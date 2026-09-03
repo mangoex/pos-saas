@@ -9161,6 +9161,113 @@ def _active_recipe_components(
     return [dict(row) for row in rows]
 
 
+def _ensure_product_default_recipe(
+    session: Session,
+    product_id: str,
+    branch_id: str,
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """Ensure a lightweight SaaS Lite 1:1 direct recipe for products sold without explicit recipes."""
+    prod = session.execute(
+        sa.select(models.products).where(models.products.c.id == product_id)
+    ).mappings().one_or_none()
+    if not prod:
+        return []
+
+    org_id = prod["organization_id"]
+
+    # 1. Resolve or create PZA unit
+    unit_id = session.execute(
+        sa.select(models.inventory_units.c.id).where(
+            models.inventory_units.c.organization_id == org_id,
+            models.inventory_units.c.code == "PZA",
+        )
+    ).scalar_one_or_none()
+    if not unit_id:
+        unit_id = session.execute(
+            sa.select(models.inventory_units.c.id).where(models.inventory_units.c.code == "PZA")
+        ).scalar_one_or_none()
+    if not unit_id:
+        unit_id = _id()
+        session.execute(
+            models.inventory_units.insert().values(
+                id=unit_id,
+                organization_id=org_id,
+                code="PZA",
+                name="Pieza",
+                dimension="discrete",
+                precision_scale=0,
+                created_at=now,
+            )
+        )
+
+    # 2. Resolve or create inventory item for this product
+    item_id = session.execute(
+        sa.select(models.inventory_items.c.id).where(
+            models.inventory_items.c.organization_id == org_id,
+            sa.or_(
+                models.inventory_items.c.sku == prod["sku"],
+                models.inventory_items.c.name == prod["name"],
+            ),
+        )
+    ).scalar_one_or_none()
+    if not item_id:
+        item_id = _id()
+        session.execute(
+            models.inventory_items.insert().values(
+                id=item_id,
+                organization_id=org_id,
+                name=prod["name"],
+                sku=prod["sku"],
+                base_unit_id=unit_id,
+                item_type="product",
+                catalog_scope="organization",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # 3. Create default 1:1 recipe
+    recipe_id = _id()
+    session.execute(
+        models.recipes.insert().values(
+            id=recipe_id,
+            organization_id=org_id,
+            product_id=product_id,
+            output_item_id=None,
+            branch_id=None,
+            recipe_type="sale",
+            version=1,
+            status="active",
+            yield_quantity=Decimal("1"),
+            yield_unit_id=unit_id,
+            valid_from=now,
+            valid_to=None,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    # 4. Create default 1:1 recipe component
+    session.execute(
+        models.recipe_components.insert().values(
+            recipe_id=recipe_id,
+            item_id=item_id,
+            quantity_base_units=Decimal("1"),
+            unit_id=unit_id,
+            net_quantity=Decimal("1"),
+            waste_rate=Decimal("0"),
+            gross_quantity=Decimal("1"),
+            sort_order=1,
+            notes="SaaS Lite direct sale recipe",
+        )
+    )
+    session.flush()
+
+    return _active_recipe_components(session, product_id, branch_id)
+
+
 def _build_order_consumption_snapshot(
     session: Session,
     order_id: str,
@@ -9172,6 +9279,8 @@ def _build_order_consumption_snapshot(
     selected_modifiers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     components = _active_recipe_components(session, product_id, branch_id)
+    if not components:
+        components = _ensure_product_default_recipe(session, product_id, branch_id, created_at)
     if not components:
         raise BusinessError("active_recipe_required", "Product requires an active recipe")
     warehouse_id = _branch_warehouse_id(session, branch_id)
