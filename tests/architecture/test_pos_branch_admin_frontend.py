@@ -145,17 +145,13 @@ def test_admin_hub_contains_operational_cards_including_variations() -> None:
     assert routes == [
         "/administration/attendance",
         "/sales-monitor",
-        "/historical-reports",
         "/administration/products",
         "/administration/variations",
         "/administration/ingredient-extras",
         "/administration/inventory",
         "/administration/suppliers",
         "/administration/purchases",
-        "/administration/production",
         "/administration/waste",
-        "/administration/transfers",
-        "/administration/counts",
     ]
     for forbidden in ("Sucursales", "Usuarios", "Roles", "Personal de sucursal"):
         assert forbidden not in source

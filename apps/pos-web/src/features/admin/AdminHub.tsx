@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '@restaurantos/api-client';
 import { Link } from 'react-router-dom';
 import {
-  Building2, Carrot, ChefHat, ClipboardCheck, Package, Receipt,
-  ShieldCheck, Trash2, Truck, MessageSquareText, Clock3,
-  BarChart3, TrendingUp, Lock,
+  Building2, Carrot, Package, Receipt,
+  ShieldCheck, Trash2, MessageSquareText, Clock3,
+  BarChart3, Lock,
 } from 'lucide-react';
 import { usePosSession } from '../../session';
 
@@ -46,18 +46,11 @@ const enabledCards: EnabledCard[] = [
     permission: 'reports.sales.read',
   },
   {
-    to: '/historical-reports',
-    label: 'Reportes históricos',
-    description: 'Consulta de venta por insumos, gastos y conciliación de sucursal.',
-    icon: TrendingUp,
-    permission: ['reports.ingredient_sales.read', 'reports.expenses.read'],
-  },
-  {
     to: '/administration/products',
-    label: 'Productos y recetas',
-    description: 'Disponibilidad local sobre productos vinculados al catálogo y recetas centrales.',
+    label: 'Disponibilidad de Menú',
+    description: 'Activar o apagar productos e insumos agotados (86) en la sucursal.',
     icon: Package,
-    permission: ['recipes.manage', 'branch.admin.access', 'admin.manage'],
+    permission: ['catalog.branch.manage', 'branch.admin.access', 'admin.manage'],
   },
   {
     to: '/administration/variations',
@@ -95,32 +88,11 @@ const enabledCards: EnabledCard[] = [
     permission: 'purchases.read',
   },
   {
-    to: '/administration/production',
-    label: 'Producción',
-    description: 'Consulta de elaborados y lotes producidos localmente.',
-    icon: ChefHat,
-    permission: 'production.manage',
-  },
-  {
     to: '/administration/waste',
     label: 'Mermas',
     description: 'Consulta de registros, autorizaciones y reversas auditables de la sucursal.',
     icon: Trash2,
     permission: 'inventory.waste',
-  },
-  {
-    to: '/administration/transfers',
-    label: 'Traspasos',
-    description: 'Seguimiento de envíos, tránsito y recepciones relacionadas con la sucursal.',
-    icon: Truck,
-    permission: 'inventory.transfer.send',
-  },
-  {
-    to: '/administration/counts',
-    label: 'Conteos físicos',
-    description: 'Consulta de capturas, revisiones y ajustes autorizados.',
-    icon: ClipboardCheck,
-    permission: 'inventory.count',
   },
 ];
 
