@@ -14,11 +14,14 @@ if config.config_file_name is not None:
 target_metadata = metadata
 
 
+from restaurant_os.database import normalize_database_url
+
+
 def _database_url() -> str:
     settings = get_settings()
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL or RESTAURANTOS_DATABASE_URL is required for migrations")
-    return settings.database_url
+    return normalize_database_url(settings.database_url)
 
 
 def run_migrations_offline() -> None:

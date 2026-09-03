@@ -31,11 +31,13 @@ COPY *.xlsx /app/
 COPY *.xlsx /app/apps/api/
 
 COPY apps/api /app/apps/api
+COPY infra/docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 WORKDIR /app/apps/api
 RUN pip install --no-cache-dir -e .
 
 ENV RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED="true"
 
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && uvicorn restaurant_os.main:app --host 0.0.0.0 --port 8000"]
+CMD ["/app/entrypoint.sh"]
 
