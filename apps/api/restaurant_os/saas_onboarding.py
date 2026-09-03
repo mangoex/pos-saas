@@ -440,6 +440,7 @@ def import_custom_catalog_for_org(
     organization_id: str,
     branch_id: str | None,
     catalog_data: list[dict[str, Any]],
+    mobile_theme: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Import a custom or AI-parsed menu catalog into an organization."""
@@ -563,7 +564,7 @@ def import_custom_catalog_for_org(
 
             created_products += 1
 
-    return {"status": "ok", "created_products": created_products}
+    return {"status": "ok", "created_products": created_products, "mobile_theme": mobile_theme or "light"}
 
 
 def seed_starter_catalog_for_org(

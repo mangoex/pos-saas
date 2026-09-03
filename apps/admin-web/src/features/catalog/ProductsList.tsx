@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { ApiError, fetchApi } from '@restaurantos/api-client';
-import { Plus, Package, Edit, Trash2, SlidersHorizontal, Search, Sparkles, UploadCloud, FileText, Check } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, SlidersHorizontal, Search, Sparkles, UploadCloud, FileText, Check, Sun, Moon } from 'lucide-react';
 import { ModifierManager } from './ModifierManager';
 import { resolveBranchId } from '../../lib/branchContext';
 
@@ -41,6 +41,23 @@ const emptyForm = {
   image_url: '',
 };
 
+function getProductAlusiveEmoji(catName: string, prodName: string): string {
+  const text = `${catName} ${prodName}`.toLowerCase();
+  if (text.includes('sushi') || text.includes('rollo') || text.includes('gratinado') || text.includes('natural') || text.includes('roll') || text.includes('tampico') || text.includes('anguila') || text.includes('camarón') || text.includes('camaron')) return '🍣';
+  if (text.includes('taco') || text.includes('asada') || text.includes('pastor') || text.includes('gringa')) return '🌮';
+  if (text.includes('pizza')) return '🍕';
+  if (text.includes('hamburguesa') || text.includes('burger') || text.includes('papas')) return '🍔';
+  if (text.includes('carne') || text.includes('corte') || text.includes('pollo') || text.includes('alitas') || text.includes('boneless') || text.includes('res')) return '🥩';
+  if (text.includes('ensalada') || text.includes('vegano') || text.includes('aguacate') || text.includes('bowl')) return '🥗';
+  if (text.includes('café') || text.includes('cafe') || text.includes('latte') || text.includes('capuchino') || text.includes('matcha')) return '☕';
+  if (text.includes('té') || text.includes('te 1lt') || text.includes('limonada') || text.includes('coca') || text.includes('refresco') || text.includes('bebida') || text.includes('jamaica') || text.includes('agua')) return '🥤';
+  if (text.includes('cerveza') || text.includes('beer') || text.includes('coctel')) return '🍺';
+  if (text.includes('postre') || text.includes('pastel') || text.includes('helado') || text.includes('dulce') || text.includes('galleta') || text.includes('crepa')) return '🍰';
+  if (text.includes('pan') || text.includes('croissant') || text.includes('baguette') || text.includes('cuernito')) return '🥐';
+  if (text.includes('desayuno') || text.includes('huevo') || text.includes('omelette') || text.includes('chilaquiles')) return '🍳';
+  return '🍽️';
+}
+
 const ProductsList = () => {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,6 +69,13 @@ const ProductsList = () => {
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'templates' | 'ai_upload'>('templates');
+  const [selectedMobileTheme, setSelectedMobileTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      return (localStorage.getItem('restaurantos_mobile_theme') as 'light' | 'dark') || 'light';
+    } catch {
+      return 'light';
+    }
+  });
   const [selectedTemplate, setSelectedTemplate] = useState('taqueria');
   const [selectedFile, setSelectedFile] = useState<{ file: File; base64: string; previewUrl?: string } | null>(null);
   const [parsedCategories, setParsedCategories] = useState<Array<{ name: string; products: Array<{ name: string; price: number; description: string; station: string }> }>>([]);
@@ -97,13 +121,16 @@ const ProductsList = () => {
   });
 
   const importMutation = useMutation({
-    mutationFn: async (categories: any) => {
+    mutationFn: async (payload: { categories: any; mobile_theme?: string } | any[]) => {
       const branchId = resolveBranchId();
+      const categories = Array.isArray(payload) ? payload : payload.categories;
+      const mobile_theme = Array.isArray(payload) ? undefined : payload.mobile_theme;
       return fetchApi('/catalog/import-custom-catalog', {
         method: 'POST',
         body: JSON.stringify({
           categories,
           branch_id: branchId,
+          mobile_theme,
         }),
       });
     },
@@ -608,64 +635,166 @@ const ProductsList = () => {
             /* Tab: Subir Menú PDF / Imagen */
             <>
               {parsedCategories.length === 0 ? (
-                <div style={{ display: 'grid', gap: 16 }}>
-                  <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>
-                    Sube una fotografía, imagen digital o archivo PDF de tu carta o menú. Nuestra IA analizará los platillos, bebidas y precios para importarlos a tu sistema.
-                  </p>
+                <div style={{ display: 'grid', gap: 20 }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 4px', fontSize: '0.9375rem', fontWeight: 600, color: '#0f172a' }}>
+                      1. Selecciona el formato visual para la Web App Móvil
+                    </h4>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.8125rem' }}>
+                      Define la estética y experiencia que verán tus clientes al abrir el menú en su teléfono:
+                    </p>
 
-                  <label
-                    style={{
-                      border: '2px dashed #cbd5e1',
-                      borderRadius: 12,
-                      padding: 28,
-                      textAlign: 'center',
-                      background: selectedFile ? '#f0fdf4' : '#f8fafc',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
-                  >
-                    <input
-                      type="file"
-                      accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          const base64 = event.target?.result as string;
-                          const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-                          setSelectedFile({ file, base64, previewUrl });
-                          setTemplateError('');
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                    <div style={{ padding: 12, borderRadius: 12, background: '#ecfdf5', color: '#10b981' }}>
-                      <UploadCloud size={32} />
-                    </div>
-                    {selectedFile ? (
-                      <div>
-                        <strong style={{ color: '#0f172a', display: 'block' }}>{selectedFile.file.name}</strong>
-                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
-                          {(selectedFile.file.size / 1024).toFixed(1)} KB · Clic para cambiar archivo
-                        </span>
-                        {selectedFile.previewUrl && (
-                          <div style={{ marginTop: 12, maxHeight: 180, overflow: 'hidden', borderRadius: 8 }}>
-                            <img src={selectedFile.previewUrl} alt="Preview" style={{ maxHeight: 180, objectFit: 'contain' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                      {/* Opción Formato Claro */}
+                      <div
+                        onClick={() => {
+                          setSelectedMobileTheme('light');
+                          localStorage.setItem('restaurantos_mobile_theme', 'light');
+                        }}
+                        style={{
+                          border: selectedMobileTheme === 'light' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                          background: selectedMobileTheme === 'light' ? '#eff6ff' : '#ffffff',
+                          borderRadius: 12,
+                          padding: 14,
+                          cursor: 'pointer',
+                          position: 'relative',
+                          transition: 'all 0.15s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ padding: 6, borderRadius: 8, background: '#fef3c7', color: '#d97706' }}>
+                              <Sun size={18} />
+                            </div>
+                            <strong style={{ fontSize: '0.875rem', color: '#0f172a' }}>Formato Claro</strong>
                           </div>
-                        )}
+                          {selectedMobileTheme === 'light' && (
+                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#3b82f6', color: '#fff' }}>
+                              SELECCIONADO
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#475569', lineHeight: 1.4 }}>
+                          Diseño <strong>Light Modern</strong>: limpio, luminoso, fondo blanco/gris tenue, cuadrícula redondeada con sombras suaves y acentos vibrantes de alta legibilidad.
+                        </p>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
+                          <span style={{ fontSize: '0.6875rem', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>Fondo #F8FAFC</span>
+                          <span style={{ fontSize: '0.6875rem', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>Tarjetas Blancas</span>
+                        </div>
                       </div>
-                    ) : (
-                      <div>
-                        <strong style={{ color: '#0f172a', display: 'block' }}>Selecciona o arrastra tu menú</strong>
-                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>Soporta PDF, JPG, PNG o WebP (hasta 10MB)</span>
+
+                      {/* Opción Formato Oscuro */}
+                      <div
+                        onClick={() => {
+                          setSelectedMobileTheme('dark');
+                          localStorage.setItem('restaurantos_mobile_theme', 'dark');
+                        }}
+                        style={{
+                          border: selectedMobileTheme === 'dark' ? '2px solid #d97706' : '1px solid #e2e8f0',
+                          background: selectedMobileTheme === 'dark' ? '#1c1917' : '#ffffff',
+                          color: selectedMobileTheme === 'dark' ? '#f5f5f4' : 'inherit',
+                          borderRadius: 12,
+                          padding: 14,
+                          cursor: 'pointer',
+                          position: 'relative',
+                          transition: 'all 0.15s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ padding: 6, borderRadius: 8, background: '#451a03', color: '#fbbf24' }}>
+                              <Moon size={18} />
+                            </div>
+                            <strong style={{ fontSize: '0.875rem', color: selectedMobileTheme === 'dark' ? '#fef3c7' : '#0f172a' }}>
+                              Formato Oscuro
+                            </strong>
+                          </div>
+                          {selectedMobileTheme === 'dark' && (
+                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#d97706', color: '#fff' }}>
+                              SELECCIONADO
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: selectedMobileTheme === 'dark' ? '#d6d3d1' : '#475569', lineHeight: 1.4 }}>
+                          Diseño <strong>Warm Dark & Gold</strong>: estética cálida gourmet / lounge, espresso oscuro, acentos en oro cálido y tipografía premium con contrastes refinados.
+                        </p>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
+                          <span style={{ fontSize: '0.6875rem', background: selectedMobileTheme === 'dark' ? '#292524' : '#f1f5f9', color: selectedMobileTheme === 'dark' ? '#fbbf24' : '#475569', padding: '2px 6px', borderRadius: 4 }}>Fondo #18110B</span>
+                          <span style={{ fontSize: '0.6875rem', background: selectedMobileTheme === 'dark' ? '#292524' : '#f1f5f9', color: selectedMobileTheme === 'dark' ? '#fbbf24' : '#475569', padding: '2px 6px', borderRadius: 4 }}>Acento Oro</span>
+                        </div>
                       </div>
-                    )}
-                  </label>
+                    </div>
+                  </div>
+
+                  {/* 2. File Upload Dropzone */}
+                  <div>
+                    <h4 style={{ margin: '0 0 4px', fontSize: '0.9375rem', fontWeight: 600, color: '#0f172a' }}>
+                      2. Carga la foto o PDF de tu menú
+                    </h4>
+                    <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '0.8125rem' }}>
+                      Nuestra IA extraerá platillos, ingredientes/descripción, precios y estación. A los productos sin foto se les asigna un icono culinario alusivo que llena el espacio visual.
+                    </p>
+
+                    <label
+                      style={{
+                        border: '2px dashed #cbd5e1',
+                        borderRadius: 12,
+                        padding: 24,
+                        textAlign: 'center',
+                        background: selectedFile ? '#f0fdf4' : '#f8fafc',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <input
+                        type="file"
+                        accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const base64 = event.target?.result as string;
+                            const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+                            setSelectedFile({ file, base64, previewUrl });
+                            setTemplateError('');
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                      <div style={{ padding: 12, borderRadius: 12, background: '#ecfdf5', color: '#10b981' }}>
+                        <UploadCloud size={32} />
+                      </div>
+                      {selectedFile ? (
+                        <div>
+                          <strong style={{ color: '#0f172a', display: 'block' }}>{selectedFile.file.name}</strong>
+                          <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                            {(selectedFile.file.size / 1024).toFixed(1)} KB · Clic para cambiar archivo
+                          </span>
+                          {selectedFile.previewUrl && (
+                            <div style={{ marginTop: 12, maxHeight: 180, overflow: 'hidden', borderRadius: 8 }}>
+                              <img src={selectedFile.previewUrl} alt="Preview" style={{ maxHeight: 180, objectFit: 'contain' }} />
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <strong style={{ color: '#0f172a', display: 'block' }}>Selecciona o arrastra tu menú</strong>
+                          <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>Soporta PDF, JPG, PNG o WebP (hasta 10MB)</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
                     <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>
@@ -690,84 +819,218 @@ const ProductsList = () => {
               ) : (
                 /* Parsed Review Mode */
                 <div style={{ display: 'grid', gap: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     <div>
-                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#0f172a' }}>Revisión del menú detectado</h4>
+                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#0f172a' }}>Revisión del menú detectado con IA</h4>
                       <p style={{ margin: '2px 0 0', color: '#64748b', fontSize: '0.8125rem' }}>
-                        Verifica y ajusta los nombres y precios antes de importar a tu menú.
+                        Verifica nombre, descripción/ingredientes, precio y estación. Se asignó automáticamente el icono alusivo al espacio de imagen.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => { setParsedCategories([]); setSelectedFile(null); }}
-                      style={{ fontSize: '0.8125rem', color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                      Volver a escanear
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Tema móvil:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextTheme = selectedMobileTheme === 'light' ? 'dark' : 'light';
+                          setSelectedMobileTheme(nextTheme);
+                          localStorage.setItem('restaurantos_mobile_theme', nextTheme);
+                        }}
+                        style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          padding: '3px 8px',
+                          borderRadius: 6,
+                          border: '1px solid #cbd5e1',
+                          background: selectedMobileTheme === 'dark' ? '#1c1917' : '#f8fafc',
+                          color: selectedMobileTheme === 'dark' ? '#fbbf24' : '#0f172a',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        {selectedMobileTheme === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+                        {selectedMobileTheme === 'dark' ? 'Oscuro (Gold)' : 'Claro (Light)'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setParsedCategories([]); setSelectedFile(null); }}
+                        style={{ fontSize: '0.8125rem', color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginLeft: 4 }}
+                      >
+                        Volver a escanear
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={{ display: 'grid', gap: 12, maxHeight: '380px', overflowY: 'auto' }}>
+                  <div style={{ display: 'grid', gap: 12, maxHeight: '420px', overflowY: 'auto' }}>
                     {parsedCategories.map((cat, catIdx) => (
-                      <div key={catIdx} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, background: '#fff' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <input
-                            type="text"
-                            value={cat.name}
-                            onChange={(e) => {
-                              const newCats = [...parsedCategories];
-                              newCats[catIdx].name = e.target.value;
-                              setParsedCategories(newCats);
-                            }}
-                            style={{ fontWeight: 700, fontSize: '0.95rem', border: 'none', borderBottom: '1px dashed #cbd5e1', outline: 'none', padding: '2px 4px', width: '220px' }}
-                          />
+                      <div key={catIdx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, background: '#fff' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>Categoría:</span>
+                            <input
+                              type="text"
+                              value={cat.name}
+                              onChange={(e) => {
+                                const newCats = [...parsedCategories];
+                                newCats[catIdx].name = e.target.value;
+                                setParsedCategories(newCats);
+                              }}
+                              style={{ fontWeight: 700, fontSize: '0.95rem', border: 'none', borderBottom: '1px dashed #cbd5e1', outline: 'none', padding: '2px 6px', width: '220px', color: '#0f172a' }}
+                            />
+                          </div>
                           <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{cat.products.length} productos</span>
                         </div>
-                        <div style={{ display: 'grid', gap: 6 }}>
-                          {cat.products.map((prod, prodIdx) => (
-                            <div key={prodIdx} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 10px', borderRadius: 6 }}>
-                              <input
-                                type="text"
-                                value={prod.name}
-                                onChange={(e) => {
-                                  const newCats = [...parsedCategories];
-                                  newCats[catIdx].products[prodIdx].name = e.target.value;
-                                  setParsedCategories(newCats);
+
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {cat.products.map((prod, prodIdx) => {
+                            const alusiveEmoji = getProductAlusiveEmoji(cat.name, prod.name);
+                            return (
+                              <div
+                                key={prodIdx}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 12,
+                                  background: '#f8fafc',
+                                  padding: '8px 12px',
+                                  borderRadius: 8,
+                                  border: '1px solid #f1f5f9',
                                 }}
-                                style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px', fontSize: '0.85rem' }}
-                              />
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>$</span>
-                                <input
-                                  type="number"
-                                  step="0.50"
-                                  value={prod.price}
+                              >
+                                {/* Alusive Icon Avatar filling the image space */}
+                                <div
+                                  title={`Icono alusivo para ${prod.name}`}
+                                  style={{
+                                    width: 48,
+                                    height: 48,
+                                    minWidth: 48,
+                                    borderRadius: 8,
+                                    background: prod.station === 'barra'
+                                      ? 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)'
+                                      : 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+                                    border: '1px solid rgba(0,0,0,0.06)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.6rem',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {alusiveEmoji}
+                                </div>
+
+                                {/* Product details: Name and Description/Ingredients */}
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                                  <input
+                                    type="text"
+                                    value={prod.name}
+                                    placeholder="Nombre del producto"
+                                    onChange={(e) => {
+                                      const newCats = [...parsedCategories];
+                                      newCats[catIdx].products[prodIdx].name = e.target.value;
+                                      setParsedCategories(newCats);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: 4,
+                                      padding: '4px 8px',
+                                      fontSize: '0.875rem',
+                                      fontWeight: 600,
+                                      color: '#0f172a',
+                                    }}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={prod.description || ''}
+                                    placeholder="Ingredientes / descripción (ej. rollo empanizado de res y camarón)"
+                                    onChange={(e) => {
+                                      const newCats = [...parsedCategories];
+                                      newCats[catIdx].products[prodIdx].description = e.target.value;
+                                      setParsedCategories(newCats);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      border: '1px dashed #cbd5e1',
+                                      borderRadius: 4,
+                                      padding: '3px 8px',
+                                      fontSize: '0.75rem',
+                                      color: '#475569',
+                                      background: '#fff',
+                                    }}
+                                  />
+                                </div>
+
+                                {/* Station Selector */}
+                                <select
+                                  value={prod.station || 'cocina'}
                                   onChange={(e) => {
                                     const newCats = [...parsedCategories];
-                                    newCats[catIdx].products[prodIdx].price = parseFloat(e.target.value) || 0;
+                                    newCats[catIdx].products[prodIdx].station = e.target.value;
                                     setParsedCategories(newCats);
                                   }}
-                                  style={{ width: 80, border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px', fontSize: '0.85rem', textAlign: 'right' }}
-                                />
+                                  style={{
+                                    fontSize: '0.75rem',
+                                    padding: '4px 6px',
+                                    borderRadius: 4,
+                                    border: '1px solid #cbd5e1',
+                                    background: prod.station === 'barra' ? '#e0f2fe' : '#fef3c7',
+                                    color: prod.station === 'barra' ? '#0369a1' : '#b45309',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <option value="cocina">Cocina</option>
+                                  <option value="barra">Barra</option>
+                                  <option value="postres">Postres</option>
+                                  <option value="packing">Packing</option>
+                                </select>
+
+                                {/* Price input */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>$</span>
+                                  <input
+                                    type="number"
+                                    step="0.50"
+                                    value={prod.price}
+                                    onChange={(e) => {
+                                      const newCats = [...parsedCategories];
+                                      newCats[catIdx].products[prodIdx].price = parseFloat(e.target.value) || 0;
+                                      setParsedCategories(newCats);
+                                    }}
+                                    style={{
+                                      width: 75,
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: 4,
+                                      padding: '4px 6px',
+                                      fontSize: '0.85rem',
+                                      textAlign: 'right',
+                                      fontWeight: 600,
+                                    }}
+                                  />
+                                </div>
+
+                                {/* Delete button */}
+                                <button
+                                  type="button"
+                                  title="Eliminar platillo"
+                                  onClick={() => {
+                                    const newCats = [...parsedCategories];
+                                    newCats[catIdx].products.splice(prodIdx, 1);
+                                    if (newCats[catIdx].products.length === 0) {
+                                      newCats.splice(catIdx, 1);
+                                    }
+                                    setParsedCategories(newCats);
+                                  }}
+                                  style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: 4 }}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
-                              <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: 4, background: prod.station === 'barra' ? '#e0f2fe' : '#fef3c7', color: prod.station === 'barra' ? '#0369a1' : '#b45309' }}>
-                                {prod.station === 'barra' ? 'Barra' : 'Cocina'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newCats = [...parsedCategories];
-                                  newCats[catIdx].products.splice(prodIdx, 1);
-                                  if (newCats[catIdx].products.length === 0) {
-                                    newCats.splice(catIdx, 1);
-                                  }
-                                  setParsedCategories(newCats);
-                                }}
-                                style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: 2 }}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -780,7 +1043,7 @@ const ProductsList = () => {
                     <Button
                       variant="primary"
                       disabled={parsedCategories.length === 0 || importMutation.isPending}
-                      onClick={() => importMutation.mutate(parsedCategories)}
+                      onClick={() => importMutation.mutate({ categories: parsedCategories, mobile_theme: selectedMobileTheme })}
                     >
                       {importMutation.isPending ? 'Guardando en el menú...' : 'Guardar en el menú'}
                     </Button>

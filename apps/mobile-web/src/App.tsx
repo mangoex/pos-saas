@@ -46,11 +46,27 @@ export const App: React.FC = () => {
   const [customerCoords, setCustomerCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [returnToCartAfterBranch, setReturnToCartAfterBranch] = useState(false);
 
+  // Visual Theme (Light vs Warm Dark)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromUrl = urlParams.get('theme');
+      if (fromUrl === 'dark' || fromUrl === 'light') return fromUrl;
+      return (localStorage.getItem('restaurantos_mobile_theme') as 'light' | 'dark') || 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   // Favorites state with localStorage
   const [likedProductIds, setLikedProductIds] = useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem('kiwi_liked_products');
-      return saved ? new Set(JSON.parse(saved)) : new Set(['prod-jug-ver', 'prod-san-kyo']);
+      const saved = localStorage.getItem('restaurantos_liked_products') || localStorage.getItem('kiwi_liked_products');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch {
       return new Set();
     }
@@ -59,7 +75,7 @@ export const App: React.FC = () => {
   // Cart state with localStorage
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
-      const saved = localStorage.getItem('kiwi_mobile_cart');
+      const saved = localStorage.getItem('restaurantos_mobile_cart') || localStorage.getItem('kiwi_mobile_cart');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];

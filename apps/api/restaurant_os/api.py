@@ -4598,6 +4598,7 @@ def post_import_custom_catalog(
     require_permission(session, actor_id, "catalog.manage")
     categories = payload.get("categories") or []
     branch_id = payload.get("branch_id")
+    mobile_theme = payload.get("mobile_theme")
     from restaurant_os.saas_onboarding import import_custom_catalog_for_org
     from restaurant_os.operations import ORGANIZATION_ID
 
@@ -4606,6 +4607,7 @@ def post_import_custom_catalog(
         organization_id=ORGANIZATION_ID,
         branch_id=branch_id,
         catalog_data=categories,
+        mobile_theme=mobile_theme,
     )
     session.commit()
     return res

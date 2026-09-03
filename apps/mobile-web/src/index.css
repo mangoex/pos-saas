@@ -37,6 +37,31 @@
   --app-max-width: 480px;
 }
 
+[data-theme="dark"] {
+  /* Warm Dark & Gold Palette (Inspirado en Café Gourmet / Lounge) */
+  --bg-app: #18110b;
+  --bg-card: #251a12;
+  --bg-card-secondary: #332419;
+  --bg-elevated: #2d1f16;
+
+  --text-main: #fef3c7;
+  --text-muted: #d5c4b1;
+  --text-subtle: #a89480;
+
+  --accent-primary: #d97706; /* Warm Gold */
+  --accent-primary-hover: #b45309;
+  --accent-green: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-red: #f87171;
+
+  --border-light: #3d2c1f;
+  --border-subtle: #291c13;
+
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
 /* Reset & Base */
 *, *::before, *::after {
   box-sizing: border-box;

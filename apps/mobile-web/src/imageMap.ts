@@ -162,7 +162,12 @@ export function getCategoryCover(categoryName: string): string {
 
 export function getCategoryIcon(categoryName: string): string {
   const cat = (categoryName || '').toLowerCase();
-  if (cat === 'todos' || cat === 'all') return '🥝';
+  if (cat === 'todos' || cat === 'all') return '🍽️';
+  if (cat.includes('sushi') || cat.includes('rollo') || cat.includes('gratinado') || cat.includes('natural')) return '🍣';
+  if (cat.includes('taco') || cat.includes('asada') || cat.includes('pastor')) return '🌮';
+  if (cat.includes('pizza')) return '🍕';
+  if (cat.includes('hamburguesa') || cat.includes('burger')) return '🍔';
+  if (cat.includes('carne') || cat.includes('corte') || cat.includes('pollo')) return '🥩';
   if (cat.includes('fruta') || cat.includes('cereal') || cat.includes('avena')) return '🍍';
   if (cat.includes('combo') || cat.includes('paquete')) return '🍱';
   if (cat.includes('focaccia')) return '🍞';
@@ -173,11 +178,11 @@ export function getCategoryIcon(categoryName: string): string {
   if (cat.includes('smoothie') || cat.includes('licuado')) return '🍓';
   if (cat.includes('café') || cat.includes('cafe') || cat.includes('matcha')) return '🍵';
   if (cat.includes('pan') || cat.includes('croissant') || cat.includes('cuernito')) return '🥐';
-  if (cat.includes('agua') || cat.includes('bebida')) return '💧';
-  if (cat.includes('jugo') || cat.includes('extracto')) return '🥤';
+  if (cat.includes('agua') || cat.includes('bebida') || cat.includes('refresco')) return '🥤';
+  if (cat.includes('jugo') || cat.includes('extracto')) return '🧃';
   if (cat.includes('postre') || cat.includes('dulce')) return '🍰';
   if (cat.includes('extra') || cat.includes('adicional')) return '✨';
-  return '🥝';
+  return '🍽️';
 }
 
 export function detectProductSize(productName: string): string | null {
@@ -367,21 +372,61 @@ export function getProductIconMeta(product: { sku?: string; name?: string; categ
     };
   }
 
-  if (cat.includes('combo') || name.includes('combo') || name.includes('paquete') || sku.startsWith('COM')) {
+  if (cat.includes('sushi') || cat.includes('rollo') || cat.includes('gratinado') || cat.includes('natural') || name.includes('roll') || name.includes('sushi') || name.includes('tampico') || name.includes('anguila') || name.includes('camarón') || name.includes('camaron')) {
     return {
-      emoji: '🍱',
-      badgeLabel: 'Combo',
-      bgGradient: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)',
-      borderColor: '#e9d5ff',
-      textColor: '#7e22ce',
+      emoji: '🍣',
+      badgeLabel: 'Sushi Roll',
+      bgGradient: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)',
+      borderColor: '#fdba74',
+      textColor: '#c2410c',
+    };
+  }
+
+  if (cat.includes('taco') || name.includes('taco') || name.includes('asada') || name.includes('pastor') || name.includes('gringa')) {
+    return {
+      emoji: '🌮',
+      badgeLabel: 'Taquería',
+      bgGradient: 'linear-gradient(135deg, #fefce8 0%, #fef08a 100%)',
+      borderColor: '#fde047',
+      textColor: '#a16207',
+    };
+  }
+
+  if (cat.includes('pizza') || name.includes('pizza')) {
+    return {
+      emoji: '🍕',
+      badgeLabel: 'Pizza Artesanal',
+      bgGradient: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)',
+      borderColor: '#fecdd3',
+      textColor: '#be123c',
+    };
+  }
+
+  if (cat.includes('hamburguesa') || cat.includes('burger') || name.includes('burger') || name.includes('hamburguesa')) {
+    return {
+      emoji: '🍔',
+      badgeLabel: 'Hamburguesa',
+      bgGradient: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)',
+      borderColor: '#fdba74',
+      textColor: '#c2410c',
+    };
+  }
+
+  if (cat.includes('bebida') || cat.includes('refresco') || name.includes('té') || name.includes('te 1lt') || name.includes('limonada') || name.includes('coca') || name.includes('jamaica')) {
+    return {
+      emoji: '🥤',
+      badgeLabel: 'Bebida',
+      bgGradient: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+      borderColor: '#bfdbfe',
+      textColor: '#1d4ed8',
     };
   }
 
   return {
-    emoji: '🥝',
+    emoji: '🍽️',
     badgeLabel: 'Especialidad',
-    bgGradient: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-    borderColor: '#bbf7d0',
-    textColor: '#15803d',
+    bgGradient: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+    borderColor: '#cbd5e1',
+    textColor: '#334155',
   };
 }

@@ -62,23 +62,24 @@ def parse_menu_document(
         "{\n"
         '  "categories": [\n'
         "    {\n"
-        '      "name": "Nombre de la categoría (ej. Tacos, Hamburguesas, Bebidas)",\n'
+        '      "name": "Nombre de la categoría (ej. Sushi, Gratinados, Natural Especial, Bebidas, Tacos)",\n'
         '      "products": [\n'
         "        {\n"
         '          "name": "Nombre del platillo o bebida",\n'
         '          "price": 85.0,\n'
-        '          "description": "Descripción o ingredientes indicados",\n'
-        '          "station": "cocina" // o "barra" para bebidas/cafés, o "postres"\n'
+        '          "description": "Descripción e ingredientes indicados en el menú",\n'
+        '          "station": "cocina" // o "barra" para bebidas/tés/cafés/refrescos, o "postres"\n'
         "        }\n"
         "      ]\n"
         "    }\n"
         "  ]\n"
         "}\n\n"
-        "Reglas:\n"
-        "1. Si un producto viene con opciones de tamaño (ej. Chico $40, Grande $60), crea un producto por cada variante (ej. 'Capuchino Chico', 'Capuchino Grande').\n"
-        "2. El campo 'price' debe ser un número decimal en pesos MXN (ej. 55.0, 140.0).\n"
-        "3. El campo 'station' debe ser 'barra' si es bebida, café, cerveza o coctel; 'cocina' para alimentos; 'postres' para repostería.\n"
-        "4. No omitas ningún producto visible en el menú."
+        "Reglas de Oro:\n"
+        "1. Si un producto viene con opciones de precio por cantidad o tamaño (ej. '1 - $95.00, 2 - $168.00'), registra el producto con el precio unitario base ($95.00) y en la descripción incluye la opción por paquete/piezas (ej. 'Rollo empanizado de res y camarones con base de Philadelphia y aguacate (1 pza: $95 | 2 pzas: $168)'). Si son tamaños claramente distintos (ej. Chico $40, Grande $60), crea un producto por cada tamaño.\n"
+        "2. El campo 'price' debe ser un número decimal en pesos MXN (ej. 95.0, 135.0, 40.0).\n"
+        "3. El campo 'description' es FUNDAMENTAL: copia con fidelidad los ingredientes y detalles indicados en la carta (ej. 'Rollo de res, Philadelphia, aguacate con gratinado especial de tocino serrano y chipotle'). No lo dejes vacío si está presente en el documento.\n"
+        "4. El campo 'station' debe ser 'barra' para bebidas, tés (té 1lt), limonadas, refrescos, cervezas, cocteles y cafés; 'cocina' para sushi, gratinados, alimentos calientes, tacos y platillos preparados.\n"
+        "5. No omitas ningún producto visible en el menú; lee todas las columnas y secciones."
     )
 
     user_content: list[dict[str, Any]] = [
