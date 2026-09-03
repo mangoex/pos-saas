@@ -11,6 +11,15 @@ organizations = sa.Table(
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.String(160), nullable=False),
     sa.Column("status", sa.String(32), nullable=False, server_default="active"),
+    sa.Column("plan", sa.String(32), nullable=False, server_default="trial"),
+    sa.Column("subscription_status", sa.String(32), nullable=False, server_default="active"),
+    sa.Column("trial_ends_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("monthly_fee_cents", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("suspended_reason", sa.String(255), nullable=True),
+    sa.Column("owner_name", sa.String(160), nullable=True),
+    sa.Column("owner_email", sa.String(160), nullable=True),
+    sa.Column("owner_phone", sa.String(32), nullable=True),
+    sa.Column("business_type", sa.String(32), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
@@ -191,6 +200,7 @@ users = sa.Table(
     sa.Column("display_name", sa.String(160), nullable=False),
     sa.Column("employee_code", sa.String(6), nullable=True),
     sa.Column("status", sa.String(32), nullable=False, server_default="invited"),
+    sa.Column("is_superadmin", sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     sa.UniqueConstraint(

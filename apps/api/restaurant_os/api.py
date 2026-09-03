@@ -2559,6 +2559,125 @@ def public_whatsapp_orders_endpoint(
     return submit_whatsapp_order(session, payload)
 
 
+from restaurant_os.superadmin import (
+    require_superadmin,
+    get_saas_metrics,
+    list_tenants,
+    create_tenant_by_admin,
+    update_tenant_status,
+    update_tenant_plan,
+    impersonate_tenant,
+    parse_and_import_menu_ai,
+)
+
+
+@router.get("/superadmin/metrics")
+@router.get("/v1/superadmin/metrics")
+def get_superadmin_metrics_endpoint(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return get_saas_metrics(session)
+
+
+@router.get("/superadmin/tenants")
+@router.get("/v1/superadmin/tenants")
+def get_superadmin_tenants_endpoint(
+    session: SessionDep,
+    search: str | None = None,
+    status: str | None = None,
+    plan: str | None = None,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> list[dict[str, Any]]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return list_tenants(session, search=search, status=status, plan=plan)
+
+
+@router.post("/superadmin/tenants", status_code=201)
+@router.post("/v1/superadmin/tenants", status_code=201)
+def post_superadmin_tenants_endpoint(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return create_tenant_by_admin(session, payload)
+
+
+@router.patch("/superadmin/tenants/{tenant_id}/status")
+@router.patch("/v1/superadmin/tenants/{tenant_id}/status")
+def patch_superadmin_tenant_status_endpoint(
+    tenant_id: str,
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    status = str(payload.get("status", "active"))
+    reason = payload.get("reason")
+    return update_tenant_status(session, tenant_id, status=status, reason=reason)
+
+
+@router.patch("/superadmin/tenants/{tenant_id}/plan")
+@router.patch("/v1/superadmin/tenants/{tenant_id}/plan")
+def patch_superadmin_tenant_plan_endpoint(
+    tenant_id: str,
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    plan = str(payload.get("plan", "starter_349"))
+    monthly_fee = payload.get("monthly_fee_cents")
+    return update_tenant_plan(session, tenant_id, plan=plan, monthly_fee_cents=monthly_fee)
+
+
+@router.post("/superadmin/tenants/{tenant_id}/impersonate")
+@router.post("/v1/superadmin/tenants/{tenant_id}/impersonate")
+def post_superadmin_tenant_impersonate_endpoint(
+    tenant_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return impersonate_tenant(session, tenant_id, actor_superadmin_id=actor_id)
+
+
+@router.post("/superadmin/tenants/{tenant_id}/ai-menu-import")
+@router.post("/v1/superadmin/tenants/{tenant_id}/ai-menu-import")
+def post_superadmin_ai_menu_import_endpoint(
+    tenant_id: str,
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    branch_id = payload.get("branch_id")
+    if not branch_id:
+        branch = session.execute(
+            sa.select(models.branches.c.id).where(models.branches.c.organization_id == tenant_id)
+        ).scalar_one_or_none()
+        branch_id = str(branch)
+    raw_text = str(payload.get("menu_text", ""))
+    imported = parse_and_import_menu_ai(session, tenant_id, branch_id, raw_text)
+    return {"imported_products": imported, "count": len(imported)}
+
+
 class PublicOrderModifier(BaseModel):
     model_config = ConfigDict(extra="forbid")
     option_id: str = Field(min_length=1, max_length=36)

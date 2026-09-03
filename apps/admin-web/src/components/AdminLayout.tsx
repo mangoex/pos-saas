@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Settings, BarChart2, Bell, Search, UserRound,
   LogOut, Package, Store, Carrot, ChevronLeft, ChevronRight, Camera,
-  ShoppingCart, Receipt, Share2
+  ShoppingCart, Receipt, Share2, Crown
 } from 'lucide-react';
 import { Modal, Input, Button } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
@@ -13,6 +13,7 @@ import AdminAssistantPanel from '../features/admin-ai/AdminAssistantPanel';
 import AdminProposalReview from '../features/admin-ai/AdminProposalReview';
 import { CategorySubNav } from './CategorySubNav';
 import { canManageCashConcepts } from '../features/cash/cashConceptState';
+import { ImpersonationBanner } from '../features/superadmin/ImpersonationBanner';
 
 const compressImage = (dataUrl: string, maxWidth = 128, maxHeight = 128): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -245,10 +246,23 @@ const AdminLayout = () => {
         '/customers',
       ],
     },
+    ...(currentUser.is_superadmin
+      ? [
+          {
+            path: '/superadmin',
+            label: 'Consola SaaS Master',
+            icon: <Crown size={20} color="#f59e0b" />,
+            badge: 'VIP',
+            matchingPrefixes: ['/superadmin'],
+          },
+        ]
+      : []),
   ];
 
   return (
-    <div className="admin-layout">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
+      <ImpersonationBanner />
+      <div className="admin-layout" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       {/* Dark Admin Sidebar */}
       <div className="admin-sidebar" style={{ width: isCollapsed ? '80px' : '260px', transition: 'width 0.3s', display: 'flex', flexDirection: 'column' }}>
         <div className="admin-sidebar-logo" style={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'space-between', alignItems: 'center', padding: isCollapsed ? '24px 0' : '24px' }}>
@@ -441,6 +455,7 @@ const AdminLayout = () => {
         branchName={branches.find((branch) => branch.id === branchId)?.name || 'Sucursal'}
       />
       {proposalId && <AdminProposalReview proposalId={proposalId} onClose={() => navigate(`${location.pathname}${location.search.replace(/([?&])admin_ai_proposal=[^&]*&?/, '$1').replace(/[?&]$/, '')}`)} />}
+      </div>
     </div>
   );
 };

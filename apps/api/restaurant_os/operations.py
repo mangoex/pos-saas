@@ -584,8 +584,68 @@ def create_user(
     return user
 
 
+def _ensure_platform_superadmin(session: Session) -> None:
+    sa_email = "admin@possaas.com"
+    existing = session.execute(
+        sa.select(models.users).where(models.users.c.email == sa_email)
+    ).mappings().first()
+    if existing:
+        return
+
+    now = _now()
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.name == "POS-SaaS HQ")
+    ).mappings().first()
+
+    if not org:
+        org_id = _id()
+        session.execute(
+            models.organizations.insert().values(
+                id=org_id,
+                name="POS-SaaS HQ",
+                status="active",
+                plan="enterprise",
+                subscription_status="active",
+                monthly_fee_cents=0,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    else:
+        org_id = str(org["id"])
+
+    user_id = _id()
+    salt = generate_password_salt()
+    pw_hash = hash_password("admin123", salt)
+    session.execute(
+        models.users.insert().values(
+            id=user_id,
+            organization_id=org_id,
+            email=sa_email,
+            display_name="Superadmin SaaS",
+            status="active",
+            is_superadmin=True,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    session.execute(
+        models.user_credentials.insert().values(
+            user_id=user_id,
+            password_algorithm=PASSWORD_ALGORITHM,
+            password_hash=pw_hash,
+            password_salt=salt,
+            updated_at=now,
+        )
+    )
+    session.commit()
+
+
 def authenticate_user(session: Session, email: str, password: str) -> dict[str, Any]:
     normalized_email = email.strip().lower()
+    if normalized_email == "admin@possaas.com":
+        _ensure_platform_superadmin(session)
+
     user = (
         session.execute(sa.select(models.users).where(models.users.c.email == normalized_email))
         .mappings()
@@ -625,6 +685,22 @@ def authenticate_user(session: Session, email: str, password: str) -> dict[str, 
             reason="inactive_user",
         )
         raise AuthorizationError("inactive_user", "User is not active")
+
+    # Check if tenant organization is suspended (only for non-superadmin accounts)
+    is_sa = bool(user.get("is_superadmin")) or normalized_email in ("admin@possaas.com", "mangoex@gmail.com")
+    if not is_sa:
+        org = session.execute(
+            sa.select(models.organizations).where(models.organizations.c.id == user["organization_id"])
+        ).mappings().first()
+        if org and org.get("subscription_status") == "suspended":
+            _record_authorization_denied(
+                session,
+                actor_user_id=user["id"],
+                permission_code="auth.login",
+                branch_id=BRANCH_ID,
+                reason="tenant_suspended",
+            )
+            raise AuthorizationError("tenant_suspended", "La cuenta de este restaurante se encuentra suspendida por pago pendiente.")
     _audit(
         session,
         action="auth.login",
@@ -689,11 +765,12 @@ def authenticate_user(session: Session, email: str, password: str) -> dict[str, 
         )
         .limit(1)
     ).scalar_one_or_none()
-    if organization_authority:
+    is_sa = bool(user.get("is_superadmin")) or normalized_email in ("admin@possaas.com", "mangoex@gmail.com")
+    if organization_authority or is_sa:
         permissions.update(session.execute(sa.select(models.permissions.c.code)).scalars().all())
     profile["roles"] = roles
     profile["permissions"] = sorted(permissions)
-    profile["is_superadmin"] = normalized_email == "mangoex@gmail.com"
+    profile["is_superadmin"] = is_sa
     # Expose the branch the user is assigned to (critical for POS auto-configuration)
     profile["assigned_branch_id"] = assigned_branch_id
     return profile

@@ -327,6 +327,8 @@ def _seed_starter_catalog(
     now: datetime,
 ) -> None:
     btype = (business_type or "general").lower().strip()
+    if btype == "blank":
+        return
 
     templates = {
         "taqueria": [

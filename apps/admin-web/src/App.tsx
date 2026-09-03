@@ -36,6 +36,15 @@ import { ReportsHub } from './features/hubs/ReportsHub';
 import { AdminAccessHub } from './features/hubs/AdminAccessHub';
 import { canManageCashConcepts } from './features/cash/cashConceptState';
 import { redirectToPos } from './lib/posHandoff';
+import { SaaSConsoleView } from './features/superadmin/SaaSConsoleView';
+
+const SuperadminRoute = ({ children }: { children: React.ReactNode }) => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  if (!user.is_superadmin) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
@@ -143,6 +152,7 @@ export const App = () => {
           </ProtectedRoute>
         }>
           <Route index element={<Overview />} />
+          <Route path="superadmin" element={<SuperadminRoute><SaaSConsoleView /></SuperadminRoute>} />
 
           {/* Category Hubs (POS Style Grid Views) */}
           <Route path="catalog" element={<CatalogHub />} />
