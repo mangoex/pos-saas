@@ -101,8 +101,6 @@ def create_app() -> FastAPI:
 
     @app.get("/", tags=["platform"])
     def platform_home(request: Request) -> Response:
-        if _request_prefers_mobile_menu(request):
-            return _with_device_variant_headers(RedirectResponse(url="/menu/", status_code=307))
         return _with_device_variant_headers(serve_spa("landing-web", ""))
 
     @app.get("/landing-assets/{full_path:path}", tags=["platform"])

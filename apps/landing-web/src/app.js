@@ -33,6 +33,8 @@
     const progress = pageProgress();
     const index = routeIndex(progress);
 
+    root.style.setProperty("--omnipos-progress", `${progress}turn`);
+    root.style.setProperty("--omnipos-active", String(index));
     root.style.setProperty("--kiwi-progress", `${progress}turn`);
     root.style.setProperty("--kiwi-active", String(index));
 

@@ -1,12 +1,14 @@
 :root {
-  --sc-canvas: #07130e;
-  --sc-surface: #122018;
-  --sc-ink: #fbfaf6;
-  --sc-ink-soft: #d7dbd1;
-  --sc-accent: #b9df53;
-  --sc-accent-ink: #07130e;
+  --sc-canvas: #070e14;
+  --sc-surface: #0e1722;
+  --sc-ink: #f8fafc;
+  --sc-ink-soft: #cbd5e1;
+  --sc-accent: #10b981;
+  --sc-accent-ink: #041f17;
   --sc-font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", sans-serif;
   --sc-font-text: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --omnipos-progress: 0turn;
+  --omnipos-active: 0;
   --kiwi-progress: 0turn;
   --kiwi-active: 0;
 }
@@ -37,6 +39,7 @@ body {
   opacity: 0.025;
 }
 
+.omnipos-bar,
 .kiwi-bar {
   position: fixed;
   inset: max(1.25rem, env(safe-area-inset-top)) clamp(1.25rem, 3vw, 3.75rem) auto;
@@ -47,10 +50,12 @@ body {
   pointer-events: none;
 }
 
+.omnipos-bar a,
 .kiwi-bar a {
   pointer-events: auto;
 }
 
+.omnipos-wordmark,
 .kiwi-wordmark {
   display: inline-flex;
   gap: 0.58rem;
@@ -63,6 +68,7 @@ body {
   text-decoration: none;
 }
 
+.omnipos-wordmark__logo,
 .kiwi-wordmark__logo {
   flex: 0 0 auto;
   width: clamp(1.9rem, 1.72rem + 0.28vw, 2.2rem);
@@ -128,16 +134,18 @@ body {
   opacity: 0;
 }
 
+.omnipos-grade,
 .kiwi-grade {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
   background:
-    linear-gradient(to bottom, rgb(12 28 19 / 24%) 0%, transparent 22%, transparent 72%, rgb(12 28 19 / 34%) 100%),
-    radial-gradient(circle at 50% 46%, transparent 20%, rgb(12 28 19 / 8%) 72%, rgb(12 28 19 / 26%) 100%);
+    linear-gradient(to bottom, rgb(7 14 20 / 35%) 0%, transparent 22%, transparent 72%, rgb(7 14 20 / 60%) 100%),
+    radial-gradient(circle at 50% 46%, transparent 20%, rgb(7 14 20 / 15%) 72%, rgb(7 14 20 / 45%) 100%);
 }
 
+.omnipos-plate,
 .kiwi-plate {
   position: absolute;
   z-index: 0;
@@ -146,39 +154,44 @@ body {
   will-change: opacity;
 }
 
+.omnipos-plate--one,
 .kiwi-plate--one {
   top: 0;
   left: -7vw;
   width: min(66rem, 72vw);
   height: 100vh;
-  background: linear-gradient(90deg, rgb(12 28 19 / 91%) 0%, rgb(12 28 19 / 86%) 60%, rgb(12 28 19 / 58%) 79%, rgb(12 28 19 / 16%) 94%, transparent 100%);
+  background: linear-gradient(90deg, rgb(7 14 20 / 92%) 0%, rgb(7 14 20 / 88%) 60%, rgb(7 14 20 / 60%) 79%, rgb(7 14 20 / 18%) 94%, transparent 100%);
 }
 
+.omnipos-plate--two,
 .kiwi-plate--two {
   top: 0;
   right: -7vw;
   width: min(64rem, 72vw);
   height: 100vh;
-  background: linear-gradient(to left, rgb(12 28 19 / 93%) 0%, rgb(12 28 19 / 88%) 58%, rgb(12 28 19 / 56%) 78%, rgb(12 28 19 / 15%) 94%, transparent 100%);
+  background: linear-gradient(to left, rgb(7 14 20 / 94%) 0%, rgb(7 14 20 / 89%) 58%, rgb(7 14 20 / 58%) 78%, rgb(7 14 20 / 16%) 94%, transparent 100%);
 }
 
+.omnipos-plate--three,
 .kiwi-plate--three {
   top: 0;
   bottom: auto;
   left: -7vw;
   width: min(66rem, 72vw);
   height: 100vh;
-  background: linear-gradient(90deg, rgb(18 38 24 / 82%) 0%, rgb(18 38 24 / 74%) 60%, rgb(18 38 24 / 42%) 79%, rgb(18 38 24 / 10%) 94%, transparent 100%);
+  background: linear-gradient(90deg, rgb(7 14 20 / 90%) 0%, rgb(7 14 20 / 84%) 60%, rgb(7 14 20 / 52%) 79%, rgb(7 14 20 / 15%) 94%, transparent 100%);
 }
 
+.omnipos-plate--four,
 .kiwi-plate--four {
   right: -6vw;
   bottom: -9vh;
   width: min(68rem, 76vw);
   height: 76vh;
-  background: radial-gradient(ellipse at 76% 66%, rgb(12 28 19 / 88%) 0%, rgb(12 28 19 / 68%) 39%, rgb(12 28 19 / 18%) 66%, transparent 77%);
+  background: radial-gradient(ellipse at 76% 66%, rgb(7 14 20 / 90%) 0%, rgb(7 14 20 / 75%) 39%, rgb(7 14 20 / 25%) 66%, transparent 77%);
 }
 
+.omnipos-story,
 .kiwi-story {
   position: absolute;
   z-index: 1;
@@ -186,12 +199,14 @@ body {
   color: var(--sc-ink);
 }
 
+.omnipos-story--one,
 .kiwi-story--one {
   top: 50%;
   left: clamp(1.25rem, 7vw, 8rem);
   margin-top: clamp(-12rem, -25vh, -8rem);
 }
 
+.omnipos-story--two,
 .kiwi-story--two {
   top: 50%;
   right: clamp(1.25rem, 7vw, 8rem);
@@ -199,17 +214,20 @@ body {
   text-align: right;
 }
 
+.omnipos-story--three,
 .kiwi-story--three {
   bottom: clamp(6rem, 13vh, 9rem);
   left: clamp(1.25rem, 7vw, 8rem);
 }
 
+.omnipos-story--four,
 .kiwi-story--four {
   right: clamp(1.25rem, 7vw, 8rem);
   bottom: clamp(6.5rem, 12vh, 8.5rem);
   text-align: right;
 }
 
+.omnipos-kicker,
 .kiwi-kicker {
   margin: 0 0 1.5rem;
   color: var(--sc-accent);
@@ -220,6 +238,8 @@ body {
   text-transform: uppercase;
 }
 
+.omnipos-story h1,
+.omnipos-story h2,
 .kiwi-story h1,
 .kiwi-story h2 {
   margin: 0;
@@ -231,27 +251,35 @@ body {
   text-wrap: balance;
 }
 
+.omnipos-story h1 em,
 .kiwi-story h1 em {
   color: var(--sc-accent);
   font-style: normal;
   font-weight: 800;
 }
 
+.omnipos-story h2 strong,
 .kiwi-story h2 strong {
   font-weight: 800;
 }
 
+.omnipos-story--two h2,
+.omnipos-story--three h2,
+.omnipos-story--four h2,
 .kiwi-story--two h2,
 .kiwi-story--three h2,
 .kiwi-story--four h2 {
   font-size: clamp(3rem, 5.6vw, 6.5rem);
 }
 
+.omnipos-story--three h2,
+.omnipos-story--four h2,
 .kiwi-story--three h2,
 .kiwi-story--four h2 {
   font-weight: 760;
 }
 
+.omnipos-story__body,
 .kiwi-story__body {
   max-width: 34ch;
   margin: 1.75rem 0 0;
@@ -263,12 +291,16 @@ body {
   text-wrap: pretty;
 }
 
+.omnipos-story--two .omnipos-story__body,
+.omnipos-story--four address,
+.omnipos-story--four .omnipos-primary-cta,
 .kiwi-story--two .kiwi-story__body,
 .kiwi-story--four address,
 .kiwi-story--four .kiwi-primary-cta {
   margin-left: auto;
 }
 
+.omnipos-story__accent,
 .kiwi-story__accent {
   margin: 0 0 -0.08em;
   color: color-mix(in oklab, var(--sc-accent) 86%, white);
@@ -279,6 +311,7 @@ body {
   text-transform: uppercase;
 }
 
+.omnipos-story__aside,
 .kiwi-story__aside {
   max-width: 34ch;
   margin: 1rem 0 0;
@@ -289,6 +322,7 @@ body {
   line-height: 1.55;
 }
 
+.omnipos-story address,
 .kiwi-story address {
   display: grid;
   gap: 0.32rem;
@@ -300,6 +334,7 @@ body {
   line-height: 1.45;
 }
 
+.omnipos-story address a,
 .kiwi-story address a {
   width: fit-content;
   margin-top: 0.4rem;
@@ -309,6 +344,7 @@ body {
   text-underline-offset: 0.3em;
 }
 
+.omnipos-story--four address a,
 .kiwi-story--four address a {
   margin-left: auto;
 }
@@ -345,6 +381,7 @@ body {
   transform: translateY(1px);
 }
 
+.omnipos-contact-menu,
 .kiwi-contact-menu {
   display: flex;
   align-items: center;
@@ -355,6 +392,7 @@ body {
   margin-left: auto;
 }
 
+.omnipos-contact-menu__link,
 .kiwi-contact-menu__link {
   position: relative;
   min-height: 2.75rem;
@@ -370,6 +408,7 @@ body {
   transition: transform 130ms var(--sc-ease-out);
 }
 
+.omnipos-contact-menu__link::after,
 .kiwi-contact-menu__link::after {
   content: "";
   position: absolute;
@@ -383,15 +422,19 @@ body {
   transition: transform 150ms var(--sc-ease-out);
 }
 
+.omnipos-contact-menu__link:hover::after,
+.omnipos-contact-menu__link:focus-visible::after,
 .kiwi-contact-menu__link:hover::after,
 .kiwi-contact-menu__link:focus-visible::after {
   transform: scaleX(1);
 }
 
+.omnipos-contact-menu__link:active,
 .kiwi-contact-menu__link:active {
   transform: translateY(1px);
 }
 
+.omnipos-primary-cta,
 .kiwi-primary-cta {
   display: inline-flex;
   align-items: center;
@@ -492,7 +535,7 @@ body {
 }
 
 .plate-map__fill {
-  background: conic-gradient(var(--sc-accent) var(--kiwi-progress), transparent 0);
+  background: conic-gradient(var(--sc-accent) var(--omnipos-progress, var(--kiwi-progress)), transparent 0);
   -webkit-mask: radial-gradient(circle, transparent 58%, black 60%);
   mask: radial-gradient(circle, transparent 58%, black 60%);
 }

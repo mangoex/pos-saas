@@ -3,19 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#07130e">
-  <title>Kiwi Natural | Comida natural en Culiacán</title>
-  <meta name="description" content="Kiwi Natural. Restaurante, sandwichería y comida natural en Culiacán.">
-  <script>
-    (() => {
-      const mobileHint = navigator.userAgentData?.mobile;
-      const phoneAgent = /iPhone|iPod|Windows Phone|BlackBerry|Opera Mini|Android.+Mobile/i;
-      const isPhone = typeof mobileHint === "boolean" ? mobileHint : phoneAgent.test(navigator.userAgent);
-      if (isPhone) window.location.replace("/menu/");
-    })();
-  </script>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2307130e'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23b9df53'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%2307130e'/%3E%3C/svg%3E">
-  <link rel="preload" as="image" href="/landing-assets/assets/kiwi-poster.webp">
+  <meta name="theme-color" content="#0b1319">
+  <title>Omnipos | Sistema Operativo Inteligente para Restaurantes</title>
+  <meta name="description" content="Omnipos. Punto de venta táctil, pantallas de cocina KDS, Delivery Hub unificado (Uber Eats, DiDi, Rappi, WhatsApp) y facturación para restaurantes.">
+  <link rel="icon" href="/landing-assets/assets/omnipos-logo.svg">
+  <link rel="preload" as="image" href="/landing-assets/assets/omnipos-bg.webp">
   <link rel="stylesheet" href="/landing-assets/scrollcraft.css">
   <link rel="stylesheet" href="/landing-assets/styles.css">
 </head>
@@ -23,74 +15,74 @@
   <span data-sc-progress aria-hidden="true"></span>
   <div class="sc-grain" aria-hidden="true"></div>
 
-  <header class="kiwi-bar">
-    <a class="kiwi-wordmark" href="#inicio" data-route-progress="0" aria-label="Kiwi Natural, volver al inicio">
-      <img class="kiwi-wordmark__logo" src="/landing-assets/assets/kiwi-logo.png" width="500" height="500" alt="">
-      <span>Kiwi Natural</span>
+  <header class="omnipos-bar kiwi-bar">
+    <a class="omnipos-wordmark kiwi-wordmark" href="#inicio" data-route-progress="0" aria-label="Omnipos, volver al inicio">
+      <img class="omnipos-wordmark__logo kiwi-wordmark__logo" src="/landing-assets/assets/omnipos-logo.svg" width="40" height="40" alt="Omnipos">
+      <span>Omnipos</span>
     </a>
-    <a class="kiwi-menu-link" href="/menu/">Ver menú</a>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a class="omnipos-nav-cta" href="/admin/" style="color: #fff; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; padding: 6px 16px; border-radius: 9999px; text-decoration: none; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">Acceder</a>
+    </div>
   </header>
 
   <main id="inicio" data-sc-mode="worldflight" data-sc-seam="0.16" data-sc-lerp="0.12">
     <div data-sc-world aria-hidden="true">
-      <div data-sc-segment data-sc-w="8.5" data-sc-linger="0.12" data-sc-waypoint="Kiwi Natural">
+      <div data-sc-segment data-sc-w="8.5" data-sc-linger="0.12" data-sc-waypoint="Omnipos">
         <picture>
-          <img class="sc-world__poster" src="/landing-assets/assets/kiwi-poster.webp" width="800" height="450" alt="">
+          <source srcset="/landing-assets/assets/omnipos-bg.webp" type="image/webp">
+          <img class="sc-world__poster" src="https://res.cloudinary.com/dfvnyhur4/image/upload/v1788415834/ezgif.com-video-to-webp-converter_4_udrqho.webp" width="800" height="450" alt="Omnipos en acción">
         </picture>
         <video
-          data-sc-src="/landing-assets/assets/kiwi-journey.mp4"
+          data-sc-src="/landing-assets/assets/omnipos-journey.mp4"
           data-sc-lerp="0.12"
           muted
           playsinline
           preload="metadata"
           aria-hidden="true"></video>
-        <div class="kiwi-grade" aria-hidden="true"></div>
+        <div class="omnipos-grade kiwi-grade" aria-hidden="true"></div>
       </div>
     </div>
 
     <div data-sc-world-copy>
-      <div class="kiwi-plate kiwi-plate--one" data-plate="one" aria-hidden="true"></div>
-      <div class="kiwi-plate kiwi-plate--two" data-plate="two" aria-hidden="true"></div>
-      <div class="kiwi-plate kiwi-plate--three" data-plate="three" aria-hidden="true"></div>
-      <div class="kiwi-plate kiwi-plate--four" data-plate="four" aria-hidden="true"></div>
+      <div class="omnipos-plate omnipos-plate--one kiwi-plate kiwi-plate--one" data-plate="one" aria-hidden="true"></div>
+      <div class="omnipos-plate omnipos-plate--two kiwi-plate kiwi-plate--two" data-plate="two" aria-hidden="true"></div>
+      <div class="omnipos-plate omnipos-plate--three kiwi-plate kiwi-plate--three" data-plate="three" aria-hidden="true"></div>
+      <div class="omnipos-plate omnipos-plate--four kiwi-plate kiwi-plate--four" data-plate="four" aria-hidden="true"></div>
 
-      <section class="kiwi-story kiwi-story--one" data-sc-copy data-sc-window="0 0.26 0 0.22" data-story="one" aria-labelledby="story-one-title">
-        <p class="kiwi-kicker">Culiacán, Sinaloa</p>
-        <h1 id="story-one-title">Comida<br> <em>saludable.</em></h1>
-        <p class="kiwi-story__body">Kiwi Natural. Restaurante de comida rápida y sandwichería.</p>
+      <section class="omnipos-story omnipos-story--one kiwi-story kiwi-story--one" data-sc-copy data-sc-window="0 0.26 0 0.22" data-story="one" aria-labelledby="story-one-title">
+        <p class="omnipos-kicker kiwi-kicker">Plataforma Micro-POS SaaS</p>
+        <h1 id="story-one-title">Control total<br> <em>de tu restaurante.</em></h1>
+        <p class="omnipos-story__body kiwi-story__body">Omnipos. El sistema punto de venta todo en uno para taquerías, cafeterías y restaurantes en crecimiento.</p>
       </section>
 
-      <section class="kiwi-story kiwi-story--two" data-sc-copy data-sc-window="0.22 0.50 0.18 0.18" data-story="two" aria-labelledby="story-two-title" inert aria-hidden="true">
-        <p class="kiwi-story__accent" aria-hidden="true">Fresco</p>
-        <h2 id="story-two-title">Productos <strong>frescos.</strong></h2>
-        <p class="kiwi-story__body">Lo nuevo en Kiwi. Latte Fresh, tu latte en las rocas.</p>
+      <section class="omnipos-story omnipos-story--two kiwi-story kiwi-story--two" data-sc-copy data-sc-window="0.22 0.50 0.18 0.18" data-story="two" aria-labelledby="story-two-title" inert aria-hidden="true">
+        <p class="omnipos-story__accent kiwi-story__accent" aria-hidden="true">Ágil</p>
+        <h2 id="story-two-title">Comandas <strong>en tiempo real.</strong></h2>
+        <p class="omnipos-story__body kiwi-story__body">Punto de venta táctil, pantallas de cocina KDS por estación y cobros rápidos sin fricción.</p>
       </section>
 
-      <section class="kiwi-story kiwi-story--three" data-sc-copy data-sc-window="0.47 0.76 0.18 0.18" data-story="three" aria-labelledby="story-three-title" inert aria-hidden="true">
-        <h2 id="story-three-title">Naturales.</h2>
-        <p class="kiwi-story__body">Consumo en el lugar. Terraza o mesas al aire libre.</p>
-        <p class="kiwi-story__aside">Un espacio para hacer una pausa y seguir cuidándote.</p>
+      <section class="omnipos-story omnipos-story--three kiwi-story kiwi-story--three" data-sc-copy data-sc-window="0.47 0.76 0.18 0.18" data-story="three" aria-labelledby="story-three-title" inert aria-hidden="true">
+        <h2 id="story-three-title">Delivery Hub.</h2>
+        <p class="omnipos-story__body kiwi-story__body">Uber Eats, DiDi Food y Rappi unificados. Precios inteligentes con margen por canal y comandas directas a WhatsApp.</p>
+        <p class="omnipos-story__aside kiwi-story__aside">Kill-Switch global: pausa cualquier platillo agotado en todos los canales con un solo clic.</p>
       </section>
 
-      <section class="kiwi-story kiwi-story--four" data-sc-copy data-sc-window="0.72 1 0.18 0" data-story="four" aria-labelledby="story-four-title" inert aria-hidden="true">
-        <h2 id="story-four-title">Contacto.</h2>
+      <section class="omnipos-story omnipos-story--four kiwi-story kiwi-story--four" data-sc-copy data-sc-window="0.72 1 0.18 0" data-story="four" aria-labelledby="story-four-title" inert aria-hidden="true">
+        <h2 id="story-four-title">Comienza hoy.</h2>
         <address>
-          <span>Av. Insurgentes 1205</span>
-          <span>Culiacán, Sinaloa, 80000</span>
-          <a href="tel:+526674271219">667 427 1219</a>
+          <span>Planes accesibles desde $349 MXN/mes</span>
+          <span>Aprovisionamiento inmediato con IA</span>
+          <a href="/admin/">Plataforma Multi-Restaurante</a>
         </address>
-        <a class="kiwi-primary-cta" href="/menu/">
-          <span>Ver menú</span>
+        <a class="omnipos-primary-cta kiwi-primary-cta" href="/admin/">
+          <span>Entrar a Omnipos</span>
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
         </a>
-        <nav class="kiwi-contact-menu" aria-label="Accesos de Kiwi Natural">
-          <a class="kiwi-facebook-link" href="https://www.facebook.com/kiwinatural/" target="_blank" rel="noopener noreferrer" aria-label="Facebook de Kiwi Natural">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 21v-8h2.8l.4-3.1h-3.2V7.9c0-.9.3-1.5 1.6-1.5H17V3.6c-.3 0-1.4-.1-2.7-.1-2.7 0-4.5 1.6-4.5 4.6v1.8H7V13h2.8v8h3.7Z"/></svg>
-          </a>
-          <a class="kiwi-contact-menu__link" href="/admin/">Admin</a>
-          <a class="kiwi-contact-menu__link" href="/pos/">POS</a>
-          <a class="kiwi-contact-menu__link" href="/kds/">KDS</a>
-          <a class="kiwi-contact-menu__link" href="/manual/">Manual</a>
+        <nav class="omnipos-contact-menu kiwi-contact-menu" aria-label="Accesos de Omnipos">
+          <a class="omnipos-contact-menu__link kiwi-contact-menu__link" href="/admin/">Admin</a>
+          <a class="omnipos-contact-menu__link kiwi-contact-menu__link" href="/pos/">POS</a>
+          <a class="omnipos-contact-menu__link kiwi-contact-menu__link" href="/kds/">KDS</a>
+          <a class="omnipos-contact-menu__link kiwi-contact-menu__link" href="/manual/">Manual</a>
         </nav>
       </section>
     </div>
@@ -98,12 +90,12 @@
     <div data-sc-spacer aria-hidden="true"></div>
   </main>
 
-  <nav class="plate-map" aria-label="Recorrido por Kiwi Natural" data-sc-verify-state="inicio">
+  <nav class="plate-map" aria-label="Recorrido por Omnipos" data-sc-verify-state="inicio">
     <div class="plate-map__labels">
-      <button type="button" data-route-progress="0.03" data-route-index="0" aria-current="true">Comida</button>
-      <button type="button" data-route-progress="0.30" data-route-index="1">Frescos</button>
-      <button type="button" data-route-progress="0.57" data-route-index="2">Naturales</button>
-      <button type="button" data-route-progress="0.84" data-route-index="3">Contacto</button>
+      <button type="button" data-route-progress="0.03" data-route-index="0" aria-current="true">Punto de Venta</button>
+      <button type="button" data-route-progress="0.30" data-route-index="1">Cocina KDS</button>
+      <button type="button" data-route-progress="0.57" data-route-index="2">Delivery Hub</button>
+      <button type="button" data-route-progress="0.84" data-route-index="3">Comenzar</button>
     </div>
     <div class="plate-map__dish" aria-hidden="true">
       <span class="plate-map__track"></span>
