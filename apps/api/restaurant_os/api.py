@@ -4546,6 +4546,71 @@ def post_seed_starter_template(
     )
 
 
+@router.post("/catalog/parse-menu-file")
+def post_parse_menu_file(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_permission(session, actor_id, "catalog.manage")
+    file_base64 = str(payload.get("file_base64") or "").strip()
+    mime_type = str(payload.get("mime_type") or "").strip()
+    filename = str(payload.get("filename") or "menu").strip()
+    if not file_base64:
+        raise HTTPException(status_code=400, detail="Se requiere el archivo en base64.")
+
+    from restaurant_os.assisted_order import OpenRouterOptions
+    from restaurant_os.config import get_settings
+    from restaurant_os.menu_parser import parse_menu_document
+
+    settings = get_settings()
+    if not settings.openrouter_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Se requiere configurar una API Key de OpenRouter/Gemini en el servidor para escanear menús con IA.",
+        )
+
+    options = OpenRouterOptions(
+        api_key=settings.openrouter_api_key,
+        model=settings.openrouter_model,
+        base_url=settings.openrouter_base_url,
+        timeout_seconds=settings.openrouter_timeout_seconds,
+        http_referer=settings.openrouter_http_referer,
+        app_title=settings.openrouter_app_title,
+    )
+
+    try:
+        return parse_menu_document(file_base64, mime_type, filename, options)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/catalog/import-custom-catalog")
+def post_import_custom_catalog(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_permission(session, actor_id, "catalog.manage")
+    categories = payload.get("categories") or []
+    branch_id = payload.get("branch_id")
+    from restaurant_os.saas_onboarding import import_custom_catalog_for_org
+    from restaurant_os.operations import ORGANIZATION_ID
+
+    res = import_custom_catalog_for_org(
+        session=session,
+        organization_id=ORGANIZATION_ID,
+        branch_id=branch_id,
+        catalog_data=categories,
+    )
+    session.commit()
+    return res
+
+
 @router.get("/catalog/ingredient-variations/{variation_id}")
 def get_ingredient_variation_endpoint(
     variation_id: str,

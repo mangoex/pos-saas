@@ -426,34 +426,110 @@ def _seed_starter_catalog(
     }
 
     catalog_data = templates.get(btype, templates["general"])
+    import_custom_catalog_for_org(
+        session=session,
+        organization_id=organization_id,
+        branch_id=branch_id,
+        catalog_data=catalog_data,
+        now=now,
+    )
 
-    for cat_data in catalog_data:
-        cat_id = _id()
-        session.execute(
-            models.product_categories.insert().values(
-                id=cat_id,
-                organization_id=organization_id,
-                name=cat_data["category"],
-                display_order=cat_data["display_order"],
-                status="active",
-                created_at=now,
-                updated_at=now,
-            )
+
+def import_custom_catalog_for_org(
+    session: Session,
+    organization_id: str,
+    branch_id: str | None,
+    catalog_data: list[dict[str, Any]],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Import a custom or AI-parsed menu catalog into an organization."""
+    if now is None:
+        now = _now()
+
+    active_branches = session.execute(
+        sa.select(models.branches.c.id).where(
+            models.branches.c.organization_id == organization_id,
+            models.branches.c.status == "active",
         )
+    ).scalars().all()
+    if not active_branches and branch_id:
+        active_branches = [branch_id]
 
-        for prod_data in cat_data["products"]:
+    created_products = 0
+
+    for idx, cat_data in enumerate(catalog_data):
+        cat_name = str(cat_data.get("category") or cat_data.get("name") or "General").strip()
+        display_order = int(cat_data.get("display_order") or (idx + 1))
+
+        # Reuse existing category if present
+        cat = session.execute(
+            sa.select(models.product_categories.c.id).where(
+                models.product_categories.c.organization_id == organization_id,
+                models.product_categories.c.name == cat_name,
+            )
+        ).scalars().first()
+
+        if cat:
+            cat_id = cat
+        else:
+            cat_id = _id()
+            session.execute(
+                models.product_categories.insert().values(
+                    id=cat_id,
+                    organization_id=organization_id,
+                    name=cat_name,
+                    display_order=display_order,
+                    status="active",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
+        products = cat_data.get("products") or []
+        for p_idx, prod_data in enumerate(products):
+            prod_name = str(prod_data.get("name") or f"Producto {p_idx + 1}").strip()
+            raw_sku = str(prod_data.get("sku") or "").strip()
+            if not raw_sku:
+                clean_prefix = re.sub(r'[^A-Z0-9]+', '', prod_name.upper())[:4] or "PRD"
+                raw_sku = f"{clean_prefix}-{uuid.uuid4().hex[:4].upper()}"
+
+            # Check if product with this SKU or name already exists in org
+            existing_prod = session.execute(
+                sa.select(models.products.c.id).where(
+                    models.products.c.organization_id == organization_id,
+                    sa.or_(
+                        models.products.c.sku == raw_sku,
+                        models.products.c.name == prod_name,
+                    ),
+                )
+            ).scalars().first()
+
+            if existing_prod:
+                continue
+
             prod_id = _id()
             price_id = _id()
+            price_cents = int(prod_data.get("price_cents") or 0)
+            if price_cents <= 0 and prod_data.get("price") is not None:
+                try:
+                    price_cents = int(float(prod_data["price"]) * 100)
+                except (ValueError, TypeError):
+                    price_cents = 0
+
+            desc = str(prod_data.get("description") or f"{prod_name} preparado al momento").strip()
+            station = str(prod_data.get("station") or "cocina").lower().strip()
+            if station not in ("cocina", "barra", "postres", "packing"):
+                station = "cocina"
 
             session.execute(
                 models.products.insert().values(
                     id=prod_id,
                     organization_id=organization_id,
                     category_id=cat_id,
-                    name=prod_data["name"],
-                    sku=prod_data["sku"],
-                    description=f"Delicioso {prod_data['name']} preparado al momento",
-                    station="cocina",
+                    name=prod_name,
+                    sku=raw_sku,
+                    description=desc,
+                    station=station,
                     status="active",
                     catalog_scope="organization",
                     source_branch_id=None,
@@ -467,7 +543,7 @@ def _seed_starter_catalog(
                     id=price_id,
                     organization_id=organization_id,
                     product_id=prod_id,
-                    price_cents=prod_data["price_cents"],
+                    price_cents=price_cents,
                     currency="MXN",
                     valid_from=now,
                     valid_to=None,
@@ -475,15 +551,19 @@ def _seed_starter_catalog(
                 )
             )
 
-            if branch_id:
+            for b_id in active_branches:
                 session.execute(
                     models.branch_product_availability.insert().values(
-                        branch_id=branch_id,
+                        branch_id=b_id,
                         product_id=prod_id,
                         is_available=True,
                         updated_at=now,
                     )
                 )
+
+            created_products += 1
+
+    return {"status": "ok", "created_products": created_products}
 
 
 def seed_starter_catalog_for_org(
@@ -500,7 +580,7 @@ def seed_starter_catalog_for_org(
             sa.select(models.branches.c.id)
             .where(models.branches.c.organization_id == organization_id)
             .order_by(models.branches.c.created_at)
-        ).scalar_one_or_none()
+        ).scalars().first()
         resolved_branch_id = branch
 
     _seed_starter_catalog(

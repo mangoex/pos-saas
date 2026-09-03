@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { ApiError, fetchApi } from '@restaurantos/api-client';
-import { Plus, Package, Edit, Trash2, SlidersHorizontal, Search, Sparkles } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, SlidersHorizontal, Search, Sparkles, UploadCloud, FileText, Check } from 'lucide-react';
 import { ModifierManager } from './ModifierManager';
+import { resolveBranchId } from '../../lib/branchContext';
 
 import '../../premium-catalogs.css';
 
@@ -42,14 +43,20 @@ const ProductsList = () => {
   const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState(emptyForm);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'templates' | 'ai_upload'>('templates');
   const [selectedTemplate, setSelectedTemplate] = useState('taqueria');
+  const [selectedFile, setSelectedFile] = useState<{ file: File; base64: string; previewUrl?: string } | null>(null);
+  const [parsedCategories, setParsedCategories] = useState<Array<{ name: string; products: Array<{ name: string; price: number; description: string; station: string }> }>>([]);
   const [templateError, setTemplateError] = useState('');
 
   const templateMutation = useMutation({
-    mutationFn: (templateType: string) => fetchApi('/catalog/seed-starter-template', {
-      method: 'POST',
-      body: JSON.stringify({ template_type: templateType }),
-    }),
+    mutationFn: (templateType: string) => {
+      const branchId = resolveBranchId();
+      return fetchApi('/catalog/seed-starter-template', {
+        method: 'POST',
+        body: JSON.stringify({ template_type: templateType, branch_id: branchId }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['categories'] });
@@ -58,6 +65,50 @@ const ProductsList = () => {
     },
     onError: (err) => {
       setTemplateError(err instanceof ApiError ? err.message : 'Error al cargar la plantilla de menú.');
+    },
+  });
+
+  const parseMutation = useMutation({
+    mutationFn: async (fileData: { base64: string; mime_type: string; filename: string }) => {
+      return fetchApi('/catalog/parse-menu-file', {
+        method: 'POST',
+        body: JSON.stringify({
+          file_base64: fileData.base64,
+          mime_type: fileData.mime_type,
+          filename: fileData.filename,
+        }),
+      });
+    },
+    onSuccess: (data: any) => {
+      setParsedCategories(data.categories || []);
+      setTemplateError('');
+    },
+    onError: (err) => {
+      setTemplateError(err instanceof ApiError ? err.message : 'Error al procesar el archivo con IA.');
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (categories: any) => {
+      const branchId = resolveBranchId();
+      return fetchApi('/catalog/import-custom-catalog', {
+        method: 'POST',
+        body: JSON.stringify({
+          categories,
+          branch_id: branchId,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      setIsTemplateModalOpen(false);
+      setParsedCategories([]);
+      setSelectedFile(null);
+      setTemplateError('');
+    },
+    onError: (err) => {
+      setTemplateError(err instanceof ApiError ? err.message : 'Error al importar los productos al catálogo.');
     },
   });
 
@@ -367,11 +418,46 @@ const ProductsList = () => {
 
       {modifierProduct && <ModifierManager isOpen productId={modifierProduct.id} productName={modifierProduct.name} onClose={() => setModifierProduct(null)} />}
 
-      <Modal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} title="Plantillas de Menú Prediseñadas">
-        <div style={{ display: 'grid', gap: 16 }}>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>
-            Selecciona un giro comercial para precargar categorías, productos listos para la venta, precios base y configuración de estación.
-          </p>
+      <Modal isOpen={isTemplateModalOpen} onClose={() => { setIsTemplateModalOpen(false); setParsedCategories([]); setSelectedFile(null); }} title="Crear o Cargar Menú">
+        <div style={{ display: 'grid', gap: 16, maxHeight: '85vh', overflowY: 'auto' }}>
+          {/* Tabs */}
+          <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setModalTab('templates')}
+              style={{
+                padding: '8px 16px',
+                border: 'none',
+                background: 'transparent',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+                color: modalTab === 'templates' ? '#10b981' : '#64748b',
+                borderBottom: modalTab === 'templates' ? '2px solid #10b981' : '2px solid transparent',
+              }}
+            >
+              📋 Plantillas Rápidas
+            </button>
+            <button
+              type="button"
+              onClick={() => setModalTab('ai_upload')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 16px',
+                border: 'none',
+                background: 'transparent',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+                color: modalTab === 'ai_upload' ? '#10b981' : '#64748b',
+                borderBottom: modalTab === 'ai_upload' ? '2px solid #10b981' : '2px solid transparent',
+              }}
+            >
+              <Sparkles size={16} /> Subir Menú (PDF / Imagen)
+            </button>
+          </div>
 
           {templateError && (
             <div style={{ padding: 12, borderRadius: 8, background: '#fee2e2', color: '#dc2626', fontSize: '0.875rem' }}>
@@ -379,49 +465,241 @@ const ProductsList = () => {
             </div>
           )}
 
-          <div style={{ display: 'grid', gap: 10 }}>
-            {[
-              { id: 'taqueria', title: '🌮 Taquería Mexicana', desc: 'Tacos al Pastor, Asada, Gringas y Aguas Frescas' },
-              { id: 'cafeteria', title: '☕ Cafetería y Repostería', desc: 'Americano, Capuchino, Latte, Croissants y Pasteles' },
-              { id: 'hamburgueseria', title: '🍔 Hamburguesería & Snacks', desc: 'Burgers clásicas, dobles, Papas a la Francesa y Bebidas' },
-              { id: 'pizzeria', title: '🍕 Pizzería Artesanal', desc: 'Pizzas medianas de Pepperoni, Hawaiana y Refrescos' },
-              { id: 'general', title: '🍽️ Menú Restaurante General', desc: 'Platillos especiales, combos del día y bebidas de la casa' },
-            ].map((tmpl) => (
-              <button
-                key={tmpl.id}
-                type="button"
-                onClick={() => setSelectedTemplate(tmpl.id)}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  gap: 4,
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  border: selectedTemplate === tmpl.id ? '2px solid #10b981' : '1px solid #e2e8f0',
-                  background: selectedTemplate === tmpl.id ? '#ecfdf5' : '#fff',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{tmpl.title}</strong>
-                <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{tmpl.desc}</span>
-              </button>
-            ))}
-          </div>
+          {modalTab === 'templates' ? (
+            <>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>
+                Selecciona un giro comercial para precargar categorías, productos listos para la venta, precios base y configuración de estación.
+              </p>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
-            <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => templateMutation.mutate(selectedTemplate)}
-              disabled={templateMutation.isPending}
-            >
-              {templateMutation.isPending ? 'Cargando plantilla...' : 'Cargar este menú'}
-            </Button>
-          </div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {[
+                  { id: 'taqueria', title: '🌮 Taquería Mexicana', desc: 'Tacos al Pastor, Asada, Gringas y Aguas Frescas' },
+                  { id: 'cafeteria', title: '☕ Cafetería y Repostería', desc: 'Americano, Capuchino, Latte, Croissants y Pasteles' },
+                  { id: 'hamburgueseria', title: '🍔 Hamburguesería & Snacks', desc: 'Burgers clásicas, dobles, Papas a la Francesa y Bebidas' },
+                  { id: 'pizzeria', title: '🍕 Pizzería Artesanal', desc: 'Pizzas medianas de Pepperoni, Hawaiana y Refrescos' },
+                  { id: 'general', title: '🍽️ Menú Restaurante General', desc: 'Platillos especiales, combos del día y bebidas de la casa' },
+                ].map((tmpl) => (
+                  <button
+                    key={tmpl.id}
+                    type="button"
+                    onClick={() => setSelectedTemplate(tmpl.id)}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 4,
+                      padding: '12px 16px',
+                      borderRadius: 10,
+                      border: selectedTemplate === tmpl.id ? '2px solid #10b981' : '1px solid #e2e8f0',
+                      background: selectedTemplate === tmpl.id ? '#ecfdf5' : '#fff',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{tmpl.title}</strong>
+                    <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{tmpl.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+                <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => templateMutation.mutate(selectedTemplate)}
+                  disabled={templateMutation.isPending}
+                >
+                  {templateMutation.isPending ? 'Cargando plantilla...' : 'Cargar este menú'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            /* Tab: Subir Menú PDF / Imagen */
+            <>
+              {parsedCategories.length === 0 ? (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>
+                    Sube una fotografía, imagen digital o archivo PDF de tu carta o menú. Nuestra IA analizará los platillos, bebidas y precios para importarlos a tu sistema.
+                  </p>
+
+                  <label
+                    style={{
+                      border: '2px dashed #cbd5e1',
+                      borderRadius: 12,
+                      padding: 28,
+                      textAlign: 'center',
+                      background: selectedFile ? '#f0fdf4' : '#f8fafc',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <input
+                      type="file"
+                      accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const base64 = event.target?.result as string;
+                          const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+                          setSelectedFile({ file, base64, previewUrl });
+                          setTemplateError('');
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                    <div style={{ padding: 12, borderRadius: 12, background: '#ecfdf5', color: '#10b981' }}>
+                      <UploadCloud size={32} />
+                    </div>
+                    {selectedFile ? (
+                      <div>
+                        <strong style={{ color: '#0f172a', display: 'block' }}>{selectedFile.file.name}</strong>
+                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                          {(selectedFile.file.size / 1024).toFixed(1)} KB · Clic para cambiar archivo
+                        </span>
+                        {selectedFile.previewUrl && (
+                          <div style={{ marginTop: 12, maxHeight: 180, overflow: 'hidden', borderRadius: 8 }}>
+                            <img src={selectedFile.previewUrl} alt="Preview" style={{ maxHeight: 180, objectFit: 'contain' }} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <strong style={{ color: '#0f172a', display: 'block' }}>Selecciona o arrastra tu menú</strong>
+                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>Soporta PDF, JPG, PNG o WebP (hasta 10MB)</span>
+                      </div>
+                    )}
+                  </label>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+                    <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="primary"
+                      disabled={!selectedFile || parseMutation.isPending}
+                      onClick={() => {
+                        if (!selectedFile) return;
+                        parseMutation.mutate({
+                          base64: selectedFile.base64,
+                          mime_type: selectedFile.file.type,
+                          filename: selectedFile.file.name,
+                        });
+                      }}
+                    >
+                      {parseMutation.isPending ? 'Analizando con IA...' : '✨ Analizar menú con IA'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* Parsed Review Mode */
+                <div style={{ display: 'grid', gap: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#0f172a' }}>Revisión del menú detectado</h4>
+                      <p style={{ margin: '2px 0 0', color: '#64748b', fontSize: '0.8125rem' }}>
+                        Verifica y ajusta los nombres y precios antes de importar a tu menú.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setParsedCategories([]); setSelectedFile(null); }}
+                      style={{ fontSize: '0.8125rem', color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Volver a escanear
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 12, maxHeight: '380px', overflowY: 'auto' }}>
+                    {parsedCategories.map((cat, catIdx) => (
+                      <div key={catIdx} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, background: '#fff' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <input
+                            type="text"
+                            value={cat.name}
+                            onChange={(e) => {
+                              const newCats = [...parsedCategories];
+                              newCats[catIdx].name = e.target.value;
+                              setParsedCategories(newCats);
+                            }}
+                            style={{ fontWeight: 700, fontSize: '0.95rem', border: 'none', borderBottom: '1px dashed #cbd5e1', outline: 'none', padding: '2px 4px', width: '220px' }}
+                          />
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{cat.products.length} productos</span>
+                        </div>
+                        <div style={{ display: 'grid', gap: 6 }}>
+                          {cat.products.map((prod, prodIdx) => (
+                            <div key={prodIdx} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: '6px 10px', borderRadius: 6 }}>
+                              <input
+                                type="text"
+                                value={prod.name}
+                                onChange={(e) => {
+                                  const newCats = [...parsedCategories];
+                                  newCats[catIdx].products[prodIdx].name = e.target.value;
+                                  setParsedCategories(newCats);
+                                }}
+                                style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px', fontSize: '0.85rem' }}
+                              />
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>$</span>
+                                <input
+                                  type="number"
+                                  step="0.50"
+                                  value={prod.price}
+                                  onChange={(e) => {
+                                    const newCats = [...parsedCategories];
+                                    newCats[catIdx].products[prodIdx].price = parseFloat(e.target.value) || 0;
+                                    setParsedCategories(newCats);
+                                  }}
+                                  style={{ width: 80, border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px', fontSize: '0.85rem', textAlign: 'right' }}
+                                />
+                              </div>
+                              <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: 4, background: prod.station === 'barra' ? '#e0f2fe' : '#fef3c7', color: prod.station === 'barra' ? '#0369a1' : '#b45309' }}>
+                                {prod.station === 'barra' ? 'Barra' : 'Cocina'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newCats = [...parsedCategories];
+                                  newCats[catIdx].products.splice(prodIdx, 1);
+                                  if (newCats[catIdx].products.length === 0) {
+                                    newCats.splice(catIdx, 1);
+                                  }
+                                  setParsedCategories(newCats);
+                                }}
+                                style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: 2 }}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+                    <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="primary"
+                      disabled={parsedCategories.length === 0 || importMutation.isPending}
+                      onClick={() => importMutation.mutate(parsedCategories)}
+                    >
+                      {importMutation.isPending ? 'Guardando en el menú...' : 'Guardar en el menú'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Modal>
     </>
