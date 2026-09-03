@@ -57,7 +57,6 @@ def upgrade() -> None:
     """))
 
     # 2. Clean up legacy purchasing presentations and price history
-    # First, delete price history for legacy PRES-% presentations
     conn.execute(sa.text("""
         DELETE FROM supplier_price_history
         WHERE presentation_id IN (
@@ -70,17 +69,21 @@ def upgrade() -> None:
     conn.execute(sa.text("""
         DELETE FROM purchase_presentations
         WHERE (code LIKE 'PRES-%' OR code LIKE 'PRES%' OR LOWER(name) LIKE '%kiwi%')
-          AND id NOT IN (SELECT DISTINCT presentation_id FROM purchase_lines)
+          AND id NOT IN (SELECT DISTINCT presentation_id FROM purchase_document_lines)
     """))
 
-    # Clean up legacy wholesale inventory items (SKUs 1001-9999 from 0048) not in use
+    # 3. Archive legacy wholesale inventory items from 0048 so they don't appear in catalogs
     conn.execute(sa.text("""
-        DELETE FROM inventory_items
+        UPDATE inventory_items
+        SET status = 'archived'
         WHERE organization_id = '018f6f73-2d0a-74f0-8f1c-000000000001'
           AND sku >= '1000' AND sku <= '9999'
-          AND id NOT IN (SELECT DISTINCT item_id FROM purchase_lines)
-          AND id NOT IN (SELECT DISTINCT item_id FROM inventory_transactions)
-          AND id NOT IN (SELECT DISTINCT item_id FROM recipe_ingredients)
+    """))
+
+    conn.execute(sa.text("""
+        UPDATE inventory_items
+        SET name = REPLACE(name, 'KIWI', 'INSUMO')
+        WHERE UPPER(name) LIKE '%KIWI%'
     """))
 
 
