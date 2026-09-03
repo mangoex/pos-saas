@@ -26,12 +26,18 @@ Then visualiza el acceso directo a "Administración".
 
 ## BDD-FEAT-POS-002: Depuración de Tarjetas ERP en Hub de Administración de Sucursal
 
-### BDD-SC-POS-003: Exclusión de producción, traspasos y conteos físicos
+### BDD-SC-POS-003: Exclusión de producción, traspasos, conteos físicos e inventario de almacén
 Given un usuario supervisor o administrador accede al Hub de "Administración de sucursal" en el POS
 When examina las tarjetas operativas disponibles
-Then no se presentan tarjetas para Producción de lotes (`/administration/production`), Traspasos (`/administration/transfers`) ni Conteos físicos (`/administration/counts`).
+Then no se presentan tarjetas para Producción de lotes (`/administration/production`), Traspasos (`/administration/transfers`), Conteos físicos (`/administration/counts`), Reportes históricos (`/historical-reports`), ni opciones fragmentadas de comentarios/ingredientes o inventario de almacén.
 
-### BDD-SC-POS-004: Foco en disponibilidad, compras de caja, mermas y monitoreo
-Given el supervisor accede al Hub de "Administración de sucursal"
-When revisa las opciones autorizadas
-Then dispone de Monitor de ventas, Disponibilidad de Menú, Mermas operativas, Compras de caja chica, Directorio de proveedores y Checador de asistencia.
+### BDD-SC-POS-004: Foco en 6 tarjetas operativas y distinción de checador
+Given el supervisor o administrador accede al Hub de "Administración de sucursal"
+When revisa las opciones operativas autorizadas
+Then dispone exactamente de 6 tarjetas:
+  1. Reporte de Asistencia (auditoría de horas y checadas, distinguiéndose de la acción de checar del sidebar)
+  2. Monitor de ventas (desbloqueado para supervisores y administradores)
+  3. Disponibilidad de Menú (activar/apagar platillos e insumos agotados 86)
+  4. Proveedores locales
+  5. Compras de caja chica
+  6. Mermas operativas.

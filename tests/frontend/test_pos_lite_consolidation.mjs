@@ -31,6 +31,31 @@ assert.equal(
   false,
   'AdminHub in POS Lite must NOT include /historical-reports card'
 );
+assert.equal(
+  adminHubContent.includes("to: '/administration/variations'"),
+  false,
+  'AdminHub in POS Lite must NOT include fragmented /administration/variations card'
+);
+assert.equal(
+  adminHubContent.includes("to: '/administration/ingredient-extras'"),
+  false,
+  'AdminHub in POS Lite must NOT include fragmented /administration/ingredient-extras card'
+);
+assert.equal(
+  adminHubContent.includes("to: '/administration/inventory'"),
+  false,
+  'AdminHub in POS Lite must NOT include /administration/inventory warehouse card'
+);
+assert.equal(
+  adminHubContent.includes("Reporte de Asistencia"),
+  true,
+  'AdminHub must name attendance card as Reporte de Asistencia to differentiate from sidebar clock-in'
+);
+assert.match(
+  adminHubContent,
+  /hasPermission\('branch\.admin\.access'\)|hasPermission\('admin\.manage'\)/,
+  'AdminHub isCardAuthorized must unlock cards for branch admins and managers'
+);
 
 // Verify core operational cards remain
 assert.equal(

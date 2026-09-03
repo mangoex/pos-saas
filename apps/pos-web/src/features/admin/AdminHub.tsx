@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '@restaurantos/api-client';
 import { Link } from 'react-router-dom';
 import {
-  Building2, Carrot, Package, Receipt,
-  ShieldCheck, Trash2, MessageSquareText, Clock3,
+  Building2, Package, Receipt,
+  ShieldCheck, Trash2, Clock3,
   BarChart3, Lock,
 } from 'lucide-react';
 import { usePosSession } from '../../session';
@@ -33,7 +33,7 @@ interface BranchImportSummary {
 const enabledCards: EnabledCard[] = [
   {
     to: '/administration/attendance',
-    label: 'Checador',
+    label: 'Reporte de Asistencia',
     description: 'Reporte de entradas y salidas del personal con filtros por fecha, código y sucursal.',
     icon: Clock3,
     permission: 'branch.staff.read',
@@ -51,27 +51,6 @@ const enabledCards: EnabledCard[] = [
     description: 'Activar o apagar productos e insumos agotados (86) en la sucursal.',
     icon: Package,
     permission: ['catalog.branch.manage', 'branch.admin.access', 'admin.manage'],
-  },
-  {
-    to: '/administration/variations',
-    label: 'Comentarios del pedido',
-    description: 'Disponibilidad local de indicaciones de cocina por producto.',
-    icon: MessageSquareText,
-    permission: ['catalog.branch.manage', 'recipes.manage', 'admin.manage'],
-  },
-  {
-    to: '/administration/ingredient-extras',
-    label: 'Ingredientes adicionales',
-    description: 'Disponibilidad local de porciones extra configuradas por corporativo.',
-    icon: Carrot,
-    permission: ['catalog.branch.manage', 'recipes.manage', 'admin.manage'],
-  },
-  {
-    to: '/administration/inventory',
-    label: 'Inventario',
-    description: 'Existencias y movimientos del almacén de la sucursal.',
-    icon: Carrot,
-    permission: ['inventory.read', 'branch.admin.access', 'admin.manage'],
   },
   {
     to: '/administration/suppliers',
@@ -97,9 +76,7 @@ const enabledCards: EnabledCard[] = [
 ];
 
 export function branchAdministrationCards(canManageVariations: boolean): EnabledCard[] {
-  return enabledCards.filter(
-    (card) => !['/administration/variations', '/administration/ingredient-extras'].includes(card.to) || canManageVariations,
-  );
+  return enabledCards;
 }
 
 const AdminHub: React.FC = () => {
@@ -114,6 +91,13 @@ const AdminHub: React.FC = () => {
   const visibleCards = branchAdministrationCards(hasPermission('catalog.branch.manage'));
 
   const isCardAuthorized = (card: EnabledCard): boolean => {
+    if (
+      hasPermission('admin.manage') ||
+      hasPermission('branch.admin.access') ||
+      Boolean(session?.roles?.some((r) => r.name.toLowerCase().includes('admin')))
+    ) {
+      return true;
+    }
     if (!card.permission) return true;
     if (Array.isArray(card.permission)) {
       return card.permission.some((p) => hasPermission(p));
