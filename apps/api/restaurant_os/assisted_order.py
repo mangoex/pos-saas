@@ -23,7 +23,7 @@ class OpenRouterOptions:
     base_url: str
     timeout_seconds: float
     http_referer: str | None = None
-    app_title: str = "Kiwi RestaurantOS POS"
+    app_title: str = "RestaurantOS POS"
 
 
 def _normalize(value: str) -> str:

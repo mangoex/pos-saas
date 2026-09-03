@@ -101,7 +101,7 @@ export const RecipeAiAssistantModal: React.FC<Props> = ({
     <Modal isOpen={isOpen} onClose={onClose} title={`✨ Asistente IA de Recetas — ${productName}`}>
       <div style={{ display: 'grid', gap: 16, maxHeight: '80vh', overflowY: 'auto', padding: '4px' }}>
         <p style={{ color: '#4b5563', fontSize: '0.9rem', margin: 0 }}>
-          Pega el texto libre de la receta (ingredientes, cantidades y preparación). La IA identificará los insumos del catálogo de Kiwi, normalizará unidades a kg/litros/piezas y calculará el Food Cost sugerido.
+          Pega el texto libre de la receta (ingredientes, cantidades y preparación). La IA identificará los insumos del catálogo, normalizará unidades a kg/litros/piezas y calculará el Food Cost sugerido.
         </p>
 
         <div style={{ display: 'grid', gap: 6 }}>
@@ -211,7 +211,7 @@ export const RecipeAiAssistantModal: React.FC<Props> = ({
                 <thead style={{ background: '#f3f4f6' }}>
                   <tr>
                     <th style={{ padding: '8px 10px', textAlign: 'left' }}>Ingrediente Detectado</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'left' }}>Insumo en Catálogo Kiwi</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left' }}>Insumo en Catálogo</th>
                     <th style={{ padding: '8px 10px', textAlign: 'right' }}>Cant. Normalizada</th>
                     <th style={{ padding: '8px 10px', textAlign: 'right' }}>Costo Línea</th>
                     <th style={{ padding: '8px 10px', textAlign: 'center' }}>Match</th>

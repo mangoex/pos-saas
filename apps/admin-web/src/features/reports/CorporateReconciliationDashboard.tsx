@@ -81,7 +81,7 @@ export default function CorporateReconciliationDashboard() {
             Consolidado Multi-Sucursal y Cortes
           </h1>
           <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-            Informe General Acumulado Diaria y Mensualmente (Formato Oficial Kiwi)
+            Informe General Acumulado Diaria y Mensualmente (Formato Oficial)
           </p>
         </div>
 

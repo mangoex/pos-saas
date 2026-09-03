@@ -2185,7 +2185,7 @@ def branch_reconciliation_export_endpoint(
         content=excel_stream.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f'attachment; filename="Corte_Kiwi_{branch_id}_{year}_{month:02d}.xlsx"'
+            "Content-Disposition": f'attachment; filename="Corte_{branch_id}_{year}_{month:02d}.xlsx"'
         },
     )
 
@@ -6025,7 +6025,7 @@ def post_uber_eats_test_order(
         "id": f"uber-test-{uuid.uuid4().hex[:8]}",
         "display_id": f"U{uuid.uuid4().hex[:4].upper()}",
         "event_type": "orders.notification",
-        "store": {"id": store_id, "name": "Kiwi Restaurante"},
+        "store": {"id": store_id, "name": "Restaurante Demo"},
         "eater": {"first_name": customer_name, "last_name": "", "phone": "+526671234567"},
         "delivery": {"notes": "Timbre no funciona, llamar al llegar."},
         "cart": {

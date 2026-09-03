@@ -727,7 +727,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   <input
                     type="text"
                     className="premium-input"
-                    placeholder="RESTAURANTE KIWI SA DE CV"
+                    placeholder="RESTAURANTE EJEMPLO SA DE CV"
                     value={facturapiForm.organization_legal_name ?? ''}
                     onChange={(e) => setFacturapiForm({ ...facturapiForm, organization_legal_name: e.target.value.toUpperCase() })}
                   />
@@ -1127,7 +1127,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   Vinculación de Sucursales Físicas con {selectedProvider === 'UBER_EATS' ? 'Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'DiDi Food' : selectedProvider === 'RAPPI' ? 'Rappi' : selectedProvider}
                 </h2>
                 <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-                  Asocia el {selectedProvider === 'UBER_EATS' ? 'Store UUID' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID' : selectedProvider === 'RAPPI' ? 'Store ID de Rappi' : 'Store ID'} de cada tienda en la plataforma externa con la sucursal de Kiwi.
+                  Asocia el {selectedProvider === 'UBER_EATS' ? 'Store UUID' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID' : selectedProvider === 'RAPPI' ? 'Store ID de Rappi' : 'Store ID'} de cada tienda en la plataforma externa con tu sucursal en RestaurantOS.
                 </p>
               </div>
               <Button variant="primary" onClick={() => setMappingModalOpen(true)}>

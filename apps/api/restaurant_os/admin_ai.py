@@ -59,7 +59,7 @@ class AdminAiProviderOptions:
     model: str
     base_url: str
     timeout_seconds: float
-    app_title: str = "Kiwi RestaurantOS Admin"
+    app_title: str = "RestaurantOS Admin"
 
 
 CANONICAL_RULES: tuple[dict[str, str], ...] = (
