@@ -18550,18 +18550,53 @@ def create_purchase_document(
     branch_id = str(payload.get("branch_id", ""))
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "purchases.manage", branch_id)
-    supplier_id = str(payload.get("supplier_id", ""))
-    supplier = (
-        session.execute(
-            sa.select(models.suppliers).where(
-                models.suppliers.c.id == supplier_id,
-                models.suppliers.c.organization_id == ORGANIZATION_ID,
-                models.suppliers.c.status == "active",
+    supplier_id = str(payload.get("supplier_id", "")).strip()
+    supplier = None
+    if supplier_id:
+        supplier = (
+            session.execute(
+                sa.select(models.suppliers).where(
+                    models.suppliers.c.id == supplier_id,
+                    models.suppliers.c.organization_id == ORGANIZATION_ID,
+                    models.suppliers.c.status == "active",
+                )
             )
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
+    if not supplier:
+        # Default or provision general supplier
+        supplier = (
+            session.execute(
+                sa.select(models.suppliers).where(
+                    models.suppliers.c.organization_id == ORGANIZATION_ID,
+                    models.suppliers.c.status == "active",
+                ).order_by(models.suppliers.c.created_at)
+            )
+            .mappings()
+            .first()
+        )
+        if not supplier:
+            sup_id = _id()
+            now_dt = _now()
+            session.execute(
+                models.suppliers.insert().values(
+                    id=sup_id,
+                    organization_id=ORGANIZATION_ID,
+                    code="SUP-GEN",
+                    commercial_name="Proveedor General",
+                    legal_name="Proveedor General",
+                    credit_days=0,
+                    status="active",
+                    created_at=now_dt,
+                    updated_at=now_dt,
+                )
+            )
+            supplier = session.execute(
+                sa.select(models.suppliers).where(models.suppliers.c.id == sup_id)
+            ).mappings().first()
+        supplier_id = supplier["id"]
+
     branch = session.execute(
         sa.select(models.branches.c.id).where(
             models.branches.c.id == branch_id,
@@ -18569,9 +18604,9 @@ def create_purchase_document(
             models.branches.c.status == "active",
         )
     ).scalar_one_or_none()
-    if not supplier or not branch:
+    if not branch:
         raise BusinessError(
-            "purchase_supplier_or_branch_not_found", "Active supplier and branch are required"
+            "purchase_supplier_or_branch_not_found", "Active branch is required"
         )
     terms = (
         session.execute(
@@ -18590,9 +18625,10 @@ def create_purchase_document(
     document_type = str(payload.get("document_type", "receipt")).strip().lower()
     if document_type not in {"invoice", "receipt", "ticket", "note"}:
         raise BusinessError("invalid_purchase_document_type", "Purchase document type is invalid")
+    now = _now()
     folio = str(payload.get("folio", "")).strip()
     if not folio:
-        raise BusinessError("purchase_folio_required", "Purchase document folio is required")
+        folio = f"COMP-{now.strftime('%Y%m%d')}-{uuid4().hex[:4].upper()}"
     freight = _money(payload.get("freight_total", "0"))
     if freight != 0:
         raise BusinessError(
@@ -18601,32 +18637,114 @@ def create_purchase_document(
     raw_lines = list(payload.get("lines", []))
     if not raw_lines:
         raise BusinessError("purchase_lines_required", "Purchase requires at least one line")
-    now = _now()
     document_id = _id()
     lines: list[dict[str, Any]] = []
     subtotal = Decimal("0")
     discount_total = Decimal("0")
     tax_total = Decimal("0")
     for raw in raw_lines:
-        presentation = (
-            session.execute(
-                sa.select(models.purchase_presentations).where(
-                    models.purchase_presentations.c.id == str(raw.get("presentation_id", "")),
-                    models.purchase_presentations.c.supplier_id == supplier_id,
-                    models.purchase_presentations.c.status == "active",
+        presentation = None
+        pres_id = str(raw.get("presentation_id", "")).strip()
+        if pres_id:
+            presentation = (
+                session.execute(
+                    sa.select(models.purchase_presentations).where(
+                        models.purchase_presentations.c.id == pres_id,
+                        models.purchase_presentations.c.status == "active",
+                    )
                 )
+                .mappings()
+                .first()
             )
-            .mappings()
-            .first()
-        )
-        if not presentation:
-            raise BusinessError(
-                "purchase_presentation_not_found", "Active supplier presentation was not found"
-            )
+
         quantity = _quantity(raw.get("quantity", "0"))
-        unit_price = _money(raw.get("unit_price", presentation["last_net_price"]))
+        unit_price = _money(raw.get("unit_price", "0"))
         discount = _money(raw.get("discount", "0"))
         tax = _money(raw.get("tax", "0"))
+
+        if not presentation:
+            concept = str(
+                raw.get("concept")
+                or raw.get("description")
+                or raw.get("name")
+                or raw.get("item_name")
+                or "Gasto General"
+            ).strip()
+
+            # Find or create inventory item
+            item = session.execute(
+                sa.select(models.inventory_items).where(
+                    models.inventory_items.c.organization_id == ORGANIZATION_ID,
+                    sa.func.lower(models.inventory_items.c.name) == concept.lower(),
+                )
+            ).mappings().first()
+
+            if not item:
+                unit = session.execute(
+                    sa.select(models.inventory_units.c.id).where(
+                        models.inventory_units.c.code == "PZA"
+                    )
+                ).scalar_one_or_none()
+                if not unit:
+                    unit = session.execute(sa.select(models.inventory_units.c.id)).scalars().first()
+                item_id = _id()
+                clean_prefix = re.sub(r'[^A-Z0-9]+', '', concept.upper())[:6] or "INS"
+                sku = f"{clean_prefix}-{uuid4().hex[:4].upper()}"
+                session.execute(
+                    models.inventory_items.insert().values(
+                        id=item_id,
+                        organization_id=ORGANIZATION_ID,
+                        name=concept,
+                        sku=sku,
+                        base_unit_id=unit,
+                        item_type="ingredient",
+                        status="active",
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                item = session.execute(
+                    sa.select(models.inventory_items).where(models.inventory_items.c.id == item_id)
+                ).mappings().first()
+
+            pres_id = _id()
+            pres_code = f"P-{uuid4().hex[:6].upper()}"
+            session.execute(
+                models.purchase_presentations.insert().values(
+                    id=pres_id,
+                    organization_id=ORGANIZATION_ID,
+                    supplier_id=supplier_id,
+                    item_id=item["id"],
+                    code=pres_code,
+                    name=concept,
+                    package_type="direct",
+                    commercial_quantity=Decimal("1.0"),
+                    commercial_unit_id=unit,
+                    base_unit_id=unit,
+                    base_unit_yield=Decimal("1.0"),
+                    gross_content=Decimal("1.0"),
+                    net_content=Decimal("1.0"),
+                    usable_content=Decimal("1.0"),
+                    yield_percent=Decimal("100.0"),
+                    barcode=None,
+                    tax_rate=Decimal("0"),
+                    last_net_price=unit_price,
+                    cost_per_base_unit=unit_price,
+                    is_preferred=True,
+                    status="active",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            presentation = session.execute(
+                sa.select(models.purchase_presentations).where(
+                    models.purchase_presentations.c.id == pres_id
+                )
+            ).mappings().first()
+        else:
+            if unit_price <= 0 and presentation.get("last_net_price"):
+                unit_price = _money(presentation["last_net_price"])
+
         line_subtotal = _money(quantity * unit_price)
         if quantity <= 0 or unit_price < 0 or discount < 0 or discount > line_subtotal or tax < 0:
             raise BusinessError(

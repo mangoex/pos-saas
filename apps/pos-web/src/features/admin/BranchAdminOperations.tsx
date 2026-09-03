@@ -289,7 +289,8 @@ interface Purchase {
 }
 
 interface PurchaseDraftLine {
-  presentation_id: string;
+  concept: string;
+  presentation_id?: string;
   quantity: string;
   unit_price: string;
   discount: string;
@@ -309,24 +310,19 @@ export function BranchAdminPurchases() {
 
   const [form, setForm] = useState({
     supplier_id: '',
-    document_type: 'invoice',
+    document_type: 'receipt',
     folio: '',
     document_date: new Date().toISOString().slice(0, 10),
     paid_from_cash: true,
     lines: [
-      { presentation_id: '', quantity: '1', unit_price: '', discount: '0', tax: '0' },
+      { concept: '', quantity: '1', unit_price: '', discount: '0', tax: '0' },
     ] as PurchaseDraftLine[],
   });
-
-  const availablePresentations = useMemo(() => {
-    if (!form.supplier_id) return presentations.data;
-    return presentations.data.filter((p) => p.supplier_id === form.supplier_id);
-  }, [presentations.data, form.supplier_id]);
 
   const addLine = () => {
     setForm((f) => ({
       ...f,
-      lines: [...f.lines, { presentation_id: '', quantity: '1', unit_price: '', discount: '0', tax: '0' }],
+      lines: [...f.lines, { concept: '', quantity: '1', unit_price: '', discount: '0', tax: '0' }],
     }));
   };
 
@@ -338,17 +334,7 @@ export function BranchAdminPurchases() {
   const updateLine = (idx: number, key: keyof PurchaseDraftLine, value: string) => {
     setForm((f) => ({
       ...f,
-      lines: f.lines.map((l, i) => {
-        if (i !== idx) return l;
-        const updated = { ...l, [key]: value };
-        if (key === 'presentation_id') {
-          const pres = presentations.data.find((p) => p.id === value);
-          if (pres && (!l.unit_price || l.unit_price === '0')) {
-            updated.unit_price = String(pres.last_net_price);
-          }
-        }
-        return updated;
-      }),
+      lines: f.lines.map((l, i) => (i === idx ? { ...l, [key]: value } : l)),
     }));
   };
 
@@ -370,22 +356,14 @@ export function BranchAdminPurchases() {
   }, [form.lines]);
 
   const handleCreatePurchase = async () => {
-    if (!form.supplier_id) {
-      setError('Selecciona un proveedor.');
-      return;
-    }
-    if (!form.folio.trim()) {
-      setError('El folio o número de comprobante es obligatorio.');
-      return;
-    }
     for (let i = 0; i < form.lines.length; i++) {
       const line = form.lines[i];
-      if (!line.presentation_id) {
-        setError(`Selecciona la presentación en la línea ${i + 1}.`);
+      if (!line.concept.trim() && !line.presentation_id) {
+        setError(`Escribe el concepto o insumo en la fila ${i + 1}.`);
         return;
       }
       if (parseFloat(line.quantity) <= 0) {
-        setError(`Cantidad inválida en la línea ${i + 1}.`);
+        setError(`Cantidad inválida en la fila ${i + 1}.`);
         return;
       }
     }
@@ -397,14 +375,15 @@ export function BranchAdminPurchases() {
         method: 'POST',
         body: JSON.stringify({
           branch_id: branchId,
-          supplier_id: form.supplier_id,
+          supplier_id: form.supplier_id || undefined,
           document_type: form.document_type,
-          folio: form.folio.trim(),
+          folio: form.folio.trim() || undefined,
           document_date: form.document_date,
           paid_from_cash: form.paid_from_cash,
           payment_method: form.paid_from_cash ? 'cash' : 'other',
           lines: form.lines.map((l) => ({
-            presentation_id: l.presentation_id,
+            concept: l.concept.trim(),
+            presentation_id: l.presentation_id || undefined,
             quantity: l.quantity,
             unit_price: l.unit_price || '0',
             discount: l.discount || '0',
@@ -415,11 +394,11 @@ export function BranchAdminPurchases() {
       setIsModalOpen(false);
       setForm({
         supplier_id: '',
-        document_type: 'invoice',
+        document_type: 'receipt',
         folio: '',
         document_date: new Date().toISOString().slice(0, 10),
         paid_from_cash: true,
-        lines: [{ presentation_id: '', quantity: '1', unit_price: '', discount: '0', tax: '0' }],
+        lines: [{ concept: '', quantity: '1', unit_price: '', discount: '0', tax: '0' }],
       });
       purchases.refetch();
     } catch (e: unknown) {
@@ -528,13 +507,13 @@ export function BranchAdminPurchases() {
           {error && <div role="alert" style={{ color: '#b91c1c' }}>{error}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <label>
-              Proveedor *
+              Proveedor
               <select
                 style={selectStyle}
                 value={form.supplier_id}
                 onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}
               >
-                <option value="">Selecciona proveedor</option>
+                <option value="">Proveedor General / Varios</option>
                 {suppliers.data.map((s) => (
                   <option key={s.id} value={s.id}>{s.commercial_name} ({s.code})</option>
                 ))}
@@ -547,19 +526,18 @@ export function BranchAdminPurchases() {
                 value={form.document_type}
                 onChange={(e) => setForm({ ...form, document_type: e.target.value })}
               >
-                <option value="invoice">Factura</option>
-                <option value="receipt">Remisión</option>
+                <option value="receipt">Remisión / Nota</option>
                 <option value="ticket">Ticket</option>
-                <option value="note">Nota</option>
+                <option value="invoice">Factura</option>
               </select>
             </label>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <label>
-              Folio / Número Comprobante *
+              Folio / Número Comprobante
               <Input
-                placeholder="Ej. FAC-10293"
+                placeholder="Ej. FAC-10293, Ticket # o auto-generar"
                 value={form.folio}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, folio: e.target.value })}
               />
@@ -591,6 +569,15 @@ export function BranchAdminPurchases() {
               </Button>
             </div>
 
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px 80px 80px 32px', gap: 8, fontSize: '0.75rem', fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              <span>Insumo o Concepto</span>
+              <span>Cant.</span>
+              <span>P. Unit ($)</span>
+              <span>Desc.</span>
+              <span>IVA</span>
+              <span></span>
+            </div>
+
             {form.lines.map((line, idx) => (
               <div
                 key={idx}
@@ -602,18 +589,11 @@ export function BranchAdminPurchases() {
                   marginBottom: 8,
                 }}
               >
-                <select
-                  style={selectStyle}
-                  value={line.presentation_id}
-                  onChange={(e) => updateLine(idx, 'presentation_id', e.target.value)}
-                >
-                  <option value="">Selecciona presentación</option>
-                  {availablePresentations.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.item_name})
-                    </option>
-                  ))}
-                </select>
+                <Input
+                  placeholder="Ej. Bolsa de hielo, Verdura, Gas..."
+                  value={line.concept}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLine(idx, 'concept', e.target.value)}
+                />
                 <Input
                   type="number"
                   min="0.001"

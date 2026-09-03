@@ -236,3 +236,59 @@ def test_purchase_paid_from_cash_shift_and_cancellation_compensation():
     assert cancel_res.status_code == 200, cancel_res.text
     cancelled = cancel_res.json()
     assert cancelled["status"] == "cancelled"
+
+
+def test_branch_direct_purchase_without_presentations_uses_concept():
+    """Verify that a branch cashier or supervisor can record a direct cash purchase
+    by simply passing free-text concept (e.g. Bolsa de hielo) without needing
+    preconfigured presentations or suppliers.
+    """
+    client = _client_with_seeded_database()
+    headers = _admin_headers()
+
+    # Open cash shift
+    shift_res = _open_shift(client, opening_cash_cents=200000, headers=headers)
+    assert shift_res.status_code == 200
+
+    res = client.post(
+        "/api/v1/purchases",
+        json={
+            "branch_id": BRANCH_ID,
+            "document_type": "receipt",
+            "paid_from_cash": True,
+            "payment_method": "cash",
+            "lines": [
+                {
+                    "concept": "Bolsa de hielo 5kg",
+                    "quantity": "2",
+                    "unit_price": "35.00",
+                    "discount": "0",
+                    "tax": "0",
+                },
+                {
+                    "concept": "Servilletas y desechables",
+                    "quantity": "1",
+                    "unit_price": "85.50",
+                    "discount": "0",
+                    "tax": "0",
+                },
+            ],
+        },
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    purchase = res.json()
+    assert purchase["id"] is not None
+    assert float(purchase["total"]) == 155.5  # 2*35 + 85.5
+    assert len(purchase["lines"]) == 2
+
+    # Confirm purchase with cash register
+    conf_res = client.post(
+        f"/api/v1/purchases/{purchase['id']}/confirm",
+        json={"idempotency_key": f"conf-concept-{uuid.uuid4()}", "register_id": "CAJA-01"},
+        headers=headers,
+    )
+    assert conf_res.status_code == 200, conf_res.text
+    confirmed = conf_res.json()
+    assert confirmed["status"] == "confirmed"
+    assert confirmed["paid_from_cash"] is True
