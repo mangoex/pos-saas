@@ -188,6 +188,7 @@ export const App = () => {
           <Route path="branches" element={<BranchesList />} />
           <Route path="drivers" element={<DriversList />} />
           <Route path="integrations" element={<IntegrationsHub />} />
+          <Route path="invoicing" element={<IntegrationsHub defaultProvider="FACTURAPI" />} />
           <Route path="cash-concepts" element={<CashConceptManageRoute><CashConceptsManager /></CashConceptManageRoute>} />
 
           {/* Subroutes: Ventas y Reportes */}

@@ -211,7 +211,7 @@ const AdminLayout = () => {
     },
     {
       path: '/branches-hub',
-      label: 'Sucursal y Delivery Hub',
+      label: 'Sucursales y Canales',
       icon: <Store size={20} />,
       badge: 'Uber/DiDi',
       matchingPrefixes: [
@@ -219,7 +219,7 @@ const AdminLayout = () => {
         '/branches',
         '/drivers',
         '/integrations',
-        '/cash-concepts',
+        '/invoicing',
       ],
     },
     {
@@ -233,6 +233,7 @@ const AdminLayout = () => {
         '/sales-monitor',
         '/historical-reports',
         '/orders',
+        '/cash-concepts',
       ],
     },
     {

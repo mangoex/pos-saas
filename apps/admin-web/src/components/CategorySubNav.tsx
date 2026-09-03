@@ -27,17 +27,40 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     ],
   },
   {
+    hubPath: '/inventory',
+    categoryTitle: 'Inventario y Almacén',
+    items: [
+      { path: '/inventory/items', label: 'Insumos' },
+      {
+        path: '/warehouses',
+        label: 'Almacenes',
+        requiredPermission: (user: any) =>
+          Boolean(user.is_superadmin || (user.permissions || []).includes('catalog.manage')),
+      },
+      { path: '/production', label: 'Producción de Lotes' },
+      { path: '/inventory/waste', label: 'Mermas' },
+      { path: '/inventory/transfers', label: 'Traspasos' },
+      { path: '/inventory/counts', label: 'Conteos Físicos' },
+      { path: '/inventory/units', label: 'Unidades' },
+    ],
+  },
+  {
+    hubPath: '/purchasing',
+    categoryTitle: 'Compras y Proveedores',
+    items: [
+      { path: '/purchases', label: 'Compras directas' },
+      { path: '/suppliers', label: 'Proveedores' },
+      { path: '/purchase-presentations', label: 'Presentaciones' },
+    ],
+  },
+  {
     hubPath: '/branches-hub',
-    categoryTitle: 'Sucursal y Delivery Hub',
+    categoryTitle: 'Sucursales y Canales',
     items: [
       { path: '/branches', label: 'Datos del Negocio' },
-      { path: '/integrations', label: 'Delivery Hub (Apps)' },
+      { path: '/integrations', label: 'Canales de Delivery (Apps)' },
+      { path: '/invoicing', label: 'Facturación SAT' },
       { path: '/drivers', label: 'Repartidores' },
-      {
-        path: '/cash-concepts',
-        label: 'Conceptos de Caja',
-        requiredPermission: (user) => canManageCashConcepts(user),
-      },
     ],
   },
   {
@@ -45,6 +68,11 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     categoryTitle: 'Cajas y Reportes',
     items: [
       { path: '/reports', label: 'Cortes X/Z y Ventas' },
+      {
+        path: '/cash-concepts',
+        label: 'Conceptos de Caja',
+        requiredPermission: (user) => canManageCashConcepts(user),
+      },
     ],
   },
   {

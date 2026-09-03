@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Badge, Modal } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
@@ -19,6 +20,7 @@ import {
   QrCode,
   Eye,
   EyeOff,
+  Receipt,
 } from 'lucide-react';
 import '../../premium-catalogs.css';
 
@@ -96,9 +98,23 @@ interface InvoiceRecord {
   verification_url?: string;
 }
 
-export default function IntegrationsHub() {
+interface IntegrationsHubProps {
+  defaultProvider?: 'UBER_EATS' | 'DIDI_FOOD' | 'RAPPI' | 'FACTURAPI';
+}
+
+export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProps = {}) {
+  const location = useLocation();
+  const isInvoicingRoute = location.pathname.includes('/invoicing') || defaultProvider === 'FACTURAPI';
   const queryClient = useQueryClient();
-  const [selectedProvider, setSelectedProvider] = useState<'UBER_EATS' | 'DIDI_FOOD' | 'RAPPI' | 'FACTURAPI'>('UBER_EATS');
+  const [selectedProvider, setSelectedProvider] = useState<'UBER_EATS' | 'DIDI_FOOD' | 'RAPPI' | 'FACTURAPI'>(
+    isInvoicingRoute ? 'FACTURAPI' : (defaultProvider || 'UBER_EATS')
+  );
+
+  useEffect(() => {
+    if (isInvoicingRoute) {
+      setSelectedProvider('FACTURAPI');
+    }
+  }, [isInvoicingRoute]);
   const [activeTab, setActiveTab] = useState<'config' | 'stores' | 'logs' | 'invoices'>('config');
   const [copied, setCopied] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -268,11 +284,22 @@ export default function IntegrationsHub() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
         <div>
           <h1 className="premium-header-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Share2 size={26} style={{ color: '#10b981' }} />
-            Hub de Integraciones & Facturación CFDI
+            {isInvoicingRoute ? (
+              <>
+                <Receipt size={26} style={{ color: '#7e22ce' }} />
+                Facturación Electrónica SAT (CFDI 4.0)
+              </>
+            ) : (
+              <>
+                <Share2 size={26} style={{ color: '#10b981' }} />
+                Canales de Delivery (Apps de Comida)
+              </>
+            )}
           </h1>
           <p className="premium-header-subtitle">
-            Conecta plataformas de delivery (Uber Eats, DiDi Food, Rappi) y el servicio oficial de timbrado ante el SAT (Facturapi CFDI 4.0).
+            {isInvoicingRoute
+              ? 'Emite y timbra facturas digitales válidas ante el SAT (Facturapi) o habilita autofactura QR para comensales.'
+              : 'Recepción automática y unificada de pedidos de Uber Eats, DiDi Food y Rappi directamente en el POS y cocina.'}
           </p>
         </div>
       </div>

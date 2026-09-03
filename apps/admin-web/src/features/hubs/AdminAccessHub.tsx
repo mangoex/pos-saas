@@ -14,7 +14,7 @@ export const AdminAccessHub: React.FC = () => {
     },
     {
       title: 'Roles y Permisos',
-      description: 'Definición de niveles de seguridad y permisos de catálogo, inventario y caja.',
+      description: 'Perfiles de acceso y seguridad operativa (Administrador, Supervisor y Cajero).',
       icon: <Shield size={26} />,
       iconBg: '#fef2f2',
       iconColor: '#dc2626',
@@ -28,20 +28,12 @@ export const AdminAccessHub: React.FC = () => {
       iconColor: '#a855f7',
       path: '/customers',
     },
-    {
-      title: 'Importaciones Masivas',
-      description: 'Revisión y carga masiva de insumos, productos e historial de ventas.',
-      icon: <Database size={26} />,
-      iconBg: '#f0fdf4',
-      iconColor: '#15803d',
-      path: '/imports',
-    },
   ];
 
   return (
     <CategoryHubView
       title="Administración y Accesos"
-      subtitle="Control de roles de usuario, permisos granulares e importaciones del sistema."
+      subtitle="Control de usuarios, perfiles de acceso y directorio de clientes."
       cards={cards}
     />
   );

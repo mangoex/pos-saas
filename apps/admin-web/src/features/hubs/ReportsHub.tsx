@@ -1,8 +1,12 @@
 import React from 'react';
-import { BarChart3, LineChart } from 'lucide-react';
+import { BarChart3, LineChart, Wallet } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
+import { canManageCashConcepts } from '../cash/cashConceptState';
 
 export const ReportsHub: React.FC = () => {
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const hasCashConceptManage = canManageCashConcepts(currentUser);
+
   const cards: HubCardItem[] = [
     {
       title: 'Cierre y Reconciliación',
@@ -12,6 +16,18 @@ export const ReportsHub: React.FC = () => {
       iconColor: '#2563eb',
       path: '/reports',
     },
+    ...(hasCashConceptManage
+      ? [
+          {
+            title: 'Conceptos de Caja',
+            description: 'Motivos autorizados para ingresos y egresos de efectivo en turnos de caja.',
+            icon: <Wallet size={26} />,
+            iconBg: '#ecfdf5',
+            iconColor: '#047857',
+            path: '/cash-concepts',
+          },
+        ]
+      : []),
     {
       title: 'Métricas y Rendimiento',
       description: 'Visualización de tendencias, ventas por categoría e indicadores clave.',
@@ -24,8 +40,8 @@ export const ReportsHub: React.FC = () => {
 
   return (
     <CategoryHubView
-      title="Ventas y Reportes"
-      subtitle="Monitoreo financiero, consolidación de ingresos y métricas operativas de la cadena."
+      title="Cajas y Reportes"
+      subtitle="Monitoreo financiero, control de conceptos de caja, cortes de turno y métricas de venta."
       cards={cards}
     />
   );

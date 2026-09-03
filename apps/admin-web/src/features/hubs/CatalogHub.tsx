@@ -1,10 +1,9 @@
 import React from 'react';
-import { Package, Utensils, Tags, MessageSquareText, Plus, ListTree } from 'lucide-react';
+import { Package, Tags, MessageSquareText, Plus, ListTree } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
 
 export const CatalogHub: React.FC = () => {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const hasRecipesManage = Boolean((currentUser.permissions || []).includes('recipes.manage'));
   const hasCatalogManage = Boolean(
     currentUser.is_superadmin || (currentUser.permissions || []).includes('catalog.manage')
   );
@@ -18,18 +17,6 @@ export const CatalogHub: React.FC = () => {
       iconColor: '#2563eb',
       path: '/products',
     },
-    ...(hasRecipesManage
-      ? [
-          {
-            title: 'Recetas',
-            description: 'Fórmulas de preparación, subrecetas y explosión de insumos de cocina y barra.',
-            icon: <Utensils size={26} />,
-            iconBg: '#f0fdf4',
-            iconColor: '#16a34a',
-            path: '/recipes',
-          },
-        ]
-      : []),
     {
       title: 'Categorías',
       description: 'Familias de productos y agrupación visual para terminales POS y cartas digitales.',
@@ -71,7 +58,7 @@ export const CatalogHub: React.FC = () => {
   return (
     <CategoryHubView
       title="Catálogo y Menú"
-      subtitle="Administra la oferta gastronómica, recetas, precios y modificadores de tu restaurante."
+      subtitle="Administra la oferta gastronómica, productos, precios y modificadores de tu restaurante."
       cards={cards}
     />
   );
