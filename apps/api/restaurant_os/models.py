@@ -450,6 +450,7 @@ products = sa.Table(
     sa.Column("image_url", sa.String(512), nullable=True),
     sa.Column("catalog_scope", sa.String(24), nullable=False, server_default="organization"),
     sa.Column("source_branch_id", sa.String(36), sa.ForeignKey("branches.id"), nullable=True),
+    sa.Column("delivery_price_cents", sa.Integer(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     sa.UniqueConstraint("organization_id", "sku", name="uq_products_org_sku"),

@@ -18,59 +18,21 @@ interface CategoryNavConfig {
 const CATEGORY_CONFIGS: CategoryNavConfig[] = [
   {
     hubPath: '/catalog',
-    categoryTitle: 'Catálogo y Menú',
+    categoryTitle: 'Catálogo y Precios',
     items: [
-      { path: '/products', label: 'Productos' },
-      {
-        path: '/recipes',
-        label: 'Recetas',
-        requiredPermission: (user) => (user.permissions || []).includes('recipes.manage'),
-      },
+      { path: '/products', label: 'Productos y Precios' },
       { path: '/categories', label: 'Categorías' },
-      { path: '/variations', label: 'Comentarios y Notas' },
       { path: '/ingredient-extras', label: 'Ingredientes Extra' },
-      {
-        path: '/category-options',
-        label: 'Selector previo',
-        requiredPermission: (user) =>
-          Boolean(user.is_superadmin || (user.permissions || []).includes('catalog.manage')),
-      },
-    ],
-  },
-  {
-    hubPath: '/inventory',
-    categoryTitle: 'Inventario y Almacén',
-    items: [
-      { path: '/inventory/items', label: 'Insumos' },
-      {
-        path: '/warehouses',
-        label: 'Almacenes',
-        requiredPermission: (user) =>
-          Boolean(user.is_superadmin || (user.permissions || []).includes('catalog.manage')),
-      },
-      { path: '/production', label: 'Producción de Lotes' },
-      { path: '/inventory/waste', label: 'Mermas' },
-      { path: '/inventory/transfers', label: 'Traspasos' },
-      { path: '/inventory/counts', label: 'Conteos Físicos' },
-      { path: '/inventory/units', label: 'Unidades' },
-    ],
-  },
-  {
-    hubPath: '/purchasing',
-    categoryTitle: 'Compras y Proveedores',
-    items: [
-      { path: '/purchases', label: 'Compras directas' },
-      { path: '/suppliers', label: 'Proveedores' },
-      { path: '/purchase-presentations', label: 'Presentaciones' },
+      { path: '/variations', label: 'Notas de Comanda' },
     ],
   },
   {
     hubPath: '/branches-hub',
-    categoryTitle: 'Sucursales y Canales',
+    categoryTitle: 'Sucursal y Delivery Hub',
     items: [
-      { path: '/branches', label: 'Sucursales' },
+      { path: '/branches', label: 'Datos del Negocio' },
+      { path: '/integrations', label: 'Delivery Hub (Apps)' },
       { path: '/drivers', label: 'Repartidores' },
-      { path: '/integrations', label: 'Integraciones' },
       {
         path: '/cash-concepts',
         label: 'Conceptos de Caja',
@@ -80,20 +42,18 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
   },
   {
     hubPath: '/reports-hub',
-    categoryTitle: 'Ventas y Reportes',
+    categoryTitle: 'Cajas y Reportes',
     items: [
-      { path: '/reports', label: 'Cierre y Reconciliación' },
-      { path: '/analytics', label: 'Métricas' },
+      { path: '/reports', label: 'Cortes X/Z y Ventas' },
     ],
   },
   {
     hubPath: '/admin-access-hub',
-    categoryTitle: 'Administración y Accesos',
+    categoryTitle: 'Equipo y Cajeros',
     items: [
-      { path: '/users', label: 'Usuarios' },
+      { path: '/users', label: 'Cajeros y Usuarios' },
       { path: '/roles', label: 'Roles y Permisos' },
-      { path: '/customers', label: 'Clientes' },
-      { path: '/imports', label: 'Importaciones' },
+      { path: '/customers', label: 'Directorio de Clientes' },
     ],
   },
 ];

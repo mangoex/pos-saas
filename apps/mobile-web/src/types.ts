@@ -96,6 +96,7 @@ interface PersistedOrderResultBase {
   customer_info: CustomerOrderInfo;
   items: CartItem[];
   total_cents: number;
+  whatsapp_url?: string;
 }
 
 /** A canonical operational order returned by the legacy public-order endpoint. */

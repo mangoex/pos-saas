@@ -12,7 +12,7 @@ import uuid
 from uuid import UUID
 
 # ruff: noqa: E501, E402, I001
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError
@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from restaurant_os import models
+from restaurant_os.saas_onboarding import SignUpRequest, signup_tenant
 from restaurant_os.auth import create_session_token, verify_session_token
 from restaurant_os.assisted_order import (
     AssistedOrderError,
@@ -436,6 +437,11 @@ def get_dashboard_overview_endpoint(
         )
         return get_dashboard_overview(session, authorized_branch_id, month)
 
+@router.post("/auth/signup", status_code=status.HTTP_201_CREATED)
+def signup_endpoint(payload: SignUpRequest, session: SessionDep) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        return signup_tenant(session, payload.model_dump())
+
     return _business_response(operation)
 
 
@@ -822,10 +828,14 @@ def get_catalog_products(
 ) -> list[dict[str, Any]]:
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
+        user_org = session.execute(
+            sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)
+        ).scalar()
+        org_id = str(user_org) if user_org else None
         if branch_id:
             authorized_branch = authorize_branch_scope(session, actor_id, "pos.operate", branch_id)
-            return list_catalog_products(session, authorized_branch)
-        return list_catalog_products(session)
+            return list_catalog_products(session, authorized_branch, organization_id=org_id)
+        return list_catalog_products(session, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -1290,11 +1300,12 @@ def post_catalog_product(
     category_name = str(payload.get("category_name", ""))
     station = str(payload.get("station", "kitchen"))
     price_cents = int(payload.get("price_cents", 0))
+    delivery_price_cents = int(payload["delivery_price_cents"]) if payload.get("delivery_price_cents") is not None else None
     image_url = payload.get("image_url") if "image_url" in payload else None
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: create_product(
-            session, name, sku, category_name, station, price_cents, image_url, actor_id
+            session, name, sku, category_name, station, price_cents, image_url, actor_id, delivery_price_cents=delivery_price_cents
         )
     )
 
@@ -2522,9 +2533,30 @@ def public_branches_endpoint(
     )
 
 
+from restaurant_os.whatsapp_menu import get_public_menu_for_branch, submit_whatsapp_order
+
+
 @router.get("/public/catalog")
 def public_catalog_endpoint(session: SessionDep) -> dict[str, Any]:
     return _business_response(lambda: get_public_catalog(session))
+
+
+@router.get("/public/menu")
+@router.get("/v1/public/menu")
+def public_menu_endpoint(
+    session: SessionDep,
+    branch_id: str,
+) -> dict[str, Any]:
+    return get_public_menu_for_branch(session, branch_id)
+
+
+@router.post("/public/whatsapp-orders")
+@router.post("/v1/public/whatsapp-orders")
+def public_whatsapp_orders_endpoint(
+    payload: dict[str, Any],
+    session: SessionDep,
+) -> dict[str, Any]:
+    return submit_whatsapp_order(session, payload)
 
 
 class PublicOrderModifier(BaseModel):
@@ -3450,6 +3482,7 @@ def put_catalog_product(
     category_name = payload.get("category_name")
     station = payload.get("station")
     status = payload.get("status")
+    delivery_price_cents = int(payload["delivery_price_cents"]) if payload.get("delivery_price_cents") is not None else None
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: update_product(
@@ -3463,6 +3496,7 @@ def put_catalog_product(
             station,
             status,
             actor_id,
+            delivery_price_cents=delivery_price_cents,
         )
     )
 
@@ -3826,6 +3860,7 @@ from restaurant_os.platform_data import (
 
 
 @router.get("/categories")
+@router.get("/catalog/categories")
 def get_categories(
     session: SessionDep,
     branch_id: str | None = None,
@@ -3834,10 +3869,14 @@ def get_categories(
 ) -> list[dict[str, Any]]:
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
+        user_org = session.execute(
+            sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)
+        ).scalar()
+        org_id = str(user_org) if user_org else None
         if branch_id:
             authorized_branch = authorize_branch_scope(session, actor_id, "pos.operate", branch_id)
-            return list_categories(session, authorized_branch)
-        return list_categories(session)
+            return list_categories(session, authorized_branch, organization_id=org_id)
+        return list_categories(session, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -5621,8 +5660,40 @@ def post_complete_legacy_import(
 
 
 # ---------------------------------------------------------------------------
-# Integrations Hub: Uber Eats Marketplace & Channels
+# Integrations Hub: Delivery Channels & Global Kill-Switch
 # ---------------------------------------------------------------------------
+
+from restaurant_os.integrations.kill_switch import get_channels_status, toggle_kill_switch
+
+
+@router.post("/integrations/kill-switch")
+@router.post("/v1/integrations/kill-switch")
+def post_kill_switch(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        return toggle_kill_switch(session, actor_id, payload)
+
+    return _business_response(operation)
+
+
+@router.get("/integrations/channels/status")
+@router.get("/v1/integrations/channels/status")
+def get_integrations_channels_status(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> list[dict[str, Any]]:
+    def operation() -> list[dict[str, Any]]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        return get_channels_status(session, actor_id)
+
+    return _business_response(operation)
+
 
 
 @router.post("/integrations/uber-eats/webhook")
@@ -6535,6 +6606,30 @@ def post_pos_rappi_order_status(
 # ---------------------------------------------------------------------------
 
 
+from restaurant_os.invoicing.self_invoicing import (
+    emit_self_invoice,
+    lookup_ticket_for_self_invoicing,
+)
+
+
+@router.get("/self-invoice/lookup")
+@router.get("/v1/self-invoice/lookup")
+def get_self_invoice_lookup(
+    folio: str,
+    session: SessionDep,
+) -> dict[str, Any]:
+    return lookup_ticket_for_self_invoicing(session, folio)
+
+
+@router.post("/self-invoice/emit")
+@router.post("/v1/self-invoice/emit")
+def post_self_invoice_emit(
+    payload: dict[str, Any],
+    session: SessionDep,
+) -> dict[str, Any]:
+    return emit_self_invoice(session, payload)
+
+
 @router.get("/integrations/facturapi/config")
 def get_facturapi_config(
     session: SessionDep,
@@ -6543,7 +6638,9 @@ def get_facturapi_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    cfg = invoicing_service.get_config(session, ORGANIZATION_ID)
+    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    org_id = str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+    cfg = invoicing_service.get_config(session, org_id)
     return cfg or {
         "is_enabled": False,
         "environment": "sandbox",
@@ -6570,7 +6667,9 @@ def save_facturapi_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return invoicing_service.save_config(session, ORGANIZATION_ID, payload)
+    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    org_id = str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+    return invoicing_service.save_config(session, org_id, payload)
 
 
 @router.post("/integrations/facturapi/test-connection")
@@ -6581,7 +6680,9 @@ def test_facturapi_connection(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return invoicing_service.test_connection(session, ORGANIZATION_ID)
+    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    org_id = str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+    return invoicing_service.test_connection(session, org_id)
 
 
 @router.get("/invoicing/invoices")

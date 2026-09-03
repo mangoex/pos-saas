@@ -1,94 +1,63 @@
-# Contexto del producto
+# Contexto del producto: POS-SaaS
 
-## Nombre de trabajo
+## 1. Visión y Propósito
 
-RestaurantOS.
+**POS-SaaS** es una plataforma en la nube (SaaS Multi-tenant) diseñada específicamente para micro y pequeños negocios gastronómicos en México y Latinoamérica:
+- Taquerías
+- Cafeterías
+- Dark kitchens
+- Fondas
+- Pizzerías
+- Food trucks y carritos
 
-## Organización inicial
+El objetivo central es erradicar la burocracia, costos exorbitantes y fricción técnica de los ERPs tradicionales, ofreciendo una solución que se configura en **5 minutos**, con planes accesibles entre **$349 y $599 MXN / mes**.
 
-- Una cadena mexicana.
-- Siete sucursales.
-- Quince cajas.
-- Varias razones sociales.
-- Cada sucursal pertenece a una sola razón social.
-- Cada sucursal tiene un solo almacén.
-- Cada sucursal tiene cocina propia.
-- No existe cocina central.
+---
 
-## Modelo operativo
+## 2. Los 5 Dolores Críticos que Resuelve
 
-- Restaurantes de comida rápida.
-- Sin mesas.
-- Pedidos en mostrador.
-- Pedidos para recoger.
-- Pedidos a domicilio.
-- Repartidores propios.
-- Pedidos desde POS, WhatsApp, chatbot, Rappi, Uber Eats y DiDi.
-- Pago al recoger o recibir.
-- Formas de pago iniciales: efectivo, tarjeta registrada manualmente y transferencia.
-- Varias cajas simultáneas por sucursal.
-- Operación offline de hasta dos horas.
-- Varias cajas pueden estar desconectadas simultáneamente.
-- Cada sucursal dispone de una computadora Windows que puede operar como gateway local.
-- Impresoras térmicas de marcas y modelos variables.
-- KDS e impresión automática.
-- Estaciones: cocina, bebidas, empaque y entrega.
+1. **POS Táctil Ultrarrápido:**
+   - Toma de comandas y cobro en mostrador o mesas en segundos desde tablets económicas, iPads o computadoras.
+   - División de cuentas, propinas sugeridas, control estricto de turnos y cortes de caja (Corte X y Corte Z) para eliminar fugas de efectivo.
 
-## Inventarios y costos
+2. **Delivery Hub Unificado:**
+   - Recepción centralizada de pedidos de Uber Eats, DiDi Food y Rappi en una única pantalla y comanda de cocina.
+   - **Kill-Switch Global:** Un solo botón maestro para pausar o apagar platillos agotados en simultáneo en todas las apps de delivery.
 
-- Un almacén formal por sucursal.
-- Ubicaciones internas opcionales.
-- Costo promedio ponderado para inventarios.
-- Costo estándar para presupuestos y análisis.
-- Recetas y subrecetas multinivel.
-- Insumos elaborados por lote, como aderezos.
-- Lotes y caducidades.
-- Rendimiento planeado y real.
-- Mermas autorizadas.
-- Traspasos entre sucursales.
-- Reserva al aceptar el pedido.
-- Consumo al confirmar producción.
+3. **Autofacturación 1-Click (CFDI 4.0 SAT):**
+   - Ticket con código QR dinámico y URL corta única.
+   - El comensal escanea el QR desde su celular, captura su RFC y datos fiscales en menos de 1 minuto y recibe su factura CFDI 4.0 al instante sin saturar al cajero.
 
-## Compras
+4. **Menú Web con Pedidos por WhatsApp:**
+   - Menú digital responsivo propio (sin la comisión del 30% de las plataformas).
+   - Carrito de compras con selección de variantes/modificadores y checkout con mensaje estructurado directo al WhatsApp del restaurante.
 
-- No se requieren órdenes de compra en la primera versión.
-- Recepciones directas.
-- Compras de contado y crédito.
-- Cuentas por pagar.
-- Presentaciones de proveedor.
-- Importación de XML de CFDI.
-- Equivalencias entre conceptos de proveedor y productos internos.
+5. **Backoffice Ultraligero y Multi-tenant:**
+   - Registro autoservicio (Sign up en 5 minutos) con aprovisionamiento inmediato.
+   - Catálogo ágil con precios diferenciados por canal (Salón vs Delivery Apps para absorber comisiones).
+   - Reportes ejecutivos automatizados enviados diariamente al WhatsApp o correo del dueño.
 
-## Entrega
+---
 
-- Zonas, cobertura, costos, mínimos y tiempos.
-- Optimización simultánea de pedidos y repartidores.
-- Un repartidor puede llevar varios pedidos.
-- Inicialmente no habrá aplicación móvil ni geolocalización en tiempo real del repartidor.
-- La operación de estados será registrada por el despachador.
+## 3. Estrategia Técnica y Podado de Complejidad
 
-## Facturación
+El proyecto se apoya en un código base gastronómico probado, aplicando una estricta estrategia de simplificación:
+- **REUTILIZAR:**
+  - Backend modular en FastAPI (Python tipado) con SQLAlchemy y PostgreSQL.
+  - Frontend moderno en React 19 + TypeScript estricto con Vite.
+  - Sincronización y resiliencia offline local (SQLite en gateway para operaciones sin internet).
+  - Adaptadores existentes de FacturAPI (CFDI 4.0) y agregadores de delivery (Uber Eats, DiDi Food, Rappi).
+- **PODAR PARA MVP (Fuera de alcance inicial):**
+  - Costeo teórico gramo a gramo y recetas/subrecetas multinivel.
+  - Lotes de producción interna de elaborados (panadería, salsas por lote).
+  - Múltiples almacenes por sucursal y traspasos inter-almacén.
+  - Cuentas por pagar, recepción de compras con XML de proveedores a crédito.
+  - Despacho y optimización de rutas avanzadas para flotas de repartidores propios.
 
-- No se emitirán CFDI directamente.
-- Se exportará información hacia una variante de CONTPAQi aún no definida.
-- Se requieren facturas individuales y globales.
-- El formato de exportación debe ser configurable mediante adaptadores.
+---
 
-## Infraestructura
+## 4. Modelo de Negocio e Infraestructura
 
-- Aplicación y base central desplegadas en Easypanel.
-- VPS en Hostinger.
-- Servicios en contenedores.
-- PostgreSQL como base central.
-- SQLite local en cada sucursal.
-- Redis para cache, locks, colas y coordinación.
-- Gateway local en Windows.
-- Respaldo de conectividad 4G/5G recomendado para mantener canales externos.
-
-## Supuestos
-
-- El sistema se construirá inicialmente para una sola organización.
-- El modelo incluirá `organization_id` para permitir evolución futura.
-- Las integraciones existentes con marketplaces deberán auditarse antes de codificar adaptadores.
-- La variante exacta de CONTPAQi se determinará durante implementación.
-- La compatibilidad de impresoras se resolverá con una matriz certificada.
+- **Modelo:** Suscripción mensual / anual autoservicio (Tier Básico $349 MXN, Tier Pro $599 MXN).
+- **Multi-tenancy:** Base de datos relacional compartida con aislamiento estricto por `organization_id` en todas las consultas y mutaciones.
+- **Despliegue:** API y servicios centrales en contenedores Docker gestionados vía Easypanel / Cloud VPS, con bases de datos PostgreSQL y Redis.

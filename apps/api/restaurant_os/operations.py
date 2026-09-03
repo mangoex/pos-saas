@@ -999,30 +999,49 @@ def create_product(
     price_cents: int,
     image_url: str | None = None,
     actor_user_id: str | None = None,
+    delivery_price_cents: int | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
+    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    org_id = str(actor["organization_id"]) if actor else ORGANIZATION_ID
+
     normalized_name = name.strip()
     normalized_sku = normalize_product_sku(sku)
     normalized_category = category_name.strip()
     normalized_station = station.strip().lower()
-    if not is_uppercase_name(normalized_name):
-        raise BusinessError("invalid_product_name", "Product name must be uppercase")
-    if not is_numeric_sku(normalized_sku):
-        raise BusinessError("invalid_product_sku", "Product SKU must contain only digits")
-    if not normalized_category or normalized_category != canonical_category_name(
-        normalized_category
-    ):
-        raise BusinessError("invalid_category_name", "Category name must be uppercase")
-    if normalized_station not in {"kitchen", "drinks", "packing"}:
-        raise BusinessError("invalid_station", "Station must be kitchen, drinks or packing")
+
+    if not normalized_name:
+        raise BusinessError("invalid_product_name", "Product name cannot be blank")
+    if not normalized_sku:
+        raise BusinessError("invalid_product_sku", "Product SKU cannot be blank")
+
+    if org_id == ORGANIZATION_ID:
+        if not is_uppercase_name(normalized_name):
+            raise BusinessError("invalid_product_name", "Product name must be uppercase")
+        if not is_numeric_sku(normalized_sku):
+            raise BusinessError("invalid_product_sku", "Product SKU must contain only digits")
+        if not normalized_category or normalized_category != canonical_category_name(
+            normalized_category
+        ):
+            raise BusinessError("invalid_category_name", "Category name must be uppercase")
+
+    if normalized_station in {"cocina", "kitchen"}:
+        station_val = "cocina" if org_id != ORGANIZATION_ID else "kitchen"
+    elif normalized_station in {"barra", "drinks"}:
+        station_val = "barra" if org_id != ORGANIZATION_ID else "drinks"
+    else:
+        station_val = "packing"
+
     if price_cents <= 0:
         raise BusinessError("invalid_price", "Price must be positive")
+    if delivery_price_cents is not None and delivery_price_cents <= 0:
+        raise BusinessError("invalid_delivery_price", "Delivery price must be positive")
 
     existing = (
         session.execute(
             sa.select(models.products).where(
-                models.products.c.organization_id == ORGANIZATION_ID,
+                models.products.c.organization_id == org_id,
                 models.products.c.sku == normalized_sku,
             )
         )
@@ -1033,23 +1052,24 @@ def create_product(
         raise BusinessError("product_already_exists", "Product SKU already exists")
 
     now = _now()
-    category = _get_or_create_category(session, normalized_category, now)
+    category = _get_or_create_category(session, normalized_category, now, organization_id=org_id)
     product = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": org_id,
         "category_id": category["id"],
         "name": normalized_name,
         "sku": normalized_sku,
-        "description": "Producto creado desde Admin.",
-        "station": normalized_station,
+        "description": "Producto de catálogo.",
+        "station": station_val,
         "status": "active",
         "image_url": image_url.strip() if (image_url and image_url.strip()) else None,
+        "delivery_price_cents": delivery_price_cents,
         "created_at": now,
         "updated_at": now,
     }
     price = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": org_id,
         "product_id": product["id"],
         "price_cents": price_cents,
         "currency": "MXN",
@@ -1057,8 +1077,18 @@ def create_product(
         "valid_to": None,
         "created_at": now,
     }
+
+    user_branch = session.execute(
+        sa.select(models.user_roles.c.branch_id).where(models.user_roles.c.user_id == actor_id)
+    ).scalar()
+    if not user_branch:
+        user_branch = session.execute(
+            sa.select(models.branches.c.id).where(models.branches.c.organization_id == org_id)
+        ).scalar()
+    target_branch_id = str(user_branch) if user_branch else BRANCH_ID
+
     availability = {
-        "branch_id": BRANCH_ID,
+        "branch_id": target_branch_id,
         "product_id": product["id"],
         "is_available": True,
         "updated_at": now,
@@ -1071,7 +1101,7 @@ def create_product(
         action="product.created",
         entity_type="product",
         entity_id=product["id"],
-        payload={"sku": normalized_sku, "price_cents": price_cents, "station": normalized_station},
+        payload={"sku": normalized_sku, "price_cents": price_cents, "delivery_price_cents": delivery_price_cents, "station": station_val},
         actor_user_id=actor_id,
     )
     session.commit()
@@ -1079,6 +1109,7 @@ def create_product(
         **product,
         "category_name": category["name"],
         "price_cents": price_cents,
+        "delivery_price_cents": delivery_price_cents,
         "currency": "MXN",
         "is_available": True,
     }
@@ -8702,11 +8733,13 @@ def _get_or_create_category(
     session: Session,
     category_name: str,
     created_at: datetime,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
+    org_id = organization_id or ORGANIZATION_ID
     row = (
         session.execute(
             sa.select(models.product_categories).where(
-                models.product_categories.c.organization_id == ORGANIZATION_ID,
+                models.product_categories.c.organization_id == org_id,
                 models.product_categories.c.name == category_name,
                 models.product_categories.c.status != "archived",
             )
@@ -8719,7 +8752,7 @@ def _get_or_create_category(
 
     category = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": org_id,
         "name": category_name,
         "display_order": 100,
         "status": "active",
@@ -9474,7 +9507,6 @@ def require_permission(
         session.execute(
             sa.select(models.users).where(
                 models.users.c.id == actor_user_id,
-                models.users.c.organization_id == ORGANIZATION_ID,
             )
         )
         .mappings()
@@ -9499,6 +9531,7 @@ def require_permission(
         )
         raise AuthorizationError("actor_not_authorized", "Actor is not authorized")
 
+    org_id = str(actor["organization_id"])
     role_rows = session.execute(
         sa.select(
             models.roles.c.id.label("role_id"),
@@ -9510,7 +9543,7 @@ def require_permission(
         )
         .where(
             models.user_roles.c.user_id == actor_user_id,
-            models.roles.c.organization_id == ORGANIZATION_ID,
+            models.roles.c.organization_id == org_id,
         )
     ).mappings()
     roles = [dict(row) for row in role_rows]
@@ -9567,19 +9600,13 @@ def require_permission(
         .where(
             models.role_authority_grants.c.role_id.in_(scoped_role_ids),
             models.role_authority_grants.c.authority_kind == "organization_all_permissions",
-            models.roles.c.organization_id == ORGANIZATION_ID,
+            models.roles.c.organization_id == org_id,
             models.roles.c.scope == "organization",
         )
         .limit(1)
     ).scalar_one_or_none()
     if organization_authority:
-        persisted_permission = session.execute(
-            sa.select(models.permissions.c.id)
-            .where(models.permissions.c.code == permission_code)
-            .limit(1)
-        ).scalar_one_or_none()
-        if persisted_permission:
-            return
+        return
 
     _record_authorization_denied(
         session,
@@ -11342,28 +11369,36 @@ def update_product(
     station: str | None = None,
     status: str | None = None,
     actor_user_id: str | None = None,
+    delivery_price_cents: int | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
+    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    org_id = str(actor["organization_id"]) if actor else ORGANIZATION_ID
 
     update_data: dict[str, Any] = {}
     if name is not None:
         normalized_name = name.strip()
-        if not is_uppercase_name(normalized_name):
+        if org_id == ORGANIZATION_ID and not is_uppercase_name(normalized_name):
             raise BusinessError("invalid_product_name", "Product name must be uppercase")
         update_data["name"] = normalized_name
     if sku is not None:
         normalized_sku = normalize_product_sku(sku)
-        if not is_numeric_sku(normalized_sku):
+        if org_id == ORGANIZATION_ID and not is_numeric_sku(normalized_sku):
             raise BusinessError("invalid_product_sku", "Product SKU must contain only digits")
         update_data["sku"] = normalized_sku
     if image_url is not None:
         update_data["image_url"] = image_url.strip() if image_url.strip() else None
     if station is not None:
         normalized_station = station.strip().lower()
-        if normalized_station not in {"kitchen", "drinks", "packing"}:
-            raise BusinessError("invalid_station", "Station must be kitchen, drinks or packing")
-        update_data["station"] = normalized_station
+        if normalized_station in {"cocina", "kitchen"}:
+            update_data["station"] = "cocina" if org_id != ORGANIZATION_ID else "kitchen"
+        elif normalized_station in {"barra", "drinks"}:
+            update_data["station"] = "barra" if org_id != ORGANIZATION_ID else "drinks"
+        elif normalized_station in {"packing"}:
+            update_data["station"] = "packing"
+        else:
+            raise BusinessError("invalid_station", "Station must be valid")
     if status is not None:
         normalized_status = status.strip().lower()
         if normalized_status not in {"active", "inactive", "needs_review"}:
@@ -11377,15 +11412,17 @@ def update_product(
             if not current_station or current_station.strip().lower() == "unassigned":
                 raise BusinessError("missing_product_station", "Assign a station before activation")
         update_data["status"] = normalized_status
+    if delivery_price_cents is not None:
+        update_data["delivery_price_cents"] = delivery_price_cents
 
     now = _now()
     if category_name is not None:
         normalized_category = category_name.strip()
-        if not normalized_category or normalized_category != canonical_category_name(
-            normalized_category
+        if org_id == ORGANIZATION_ID and (
+            not normalized_category or normalized_category != canonical_category_name(normalized_category)
         ):
             raise BusinessError("invalid_category_name", "Category name must be uppercase")
-        category = _get_or_create_category(session, normalized_category, now)
+        category = _get_or_create_category(session, normalized_category, now, organization_id=org_id)
         update_data["category_id"] = category["id"]
     if update_data:
         update_data["updated_at"] = now
@@ -11398,7 +11435,7 @@ def update_product(
     if price_cents is not None:
         price = {
             "id": _id(),
-            "organization_id": ORGANIZATION_ID,
+            "organization_id": org_id,
             "product_id": product_id,
             "price_cents": price_cents,
             "currency": "MXN",
@@ -22810,7 +22847,6 @@ def build_session_profile(
         session.execute(
             sa.select(models.users).where(
                 models.users.c.id == actor,
-                models.users.c.organization_id == ORGANIZATION_ID,
             )
         )
         .mappings()
@@ -22821,6 +22857,7 @@ def build_session_profile(
     if user["status"] != "active":
         raise AuthorizationError("user_inactive", "User is not active")
 
+    org_id = str(user["organization_id"])
     role_rows = list(
         session.execute(
             sa.select(
@@ -22836,7 +22873,7 @@ def build_session_profile(
             )
             .where(
                 models.user_roles.c.user_id == actor,
-                models.roles.c.organization_id == ORGANIZATION_ID,
+                models.roles.c.organization_id == org_id,
             )
             .order_by(models.roles.c.name, models.user_roles.c.branch_id)
         ).mappings()
@@ -22855,11 +22892,11 @@ def build_session_profile(
     ]
     has_org_scope = any(row["scope"] == "organization" for row in role_rows)
     if has_org_scope:
-        allowed_branch_ids = _active_organization_branch_ids(session)
+        allowed_branch_ids = _active_organization_branch_ids(session, org_id)
     else:
         assigned_ids = {str(row["branch_id"]) for row in role_rows if row["branch_id"]}
         allowed_branch_ids = [
-            branch for branch in _active_organization_branch_ids(session) if branch in assigned_ids
+            branch for branch in _active_organization_branch_ids(session, org_id) if branch in assigned_ids
         ]
     if not allowed_branch_ids:
         raise AuthorizationError("actor_not_authorized", "Actor has no active branch scope")
@@ -22868,6 +22905,7 @@ def build_session_profile(
         session,
         requested_branch_id=branch_id,
         allowed_branch_ids=allowed_branch_ids,
+        organization_id=org_id,
     )
     active_branch_id = str(active_branch["id"])
     effective_role_ids = {
@@ -23023,6 +23061,7 @@ def _resolve_active_branch(
     session: Session,
     requested_branch_id: str | None,
     allowed_branch_ids: list[str],
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
     """Resolve the active branch for a session profile."""
     if requested_branch_id and requested_branch_id not in allowed_branch_ids:
@@ -23030,7 +23069,7 @@ def _resolve_active_branch(
             "permission_denied", "Actor does not have access to the requested branch"
         )
     target_id = requested_branch_id or allowed_branch_ids[0]
-    detail = _branch_detail(session, target_id)
+    detail = _branch_detail(session, target_id, organization_id=organization_id)
     if not detail:
         raise AuthorizationError(
             "permission_denied", "Actor does not have access to the requested branch"
@@ -23038,13 +23077,14 @@ def _resolve_active_branch(
     return detail
 
 
-def _active_organization_branch_ids(session: Session) -> list[str]:
+def _active_organization_branch_ids(session: Session, organization_id: str | None = None) -> list[str]:
+    org_id = organization_id or ORGANIZATION_ID
     return [
         str(branch_id)
         for branch_id in session.execute(
             sa.select(models.branches.c.id)
             .where(
-                models.branches.c.organization_id == ORGANIZATION_ID,
+                models.branches.c.organization_id == org_id,
                 models.branches.c.status == "active",
             )
             .order_by(models.branches.c.code)
@@ -23052,7 +23092,15 @@ def _active_organization_branch_ids(session: Session) -> list[str]:
     ]
 
 
-def _branch_detail(session: Session, branch_id: str) -> dict[str, Any] | None:
+def _branch_detail(session: Session, branch_id: str, organization_id: str | None = None) -> dict[str, Any] | None:
+    org_id = organization_id
+    if not org_id:
+        org_id = session.execute(
+            sa.select(models.branches.c.organization_id).where(models.branches.c.id == branch_id)
+        ).scalar()
+    if not org_id:
+        org_id = ORGANIZATION_ID
+
     row = (
         session.execute(
             sa.select(
@@ -23086,7 +23134,7 @@ def _branch_detail(session: Session, branch_id: str) -> dict[str, Any] | None:
             )
             .where(
                 models.branches.c.id == branch_id,
-                models.branches.c.organization_id == ORGANIZATION_ID,
+                models.branches.c.organization_id == org_id,
                 models.branches.c.status == "active",
             )
         )

@@ -14,6 +14,7 @@ interface Product {
   sku: string;
   category_name: string;
   price_cents: number | null;
+  delivery_price_cents?: number | null;
   station: string;
   status?: string;
   image_url?: string;
@@ -21,7 +22,16 @@ interface Product {
   source_branch_id?: string | null;
 }
 
-const emptyForm = { name: '', sku: '', category_name: '', station: 'kitchen', status: 'active', price_cents: 0, image_url: '' };
+const emptyForm = {
+  name: '',
+  sku: '',
+  category_name: '',
+  station: 'kitchen',
+  status: 'active',
+  price_cents: 0,
+  delivery_price_cents: null as number | null,
+  image_url: '',
+};
 
 const ProductsList = () => {
   const queryClient = useQueryClient();
@@ -85,6 +95,7 @@ const ProductsList = () => {
         station: product.station || 'kitchen', 
         status: product.status || 'active',
         price_cents: product.price_cents || 0,
+        delivery_price_cents: product.delivery_price_cents ?? null,
         image_url: product.image_url || ''
       });
     } else {
@@ -92,6 +103,12 @@ const ProductsList = () => {
       setFormData(emptyForm);
     }
     setIsModalOpen(true);
+  };
+
+  const applyMargin = (percentage: number) => {
+    if (!formData.price_cents) return;
+    const calculated = Math.round(formData.price_cents * (1 + percentage / 100));
+    setFormData((prev) => ({ ...prev, delivery_price_cents: calculated }));
   };
 
   return (
@@ -140,7 +157,8 @@ const ProductsList = () => {
                   <th>SKU</th>
                   <th>Categoría</th>
                   <th>Estación</th>
-                  <th style={{ textAlign: 'right' }}>Precio</th>
+                  <th style={{ textAlign: 'right' }}>Precio Salón</th>
+                  <th style={{ textAlign: 'right' }}>Precio Delivery Apps</th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
@@ -163,6 +181,11 @@ const ProductsList = () => {
                     <td><Badge variant="info">{product.category_name}</Badge></td>
                     <td>{product.station}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>{product.price_cents == null ? 'No vendible' : `$${(product.price_cents / 100).toFixed(2)}`}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: product.delivery_price_cents ? '#0284c7' : '#64748b' }}>
+                      {product.delivery_price_cents != null
+                        ? `$${(product.delivery_price_cents / 100).toFixed(2)}`
+                        : (product.price_cents ? `$${(product.price_cents / 100).toFixed(2)} (igual)` : '-')}
+                    </td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button className="premium-action-btn edit" title="Modificadores" onClick={() => setModifierProduct(product)}><SlidersHorizontal size={18} /></button>
@@ -173,7 +196,7 @@ const ProductsList = () => {
                   </tr>
                 ))}
                 {filteredProducts.length === 0 && (
-                  <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-muted)' }}>No hay productos que coincidan con la búsqueda.</td></tr>
+                  <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-muted)' }}>No hay productos que coincidan con la búsqueda.</td></tr>
                 )}
               </tbody>
             </table>
@@ -216,8 +239,56 @@ const ProductsList = () => {
             </div>
           )}
           <div>
-            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Precio (centavos)</label>
-            <Input type="number" value={formData.price_cents} onChange={(e: any) => setFormData({...formData, price_cents: parseInt(e.target.value, 10)})} />
+            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Precio Salón / Mostrador ($ MXN)</label>
+            <Input
+              type="number"
+              step="0.50"
+              value={formData.price_cents ? (formData.price_cents / 100).toString() : ''}
+              onChange={(e: any) => {
+                const val = parseFloat(e.target.value);
+                setFormData({ ...formData, price_cents: isNaN(val) ? 0 : Math.round(val * 100) });
+              }}
+              placeholder="Ej. 120.00"
+            />
+          </div>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ fontWeight: 500, fontSize: '0.875rem' }}>Precio Apps Delivery (Uber / DiDi / Rappi)</label>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <span style={{ fontSize: '0.75rem', color: '#64748b', marginRight: 4 }}>Margen:</span>
+                <button
+                  type="button"
+                  onClick={() => applyMargin(20)}
+                  style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: 4, background: '#e0f2fe', color: '#0369a1', border: 'none', cursor: 'pointer' }}
+                >
+                  +20%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyMargin(25)}
+                  style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: 4, background: '#e0f2fe', color: '#0369a1', border: 'none', cursor: 'pointer' }}
+                >
+                  +25%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyMargin(30)}
+                  style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: 4, background: '#e0f2fe', color: '#0369a1', border: 'none', cursor: 'pointer' }}
+                >
+                  +30%
+                </button>
+              </div>
+            </div>
+            <Input
+              type="number"
+              step="0.50"
+              value={formData.delivery_price_cents ? (formData.delivery_price_cents / 100).toString() : ''}
+              onChange={(e: any) => {
+                const val = parseFloat(e.target.value);
+                setFormData({ ...formData, delivery_price_cents: isNaN(val) ? null : Math.round(val * 100) });
+              }}
+              placeholder="Opcional (si se omite, se usa precio de salón)"
+            />
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>URL de imagen</label>

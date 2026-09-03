@@ -189,8 +189,20 @@ def list_users(session: Session) -> list[dict[str, Any]]:
 
 
 def _list_catalog_products_base(
-    session: Session, branch_id: str | None = None
+    session: Session,
+    branch_id: str | None = None,
+    organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    org_id = organization_id
+    if branch_id and not org_id:
+        branch_org = session.execute(
+            sa.select(models.branches.c.organization_id).where(models.branches.c.id == branch_id)
+        ).scalar()
+        if branch_org:
+            org_id = str(branch_org)
+    if not org_id:
+        org_id = ORGANIZATION_ID
+
     active_price = (
         sa.select(
             models.price_versions.c.product_id,
@@ -212,6 +224,7 @@ def _list_catalog_products_base(
         models.products.c.catalog_scope,
         models.products.c.source_branch_id,
         models.products.c.category_id,
+        models.products.c.delivery_price_cents,
         models.product_categories.c.name.label("category_name"),
         active_price.c.price_cents,
         active_price.c.currency,
@@ -239,7 +252,7 @@ def _list_catalog_products_base(
                 )
             )
             .where(
-                models.products.c.organization_id == ORGANIZATION_ID,
+                models.products.c.organization_id == org_id,
                 models.products.c.status != "archived",
                 sa.or_(
                     models.products.c.catalog_scope == "organization",
@@ -250,7 +263,15 @@ def _list_catalog_products_base(
         )
     else:
         query = (
-            query.add_columns(sa.literal(True).label("is_available"))
+            query.add_columns(
+                sa.func.coalesce(
+                    sa.select(models.branch_product_availability.c.is_available)
+                    .where(models.branch_product_availability.c.product_id == models.products.c.id)
+                    .limit(1)
+                    .scalar_subquery(),
+                    True,
+                ).label("is_available")
+            )
             .select_from(
                 models.products.join(
                     models.product_categories,
@@ -258,7 +279,7 @@ def _list_catalog_products_base(
                 ).outerjoin(active_price, models.products.c.id == active_price.c.product_id)
             )
             .where(
-                models.products.c.organization_id == ORGANIZATION_ID,
+                models.products.c.organization_id == org_id,
                 models.products.c.status != "archived",
             )
         )
@@ -271,20 +292,30 @@ def _list_catalog_products_base(
 
 
 def project_pos_catalog(
-    session: Session, branch_id: str
+    session: Session, branch_id: str, organization_id: str | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     try:
-        return _project_pos_catalog(session, branch_id)
+        return _project_pos_catalog(session, branch_id, organization_id=organization_id)
     except Exception:
         logger.exception("category_option_projection_error", extra={"branch_id": branch_id})
         raise
 
 
 def _project_pos_catalog(
-    session: Session, branch_id: str
+    session: Session, branch_id: str, organization_id: str | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return one fail-closed source for POS categories and concrete products."""
-    base_products = _list_catalog_products_base(session, branch_id)
+    org_id = organization_id
+    if not org_id:
+        branch_org = session.execute(
+            sa.select(models.branches.c.organization_id).where(models.branches.c.id == branch_id)
+        ).scalar()
+        if branch_org:
+            org_id = str(branch_org)
+    if not org_id:
+        org_id = ORGANIZATION_ID
+
+    base_products = _list_catalog_products_base(session, branch_id, organization_id=org_id)
     eligible = {
         product["id"]: product
         for product in base_products
@@ -296,7 +327,7 @@ def _project_pos_catalog(
     groups = (
         session.execute(
             sa.select(models.category_option_groups).where(
-                models.category_option_groups.c.organization_id == ORGANIZATION_ID,
+                models.category_option_groups.c.organization_id == org_id,
                 models.category_option_groups.c.status == "active",
             )
         )
@@ -426,10 +457,17 @@ def _project_pos_catalog(
     return categories, products
 
 
-def list_catalog_products(session: Session, branch_id: str | None = None) -> list[dict[str, Any]]:
+def list_catalog_products(
+    session: Session,
+    branch_id: str | None = None,
+    organization_id: str | None = None,
+) -> list[dict[str, Any]]:
     if branch_id:
-        return project_pos_catalog(session, branch_id)[1]
-    return [{**product, "selection": None} for product in _list_catalog_products_base(session)]
+        return project_pos_catalog(session, branch_id, organization_id=organization_id)[1]
+    return [
+        {**product, "selection": None}
+        for product in _list_catalog_products_base(session, organization_id=organization_id)
+    ]
 
 
 def list_inventory_stock(
@@ -885,13 +923,27 @@ def list_inventory_items(session: Session, branch_id: str | None = None) -> list
     ]
 
 
-def list_categories(session: Session, branch_id: str | None = None) -> list[dict[str, Any]]:
+def list_categories(
+    session: Session,
+    branch_id: str | None = None,
+    organization_id: str | None = None,
+) -> list[dict[str, Any]]:
+    org_id = organization_id
+    if branch_id and not org_id:
+        branch_org = session.execute(
+            sa.select(models.branches.c.organization_id).where(models.branches.c.id == branch_id)
+        ).scalar()
+        if branch_org:
+            org_id = str(branch_org)
+    if not org_id:
+        org_id = ORGANIZATION_ID
+
     if branch_id:
-        return project_pos_catalog(session, branch_id)[0]
+        return project_pos_catalog(session, branch_id, organization_id=org_id)[0]
     rows = session.execute(
         sa.select(models.product_categories)
         .where(
-            models.product_categories.c.organization_id == ORGANIZATION_ID,
+            models.product_categories.c.organization_id == org_id,
             models.product_categories.c.status != "archived",
         )
         .order_by(models.product_categories.c.display_order, models.product_categories.c.name)

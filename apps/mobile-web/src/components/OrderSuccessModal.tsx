@@ -327,6 +327,36 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             )}
           </div>
 
+          {orderResult.whatsapp_url && (
+            <a
+              href={orderResult.whatsapp_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '9999px',
+                border: 'none',
+                background: '#25D366',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: '15px',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 14px rgba(37, 211, 102, 0.35)',
+                textDecoration: 'none',
+                marginBottom: '12px',
+                boxSizing: 'border-box',
+              }}
+            >
+              <span>📲 Enviar Pedido por WhatsApp</span>
+            </a>
+          )}
+
           <button
             type="button"
             onClick={onNewOrder}

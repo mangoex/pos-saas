@@ -181,7 +181,7 @@ const AdminLayout = () => {
     navigate('/login');
   };
 
-  // Main Categories in Sidebar (POS Style)
+  // Main Categories in Sidebar (POS-SaaS Lean Hub)
   const mainCategories: MainCategoryItem[] = [
     {
       path: '/',
@@ -198,44 +198,21 @@ const AdminLayout = () => {
     },
     {
       path: '/catalog',
-      label: 'Catálogo y Menú',
+      label: 'Catálogo y Precios',
       icon: <Package size={20} />,
       matchingPrefixes: [
         '/catalog',
         '/products',
-        '/recipes',
         '/categories',
         '/variations',
         '/ingredient-extras',
-        '/category-options',
-      ],
-    },
-    {
-      path: '/inventory',
-      label: 'Inventario y Almacén',
-      icon: <Carrot size={20} />,
-      matchingPrefixes: [
-        '/inventory',
-        '/warehouses',
-        '/production',
-      ],
-    },
-    {
-      path: '/purchasing',
-      label: 'Compras y Proveedores',
-      icon: <Receipt size={20} />,
-      matchingPrefixes: [
-        '/purchasing',
-        '/purchases',
-        '/suppliers',
-        '/purchase-presentations',
       ],
     },
     {
       path: '/branches-hub',
-      label: 'Sucursales y Canales',
+      label: 'Sucursal y Delivery Hub',
       icon: <Store size={20} />,
-      badge: 'Uber',
+      badge: 'Uber/DiDi',
       matchingPrefixes: [
         '/branches-hub',
         '/branches',
@@ -246,7 +223,7 @@ const AdminLayout = () => {
     },
     {
       path: '/reports-hub',
-      label: 'Ventas y Reportes',
+      label: 'Cajas y Reportes',
       icon: <BarChart2 size={20} />,
       matchingPrefixes: [
         '/reports-hub',
@@ -259,15 +236,13 @@ const AdminLayout = () => {
     },
     {
       path: '/admin-access-hub',
-      label: 'Administración',
+      label: 'Equipo y Cajeros',
       icon: <Users size={20} />,
       matchingPrefixes: [
         '/admin-access-hub',
         '/users',
         '/roles',
         '/customers',
-        '/imports',
-        '/messages',
       ],
     },
   ];
