@@ -16,7 +16,12 @@ if not raw_url:
     sys.exit(0)
 
 url = normalize_database_url(raw_url)
-print(f'Intentando conectar a la base de datos...')
+try:
+    from sqlalchemy.engine.url import make_url
+    parsed = make_url(url)
+    print(f'Conectando a base de datos -> Host: \"{parsed.host}\", Puerto: {parsed.port}, Base: \"{parsed.database}\"')
+except Exception:
+    pass
 
 for i in range(1, 31):
     try:
@@ -28,11 +33,12 @@ for i in range(1, 31):
         print(f'Intento {i}/30: Esperando a la base de datos... ({e})')
         time.sleep(2)
 
-print('ERROR: No se pudo resolver o conectar al host de la base de datos tras 60 segundos.')
-print('Por favor verifica en Easypanel:')
-print('1. Que el servicio PostgreSQL esté encendido (Running).')
-print('2. Que el nombre del HOST en DATABASE_URL sea exactamente el nombre del servicio Postgres en Easypanel (ej. postgres, db, o database).')
-print('3. Que ambos servicios estén dentro del mismo Proyecto en Easypanel.')
+print('ERROR: No se pudo conectar a la base de datos tras 60 segundos.')
+print('CÓMO SOLUCIONARLO EN EASYPANEL:')
+print('1. Abre tu servicio PostgreSQL en Easypanel.')
+print('2. Ve a la pestaña \"Credentials\".')
+print('3. Copia el valor de \"Internal Connection URL\" (o el \"Internal Host\").')
+print('4. Pégalo en tu servicio App como la variable DATABASE_URL.')
 sys.exit(1)
 "
 
