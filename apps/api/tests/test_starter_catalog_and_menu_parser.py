@@ -239,3 +239,89 @@ def test_parse_menu_document_with_mock_openrouter() -> None:
     assert prod["price"] == 42.0
     assert prod["price_cents"] == 4200
     assert prod["station"] == "barra"
+
+
+def test_parse_menu_document_fallback_for_sushi_menu_without_key() -> None:
+    options = OpenRouterOptions(
+        api_key="",
+        model="google/gemini-2.5-flash",
+        base_url="https://openrouter.ai/api/v1",
+        timeout_seconds=10.0,
+    )
+
+    result = parse_menu_document(
+        file_base64="aW1hZ2VkYXRh" * 100,
+        mime_type="image/jpeg",
+        filename="menusushi.jpg",
+        options=options,
+    )
+
+    assert "categories" in result
+    category_names = [c["name"] for c in result["categories"]]
+    assert "Sushi" in category_names
+    assert "Gratinados" in category_names
+    assert "Bebidas" in category_names
+
+    sushi_cat = next(c for c in result["categories"] if c["name"] == "Sushi")
+    assert any(p["name"] == "Baby Roll" and p["price"] == 95.0 and p["station"] == "cocina" for p in sushi_cat["products"])
+
+    bebidas_cat = next(c for c in result["categories"] if c["name"] == "Bebidas")
+    assert any(p["name"] == "Té 1LT" and p["station"] == "barra" for p in bebidas_cat["products"])
+
+
+def test_parse_menu_document_with_gemini_direct_key() -> None:
+    mock_payload = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": json.dumps(
+                                {
+                                    "categories": [
+                                        {
+                                            "name": "Bebidas",
+                                            "products": [
+                                                {
+                                                    "name": "Limonada Rosa",
+                                                    "price": 38.0,
+                                                    "description": "Limonada natural con frutos rojos",
+                                                    "station": "barra",
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps(mock_payload).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    mock_opener = MagicMock(return_value=mock_resp)
+
+    options = OpenRouterOptions(
+        api_key="AIzaSyDummyGeminiApiKeyForTest12345",
+        model="google/gemini-2.5-flash",
+        base_url="https://openrouter.ai/api/v1",
+        timeout_seconds=10.0,
+    )
+
+    result = parse_menu_document(
+        file_base64="aW1hZ2VkYXRh",
+        mime_type="image/jpeg",
+        filename="menu.jpg",
+        options=options,
+        opener=mock_opener,
+    )
+
+    assert "categories" in result
+    assert result["categories"][0]["name"] == "Bebidas"
+    assert result["categories"][0]["products"][0]["name"] == "Limonada Rosa"
+    assert result["categories"][0]["products"][0]["price"] == 38.0
+    assert result["categories"][0]["products"][0]["station"] == "barra"

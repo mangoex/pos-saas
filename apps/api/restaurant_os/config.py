@@ -31,7 +31,16 @@ class Settings(BaseSettings):
     admin_ai_assistant_enabled: bool = Field(default=False)
     admin_ai_openrouter_model: str = Field(default="google/gemini-3.1-flash-lite")
     admin_ai_openrouter_timeout_seconds: float = Field(default=10.0, ge=1.0, le=30.0)
-    openrouter_api_key: str | None = Field(default=None, min_length=16)
+    openrouter_api_key: str | None = Field(
+        default=None,
+        min_length=16,
+        validation_alias=AliasChoices(
+            "RESTAURANTOS_OPENROUTER_API_KEY",
+            "OPENROUTER_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+        ),
+    )
     openrouter_model: str = Field(default="google/gemini-3.1-flash-lite")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1")
     openrouter_timeout_seconds: float = Field(default=10.0, ge=1.0, le=30.0)

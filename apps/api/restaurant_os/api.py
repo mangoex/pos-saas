@@ -437,6 +437,8 @@ def get_dashboard_overview_endpoint(
         )
         return get_dashboard_overview(session, authorized_branch_id, month)
 
+    return _business_response(operation)
+
 @router.post("/auth/signup", status_code=status.HTTP_201_CREATED)
 def signup_endpoint(payload: SignUpRequest, session: SessionDep) -> dict[str, Any]:
     def operation() -> dict[str, Any]:
@@ -4566,14 +4568,11 @@ def post_parse_menu_file(
     from restaurant_os.menu_parser import parse_menu_document
 
     settings = get_settings()
-    if not settings.openrouter_api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="Se requiere configurar una API Key de OpenRouter/Gemini en el servidor para escanear menús con IA.",
-        )
+    custom_key = str(payload.get("api_key") or "").strip()
+    api_key = custom_key or settings.openrouter_api_key
 
     options = OpenRouterOptions(
-        api_key=settings.openrouter_api_key,
+        api_key=api_key or "",
         model=settings.openrouter_model,
         base_url=settings.openrouter_base_url,
         timeout_seconds=settings.openrouter_timeout_seconds,
@@ -4583,6 +4582,8 @@ def post_parse_menu_file(
 
     try:
         return parse_menu_document(file_base64, mime_type, filename, options)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

@@ -80,6 +80,14 @@ const ProductsList = () => {
   const [selectedFile, setSelectedFile] = useState<{ file: File; base64: string; previewUrl?: string } | null>(null);
   const [parsedCategories, setParsedCategories] = useState<Array<{ name: string; products: Array<{ name: string; price: number; description: string; station: string }> }>>([]);
   const [templateError, setTemplateError] = useState('');
+  const [aiApiKey, setAiApiKey] = useState(() => {
+    try {
+      return localStorage.getItem('restaurantos_ai_api_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
 
   const templateMutation = useMutation({
     mutationFn: (templateType: string) => {
@@ -108,15 +116,26 @@ const ProductsList = () => {
           file_base64: fileData.base64,
           mime_type: fileData.mime_type,
           filename: fileData.filename,
+          api_key: aiApiKey.trim() || undefined,
         }),
       });
     },
     onSuccess: (data: any) => {
       setParsedCategories(data.categories || []);
       setTemplateError('');
+      if (aiApiKey.trim()) {
+        try {
+          localStorage.setItem('restaurantos_ai_api_key', aiApiKey.trim());
+        } catch {
+          // ignore
+        }
+      }
     },
     onError: (err) => {
       setTemplateError(err instanceof ApiError ? err.message : 'Error al procesar el archivo con IA.');
+      if (err instanceof ApiError && err.message.includes('API Key')) {
+        setShowApiKeyInput(true);
+      }
     },
   });
 
@@ -534,8 +553,14 @@ const ProductsList = () => {
 
       {modifierProduct && <ModifierManager isOpen productId={modifierProduct.id} productName={modifierProduct.name} onClose={() => setModifierProduct(null)} />}
 
-      <Modal isOpen={isTemplateModalOpen} onClose={() => { setIsTemplateModalOpen(false); setParsedCategories([]); setSelectedFile(null); }} title="Crear o Cargar Menú">
-        <div style={{ display: 'grid', gap: 16, maxHeight: '85vh', overflowY: 'auto' }}>
+      <Modal
+        isOpen={isTemplateModalOpen}
+        onClose={() => { setIsTemplateModalOpen(false); setParsedCategories([]); setSelectedFile(null); }}
+        title="Crear o Cargar Menú"
+        size="xl"
+        maxWidth="740px"
+      >
+        <div style={{ display: 'grid', gap: 16 }}>
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', gap: 8 }}>
             <button
@@ -795,8 +820,101 @@ const ProductsList = () => {
                       )}
                     </label>
                   </div>
+                  {/* 3. Configuración de API Key para IA */}
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px' }}>
+                    <div
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                      onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: '1rem' }}>🔑</span>
+                        <div>
+                          <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
+                            API Key de IA (OpenRouter / Gemini)
+                          </strong>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>
+                            {aiApiKey ? 'Clave personalizada activa en este navegador' : 'Opcional si ya está configurada como variable en tu servidor'}
+                          </span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#3b82f6', textDecoration: 'underline', fontWeight: 600 }}>
+                        {showApiKeyInput ? 'Ocultar' : (aiApiKey ? 'Modificar' : 'Ingresar clave')}
+                      </span>
+                    </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+                    {(showApiKeyInput || (!aiApiKey && templateError)) && (
+                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #e2e8f0', display: 'grid', gap: 6 }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#475569' }}>
+                          Pega tu clave de <strong>OpenRouter</strong> (<code>sk-or-v1-...</code>) o de <strong>Google Gemini</strong> (<code>AIzaSy...</code>):
+                        </p>
+                        <input
+                          type="password"
+                          value={aiApiKey}
+                          onChange={(e) => {
+                            setAiApiKey(e.target.value);
+                            try {
+                              localStorage.setItem('restaurantos_ai_api_key', e.target.value.trim());
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                          placeholder="sk-or-v1-... o AIzaSy..."
+                          style={{
+                            width: '100%',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 6,
+                            padding: '8px 12px',
+                            fontSize: '0.8125rem',
+                            fontFamily: 'monospace',
+                            background: '#fff',
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {templateError && (
+                    <div
+                      style={{
+                        padding: 12,
+                        borderRadius: 8,
+                        background: '#fee2e2',
+                        border: '1px solid #fca5a5',
+                        color: '#b91c1c',
+                        fontSize: '0.8125rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>⚠️</span>
+                        <span>{templateError}</span>
+                      </div>
+                      {!showApiKeyInput && (
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKeyInput(true)}
+                          style={{
+                            border: 'none',
+                            background: '#b91c1c',
+                            color: '#fff',
+                            fontSize: '0.75rem',
+                            padding: '4px 10px',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Configurar Clave
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 4 }}>
                     <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>
                       Cancelar
                     </Button>
