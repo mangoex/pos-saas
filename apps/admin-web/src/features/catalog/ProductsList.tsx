@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { ApiError, fetchApi } from '@restaurantos/api-client';
-import { Plus, Package, Edit, Trash2, SlidersHorizontal, Search } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, SlidersHorizontal, Search, Sparkles } from 'lucide-react';
 import { ModifierManager } from './ModifierManager';
 
 import '../../premium-catalogs.css';
@@ -41,6 +41,25 @@ const ProductsList = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState(emptyForm);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('taqueria');
+  const [templateError, setTemplateError] = useState('');
+
+  const templateMutation = useMutation({
+    mutationFn: (templateType: string) => fetchApi('/catalog/seed-starter-template', {
+      method: 'POST',
+      body: JSON.stringify({ template_type: templateType }),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      setIsTemplateModalOpen(false);
+      setTemplateError('');
+    },
+    onError: (err) => {
+      setTemplateError(err instanceof ApiError ? err.message : 'Error al cargar la plantilla de menú.');
+    },
+  });
 
   const { data: products, isLoading, error } = useQuery<Product[]>({
     queryKey: ['products'],
@@ -118,10 +137,32 @@ const ProductsList = () => {
           <h1 className="premium-header-title">Productos y catálogo</h1>
           <p className="premium-header-subtitle">Ajusta categorías, precios, estaciones y activa los productos de tu catálogo.</p>
         </div>
-        <button className="premium-add-btn" onClick={() => openModal()}>
-          <Plus size={18} />
-          Nuevo producto
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setIsTemplateModalOpen(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 16px',
+              borderRadius: 10,
+              border: '1px solid #cbd5e1',
+              background: '#fff',
+              color: '#0f172a',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.875rem',
+            }}
+          >
+            <Sparkles size={17} color="#10b981" />
+            Cargar plantilla de menú
+          </button>
+          <button className="premium-add-btn" onClick={() => openModal()}>
+            <Plus size={18} />
+            Nuevo producto
+          </button>
+        </div>
       </div>
 
       <div style={{ position: 'relative', width: 360, maxWidth: '100%', marginBottom: 18 }}>
@@ -146,7 +187,28 @@ const ProductsList = () => {
           <div className="premium-empty-state">
             <Package size={64} className="premium-empty-icon" />
             <h3 style={{ marginBottom: 8, fontSize: '1.25rem', fontWeight: 600 }}>No hay productos registrados</h3>
-            <p style={{ color: 'var(--color-text-muted)' }}>Comienza agregando tu primer producto al menú.</p>
+            <p style={{ color: 'var(--color-text-muted)' }}>Comienza agregando tu primer producto al menú o carga una plantilla.</p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setIsTemplateModalOpen(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 18px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#10b981',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                }}
+              >
+                <Sparkles size={16} /> Cargar menú prediseñado
+              </button>
+            </div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -304,6 +366,64 @@ const ProductsList = () => {
       </Modal>
 
       {modifierProduct && <ModifierManager isOpen productId={modifierProduct.id} productName={modifierProduct.name} onClose={() => setModifierProduct(null)} />}
+
+      <Modal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} title="Plantillas de Menú Prediseñadas">
+        <div style={{ display: 'grid', gap: 16 }}>
+          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>
+            Selecciona un giro comercial para precargar categorías, productos listos para la venta, precios base y configuración de estación.
+          </p>
+
+          {templateError && (
+            <div style={{ padding: 12, borderRadius: 8, background: '#fee2e2', color: '#dc2626', fontSize: '0.875rem' }}>
+              {templateError}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            {[
+              { id: 'taqueria', title: '🌮 Taquería Mexicana', desc: 'Tacos al Pastor, Asada, Gringas y Aguas Frescas' },
+              { id: 'cafeteria', title: '☕ Cafetería y Repostería', desc: 'Americano, Capuchino, Latte, Croissants y Pasteles' },
+              { id: 'hamburgueseria', title: '🍔 Hamburguesería & Snacks', desc: 'Burgers clásicas, dobles, Papas a la Francesa y Bebidas' },
+              { id: 'pizzeria', title: '🍕 Pizzería Artesanal', desc: 'Pizzas medianas de Pepperoni, Hawaiana y Refrescos' },
+              { id: 'general', title: '🍽️ Menú Restaurante General', desc: 'Platillos especiales, combos del día y bebidas de la casa' },
+            ].map((tmpl) => (
+              <button
+                key={tmpl.id}
+                type="button"
+                onClick={() => setSelectedTemplate(tmpl.id)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 4,
+                  padding: '12px 16px',
+                  borderRadius: 10,
+                  border: selectedTemplate === tmpl.id ? '2px solid #10b981' : '1px solid #e2e8f0',
+                  background: selectedTemplate === tmpl.id ? '#ecfdf5' : '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{tmpl.title}</strong>
+                <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{tmpl.desc}</span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+            <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => templateMutation.mutate(selectedTemplate)}
+              disabled={templateMutation.isPending}
+            >
+              {templateMutation.isPending ? 'Cargando plantilla...' : 'Cargar este menú'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };

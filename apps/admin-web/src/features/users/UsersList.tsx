@@ -243,7 +243,7 @@ const UsersList = () => {
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Correo electrónico</label>
-            <Input value={formData.email} onChange={(e: any) => setFormData({...formData, email: e.target.value})} placeholder="usuario@kiwi.mx" />
+            <Input value={formData.email} onChange={(e: any) => setFormData({...formData, email: e.target.value})} placeholder="usuario@possaas.com" />
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Nombre a mostrar</label>

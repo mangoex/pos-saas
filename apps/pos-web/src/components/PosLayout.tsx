@@ -158,9 +158,9 @@ const PosLayout = () => {
         zIndex: 10
       }}>
         <div style={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'space-between', alignItems: 'center', padding: isCollapsed ? '24px 0' : '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.5rem', fontWeight: 800, color: '#10b981' }}>
-            <span>🥝</span>
-            {!isCollapsed && <span>Kiwi</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>
+            <span>🍽️</span>
+            {!isCollapsed && <span>{session?.active_branch?.business_unit?.name || 'RestaurantOS'}</span>}
           </div>
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}

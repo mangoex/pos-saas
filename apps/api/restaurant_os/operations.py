@@ -1403,15 +1403,30 @@ def _insert_user_role_assignment(
             sa.select(models.user_roles).where(
                 models.user_roles.c.user_id == user_id,
                 models.user_roles.c.role_id == role_id,
-                models.user_roles.c.branch_id.is_(normalized_branch_id)
-                if normalized_branch_id is None
-                else models.user_roles.c.branch_id == normalized_branch_id,
             )
         )
         .mappings()
         .first()
     )
     if existing:
+        if existing["branch_id"] != normalized_branch_id:
+            session.execute(
+                sa.update(models.user_roles)
+                .where(
+                    models.user_roles.c.user_id == user_id,
+                    models.user_roles.c.role_id == role_id,
+                )
+                .values(branch_id=normalized_branch_id)
+            )
+            _audit(
+                session,
+                action="user_role.updated",
+                entity_type="user",
+                entity_id=user_id,
+                payload={"role_id": role_id, "branch_id": normalized_branch_id},
+                branch_id=normalized_branch_id or BRANCH_ID,
+                actor_user_id=actor_user_id,
+            )
         return dict(existing)
 
     session.execute(models.user_roles.insert().values(**assignment))
@@ -14154,17 +14169,39 @@ def create_ingredient_variation(
     require_permission(session, actor_id, "catalog.manage")
     _reject_global_catalog_branch_override(payload)
     item_id = str(payload.get("inventory_item_id", "")).strip()
-    item = (
+    custom_label = str(payload.get("name") or payload.get("add_label") or payload.get("label") or "").strip()
+    item = None
+    if item_id:
+        item = (
+            session.execute(
+                sa.select(models.inventory_items.c.id, models.inventory_items.c.name).where(
+                    models.inventory_items.c.id == item_id,
+                    models.inventory_items.c.organization_id == ORGANIZATION_ID,
+                    models.inventory_items.c.status == "active",
+                )
+            )
+            .mappings()
+            .first()
+        )
+    if not item and custom_label:
+        clean_name = custom_label.removeprefix("Porción extra de ").removeprefix("Con ").strip()
+        item_id = _id()
+        sku_candidate = f"EXT-{re.sub(r'[^A-Z0-9]+', '', clean_name.upper())[:6] or 'ADD'}-{uuid.uuid4().hex[:4].upper()}"
+        now = _now()
         session.execute(
-            sa.select(models.inventory_items.c.id, models.inventory_items.c.name).where(
-                models.inventory_items.c.id == item_id,
-                models.inventory_items.c.organization_id == ORGANIZATION_ID,
-                models.inventory_items.c.status == "active",
+            models.inventory_items.insert().values(
+                id=item_id,
+                organization_id=ORGANIZATION_ID,
+                name=clean_name,
+                sku=sku_candidate,
+                unit_code="PZA",
+                status="active",
+                created_at=now,
+                updated_at=now,
             )
         )
-        .mappings()
-        .first()
-    )
+        item = {"id": item_id, "name": clean_name}
+
     if not item:
         raise BusinessError(
             "ingredient_variation_item_not_found", "Ingredient inventory item was not found"

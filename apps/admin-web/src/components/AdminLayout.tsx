@@ -234,6 +234,7 @@ const AdminLayout = () => {
         '/historical-reports',
         '/orders',
         '/cash-concepts',
+        '/waste',
       ],
     },
     {

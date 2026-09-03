@@ -224,6 +224,31 @@ def test_owner_assignment_requires_persisted_authority_and_role_updates_are_addi
         assert "018f6f73-2d0a-74f0-8f1c-000000001024" in role_ids
 
 
+def test_update_user_same_role_different_branch_upserts_without_integrity_error() -> None:
+    engine = create_engine("sqlite+pysqlite://")
+    models.metadata.create_all(engine)
+    with Session(engine) as session:
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        cashier_id = "018f6f73-2d0a-74f0-8f1c-000000001020"
+        legacy_admin_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
+        # User already has role 018f6f73-2d0a-74f0-8f1c-000000001018 on BRANCH_A
+        # Re-assigning or changing branch must upsert cleanly and not throw IntegrityError
+        update_user(
+            session,
+            cashier_id,
+            role_id="018f6f73-2d0a-74f0-8f1c-000000001018",
+            branch_id=BRANCH_A_OTHER,
+            actor_user_id=legacy_admin_id,
+        )
+        assigned_branch = session.execute(
+            models.user_roles.select().with_only_columns(models.user_roles.c.branch_id).where(
+                models.user_roles.c.user_id == cashier_id,
+                models.user_roles.c.role_id == "018f6f73-2d0a-74f0-8f1c-000000001018",
+            )
+        ).scalar()
+        assert assigned_branch == BRANCH_A_OTHER
+
+
 def test_organization_authority_role_is_immutable_except_for_authorized_rename() -> None:
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)

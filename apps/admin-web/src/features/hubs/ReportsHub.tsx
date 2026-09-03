@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, LineChart, Wallet } from 'lucide-react';
+import { BarChart3, LineChart, Wallet, Trash2 } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
 import { canManageCashConcepts } from '../cash/cashConceptState';
 
@@ -28,6 +28,14 @@ export const ReportsHub: React.FC = () => {
           },
         ]
       : []),
+    {
+      title: 'Mermas y Desperdicios',
+      description: 'Auditoría de alimentos descartados, pérdidas de cocina y cancelaciones de sucursal.',
+      icon: <Trash2 size={26} />,
+      iconBg: '#fef2f2',
+      iconColor: '#dc2626',
+      path: '/waste',
+    },
     {
       title: 'Métricas y Rendimiento',
       description: 'Visualización de tendencias, ventas por categoría e indicadores clave.',

@@ -386,6 +386,26 @@ def _seed_starter_catalog(
                 ],
             },
         ],
+        "hamburgueseria": [
+            {
+                "category": "Hamburguesas",
+                "display_order": 1,
+                "products": [
+                    {"name": "Hamburguesa Clásica", "price_cents": 11000, "sku": "HAM-CLA"},
+                    {"name": "Hamburguesa Especial Tocino", "price_cents": 13500, "sku": "HAM-TOC"},
+                    {"name": "Hamburguesa Doble Carne", "price_cents": 16500, "sku": "HAM-DOB"},
+                ],
+            },
+            {
+                "category": "Complementos y Bebidas",
+                "display_order": 2,
+                "products": [
+                    {"name": "Papas a la Francesa", "price_cents": 5500, "sku": "COM-PAP"},
+                    {"name": "Aros de Cebolla", "price_cents": 6000, "sku": "COM-ARO"},
+                    {"name": "Refresco 600ml", "price_cents": 3500, "sku": "BEB-REF"},
+                ],
+            },
+        ],
         "general": [
             {
                 "category": "Especialidades",
@@ -455,11 +475,40 @@ def _seed_starter_catalog(
                 )
             )
 
-            session.execute(
-                models.branch_product_availability.insert().values(
-                    branch_id=branch_id,
-                    product_id=prod_id,
-                    is_available=True,
-                    updated_at=now,
+            if branch_id:
+                session.execute(
+                    models.branch_product_availability.insert().values(
+                        branch_id=branch_id,
+                        product_id=prod_id,
+                        is_available=True,
+                        updated_at=now,
+                    )
                 )
-            )
+
+
+def seed_starter_catalog_for_org(
+    session: Session,
+    organization_id: str,
+    branch_id: str | None,
+    business_type: str,
+) -> dict[str, Any]:
+    """Seed or append a starter menu template into an existing organization."""
+    now = _now()
+    resolved_branch_id = branch_id
+    if not resolved_branch_id:
+        branch = session.execute(
+            sa.select(models.branches.c.id)
+            .where(models.branches.c.organization_id == organization_id)
+            .order_by(models.branches.c.created_at)
+        ).scalar_one_or_none()
+        resolved_branch_id = branch
+
+    _seed_starter_catalog(
+        session=session,
+        organization_id=organization_id,
+        branch_id=resolved_branch_id or "",
+        business_type=business_type,
+        now=now,
+    )
+    session.commit()
+    return {"status": "ok", "template": business_type}

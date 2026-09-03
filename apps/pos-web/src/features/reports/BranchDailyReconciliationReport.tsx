@@ -143,7 +143,7 @@ export default function BranchDailyReconciliationReport() {
             Conciliación y Corte Diario de Caja
           </h1>
           <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-            Sucursal: <strong>{branchName}</strong> · Libro Mayor y Conciliación Multicanal (Kiwi Oficial)
+            Sucursal: <strong>{branchName}</strong> · Libro Mayor y Conciliación Multicanal (Oficial)
           </p>
         </div>
 

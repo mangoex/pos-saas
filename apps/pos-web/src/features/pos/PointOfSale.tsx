@@ -1353,9 +1353,9 @@ const PointOfSale = () => {
     <div className="pos-sale-screen">
       <header className="pos-sale-header">
         <div className="pos-sale-brand">
-          <span className="pos-sale-mark">K</span>
+          <span className="pos-sale-mark">R</span>
           <div>
-            <strong>Kiwi POS — <span style={{ color: '#10b981' }}>{session?.user?.display_name || ''}</span></strong>
+            <strong>RestaurantOS POS — <span style={{ color: '#10b981' }}>{session?.user?.display_name || ''}</span></strong>
             <small>Venta rápida</small>
           </div>
         </div>

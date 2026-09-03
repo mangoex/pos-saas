@@ -101,8 +101,9 @@ export default function IngredientExtras() {
     mutationFn: () => fetchApi('/catalog/ingredient-variations', {
       method: 'POST',
       body: JSON.stringify({
-        inventory_item_id: itemId,
-        add_label: label || undefined,
+        inventory_item_id: itemId || undefined,
+        name: label.trim() || undefined,
+        add_label: label.trim() || undefined,
         portion_quantity: portionQuantity,
         sale_price_cents: mxnToCentsExact(salePriceMxn),
         station,
@@ -193,27 +194,39 @@ export default function IngredientExtras() {
       </article>)}
     </div>
     <Modal isOpen={createOpen} onClose={resetCreate} title="Nuevo ingrediente adicional">
-      <div style={{ display: 'grid', gap: 10 }}>
-        {operationalError && <p role="alert">{operationalError}</p>}
-        <label>Buscar insumo por nombre o SKU
+      <div style={{ display: 'grid', gap: 12 }}>
+        {operationalError && <p role="alert" style={{ color: '#dc2626', margin: 0 }}>{operationalError}</p>}
+        <label style={{ display: 'grid', gap: 4, fontWeight: 600 }}>Nombre del adicional (ej. Queso Extra, Tocino Extra)
           <Input
-            value={itemSearch}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setItemSearch(event.target.value)}
-            placeholder="Aguacate, AGU-01…"
+            value={label}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setLabel(event.target.value)}
+            placeholder="Ej. Queso Extra, Aguacate Extra…"
           />
         </label>
-        {inventory.map((item) => <button
-          key={item.id}
-          type="button"
-          onClick={() => {
-            setItemId(item.id);
-            setLabel(`Porción extra de ${item.name}`);
-            setOperationalError('');
-          }}
-          style={{ textAlign: 'left', border: itemId === item.id ? '2px solid #10b981' : '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}
-        >
-          {item.name} · {item.sku} · {item.unit_code || 'unidad base'}
-        </button>)}
+        <details style={{ fontSize: '0.875rem', color: '#64748b' }}>
+          <summary style={{ cursor: 'pointer', padding: '4px 0' }}>Vincular a insumo de inventario (opcional)</summary>
+          <div style={{ marginTop: 8 }}>
+            <Input
+              value={itemSearch}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setItemSearch(event.target.value)}
+              placeholder="Buscar insumo por nombre o SKU…"
+            />
+            <div style={{ maxHeight: 150, overflowY: 'auto', display: 'grid', gap: 4, marginTop: 6 }}>
+              {inventory.slice(0, 15).map((item) => <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setItemId(item.id);
+                  if (!label.trim()) setLabel(`Porción extra de ${item.name}`);
+                  setOperationalError('');
+                }}
+                style={{ textAlign: 'left', border: itemId === item.id ? '2px solid #10b981' : '1px solid #e2e8f0', borderRadius: 8, padding: 8, background: itemId === item.id ? '#ecfdf5' : '#fff' }}
+              >
+                {item.name} · {item.sku} · {item.unit_code || 'unidad base'}
+              </button>)}
+            </div>
+          </div>
+        </details>
         <CanonicalFields
           form={{ portion_quantity: portionQuantity, sale_price_mxn: salePriceMxn, station, display_order: displayOrder }}
           onChange={(form) => {
@@ -226,11 +239,11 @@ export default function IngredientExtras() {
           onLabelChange={setLabel}
           labelPlaceholder={chosen ? `Porción extra de ${chosen.name}` : 'Porción extra de…'}
         />
-        <p style={{ color: '#64748b' }}>
+        <p style={{ color: '#64748b', fontSize: '0.8125rem', margin: 0 }}>
           La configuración corporativa aplica a cualquier producto; no existen overrides por sucursal.
         </p>
         <Button
-          disabled={!itemId || !portionQuantity.trim() || !salePriceMxn.trim() || create.isPending}
+          disabled={(!itemId && !label.trim()) || !portionQuantity.trim() || !salePriceMxn.trim() || create.isPending}
           onClick={() => create.mutate()}
         >
           Crear adicional

@@ -193,6 +193,7 @@ export const App = () => {
 
           {/* Subroutes: Ventas y Reportes */}
           <Route path="reports" element={<CorporateReconciliationDashboard />} />
+          <Route path="waste" element={<WasteList />} />
           <Route path="analytics" element={<div style={{ padding: 24 }}><h2>Analytics</h2><p>Panel de Métricas en vivo...</p></div>} />
 
           {/* Subroutes: Administración y Accesos */}

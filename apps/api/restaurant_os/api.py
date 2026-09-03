@@ -4523,6 +4523,29 @@ def post_ingredient_variation(
     return _business_response(lambda: create_ingredient_variation(session, payload, actor_id))
 
 
+@router.post("/catalog/seed-starter-template")
+def post_seed_starter_template(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_permission(session, actor_id, "catalog.manage")
+    template_type = str(payload.get("template_type") or "general").strip()
+    branch_id = payload.get("branch_id")
+    from restaurant_os.saas_onboarding import seed_starter_catalog_for_org
+    from restaurant_os.operations import ORGANIZATION_ID
+    return _business_response(
+        lambda: seed_starter_catalog_for_org(
+            session=session,
+            organization_id=ORGANIZATION_ID,
+            branch_id=branch_id,
+            business_type=template_type,
+        )
+    )
+
+
 @router.get("/catalog/ingredient-variations/{variation_id}")
 def get_ingredient_variation_endpoint(
     variation_id: str,

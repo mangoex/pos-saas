@@ -73,6 +73,7 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
         label: 'Conceptos de Caja',
         requiredPermission: (user) => canManageCashConcepts(user),
       },
+      { path: '/waste', label: 'Mermas y Desperdicios' },
     ],
   },
   {
