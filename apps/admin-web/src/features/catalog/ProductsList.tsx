@@ -23,6 +23,13 @@ interface Product {
   source_branch_id?: string | null;
 }
 
+interface CategoryItem {
+  id: string;
+  name: string;
+  display_order: number;
+  status: string;
+}
+
 const emptyForm = {
   name: '',
   sku: '',
@@ -42,6 +49,7 @@ const ProductsList = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState(emptyForm);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'templates' | 'ai_upload'>('templates');
   const [selectedTemplate, setSelectedTemplate] = useState('taqueria');
@@ -117,6 +125,17 @@ const ProductsList = () => {
     queryFn: () => fetchApi('/catalog/products'),
   });
 
+  const { data: categories = [] } = useQuery<CategoryItem[]>({
+    queryKey: ['categories'],
+    queryFn: () => fetchApi('/categories'),
+  });
+
+  const sortedCategories = useMemo(() => {
+    return [...categories]
+      .filter((c) => c.status !== 'inactive')
+      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name));
+  }, [categories]);
+
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es-MX');
     if (!term) return products || [];
@@ -158,6 +177,10 @@ const ProductsList = () => {
   const openModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
+      const isKnown = sortedCategories.some(
+        (c) => c.name.trim().toLowerCase() === (product.category_name || '').trim().toLowerCase()
+      );
+      setIsCustomCategory(!isKnown && Boolean(product.category_name));
       setFormData({ 
         name: product.name, 
         sku: product.sku, 
@@ -170,7 +193,12 @@ const ProductsList = () => {
       });
     } else {
       setEditingProduct(null);
-      setFormData(emptyForm);
+      setIsCustomCategory(false);
+      const defaultCat = sortedCategories.length > 0 ? sortedCategories[0].name : '';
+      setFormData({
+        ...emptyForm,
+        category_name: defaultCat,
+      });
     }
     setIsModalOpen(true);
   };
@@ -329,7 +357,68 @@ const ProductsList = () => {
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Categoría</label>
-            <Input value={formData.category_name} onChange={(e: any) => setFormData({...formData, category_name: e.target.value})} />
+            {sortedCategories.length > 0 && !isCustomCategory ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  value={formData.category_name}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setIsCustomCategory(true);
+                      setFormData({ ...formData, category_name: '' });
+                    } else {
+                      setFormData({ ...formData, category_name: e.target.value });
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    background: '#fff',
+                    fontSize: '0.875rem',
+                    color: '#0f172a',
+                  }}
+                >
+                  <option value="">-- Selecciona una categoría --</option>
+                  {sortedCategories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Escribir nueva categoría...</option>
+                </select>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Input
+                  value={formData.category_name}
+                  onChange={(e: any) => setFormData({ ...formData, category_name: e.target.value })}
+                  placeholder="Escribe el nombre de la categoría"
+                />
+                {sortedCategories.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomCategory(false);
+                      setFormData({ ...formData, category_name: sortedCategories[0]?.name || '' });
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      background: '#f8fafc',
+                      color: '#475569',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Ver lista
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Estación operativa</label>
