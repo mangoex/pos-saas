@@ -254,7 +254,7 @@ export function BranchAdminSuppliers() {
           { key: 'item', label: 'Insumo Base', render: (row) => row.item_name },
           { key: 'price', label: 'Último precio', render: (row) => money(row.last_net_price) },
         ]}
-        rows={presentations.data}
+        rows={presentations.data?.filter((p) => !p.code?.startsWith('PRES-') && !p.name?.toUpperCase().includes('KIWI')) || []}
         rowKey={(row) => row.id}
         loading={presentations.loading}
         error={presentations.error}

@@ -160,7 +160,17 @@ const PosLayout = () => {
         <div style={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'space-between', alignItems: 'center', padding: isCollapsed ? '24px 0' : '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>
             <span>🍽️</span>
-            {!isCollapsed && <span>{session?.active_branch?.business_unit?.name || 'RestaurantOS'}</span>}
+            {!isCollapsed && (
+              <span>
+                {(() => {
+                  const bu = session?.active_branch?.business_unit?.name;
+                  if (bu && !bu.toLowerCase().includes('kiwi')) return bu;
+                  const bName = session?.active_branch?.name;
+                  if (bName && !bName.toLowerCase().includes('kiwi')) return bName;
+                  return 'RestaurantOS';
+                })()}
+              </span>
+            )}
           </div>
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}

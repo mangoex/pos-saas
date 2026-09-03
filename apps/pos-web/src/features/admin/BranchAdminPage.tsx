@@ -60,10 +60,10 @@ export function BranchAdminPage({
             fontSize: 14,
           }}
         >
-          <strong style={{ color: '#16a34a' }}>{branch.name}</strong>
-          <span>{branch.business_unit.name}</span>
-          <span>{branch.legal_entity.name}</span>
-          {branch.warehouse && <span>Almacén: {branch.warehouse.name}</span>}
+          <strong style={{ color: '#16a34a' }}>{branch.name.replace(/kiwi/gi, 'RestaurantOS')}</strong>
+          <span>{branch.business_unit?.name?.toLowerCase().includes('kiwi') ? 'Operaciones Sucursal' : branch.business_unit?.name}</span>
+          <span>{branch.legal_entity?.name?.toLowerCase().includes('kiwi') ? 'Razón Social Principal' : branch.legal_entity?.name}</span>
+          {branch.warehouse && <span>Almacén: {branch.warehouse.name?.replace(/kiwi/gi, 'RestaurantOS')}</span>}
         </div>
       )}
 

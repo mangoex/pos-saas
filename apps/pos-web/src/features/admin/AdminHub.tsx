@@ -48,21 +48,14 @@ const enabledCards: EnabledCard[] = [
   {
     to: '/administration/products',
     label: 'Disponibilidad de Menú',
-    description: 'Activar o apagar productos e insumos agotados (86) en la sucursal.',
+    description: 'Activar o apagar productos agotados (86) en la sucursal.',
     icon: Package,
     permission: ['catalog.branch.manage', 'branch.admin.access', 'admin.manage'],
   },
   {
-    to: '/administration/suppliers',
-    label: 'Proveedores',
-    description: 'Consulta de proveedores, contactos y presentaciones disponibles para comprar.',
-    icon: Building2,
-    permission: 'purchases.read',
-  },
-  {
     to: '/administration/purchases',
-    label: 'Compras',
-    description: 'Consulta de recepciones, costos y conciliación con caja de la sucursal.',
+    label: 'Compras de Caja',
+    description: 'Registro y consulta de compras locales pagadas desde caja chica.',
     icon: Receipt,
     permission: 'purchases.read',
   },
@@ -136,30 +129,14 @@ const AdminHub: React.FC = () => {
           }}
         >
           <strong style={{ color: '#16a34a' }}>Administración de sucursal</strong>
-          <span>{branch.name} ({branch.code})</span>
-          <span>{branch.business_unit.name}</span>
+          <span>{branch.name?.replace(/kiwi/gi, 'RestaurantOS')} ({branch.code})</span>
+          <span>{branch.business_unit?.name?.toLowerCase().includes('kiwi') ? 'Operaciones Sucursal' : branch.business_unit?.name}</span>
           <span>
             Tipo: {UNIT_TYPE_LABELS[branch.business_unit.unit_type] || branch.business_unit.unit_type}
           </span>
-          <span>Razón social: {branch.legal_entity.name}</span>
-          {branch.warehouse && <span>Almacén: {branch.warehouse.name}</span>}
+          <span>Razón social: {branch.legal_entity?.name?.toLowerCase().includes('kiwi') ? 'Razón Social Principal' : branch.legal_entity?.name}</span>
+          {branch.warehouse && <span>Almacén: {branch.warehouse.name?.replace(/kiwi/gi, 'RestaurantOS')}</span>}
         </div>
-      )}
-
-      {latestImport && (
-        <section style={{ marginTop: 18, padding: 16, borderRadius: 14, background: '#fffbeb', border: '1px solid #fde68a' }}>
-          <strong style={{ color: '#92400e' }}>Datos heredados de esta sucursal</strong>
-          <p style={{ color: '#78350f', margin: '6px 0 10px', fontSize: 14 }}>
-            Los catálogos ya están separados por sucursal. Los datos incompletos permanecen protegidos hasta que el administrador corporativo los concluya.
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {Object.entries(latestImport.entity_summary).map(([entity, counts]) => (
-              <span key={entity} style={{ padding: '5px 9px', borderRadius: 999, background: '#fff', color: '#78350f', fontSize: 12 }}>
-                {entity}: {Object.entries(counts).map(([status, count]) => `${status} ${count}`).join(' · ')}
-              </span>
-            ))}
-          </div>
-        </section>
       )}
 
       <div
