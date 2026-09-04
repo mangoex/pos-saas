@@ -588,7 +588,8 @@ def get_branches(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "admin.manage")
-        return list_branches(session)
+        org_id = _actor_org_from_request(session, actor_id)
+        return list_branches(session, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -602,7 +603,8 @@ def get_business_units(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "catalog.manage")
-        return list_business_units(session)
+        org_id = _actor_org_from_request(session, actor_id)
+        return list_business_units(session, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -750,7 +752,8 @@ def get_roles(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "admin.manage")
-        return list_roles(session)
+        org_id = _actor_org_from_request(session, actor_id)
+        return list_roles(session, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -777,7 +780,8 @@ def get_users(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "admin.manage")
-        return list_users(session)
+        org_id = _actor_org_from_request(session, actor_id)
+        return list_users(session, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -2612,6 +2616,7 @@ from restaurant_os.superadmin import (
     create_tenant_by_admin,
     update_tenant_status,
     update_tenant_plan,
+    update_tenant_details,
     impersonate_tenant,
     parse_and_import_menu_ai,
 )
@@ -2687,6 +2692,20 @@ def patch_superadmin_tenant_plan_endpoint(
     plan = str(payload.get("plan", "starter_349"))
     monthly_fee = payload.get("monthly_fee_cents")
     return update_tenant_plan(session, tenant_id, plan=plan, monthly_fee_cents=monthly_fee)
+
+
+@router.put("/superadmin/tenants/{tenant_id}")
+@router.put("/v1/superadmin/tenants/{tenant_id}")
+def put_superadmin_tenant_update_endpoint(
+    tenant_id: str,
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return update_tenant_details(session, tenant_id, payload)
 
 
 @router.post("/superadmin/tenants/{tenant_id}/impersonate")

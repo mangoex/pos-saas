@@ -28,7 +28,8 @@ def list_organizations(session: Session) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def list_business_units(session: Session) -> list[dict[str, Any]]:
+def list_business_units(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     rows = session.execute(
         sa.select(
             models.business_units.c.id,
@@ -45,13 +46,14 @@ def list_business_units(session: Session) -> list[dict[str, Any]]:
                 models.business_units.c.legal_entity_id == models.legal_entities.c.id,
             )
         )
-        .where(models.business_units.c.organization_id == ORGANIZATION_ID)
+        .where(models.business_units.c.organization_id == org_id)
         .order_by(models.business_units.c.name)
     ).mappings()
     return [dict(row) for row in rows]
 
 
-def list_branches(session: Session) -> list[dict[str, Any]]:
+def list_branches(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     rows = session.execute(
         sa.select(
             models.branches.c.id,
@@ -88,7 +90,7 @@ def list_branches(session: Session) -> list[dict[str, Any]]:
             )
             .join(models.warehouses, models.branches.c.id == models.warehouses.c.branch_id)
         )
-        .where(models.branches.c.organization_id == ORGANIZATION_ID)
+        .where(models.branches.c.organization_id == org_id)
         .order_by(models.branches.c.name)
     ).mappings()
 
@@ -103,7 +105,8 @@ def list_branches(session: Session) -> list[dict[str, Any]]:
     return result
 
 
-def list_roles(session: Session) -> list[dict[str, Any]]:
+def list_roles(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     rows = session.execute(
         sa.select(
             models.roles.c.id,
@@ -111,7 +114,7 @@ def list_roles(session: Session) -> list[dict[str, Any]]:
             models.roles.c.scope,
             models.roles.c.created_at,
         )
-        .where(models.roles.c.organization_id == ORGANIZATION_ID)
+        .where(models.roles.c.organization_id == org_id)
         .order_by(models.roles.c.name)
     ).mappings()
 
@@ -139,7 +142,8 @@ def list_roles(session: Session) -> list[dict[str, Any]]:
     return list(roles_by_id.values())
 
 
-def list_users(session: Session) -> list[dict[str, Any]]:
+def list_users(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     rows = session.execute(
         sa.select(
             models.users.c.id,
@@ -149,7 +153,7 @@ def list_users(session: Session) -> list[dict[str, Any]]:
             models.users.c.status,
             models.users.c.created_at,
         )
-        .where(models.users.c.organization_id == ORGANIZATION_ID)
+        .where(models.users.c.organization_id == org_id)
         .order_by(models.users.c.display_name)
     ).mappings()
     users_by_id = {row["id"]: {**dict(row), "roles": []} for row in rows}
@@ -410,7 +414,7 @@ def _project_pos_catalog(
         session.execute(
             sa.select(models.product_categories)
             .where(
-                models.product_categories.c.organization_id == ORGANIZATION_ID,
+                models.product_categories.c.organization_id == org_id,
                 models.product_categories.c.status != "archived",
             )
             .order_by(models.product_categories.c.display_order, models.product_categories.c.name)
@@ -473,7 +477,9 @@ def list_catalog_products(
 def list_inventory_stock(
     session: Session,
     branch_id: str | None = None,
+    organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     stock_query = sa.select(
         models.inventory_movements.c.item_id,
         models.inventory_movements.c.warehouse_id,
@@ -546,7 +552,7 @@ def list_inventory_stock(
         sa.select(*columns)
         .select_from(source)
         .where(
-            models.inventory_items.c.organization_id == ORGANIZATION_ID,
+            models.inventory_items.c.organization_id == org_id,
             models.inventory_items.c.status == "active",
         )
     )
@@ -814,9 +820,10 @@ def list_role_permissions(session: Session, role_id: str) -> list[str]:
     return [row.permission_id for row in rows]
 
 
-def list_warehouses(session: Session, branch_id: str | None = None) -> list[dict[str, Any]]:
+def list_warehouses(session: Session, branch_id: str | None = None, organization_id: str | None = None) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     query = sa.select(models.warehouses).where(
-        models.warehouses.c.organization_id == ORGANIZATION_ID,
+        models.warehouses.c.organization_id == org_id,
     )
     if branch_id is not None:
         query = query.where(models.warehouses.c.branch_id == branch_id)
@@ -833,10 +840,11 @@ def list_warehouses(session: Session, branch_id: str | None = None) -> list[dict
     ]
 
 
-def list_inventory_units(session: Session) -> list[dict[str, Any]]:
+def list_inventory_units(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     rows = session.execute(
         sa.select(models.inventory_units)
-        .where(models.inventory_units.c.organization_id == ORGANIZATION_ID)
+        .where(models.inventory_units.c.organization_id == org_id)
         .order_by(models.inventory_units.c.name)
     ).fetchall()
     return [
@@ -851,7 +859,8 @@ def list_inventory_units(session: Session) -> list[dict[str, Any]]:
     ]
 
 
-def list_inventory_items(session: Session, branch_id: str | None = None) -> list[dict[str, Any]]:
+def list_inventory_items(session: Session, branch_id: str | None = None, organization_id: str | None = None) -> list[dict[str, Any]]:
+    org_id = organization_id or ORGANIZATION_ID
     if branch_id:
         cost_subq = (
             sa.select(
@@ -890,7 +899,7 @@ def list_inventory_items(session: Session, branch_id: str | None = None) -> list
             ).outerjoin(cost_subq, models.inventory_items.c.id == cost_subq.c.item_id)
         )
         .where(
-            models.inventory_items.c.organization_id == ORGANIZATION_ID,
+            models.inventory_items.c.organization_id == org_id,
             models.inventory_items.c.status != "archived",
         )
     )

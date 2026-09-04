@@ -389,10 +389,13 @@ def create_role(
     if normalized_scope not in {"organization", "branch"}:
         raise BusinessError("invalid_role_scope", "Role scope must be organization or branch")
 
+    actor_user = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    target_org = actor_user["organization_id"] if actor_user and actor_user.get("organization_id") else ORGANIZATION_ID
+
     existing = (
         session.execute(
             sa.select(models.roles).where(
-                models.roles.c.organization_id == ORGANIZATION_ID,
+                models.roles.c.organization_id == target_org,
                 sa.func.lower(models.roles.c.name) == normalized_name.lower(),
             )
         )
@@ -405,7 +408,7 @@ def create_role(
     now = _now()
     role: dict[str, Any] = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": target_org,
         "name": normalized_name,
         "scope": normalized_scope,
         "created_at": now,
@@ -550,9 +553,11 @@ def create_user(
         subject_type="user",
         subject_id=user_id,
     )
+    actor_user = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    target_org = actor_user["organization_id"] if actor_user and actor_user.get("organization_id") else ORGANIZATION_ID
     user = {
         "id": user_id,
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": target_org,
         "email": normalized_email,
         "display_name": normalized_name,
         "employee_code": normalized_employee_code,
@@ -917,10 +922,13 @@ def create_branch(
     if not normalized_code:
         raise BusinessError("invalid_branch_code", "Branch code is required")
 
+    actor_user = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    target_org = actor_user["organization_id"] if actor_user and actor_user.get("organization_id") else ORGANIZATION_ID
+
     existing = (
         session.execute(
             sa.select(models.branches).where(
-                models.branches.c.organization_id == ORGANIZATION_ID,
+                models.branches.c.organization_id == target_org,
                 models.branches.c.code == normalized_code,
             )
         )
@@ -931,7 +939,7 @@ def create_branch(
         raise BusinessError("branch_already_exists", "Branch code already exists")
 
     business_unit_query = sa.select(models.business_units).where(
-        models.business_units.c.organization_id == ORGANIZATION_ID,
+        models.business_units.c.organization_id == target_org,
         models.business_units.c.status == "active",
     )
     if business_unit_id:
@@ -949,7 +957,7 @@ def create_branch(
     now = _now()
     branch = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": target_org,
         "legal_entity_id": legal_entity_id,
         "business_unit_id": business_unit["id"],
         "name": normalized_name,
@@ -973,7 +981,7 @@ def create_branch(
     }
     warehouse = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": target_org,
         "branch_id": branch["id"],
         "name": f"Almacen {normalized_name}",
         "status": "active",
@@ -1024,10 +1032,13 @@ def create_business_unit(
             "invalid_business_unit_type",
             "Business unit type must be restaurant, bakery, production or other",
         )
+    actor_user = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    target_org = actor_user["organization_id"] if actor_user and actor_user.get("organization_id") else ORGANIZATION_ID
+
     legal_entity = session.execute(
         sa.select(models.legal_entities.c.id).where(
             models.legal_entities.c.id == legal_entity_id,
-            models.legal_entities.c.organization_id == ORGANIZATION_ID,
+            models.legal_entities.c.organization_id == target_org,
             models.legal_entities.c.status == "active",
         )
     ).scalar_one_or_none()
@@ -1035,7 +1046,7 @@ def create_business_unit(
         raise BusinessError("legal_entity_not_found", "An active legal entity is required")
     duplicate = session.execute(
         sa.select(models.business_units.c.id).where(
-            models.business_units.c.organization_id == ORGANIZATION_ID,
+            models.business_units.c.organization_id == target_org,
             models.business_units.c.code == normalized_code,
         )
     ).scalar_one_or_none()
@@ -1044,7 +1055,7 @@ def create_business_unit(
     now = _now()
     business_unit: dict[str, Any] = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": target_org,
         "legal_entity_id": legal_entity_id,
         "name": normalized_name,
         "code": normalized_code,

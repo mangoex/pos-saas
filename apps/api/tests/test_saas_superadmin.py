@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
 import sqlalchemy as sa
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from restaurant_os.main import app
-from restaurant_os.database import get_session
+from fastapi.testclient import TestClient
 from restaurant_os import models
+from restaurant_os.database import get_session
+from restaurant_os.main import app
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def _client_with_db() -> TestClient:
@@ -252,3 +250,91 @@ def test_superadmin_impersonate_tenant() -> None:
     customer_headers = {"Authorization": f"Bearer {imp_data['token']}"}
     cat_resp = client.get("/api/v1/catalog/products", headers=customer_headers)
     assert cat_resp.status_code == 200
+
+    # Verify impersonation details
+    assert "target_user" in imp_data
+    assert imp_data["target_user"]["is_superadmin"] is False
+    assert imp_data["target_user"]["email"] == "claudia@cafecentral.com"
+    assert "target_branch_id" in imp_data
+    assert imp_data["target_branch_id"] is not None
+
+    # Strict multi-tenant isolation verification:
+    # 1. Branches must only return Café Central's branches, NEVER 'Sucursal Piloto'
+    branches_resp = client.get("/api/v1/branches", headers=customer_headers)
+    assert branches_resp.status_code == 200
+    branches = branches_resp.json()
+    assert len(branches) == 1
+    assert branches[0]["name"] == "Sucursal Matriz"
+    assert branches[0]["code"] == "MATRIZ"
+
+    # 2. Users must only return Café Central's users
+    users_resp = client.get("/api/v1/users", headers=customer_headers)
+    assert users_resp.status_code == 200
+    users = users_resp.json()
+    user_emails = [u["email"] for u in users]
+    assert "claudia@cafecentral.com" in user_emails
+    assert "admin@possaas.com" not in user_emails
+
+    # 3. Roles must only return Café Central's roles
+    roles_resp = client.get("/api/v1/roles", headers=customer_headers)
+    assert roles_resp.status_code == 200
+    roles = roles_resp.json()
+    assert len(roles) >= 1
+
+
+def test_superadmin_update_tenant_details() -> None:
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+
+    # Create tenant
+    create_resp = client.post(
+        "/api/v1/superadmin/tenants",
+        headers=headers,
+        json={
+            "business_name": "Tacos El Pastor",
+            "owner_name": "Juan Perez",
+            "email": "juan@elpastor.com",
+            "password": "Password123!",
+            "business_type": "taqueria",
+            "plan": "starter_349",
+            "menu_mode": "generate_by_type",
+        },
+    )
+    assert create_resp.status_code == 201
+    tenant_id = create_resp.json()["tenant"]["id"]
+
+    # Verify credentials in create response
+    assert "credentials" in create_resp.json()
+    assert create_resp.json()["credentials"]["email"] == "juan@elpastor.com"
+    assert create_resp.json()["credentials"]["password"] == "Password123!"
+
+    # Update all tenant details
+    update_payload = {
+        "name": "Tacos El Pastor Premium",
+        "business_type": "taqueria",
+        "owner_name": "Juan Carlos Perez",
+        "owner_email": "juancarlos@elpastor.com",
+        "owner_phone": "5512349999",
+        "plan": "pro_599",
+        "subscription_status": "active",
+    }
+    update_resp = client.put(
+        f"/api/v1/superadmin/tenants/{tenant_id}",
+        headers=headers,
+        json=update_payload,
+    )
+    assert update_resp.status_code == 200
+    updated = update_resp.json()
+    assert updated["name"] == "Tacos El Pastor Premium"
+    assert updated["owner_name"] == "Juan Carlos Perez"
+    assert updated["owner_email"] == "juancarlos@elpastor.com"
+    assert updated["owner_phone"] == "5512349999"
+    assert updated["plan"] == "pro_599"
+    assert updated["monthly_fee_cents"] == 59900
+
+    # Verify login works with the updated email
+    login_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "juancarlos@elpastor.com", "password": "Password123!"},
+    )
+    assert login_resp.status_code == 200

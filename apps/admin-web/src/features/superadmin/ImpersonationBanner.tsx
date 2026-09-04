@@ -17,22 +17,32 @@ export const ImpersonationBanner: React.FC = () => {
   }
 
   const handleExitImpersonation = () => {
-    // Restore master token and user
+    // Restore master token, user and branch
     const originalToken = localStorage.getItem('saas_master_token');
     const originalUser = localStorage.getItem('saas_master_user');
+    const originalBranch = localStorage.getItem('saas_master_branch_id');
 
     if (originalToken) {
+      localStorage.setItem('auth_token', originalToken);
       localStorage.setItem('token', originalToken);
     }
     if (originalUser) {
       localStorage.setItem('user', originalUser);
     }
+    if (originalBranch) {
+      localStorage.setItem('admin_branch_id', originalBranch);
+      localStorage.setItem('pos_branch_id', originalBranch);
+    } else {
+      localStorage.removeItem('admin_branch_id');
+      localStorage.removeItem('pos_branch_id');
+    }
 
     localStorage.removeItem('saas_master_token');
     localStorage.removeItem('saas_master_user');
+    localStorage.removeItem('saas_master_branch_id');
     localStorage.removeItem('impersonation_info');
 
-    window.location.href = '/admin/superadmin';
+    window.location.href = '/superadmin';
   };
 
   return (

@@ -22,6 +22,11 @@ import {
   Phone,
   Mail,
   User,
+  Key,
+  Copy,
+  Eye,
+  EyeOff,
+  Check,
 } from 'lucide-react';
 
 interface SaaSMetrics {
@@ -62,6 +67,7 @@ export const SaaSConsoleView: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedTenantForPlan, setSelectedTenantForPlan] = useState<Tenant | null>(null);
   const [selectedTenantForStatus, setSelectedTenantForStatus] = useState<Tenant | null>(null);
+  const [selectedTenantForEdit, setSelectedTenantForEdit] = useState<Tenant | null>(null);
 
   // Form states for creating a new tenant
   const [formBusinessName, setFormBusinessName] = useState('');
@@ -73,7 +79,28 @@ export const SaaSConsoleView: React.FC = () => {
   const [formMenuMode, setFormMenuMode] = useState<'generate_by_type' | 'ai_import' | 'blank'>('generate_by_type');
   const [formAiMenuText, setFormAiMenuText] = useState('');
   const [formPassword, setFormPassword] = useState('Password123!');
+  const [showFormPassword, setShowFormPassword] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // States for created credentials modal
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    restaurant_name: string;
+    owner_name: string;
+    email: string;
+    password: string;
+    branch_name?: string;
+    tenant_id?: string;
+  } | null>(null);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
+
+  // Form states for edit tenant modal
+  const [editName, setEditName] = useState('');
+  const [editBusinessType, setEditBusinessType] = useState('taqueria');
+  const [editOwnerName, setEditOwnerName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editPlan, setEditPlan] = useState('starter_349');
+  const [editStatus, setEditStatus] = useState('active');
 
   // Form states for status/plan updates
   const [newPlan, setNewPlan] = useState('pro_599');
@@ -104,14 +131,40 @@ export const SaaSConsoleView: React.FC = () => {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
       queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
       setIsCreateModalOpen(false);
+      if (data?.credentials) {
+        setCreatedCredentials({
+          restaurant_name: data.tenant?.name || formBusinessName,
+          owner_name: data.credentials.display_name || formOwnerName,
+          email: data.credentials.email || formEmail,
+          password: data.credentials.password || formPassword,
+          branch_name: data.branch?.name || 'Sucursal Matriz',
+          tenant_id: data.tenant?.id,
+        });
+      }
       resetForm();
     },
     onError: (err: any) => {
       setCreateError(err.message || 'Error al crear el restaurante');
+    },
+  });
+
+  const updateTenantMutation = useMutation({
+    mutationFn: ({ tenantId, payload }: { tenantId: string; payload: any }) =>
+      fetchApi(`/superadmin/tenants/${tenantId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
+      setSelectedTenantForEdit(null);
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Error al actualizar restaurante');
     },
   });
 
@@ -143,18 +196,43 @@ export const SaaSConsoleView: React.FC = () => {
 
   const impersonateMutation = useMutation({
     mutationFn: (tenantId: string) =>
-      fetchApi<{ token: string; target_email: string; target_tenant_name: string }>(
+      fetchApi<{
+        token: string;
+        target_email: string;
+        target_tenant_name: string;
+        target_user?: any;
+        target_branch_id?: string;
+        target_branch_name?: string;
+      }>(
         `/superadmin/tenants/${tenantId}/impersonate`,
         { method: 'POST' }
       ),
     onSuccess: (data) => {
-      // Preserve superadmin token to return later
-      const currentToken = localStorage.getItem('token');
+      // Preserve superadmin token and user to return later
+      const currentToken = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      const currentUser = localStorage.getItem('user');
+      const currentBranch = localStorage.getItem('admin_branch_id');
+
       if (currentToken) {
         localStorage.setItem('saas_master_token', currentToken);
-        localStorage.setItem('saas_master_user', localStorage.getItem('user') || '');
+        if (currentUser) localStorage.setItem('saas_master_user', currentUser);
+        if (currentBranch) localStorage.setItem('saas_master_branch_id', currentBranch);
       }
+
+      // Set target tenant credentials
+      localStorage.setItem('auth_token', data.token);
       localStorage.setItem('token', data.token);
+      if (data.target_user) {
+        localStorage.setItem('user', JSON.stringify(data.target_user));
+      }
+      if (data.target_branch_id) {
+        localStorage.setItem('admin_branch_id', data.target_branch_id);
+        localStorage.setItem('pos_branch_id', data.target_branch_id);
+      } else {
+        localStorage.removeItem('admin_branch_id');
+        localStorage.removeItem('pos_branch_id');
+      }
+
       localStorage.setItem(
         'impersonation_info',
         JSON.stringify({
@@ -163,8 +241,8 @@ export const SaaSConsoleView: React.FC = () => {
           email: data.target_email,
         })
       );
-      // Reload into normal tenant admin
-      window.location.href = '/admin';
+      // Reload into normal tenant admin dashboard
+      window.location.href = '/';
     },
   });
 
@@ -613,10 +691,16 @@ export const SaaSConsoleView: React.FC = () => {
 
                         <button
                           type="button"
-                          title="Cambiar plan o cuota"
+                          title="Editar datos del restaurante y plan"
                           onClick={() => {
-                            setSelectedTenantForPlan(t);
-                            setNewPlan(t.plan);
+                            setSelectedTenantForEdit(t);
+                            setEditName(t.name);
+                            setEditBusinessType(t.business_type || 'general');
+                            setEditOwnerName(t.owner_name || '');
+                            setEditEmail(t.owner_email || '');
+                            setEditPhone(t.owner_phone || '');
+                            setEditPlan(t.plan || 'starter_349');
+                            setEditStatus(t.subscription_status || 'active');
                           }}
                           style={{
                             background: '#f8fafc',
@@ -728,7 +812,7 @@ export const SaaSConsoleView: React.FC = () => {
             )}
 
             <form onSubmit={handleCreateSubmit}>
-              {/* Sección 1: Negocio */}
+              {/* Sección 1: Datos del Restaurante */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                   Nombre Comercial del Restaurante *
@@ -753,70 +837,6 @@ export const SaaSConsoleView: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    Nombre del Dueño *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ej. Mateo Morales"
-                    value={formOwnerName}
-                    onChange={(e) => setFormOwnerName(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    Correo del Dueño (Login) *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="mateo@pastorcito.com"
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    Teléfono / WhatsApp
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="5512345678"
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                     Giro Gastronómico *
                   </label>
                   <select
@@ -837,6 +857,138 @@ export const SaaSConsoleView: React.FC = () => {
                     <option value="pizzeria">🍕 Pizzería</option>
                     <option value="general">🍽️ Restaurante / Fonda / General</option>
                   </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Teléfono / WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="5512345678"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Sección 2: Cuenta de Usuario Administrador del Restaurante */}
+              <div style={{ marginBottom: '18px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Key size={16} color="#0284c7" />
+                  <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                    Cuenta de Usuario Administrador del Restaurante
+                  </strong>
+                </div>
+                <p style={{ margin: '0 0 12px', fontSize: '12px', color: '#64748b' }}>
+                  Credenciales con las que el cliente/dueño iniciará sesión en su Punto de Venta (POS) y Panel Web.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Nombre del Administrador *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ej. Mateo Morales"
+                      value={formOwnerName}
+                      onChange={(e) => setFormOwnerName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Correo de Acceso (Usuario Login) *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="mateo@pastorcito.com"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                      Contraseña de Acceso *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
+                        let pw = '';
+                        for (let i = 0; i < 10; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+                        setFormPassword(pw);
+                        setShowFormPassword(true);
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                    >
+                      🎲 Generar contraseña segura
+                    </button>
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showFormPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      placeholder="Mínimo 8 caracteres"
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 42px 10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormPassword(!showFormPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#64748b',
+                      }}
+                    >
+                      {showFormPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1180,6 +1332,341 @@ export const SaaSConsoleView: React.FC = () => {
                 style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontWeight: 700 }}
               >
                 Confirmar Suspensión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Editar Restaurante Completo */}
+      {selectedTenantForEdit && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '16px',
+              maxWidth: '560px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '28px',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
+                  Editar Restaurante Cliente
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
+                  Modifica los datos del negocio, contacto y paquete SaaS.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTenantForEdit(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateTenantMutation.mutate({
+                  tenantId: selectedTenantForEdit.id,
+                  payload: {
+                    name: editName,
+                    business_type: editBusinessType,
+                    owner_name: editOwnerName,
+                    owner_email: editEmail,
+                    owner_phone: editPhone || null,
+                    plan: editPlan,
+                    subscription_status: editStatus,
+                  },
+                });
+              }}
+            >
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  Nombre Comercial *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Giro Gastronómico
+                  </label>
+                  <select
+                    value={editBusinessType}
+                    onChange={(e) => setEditBusinessType(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', fontWeight: 600 }}
+                  >
+                    <option value="taqueria">🌮 Taquería</option>
+                    <option value="cafeteria">☕ Cafetería / Panadería</option>
+                    <option value="pizzeria">🍕 Pizzería</option>
+                    <option value="general">🍽️ Restaurante / Fonda / General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Teléfono / WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Nombre del Dueño / Contacto
+                  </label>
+                  <input
+                    type="text"
+                    value={editOwnerName}
+                    onChange={(e) => setEditOwnerName(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Correo Electrónico (Login) *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Plan SaaS
+                  </label>
+                  <select
+                    value={editPlan}
+                    onChange={(e) => setEditPlan(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', fontWeight: 600 }}
+                  >
+                    <option value="starter_349">Plan Básico ($349 MXN/mes)</option>
+                    <option value="pro_599">Plan Pro ($599 MXN/mes)</option>
+                    <option value="trial">Periodo de Prueba (14 Días)</option>
+                    <option value="enterprise">Plan Enterprise ($1,200 MXN/mes)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Estado de Suscripción
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', fontWeight: 600 }}
+                  >
+                    <option value="active">Activo</option>
+                    <option value="suspended">Suspendido</option>
+                    <option value="trialing">En Prueba</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTenantForEdit(null)}
+                  style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateTenantMutation.isPending}
+                  style={{ padding: '10px 22px', borderRadius: '8px', border: 'none', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {updateTenantMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 5: Confirmación y Credenciales Creadas */}
+      {createdCredentials && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '20px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '30px',
+              boxSizing: 'border-box',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            }}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  background: '#ecfdf5',
+                  color: '#10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 12px',
+                }}
+              >
+                <CheckCircle2 size={32} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#0f172a' }}>
+                ¡Restaurante y Cuenta Creados!
+              </h3>
+              <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#64748b' }}>
+                El restaurante <strong>{createdCredentials.restaurant_name}</strong> y su cuenta administradora ya están listos para operar.
+              </p>
+            </div>
+
+            {/* Tarjeta de Credenciales */}
+            <div
+              style={{
+                background: '#f8fafc',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                padding: '16px',
+                marginBottom: '20px',
+              }}
+            >
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                🏪 Sucursal Inicial: <strong style={{ color: '#0f172a' }}>{createdCredentials.branch_name}</strong>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                👤 Administrador: <strong style={{ color: '#0f172a' }}>{createdCredentials.owner_name}</strong>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                📧 Correo / Usuario: <strong style={{ color: '#0284c7' }}>{createdCredentials.email}</strong>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>
+                🔑 Contraseña: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '13px', background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{createdCredentials.password}</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const text = `🍽️ Acceso a RestaurantOS para ${createdCredentials.restaurant_name}:\n\n👤 Administrador: ${createdCredentials.owner_name}\n📧 Correo: ${createdCredentials.email}\n🔑 Contraseña: ${createdCredentials.password}\n🏪 Sucursal: ${createdCredentials.branch_name}\n\n¡Ya puedes ingresar a tu Punto de Venta y Panel Web!`;
+                  navigator.clipboard.writeText(text);
+                  setCopiedCredentials(true);
+                  setTimeout(() => setCopiedCredentials(false), 3000);
+                }}
+                style={{
+                  padding: '12px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: copiedCredentials ? '#f0fdf4' : '#fff',
+                  color: copiedCredentials ? '#16a34a' : '#0f172a',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+              >
+                {copiedCredentials ? <Check size={16} /> : <Copy size={16} />}
+                <span>{copiedCredentials ? '¡Credenciales Copiadas al Portapapeles!' : 'Copiar Credenciales para el Cliente'}</span>
+              </button>
+
+              {createdCredentials.tenant_id && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tId = createdCredentials.tenant_id;
+                    setCreatedCredentials(null);
+                    if (tId) impersonateMutation.mutate(tId);
+                  }}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: '#0f172a',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <LogIn size={16} />
+                  <span>Entrar como Soporte Técnico Ahora</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setCreatedCredentials(null)}
+                style={{
+                  padding: '10px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#64748b',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cerrar
               </button>
             </div>
           </div>

@@ -248,7 +248,7 @@ const AdminLayout = () => {
         '/customers',
       ],
     },
-    ...(currentUser.is_superadmin
+    ...(currentUser.is_superadmin && !localStorage.getItem('impersonation_info')
       ? [
           {
             path: '/superadmin',
@@ -377,19 +377,21 @@ const AdminLayout = () => {
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--admin-text-muted)', fontSize: 13 }}>
-              <Store size={17} />
-              <select
-                aria-label="Sucursal activa"
-                value={branchId}
-                onChange={(event) => changeBranch(event.target.value)}
-                disabled={!allowBranchSelection || branches.length < 2}
-                style={{ minWidth: 180, padding: '9px 12px', border: '1px solid var(--color-border)', borderRadius: 8, background: '#fff' }}
-              >
-                {branches.length === 0 && <option value="">Sin sucursal</option>}
-                {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-              </select>
-            </label>
+            {!location.pathname.startsWith('/superadmin') && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--admin-text-muted)', fontSize: 13 }}>
+                <Store size={17} />
+                <select
+                  aria-label="Sucursal activa"
+                  value={branchId}
+                  onChange={(event) => changeBranch(event.target.value)}
+                  disabled={!allowBranchSelection || branches.length < 2}
+                  style={{ minWidth: 180, padding: '9px 12px', border: '1px solid var(--color-border)', borderRadius: 8, background: '#fff' }}
+                >
+                  {branches.length === 0 && <option value="">Sin sucursal</option>}
+                  {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                </select>
+              </label>
+            )}
             <button style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><Bell size={18} /></button>
             {hasCatalogManage && <button type="button" aria-label="Abrir asistente de configuración" title="Asistente de configuración" onClick={() => setIsAssistantOpen(true)} style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><UserRound size={18} /></button>}
             <div 

@@ -1,18 +1,18 @@
 """Superadmin Platform Management Service for POS-SaaS."""
-
+# ruff: noqa: E501
 from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timezone
 from typing import Any
+
+import sqlalchemy as sa
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
-import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
-from restaurant_os.auth import create_session_token, generate_password_salt, hash_password
+from restaurant_os.auth import create_session_token
 from restaurant_os.config import get_settings
 from restaurant_os.operations import _now
 from restaurant_os.saas_onboarding import signup_tenant
@@ -374,6 +374,11 @@ def create_tenant_by_admin(session: Session, payload: dict[str, Any]) -> dict[st
         "owner_user": onboarding_res["user"],
         "token": onboarding_res["token"],
         "products_count": products_count,
+        "credentials": {
+            "email": req.email,
+            "password": req.password,
+            "display_name": req.owner_name,
+        },
     }
 
 
@@ -449,6 +454,96 @@ def update_tenant_plan(
     }
 
 
+def update_tenant_details(
+    session: Session,
+    tenant_id: str,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Update all tenant details: name, business_type, owner info, plan and subscription status."""
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
+    ).mappings().first()
+
+    if not org:
+        raise HTTPException(status_code=404, detail={"code": "tenant_not_found", "message": "Tenant no encontrado"})
+
+    fee_map = {
+        "trial": 0,
+        "starter_349": 34900,
+        "pro_599": 59900,
+        "enterprise": 120000,
+    }
+
+    new_plan = data.get("plan", org["plan"])
+    new_fee = fee_map.get(new_plan, int(org.get("monthly_fee_cents") or 0))
+
+    update_values: dict[str, Any] = {"updated_at": _now()}
+    if "name" in data:
+        update_values["name"] = data["name"]
+    if "business_type" in data:
+        update_values["business_type"] = data["business_type"]
+    if "owner_name" in data:
+        update_values["owner_name"] = data["owner_name"]
+    if "owner_email" in data:
+        update_values["owner_email"] = data["owner_email"]
+    if "owner_phone" in data:
+        update_values["owner_phone"] = data["owner_phone"]
+    if "plan" in data:
+        update_values["plan"] = new_plan
+        update_values["monthly_fee_cents"] = new_fee
+    if "subscription_status" in data:
+        update_values["subscription_status"] = data["subscription_status"]
+        if data["subscription_status"] != "suspended":
+            update_values["suspended_reason"] = None
+
+    session.execute(
+        models.organizations.update()
+        .where(models.organizations.c.id == tenant_id)
+        .values(**update_values)
+    )
+
+    # Sync owner user record if email or name changed
+    old_email = org.get("owner_email")
+    new_email = data.get("owner_email")
+    new_owner_name = data.get("owner_name")
+    if old_email and (new_email or new_owner_name):
+        owner_user = session.execute(
+            sa.select(models.users).where(
+                models.users.c.organization_id == tenant_id,
+                models.users.c.email == str(old_email).strip().lower(),
+            )
+        ).mappings().first()
+        if owner_user:
+            user_updates: dict[str, Any] = {"updated_at": _now()}
+            if new_email:
+                user_updates["email"] = new_email.strip().lower()
+            if new_owner_name:
+                user_updates["display_name"] = new_owner_name
+            session.execute(
+                models.users.update()
+                .where(models.users.c.id == owner_user["id"])
+                .values(**user_updates)
+            )
+
+    session.commit()
+
+    updated_org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
+    ).mappings().first()
+
+    return {
+        "id": tenant_id,
+        "name": updated_org["name"],
+        "business_type": updated_org.get("business_type"),
+        "owner_name": updated_org.get("owner_name"),
+        "owner_email": updated_org.get("owner_email"),
+        "owner_phone": updated_org.get("owner_phone"),
+        "plan": updated_org.get("plan"),
+        "subscription_status": updated_org.get("subscription_status"),
+        "monthly_fee_cents": int(updated_org.get("monthly_fee_cents") or 0),
+    }
+
+
 def impersonate_tenant(
     session: Session,
     tenant_id: str,
@@ -475,6 +570,32 @@ def impersonate_tenant(
             detail={"code": "owner_user_not_found", "message": "No se encontró usuario activo para este restaurante"},
         )
 
+    # Find the primary branch of this tenant
+    branch = session.execute(
+        sa.select(models.branches.c.id, models.branches.c.name)
+        .where(models.branches.c.organization_id == tenant_id, models.branches.c.status == "active")
+        .order_by(models.branches.c.created_at.asc())
+    ).mappings().first()
+
+    # Collect user roles and permissions
+    user_roles = session.execute(
+        sa.select(models.roles.c.name)
+        .select_from(
+            models.user_roles.join(models.roles, models.user_roles.c.role_id == models.roles.c.id)
+        )
+        .where(models.user_roles.c.user_id == str(user["id"]))
+    ).scalars().all()
+
+    user_permissions = session.execute(
+        sa.select(models.permissions.c.code)
+        .select_from(
+            models.user_roles.join(models.roles, models.user_roles.c.role_id == models.roles.c.id)
+            .join(models.role_permissions, models.role_permissions.c.role_id == models.roles.c.id)
+            .join(models.permissions, models.permissions.c.id == models.role_permissions.c.permission_id)
+        )
+        .where(models.user_roles.c.user_id == str(user["id"]))
+    ).scalars().all()
+
     settings = get_settings()
     token = create_session_token(
         {
@@ -492,4 +613,16 @@ def impersonate_tenant(
         "target_email": str(user["email"]),
         "target_tenant_id": tenant_id,
         "target_tenant_name": str(org["name"]),
+        "target_branch_id": str(branch["id"]) if branch else None,
+        "target_branch_name": str(branch["name"]) if branch else None,
+        "target_user": {
+            "id": str(user["id"]),
+            "email": str(user["email"]),
+            "display_name": str(user["display_name"]),
+            "organization_id": tenant_id,
+            "is_superadmin": False,
+            "roles": list(user_roles),
+            "permissions": list(user_permissions),
+            "assigned_branch_id": str(branch["id"]) if branch else None,
+        },
     }
