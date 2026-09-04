@@ -1897,7 +1897,7 @@ def test_catalog_cleanup_status_and_identity_validation() -> None:
     invalid_category = client.post(
         "/api/v1/categories",
         headers=_admin_headers(),
-        json={"name": "Categoría legado"},
+        json={"name": "   "},
     )
     assert invalid_category.status_code == 409
     assert invalid_category.json()["detail"]["code"] == "invalid_category"

@@ -66,6 +66,7 @@ const ProductsList = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState(emptyForm);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'templates' | 'ai_upload'>('templates');
@@ -198,6 +199,10 @@ const ProductsList = () => {
 
   const saveMutation = useMutation({
     mutationFn: (data: typeof formData) => {
+      setModalError(null);
+      if (!data.name?.trim()) {
+        throw new Error('El nombre del producto no puede estar vacío');
+      }
       if (editingProduct) {
         return fetchApi(`/catalog/products/${editingProduct.id}`, {
           method: 'PUT',
@@ -211,8 +216,25 @@ const ProductsList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      setModalError(null);
       setIsModalOpen(false);
-    }
+    },
+    onError: (err: any) => {
+      console.error('Error al guardar producto:', err);
+      const code = err?.data?.detail?.code || err?.code || '';
+      const detailMsg = err?.data?.detail?.message || err?.message || '';
+      let msg = 'Error al guardar el producto.';
+      if (code === 'missing_product_station' || code === 'invalid_station') {
+        msg = 'Debes asignar una estación operativa válida (Cocina o Bebidas) antes de guardar.';
+      } else if (code === 'invalid_product_name') {
+        msg = 'El nombre del producto no es válido o no puede estar vacío.';
+      } else if (code === 'invalid_product_sku') {
+        msg = 'El SKU del producto ya existe o contiene caracteres no válidos.';
+      } else if (detailMsg) {
+        msg = detailMsg;
+      }
+      setModalError(msg);
+    },
   });
 
   const deleteMutation = useMutation({
@@ -221,17 +243,26 @@ const ProductsList = () => {
   });
 
   const openModal = (product?: Product) => {
+    setModalError(null);
     if (product) {
       setEditingProduct(product);
       const isKnown = sortedCategories.some(
         (c) => c.name.trim().toLowerCase() === (product.category_name || '').trim().toLowerCase()
       );
       setIsCustomCategory(!isKnown && Boolean(product.category_name));
+
+      let stationVal = (product.station || 'kitchen').toLowerCase().trim();
+      if (stationVal === 'cocina') stationVal = 'kitchen';
+      if (stationVal === 'barra') stationVal = 'drinks';
+      if (!['kitchen', 'drinks', 'packing', 'unassigned'].includes(stationVal)) {
+        stationVal = 'kitchen';
+      }
+
       setFormData({ 
         name: product.name, 
         sku: product.sku, 
         category_name: product.category_name || '', 
-        station: product.station || 'kitchen', 
+        station: stationVal,
         status: product.status || 'active',
         price_cents: product.price_cents || 0,
         delivery_price_cents: product.delivery_price_cents ?? null,
@@ -393,6 +424,11 @@ const ProductsList = () => {
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? "Ajustar producto" : "Nuevo producto"}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {modalError && (
+            <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 14px', borderRadius: 8, fontSize: '0.875rem' }}>
+              ⚠️ {modalError}
+            </div>
+          )}
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Nombre</label>
             <Input value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} />
@@ -468,22 +504,40 @@ const ProductsList = () => {
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Estación operativa</label>
-            <select value={formData.station} onChange={(event) => setFormData({ ...formData, station: event.target.value })} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
-              <option value="unassigned">Sin asignar</option>
-              <option value="kitchen">Cocina</option>
-              <option value="drinks">Bebidas</option>
+            <select
+              value={formData.station}
+              onChange={(event) => {
+                setModalError(null);
+                setFormData({ ...formData, station: event.target.value });
+              }}
+              style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+            >
+              <option value="unassigned">-- Selecciona una estación --</option>
+              <option value="kitchen">Cocina (Alimentos)</option>
+              <option value="drinks">Bebidas (Barra)</option>
               <option value="packing">Empaque</option>
             </select>
           </div>
           {editingProduct && (
             <div>
               <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Estado</label>
-              <select value={formData.status} onChange={(event) => setFormData({ ...formData, status: event.target.value })} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <select
+                value={formData.status}
+                onChange={(event) => {
+                  setModalError(null);
+                  setFormData({ ...formData, status: event.target.value });
+                }}
+                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+              >
                 <option value="needs_review">Requiere revisión</option>
                 <option value="active">Activo</option>
                 <option value="inactive">Inactivo</option>
               </select>
-              {formData.status === 'active' && formData.station === 'unassigned' && <p style={{ color: '#b45309', fontSize: 13 }}>Asigna una estación antes de activar.</p>}
+              {formData.status === 'active' && (formData.station === 'unassigned' || !formData.station) && (
+                <p style={{ color: '#b45309', fontSize: 13, marginTop: 4 }}>
+                  ⚠️ Selecciona una estación (Cocina o Bebidas) para que aparezca en el Punto de Venta.
+                </p>
+              )}
             </div>
           )}
           <div>
@@ -544,7 +598,17 @@ const ProductsList = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button variant="primary" onClick={() => saveMutation.mutate(formData)} disabled={saveMutation.isPending || (formData.status === 'active' && formData.station === 'unassigned')}>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (formData.status === 'active' && (formData.station === 'unassigned' || !formData.station)) {
+                  setModalError('Debes asignar una estación operativa (Cocina o Bebidas) para activar este producto.');
+                  return;
+                }
+                saveMutation.mutate(formData);
+              }}
+              disabled={saveMutation.isPending}
+            >
               {saveMutation.isPending ? 'Guardando...' : 'Guardar'}
             </Button>
           </div>

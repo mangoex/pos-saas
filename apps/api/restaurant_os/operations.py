@@ -11580,13 +11580,13 @@ def update_product(
     update_data: dict[str, Any] = {}
     if name is not None:
         normalized_name = name.strip()
-        if org_id == ORGANIZATION_ID and not is_uppercase_name(normalized_name):
-            raise BusinessError("invalid_product_name", "Product name must be uppercase")
+        if not normalized_name:
+            raise BusinessError("invalid_product_name", "Product name cannot be blank")
         update_data["name"] = normalized_name
     if sku is not None:
         normalized_sku = normalize_product_sku(sku)
-        if org_id == ORGANIZATION_ID and not is_numeric_sku(normalized_sku):
-            raise BusinessError("invalid_product_sku", "Product SKU must contain only digits")
+        if not normalized_sku:
+            raise BusinessError("invalid_product_sku", "Product SKU cannot be blank")
         update_data["sku"] = normalized_sku
     if image_url is not None:
         update_data["image_url"] = image_url.strip() if image_url.strip() else None
@@ -11598,6 +11598,8 @@ def update_product(
             update_data["station"] = "barra" if org_id != ORGANIZATION_ID else "drinks"
         elif normalized_station in {"packing"}:
             update_data["station"] = "packing"
+        elif normalized_station in {"unassigned", ""}:
+            update_data["station"] = "unassigned"
         else:
             raise BusinessError("invalid_station", "Station must be valid")
     if status is not None:
@@ -11605,12 +11607,12 @@ def update_product(
         if normalized_status not in {"active", "inactive", "needs_review"}:
             raise BusinessError("invalid_product_status", "Product status is invalid")
         if normalized_status == "active":
-            current_station = station
+            current_station = update_data.get("station") or station
             if current_station is None:
                 current_station = session.execute(
                     sa.select(models.products.c.station).where(models.products.c.id == product_id)
                 ).scalar_one_or_none()
-            if not current_station or current_station.strip().lower() == "unassigned":
+            if not current_station or current_station.strip().lower() in {"unassigned", ""}:
                 raise BusinessError("missing_product_station", "Assign a station before activation")
         update_data["status"] = normalized_status
     if delivery_price_cents is not None:
@@ -11619,12 +11621,9 @@ def update_product(
     now = _now()
     if category_name is not None:
         normalized_category = category_name.strip()
-        if org_id == ORGANIZATION_ID and (
-            not normalized_category or normalized_category != canonical_category_name(normalized_category)
-        ):
-            raise BusinessError("invalid_category_name", "Category name must be uppercase")
-        category = _get_or_create_category(session, normalized_category, now, organization_id=org_id)
-        update_data["category_id"] = category["id"]
+        if normalized_category:
+            category = _get_or_create_category(session, normalized_category, now, organization_id=org_id)
+            update_data["category_id"] = category["id"]
     if update_data:
         update_data["updated_at"] = now
         session.execute(
