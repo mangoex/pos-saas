@@ -237,7 +237,8 @@ export function buildWhatsAppLink(
     typeLabel = '🛵 Envío a Domicilio';
   }
 
-  let text = `🥝 *NUEVO PEDIDO - KIWI RESTAURANTE*\n`;
+  const brandTitle = branchName ? branchName.toUpperCase() : 'RESTAURANTE';
+  let text = `🍽️ *NUEVO PEDIDO - ${brandTitle}*\n`;
   text += `📋 *Folio:* #${folio}\n`;
   if (branchName) {
     text += `📍 *Sucursal:* ${branchName}\n`;
@@ -266,7 +267,7 @@ export function buildWhatsAppLink(
   if (info.order_notes) {
     text += `📝 *Comentarios Adicionales:* ${info.order_notes}\n`;
   }
-  text += `\n✨ _Pedido generado desde la Web App Móvil de Kiwi_`;
+  text += `\n✨ _Pedido generado desde el Menú Digital_`;
 
   return `https://wa.me/${restaurantPhone}?text=${encodeURIComponent(text)}`;
 }
@@ -296,8 +297,11 @@ export async function submitMobileOrder(
   const useIntent = typeof publicKey === 'string' && publicKey.length > 0;
   if (useIntent && !publicKey) throw new Error('public_order_unavailable');
 
-  const storageKey = publicKey ? `kiwi_public_order_key:${publicKey}` : '';
-  const idempotencyKey = useIntent ? (localStorage.getItem(storageKey) || crypto.randomUUID()) : undefined;
+  const storageKey = publicKey ? `restaurantos_public_order_key:${publicKey}` : '';
+  const legacyStorageKey = publicKey ? `kiwi_public_order_key:${publicKey}` : '';
+  const idempotencyKey = useIntent
+    ? (localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey) || crypto.randomUUID())
+    : undefined;
   if (useIntent && idempotencyKey) localStorage.setItem(storageKey, idempotencyKey);
   const response = await fetch(useIntent ? `${API_BASE_URL}/public/branches/${publicKey}/order-intents` : `${API_BASE_URL}/public/orders`, {
     method: 'POST',

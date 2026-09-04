@@ -408,6 +408,12 @@ def _required_actor_from_request(actor_user_id: str | None, authorization: str |
     return actor_id
 
 
+def _actor_org_from_request(session: Session, actor_id: str) -> str:
+    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    return str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+
+
+
 @router.get("/platform/bootstrap-status")
 def get_bootstrap_status(
     session: SessionDep,
@@ -4011,7 +4017,7 @@ def post_category(
 ) -> dict[str, Any]:
     name = str(payload.get("name", ""))
     display_order = int(payload.get("display_order", 0))
-    actor_id = _actor_from_request(actor_user_id, authorization)
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: create_category(session, name, display_order, actor_id))
 
 
@@ -4028,7 +4034,7 @@ def put_category(
     if display_order is not None:
         display_order = int(display_order)
     status = payload.get("status")
-    actor_id = _actor_from_request(actor_user_id, authorization)
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: update_category(session, category_id, name, display_order, status, actor_id)
     )
@@ -5994,7 +6000,8 @@ def get_uber_eats_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    config = channel_service.get_config(session, ORGANIZATION_ID, "UBER_EATS")
+    org_id = _actor_org_from_request(session, actor_id)
+    config = channel_service.get_config(session, org_id, "UBER_EATS")
     return config or {
         "is_enabled": False,
         "environment": "sandbox",
@@ -6015,7 +6022,8 @@ def put_uber_eats_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.save_config(session, ORGANIZATION_ID, "UBER_EATS", payload)
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.save_config(session, org_id, "UBER_EATS", payload)
 
 
 @router.get("/integrations/uber-eats/stores")
@@ -6026,7 +6034,8 @@ def get_uber_eats_store_mappings(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.list_store_mappings(session, ORGANIZATION_ID, "UBER_EATS")
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.list_store_mappings(session, org_id, "UBER_EATS")
 
 
 @router.post("/integrations/uber-eats/stores")
@@ -6045,8 +6054,9 @@ def post_uber_eats_store_mapping(
         raise HTTPException(
             status_code=400, detail="branch_id y external_store_id son obligatorios."
         )
+    org_id = _actor_org_from_request(session, actor_id)
     return channel_service.save_store_mapping(
-        session, ORGANIZATION_ID, "UBER_EATS", branch_id, external_store_id, is_active
+        session, org_id, "UBER_EATS", branch_id, external_store_id, is_active
     )
 
 
@@ -6059,7 +6069,8 @@ def delete_uber_eats_store_mapping(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    channel_service.delete_store_mapping(session, ORGANIZATION_ID, mapping_id)
+    org_id = _actor_org_from_request(session, actor_id)
+    channel_service.delete_store_mapping(session, org_id, mapping_id)
     return {"deleted": True, "mapping_id": mapping_id}
 
 
@@ -6072,7 +6083,8 @@ def get_uber_eats_webhook_logs(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.list_webhook_logs(session, ORGANIZATION_ID, "UBER_EATS", limit)
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.list_webhook_logs(session, org_id, "UBER_EATS", limit)
 
 
 @router.post("/integrations/uber-eats/test-order")
@@ -6228,7 +6240,8 @@ def get_didi_food_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    config = channel_service.get_config(session, ORGANIZATION_ID, "DIDI_FOOD")
+    org_id = _actor_org_from_request(session, actor_id)
+    config = channel_service.get_config(session, org_id, "DIDI_FOOD")
     return config or {
         "is_enabled": False,
         "environment": "sandbox",
@@ -6249,7 +6262,8 @@ def put_didi_food_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.save_config(session, ORGANIZATION_ID, "DIDI_FOOD", payload)
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.save_config(session, org_id, "DIDI_FOOD", payload)
 
 
 @router.get("/integrations/didi-food/stores")
@@ -6260,7 +6274,8 @@ def get_didi_food_store_mappings(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.list_store_mappings(session, ORGANIZATION_ID, "DIDI_FOOD")
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.list_store_mappings(session, org_id, "DIDI_FOOD")
 
 
 @router.post("/integrations/didi-food/stores")
@@ -6279,8 +6294,9 @@ def post_didi_food_store_mapping(
         raise HTTPException(
             status_code=400, detail="branch_id y external_store_id son obligatorios."
         )
+    org_id = _actor_org_from_request(session, actor_id)
     return channel_service.save_store_mapping(
-        session, ORGANIZATION_ID, "DIDI_FOOD", branch_id, external_store_id, is_active
+        session, org_id, "DIDI_FOOD", branch_id, external_store_id, is_active
     )
 
 
@@ -6293,7 +6309,8 @@ def delete_didi_food_store_mapping(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    channel_service.delete_store_mapping(session, ORGANIZATION_ID, mapping_id)
+    org_id = _actor_org_from_request(session, actor_id)
+    channel_service.delete_store_mapping(session, org_id, mapping_id)
     return {"deleted": True, "mapping_id": mapping_id}
 
 
@@ -6306,7 +6323,8 @@ def get_didi_food_webhook_logs(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.list_webhook_logs(session, ORGANIZATION_ID, "DIDI_FOOD", limit)
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.list_webhook_logs(session, org_id, "DIDI_FOOD", limit)
 
 
 @router.post("/integrations/didi-food/simulate")
@@ -6526,7 +6544,8 @@ def get_rappi_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    config = channel_service.get_config(session, ORGANIZATION_ID, "RAPPI")
+    org_id = _actor_org_from_request(session, actor_id)
+    config = channel_service.get_config(session, org_id, "RAPPI")
     return config or {
         "is_enabled": False,
         "environment": "sandbox",
@@ -6547,7 +6566,8 @@ def put_rappi_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.save_config(session, ORGANIZATION_ID, "RAPPI", payload)
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.save_config(session, org_id, "RAPPI", payload)
 
 
 @router.get("/integrations/rappi/stores")
@@ -6558,7 +6578,8 @@ def get_rappi_store_mappings(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.list_store_mappings(session, ORGANIZATION_ID, "RAPPI")
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.list_store_mappings(session, org_id, "RAPPI")
 
 
 @router.post("/integrations/rappi/stores")
@@ -6577,8 +6598,9 @@ def post_rappi_store_mapping(
         raise HTTPException(
             status_code=400, detail="branch_id y external_store_id son obligatorios."
         )
+    org_id = _actor_org_from_request(session, actor_id)
     return channel_service.save_store_mapping(
-        session, ORGANIZATION_ID, "RAPPI", branch_id, external_store_id, is_active
+        session, org_id, "RAPPI", branch_id, external_store_id, is_active
     )
 
 
@@ -6591,7 +6613,8 @@ def delete_rappi_store_mapping(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    channel_service.delete_store_mapping(session, ORGANIZATION_ID, mapping_id)
+    org_id = _actor_org_from_request(session, actor_id)
+    channel_service.delete_store_mapping(session, org_id, mapping_id)
     return {"deleted": True, "mapping_id": mapping_id}
 
 
@@ -6604,7 +6627,8 @@ def get_rappi_webhook_logs(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    return channel_service.list_webhook_logs(session, ORGANIZATION_ID, "RAPPI", limit)
+    org_id = _actor_org_from_request(session, actor_id)
+    return channel_service.list_webhook_logs(session, org_id, "RAPPI", limit)
 
 
 @router.post("/integrations/rappi/simulate")

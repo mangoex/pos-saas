@@ -96,10 +96,10 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
     <header className="mobile-hero-header" aria-label="Cabecera principal con menú panorámico">
       {/* Top Floating Glassmorphic Location & Branch Bar */}
       <div className="hero-top-nav-bar">
-        {/* Kiwi Brand Identity / Logo badge */}
-        <div className="hero-brand-badge" title="Kiwi Fresh Food & Drinks">
-          <span className="hero-brand-emoji" role="img" aria-label="Kiwi">🥝</span>
-          <span className="hero-brand-name">Kiwi</span>
+        {/* Brand Identity / Logo badge */}
+        <div className="hero-brand-badge" title={selectedBranch ? selectedBranch.name : 'RestaurantOS'}>
+          <span className="hero-brand-emoji" role="img" aria-label="Restaurante">🍽️</span>
+          <span className="hero-brand-name">{selectedBranch ? selectedBranch.name : 'RestaurantOS'}</span>
         </div>
 
         {/* Branch / Location Selector Capsule */}

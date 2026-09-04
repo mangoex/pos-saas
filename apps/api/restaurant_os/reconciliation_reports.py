@@ -585,7 +585,7 @@ def export_reconciliation_workbook(
 
     # Sheet 2: Master
     ws_master = wb.create_sheet(title="Master")
-    ws_master["A1"] = "PLANTILLA DE CORTE DIARIO KIWI"
+    ws_master["A1"] = "PLANTILLA DE CORTE DIARIO CONSOLIDADO"
     ws_master["A1"].font = Font(name="Calibri", size=12, bold=True)
 
     out = io.BytesIO()

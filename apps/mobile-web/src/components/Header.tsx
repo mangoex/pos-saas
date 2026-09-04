@@ -56,10 +56,10 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="mobile-header-top-row">
         <div className="mobile-brand-identity">
-          <div className="mobile-brand-logo-badge">🥝</div>
+          <div className="mobile-brand-logo-badge">🍽️</div>
           <div className="mobile-brand-text">
-            <h1 className="mobile-brand-title">Kiwi</h1>
-            <span className="mobile-brand-subtitle">Fresh Food & Drinks</span>
+            <h1 className="mobile-brand-title">{selectedBranch ? selectedBranch.name : 'RestaurantOS'}</h1>
+            <span className="mobile-brand-subtitle">{selectedBranch ? 'Menú Digital' : 'Fresh Food & Drinks'}</span>
           </div>
         </div>
 

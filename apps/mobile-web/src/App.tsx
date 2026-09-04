@@ -101,9 +101,9 @@ export const App: React.FC = () => {
         if (forceNearest && isGps) {
           // When user explicitly clicks GPS button, choose the nearest branch
           setSelectedBranch(branchList[0]);
-          localStorage.setItem('kiwi_selected_branch_id', branchList[0].id);
+          localStorage.setItem('restaurantos_selected_branch_id', branchList[0].id);
         } else {
-          const savedId = localStorage.getItem('kiwi_selected_branch_id');
+          const savedId = localStorage.getItem('restaurantos_selected_branch_id') || localStorage.getItem('kiwi_selected_branch_id');
           const match = branchList.find((b) => b.id === savedId);
           setSelectedBranch(match || branchList[0]);
         }
@@ -168,7 +168,7 @@ export const App: React.FC = () => {
 
   const handleSelectBranch = (branch: BranchInfo) => {
     setSelectedBranch(branch);
-    localStorage.setItem('kiwi_selected_branch_id', branch.id);
+    localStorage.setItem('restaurantos_selected_branch_id', branch.id);
     if (returnToCartAfterBranch) {
       setReturnToCartAfterBranch(false);
       setIsCartOpen(true);
@@ -177,11 +177,11 @@ export const App: React.FC = () => {
 
   // Save favorites & cart to localStorage
   useEffect(() => {
-    localStorage.setItem('kiwi_liked_products', JSON.stringify(Array.from(likedProductIds)));
+    localStorage.setItem('restaurantos_liked_products', JSON.stringify(Array.from(likedProductIds)));
   }, [likedProductIds]);
 
   useEffect(() => {
-    localStorage.setItem('kiwi_mobile_cart', JSON.stringify(cart));
+    localStorage.setItem('restaurantos_mobile_cart', JSON.stringify(cart));
   }, [cart]);
 
   // Reset size filter when category changes

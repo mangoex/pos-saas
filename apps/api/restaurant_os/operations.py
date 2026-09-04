@@ -12206,18 +12206,21 @@ def create_category(
     name: str,
     display_order: int = 0,
     actor_user_id: str | None = None,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
+    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    org_id = organization_id or (str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID)
 
     normalized_name = name.strip()
-    if not normalized_name or not is_uppercase_name(normalized_name):
-        raise BusinessError("invalid_category", "Category name must be uppercase")
+    if not normalized_name:
+        raise BusinessError("invalid_category", "Category name cannot be blank")
 
     existing = session.execute(
         sa.select(models.product_categories).where(
-            models.product_categories.c.organization_id == ORGANIZATION_ID,
-            models.product_categories.c.name == normalized_name,
+            models.product_categories.c.organization_id == org_id,
+            sa.func.lower(models.product_categories.c.name) == normalized_name.lower(),
             models.product_categories.c.status != "archived",
         )
     ).first()
@@ -12229,7 +12232,7 @@ def create_category(
     session.execute(
         sa.insert(models.product_categories).values(
             id=cat_id,
-            organization_id=ORGANIZATION_ID,
+            organization_id=org_id,
             name=normalized_name,
             display_order=display_order,
             status="active",
@@ -12246,7 +12249,7 @@ def create_category(
         actor_user_id=actor_id,
     )
     session.commit()
-    return {"id": cat_id, "name": normalized_name}
+    return {"id": cat_id, "name": normalized_name, "display_order": display_order, "status": "active"}
 
 
 def update_category(
@@ -12263,8 +12266,8 @@ def update_category(
     update_data: dict[str, Any] = {"updated_at": _now()}
     if name is not None:
         normalized_name = name.strip()
-        if not normalized_name or not is_uppercase_name(normalized_name):
-            raise BusinessError("invalid_category_name", "Category name must be uppercase")
+        if not normalized_name:
+            raise BusinessError("invalid_category_name", "Category name cannot be blank")
         update_data["name"] = normalized_name
     if display_order is not None:
         update_data["display_order"] = display_order

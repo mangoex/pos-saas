@@ -18,6 +18,7 @@ const CategoriesList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState({ name: '', display_order: 0, status: 'active' });
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { data: categories, isLoading, error } = useQuery<Category[]>({
     queryKey: ['categories'],
@@ -39,11 +40,16 @@ const CategoriesList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
+      setFormError(null);
       setIsModalOpen(false);
+    },
+    onError: (err: any) => {
+      setFormError(err?.message || err?.detail?.message || 'No fue posible guardar la categoría.');
     }
   });
 
   const openModal = (category?: Category) => {
+    setFormError(null);
     if (category) {
       setEditingCategory(category);
       setFormData({ name: category.name, display_order: category.display_order, status: category.status });
@@ -121,6 +127,11 @@ const CategoriesList = () => {
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingCategory ? "Editar Categoría" : "Nueva Categoría"}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {formError && (
+            <div role="alert" style={{ padding: '10px 14px', borderRadius: 8, background: '#fee2e2', color: '#b91c1c', fontSize: '0.875rem' }}>
+              {formError}
+            </div>
+          )}
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Nombre</label>
             <Input value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} />

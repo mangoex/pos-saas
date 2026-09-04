@@ -596,6 +596,7 @@ def generate_churn_recovery_message(
     customer_name: str | None = None,
     favorite_product_name: str | None = None,
     discount_code: str | None = "VUELVE10",
+    restaurant_name: str | None = None,
 ) -> str:
     """Generate a personalized WhatsApp re-engagement message highlighting customer favorites."""
     name = customer_name
@@ -639,9 +640,10 @@ def generate_churn_recovery_message(
 
     name = name or "amigo"
     fav_product = fav_product or "tu favorito de siempre"
+    brand = restaurant_name or "tu restaurante favorito"
 
     return (
-        f"¡Hola {name}! 👋 En Kiwi te extrañamos. Hace tiempo que no disfrutamos de "
-        f"prepararte {fav_product}. 🥑✨ Hoy te regalamos 10% de descuento con el código "
+        f"¡Hola {name}! 👋 En {brand} te extrañamos. Hace tiempo que no disfrutamos de "
+        f"prepararte {fav_product}. ✨ Hoy te regalamos 10% de descuento con el código "
         f"{code} en tu próxima visita o pedido directo. ¿Te lo preparamos?"
     )
