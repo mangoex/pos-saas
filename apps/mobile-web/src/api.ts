@@ -305,16 +305,19 @@ export async function submitMobileOrder(
   }
 
   // Server authority: the opaque key is projected only while guarded capture is enabled.
-  const useIntent = typeof publicKey === 'string' && publicKey.length > 0;
-  if (useIntent && !publicKey) throw new Error('public_order_unavailable');
+  const effectiveKey = publicKey || branchId;
+  const useIntent = typeof effectiveKey === 'string' && effectiveKey.length > 0;
 
-  const storageKey = publicKey ? `restaurantos_public_order_key:${publicKey}` : '';
-  const legacyStorageKey = publicKey ? `kiwi_public_order_key:${publicKey}` : '';
+  const storageKey = effectiveKey ? `restaurantos_public_order_key:${effectiveKey}` : '';
+  const legacyStorageKey = effectiveKey ? `kiwi_public_order_key:${effectiveKey}` : '';
   const idempotencyKey = useIntent
     ? (localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey) || crypto.randomUUID())
     : undefined;
   if (useIntent && idempotencyKey) localStorage.setItem(storageKey, idempotencyKey);
-  const response = await fetch(useIntent ? `${API_BASE_URL}/public/branches/${publicKey}/order-intents` : `${API_BASE_URL}/public/orders`, {
+  const targetUrl = useIntent
+    ? `${API_BASE_URL}/public/branches/${effectiveKey}/order-intents`
+    : `${API_BASE_URL}/public/orders`;
+  const response = await fetch(targetUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     body: JSON.stringify(useIntent ? {

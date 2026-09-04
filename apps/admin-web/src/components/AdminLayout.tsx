@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Settings, BarChart2, Bell, Search, UserRound,
   LogOut, Package, Store, Carrot, ChevronLeft, ChevronRight, Camera,
-  ShoppingCart, Receipt, Share2, Crown, Sun, Moon
+  ShoppingCart, Receipt, Share2, Crown
 } from 'lucide-react';
 import { Modal, Input, Button } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
@@ -72,43 +72,6 @@ const AdminLayout = () => {
   const [branchReady, setBranchReady] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const proposalId = new URLSearchParams(location.search).get('admin_ai_proposal');
-  const [mobileTheme, setMobileTheme] = useState<'light' | 'dark'>(() => {
-    try {
-      return (localStorage.getItem('restaurantos_mobile_theme') as 'light' | 'dark') || 'light';
-    } catch {
-      return 'light';
-    }
-  });
-  const [isUpdatingTheme, setIsUpdatingTheme] = useState(false);
-
-  useEffect(() => {
-    fetchApi<{ mobile_theme: string }>('/catalog/mobile-theme')
-      .then((res) => {
-        if (res?.mobile_theme === 'dark' || res?.mobile_theme === 'light') {
-          setMobileTheme(res.mobile_theme as 'light' | 'dark');
-          localStorage.setItem('restaurantos_mobile_theme', res.mobile_theme);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const toggleMobileTheme = async () => {
-    if (isUpdatingTheme) return;
-    const nextTheme = mobileTheme === 'dark' ? 'light' : 'dark';
-    setMobileTheme(nextTheme);
-    localStorage.setItem('restaurantos_mobile_theme', nextTheme);
-    setIsUpdatingTheme(true);
-    try {
-      await fetchApi('/catalog/mobile-theme', {
-        method: 'PUT',
-        body: JSON.stringify({ mobile_theme: nextTheme }),
-      });
-    } catch (err) {
-      console.error('Error actualizando tema móvil:', err);
-    } finally {
-      setIsUpdatingTheme(false);
-    }
-  };
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const hasCatalogManage = Boolean(
@@ -428,32 +391,6 @@ const AdminLayout = () => {
               </select>
             </label>
             <button style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><Bell size={18} /></button>
-            <button
-              type="button"
-              onClick={toggleMobileTheme}
-              disabled={isUpdatingTheme}
-              aria-label={`Tema menú web app móvil: ${mobileTheme === 'dark' ? 'Oscuro' : 'Claro'}`}
-              title={`Tema de la web app móvil: ${mobileTheme === 'dark' ? '🌙 Oscuro' : '☀️ Claro'} (Clic para cambiar a ${mobileTheme === 'dark' ? '☀️ Claro' : '🌙 Oscuro'})`}
-              style={{
-                background: mobileTheme === 'dark' ? '#1e293b' : '#ffffff',
-                border: mobileTheme === 'dark' ? '1.5px solid #d97706' : '1.5px solid #e2e8f0',
-                borderRadius: '50%',
-                width: 40,
-                height: 40,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                boxShadow: 'var(--admin-card-shadow)',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {mobileTheme === 'dark' ? (
-                <Moon size={19} color="#f59e0b" />
-              ) : (
-                <Sun size={19} color="#d97706" />
-              )}
-            </button>
             {hasCatalogManage && <button type="button" aria-label="Abrir asistente de configuración" title="Asistente de configuración" onClick={() => setIsAssistantOpen(true)} style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><UserRound size={18} /></button>}
             <div 
               onClick={openProfileModal}

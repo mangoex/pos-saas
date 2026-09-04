@@ -8810,7 +8810,11 @@ def _get_available_product(
                 )
             )
             .where(
-                sa.or_(models.products.c.id == product_id, models.products.c.sku == product_id),
+                sa.or_(
+                    models.products.c.id == product_id,
+                    models.products.c.sku == product_id,
+                    sa.func.lower(models.products.c.name) == product_id.strip().lower(),
+                ),
                 models.products.c.status == "active",
                 sa.func.coalesce(models.branch_product_availability.c.is_available, True).is_(True),
             )
@@ -23981,7 +23985,7 @@ def create_public_order_intent(
         raise BusinessError("public_order_schema_invalid", "Order type is invalid")
     if not normalized["customer_name"] or len(normalized["customer_name"]) > 160:
         raise BusinessError("public_order_schema_invalid", "Customer name is invalid")
-    if not re.fullmatch(r"\+?[1-9]\d{9,14}", normalized["customer_phone"]):
+    if not re.fullmatch(r"\+?[1-9]\d{7,14}", normalized["customer_phone"]):
         raise BusinessError("public_order_schema_invalid", "Customer phone is invalid")
     if not isinstance(normalized["lines"], list) or not 1 <= len(normalized["lines"]) <= 50:
         raise BusinessError("public_order_schema_invalid", "Order lines are invalid")

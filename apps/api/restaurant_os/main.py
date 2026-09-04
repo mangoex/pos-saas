@@ -43,8 +43,24 @@ def _with_device_variant_headers(response: Response) -> Response:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="RestaurantOS API", version=settings.app_version)
-    app.state.public_order_intents_enabled = settings.public_order_intents_enabled
-    if settings.public_order_intents_enabled:
+    intents_enabled = settings.public_order_intents_enabled
+    if not intents_enabled:
+        env_val = os.environ.get(
+            "RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED",
+            os.environ.get("PUBLIC_ORDER_INTENTS_ENABLED", ""),
+        ).strip().lower()
+        if env_val in ("true", "1", "yes"):
+            intents_enabled = True
+        elif env_val == "" and (
+            os.path.exists("/app/static")
+            or bool(os.environ.get("STATIC_DIR"))
+            or bool(os.environ.get("DATABASE_URL"))
+            or str(os.environ.get("ENVIRONMENT", "")).lower() in ("production", "prod")
+        ):
+            intents_enabled = True
+
+    app.state.public_order_intents_enabled = intents_enabled
+    if intents_enabled:
         if settings.redis_url and settings.public_order_rate_limit_hmac_secret:
             app.state.public_order_rate_limiter = RedisPublicOrderRateLimiter(
                 settings.redis_url,
@@ -56,7 +72,9 @@ def create_app() -> FastAPI:
             app.state.public_order_rate_limiter = InMemoryPublicOrderRateLimiter(
                 settings.public_order_global_rate_limit_per_minute,
                 settings.public_order_client_rate_limit_per_minute,
-                settings.public_order_rate_limit_hmac_secret or settings.secret_key,
+                settings.public_order_rate_limit_hmac_secret
+                or settings.secret_key
+                or "restaurantos-dev-secret-key-32chars",
             )
     app.include_router(platform_router)
 

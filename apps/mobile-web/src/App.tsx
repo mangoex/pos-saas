@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier } from './types';
-import { fetchMobileMenu, submitMobileOrder, fetchPublicBranches, fetchMobileTheme } from './api';
+import { fetchMobileMenu, submitMobileOrder, fetchPublicBranches } from './api';
 import { HeroHeader } from './components/HeroHeader';
 import { CategoryCircles } from './components/CategoryCircles';
 import { SizeSelectorFilter } from './components/SizeSelectorFilter';
@@ -47,32 +47,8 @@ export const App: React.FC = () => {
   const [returnToCartAfterBranch, setReturnToCartAfterBranch] = useState(false);
 
   // Visual Theme (Light vs Warm Dark)
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const fromUrl = urlParams.get('theme');
-      if (fromUrl === 'dark' || fromUrl === 'light') return fromUrl;
-      return (localStorage.getItem('restaurantos_mobile_theme') as 'light' | 'dark') || 'light';
-    } catch {
-      return 'light';
-    }
-  });
-
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  // Synchronize theme with backend organization setting if not explicitly forced via URL
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.get('theme')) {
-      fetchMobileTheme().then((remoteTheme) => {
-        if (remoteTheme) {
-          setTheme(remoteTheme);
-          localStorage.setItem('restaurantos_mobile_theme', remoteTheme);
-        }
-      });
-    }
+    document.documentElement.setAttribute('data-theme', 'foodie');
   }, []);
 
   // Favorites state with localStorage
@@ -111,9 +87,14 @@ export const App: React.FC = () => {
       setBranches(branchList);
       setIsLoadingLocation(false);
       if (branchList.length > 0) {
-        // Direct link or QR code resolution via URL parameters (?branch=PILOTO, ?slug=PILOTO, ?b=PILOTO)
+        // Direct link or QR code resolution via URL query or pathname (/menu/piloto, /m/piloto, ?branch=PILOTO, ?slug=PILOTO)
         const urlParams = new URLSearchParams(window.location.search);
-        const slugParam = urlParams.get('branch') || urlParams.get('slug') || urlParams.get('b');
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        const pathSlug = (['menu', 'm', 'order', 'mobile'].includes(pathSegments[0]) && pathSegments[1])
+          ? pathSegments[1]
+          : undefined;
+        const slugParam = urlParams.get('branch') || urlParams.get('slug') || urlParams.get('b') || pathSlug;
+
         if (slugParam) {
           const cleanParam = slugParam.trim().toLowerCase();
           const match = branchList.find((b) =>
@@ -136,14 +117,6 @@ export const App: React.FC = () => {
           const savedId = localStorage.getItem('restaurantos_selected_branch_id') || localStorage.getItem('kiwi_selected_branch_id');
           const match = branchList.find((b) => b.id === savedId);
           setSelectedBranch(match || branchList[0]);
-        }
-
-        if (!urlParams.get('theme')) {
-          const branchTheme = branchList[0]?.mobile_theme;
-          if (branchTheme === 'dark' || branchTheme === 'light') {
-            setTheme(branchTheme);
-            localStorage.setItem('restaurantos_mobile_theme', branchTheme);
-          }
         }
       }
     };
@@ -315,7 +288,7 @@ export const App: React.FC = () => {
         selectedBranch?.id,
         selectedBranch?.name,
         customerCoords || undefined,
-        selectedBranch?.public_key,
+        selectedBranch?.public_key || selectedBranch?.id,
       );
       setCreatedOrderResult(result);
       setCart([]);

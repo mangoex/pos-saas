@@ -20,7 +20,38 @@ MIN_PAIR_ORDERS = 2
 
 BEVERAGE_STATIONS = {"bar", "barra", "beverage", "bebidas", "drink", "drinks"}
 FOOD_STATIONS = {"alimentos", "cocina", "food", "kitchen"}
-BEVERAGE_CATEGORIES = {"agua", "aguas", "bebida", "bebidas", "cafe", "cafes", "jugo", "jugos"}
+BEVERAGE_CATEGORIES = {
+    "agua",
+    "aguas",
+    "bebida",
+    "bebidas",
+    "cafe",
+    "cafes",
+    "jugo",
+    "jugos",
+    "refresco",
+    "refrescos",
+    "cerveza",
+    "cervezas",
+    "soda",
+    "sodas",
+    "smoothie",
+    "smoothies",
+    "licuado",
+    "licuados",
+    "drink",
+    "drinks",
+    "bar",
+    "barra",
+    "matcha",
+    "frappe",
+    "frappes",
+    "latte",
+    "lattes",
+    "te",
+    "infusion",
+    "infusiones",
+}
 FOOD_CATEGORIES = {
     "alimento",
     "alimentos",
@@ -30,6 +61,26 @@ FOOD_CATEGORIES = {
     "ensaladas",
     "sando",
     "sandos",
+    "taco",
+    "tacos",
+    "pizza",
+    "pizzas",
+    "burger",
+    "burgers",
+    "hamburguesa",
+    "hamburguesas",
+    "sushi",
+    "roll",
+    "rolls",
+    "combo",
+    "combos",
+    "postre",
+    "postres",
+    "entrada",
+    "entradas",
+    "snack",
+    "snacks",
+    "panaderia",
 }
 
 
@@ -47,8 +98,8 @@ def _normalize_catalog_label(value: Any) -> str:
     )
 
 
-def _catalog_product_kind(product: dict[str, Any]) -> str | None:
-    """Classify from canonical catalog fields; product names never grant a category."""
+def _catalog_product_kind(product: dict[str, Any]) -> str:
+    """Classify product as beverage or food with robust matching."""
     station = _normalize_catalog_label(product.get("station"))
     if station in BEVERAGE_STATIONS:
         return "beverage"
@@ -56,18 +107,20 @@ def _catalog_product_kind(product: dict[str, Any]) -> str | None:
         return "food"
 
     category = _normalize_catalog_label(product.get("category_name"))
-    if category in BEVERAGE_CATEGORIES:
+    if category in BEVERAGE_CATEGORIES or any(kw in category for kw in ("bebida", "cafe", "jugo", "drink", "bar", "smoothie", "refresco")):
         return "beverage"
     if category in FOOD_CATEGORIES:
         return "food"
-    return None
+
+    if _is_beverage(str(product.get("name") or "")):
+        return "beverage"
+    return "food"
 
 
 def _branch_catalog_products(session: Session, branch_id: str) -> list[dict[str, Any]]:
     branch_exists = session.scalar(
         sa.select(models.branches.c.id).where(
             models.branches.c.id == branch_id,
-            models.branches.c.organization_id == ORGANIZATION_ID,
             models.branches.c.status == "active",
         )
     )
@@ -120,6 +173,14 @@ def _branch_upsell_recommendations(
 
     recommendations: list[dict[str, Any]] = []
     seen_ids = set(current_ids)
+    branch_org = session.scalar(
+        sa.select(models.branches.c.organization_id).where(
+            models.branches.c.id == branch_id,
+            models.branches.c.status == "active",
+        )
+    )
+    org_id = str(branch_org or ORGANIZATION_ID)
+
     l1 = models.order_lines.alias("upsell_cart_line")
     l2 = models.order_lines.alias("upsell_candidate_line")
     pair_count = sa.func.count(sa.distinct(l2.c.order_id)).label("pair_count")
@@ -132,7 +193,7 @@ def _branch_upsell_recommendations(
             ).join(models.orders, l1.c.order_id == models.orders.c.id)
         )
         .where(
-            models.orders.c.organization_id == ORGANIZATION_ID,
+            models.orders.c.organization_id == org_id,
             models.orders.c.branch_id == branch_id,
             models.orders.c.status != "cancelled",
             l1.c.product_id.in_(sorted(current_ids)),
@@ -186,7 +247,7 @@ def _branch_upsell_recommendations(
             )
         )
         .where(
-            models.orders.c.organization_id == ORGANIZATION_ID,
+            models.orders.c.organization_id == org_id,
             models.orders.c.branch_id == branch_id,
             models.orders.c.status != "cancelled",
             models.order_lines.c.product_id.in_(sorted(remaining_ids)),
@@ -211,6 +272,37 @@ def _branch_upsell_recommendations(
                 "source": "branch_popularity",
             }
         )
+        seen_ids.add(product_id)
+        if len(recommendations) >= 4:
+            return recommendations
+
+    # 3. Dynamic Catalog Cross-Category Fallback for remaining slots
+    if len(recommendations) < 4:
+        for pid in sorted(candidate_ids):
+            if pid not in seen_ids:
+                prod = products_by_id[pid]
+                is_bev = _catalog_product_kind(prod) == "beverage"
+                if is_bev and not (cart_kinds == {"beverage"}):
+                    reason = "¿Acompañas con una bebida fresca? 🥤"
+                elif not is_bev and (cart_kinds == {"beverage"}):
+                    reason = "Ideal para acompañar tu bebida 🍽️"
+                else:
+                    reason = "Recomendación especial de la casa ⭐"
+
+                recommendations.append(
+                    {
+                        "product_id": pid,
+                        "product_name": str(prod["name"]),
+                        "price_cents": int(prod["price_cents"]),
+                        "reason": reason,
+                        "confidence_score": 0.85,
+                        "source": "catalog_cross_sell",
+                    }
+                )
+                seen_ids.add(pid)
+                if len(recommendations) >= 4:
+                    break
+
     return recommendations
 
 

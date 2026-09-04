@@ -2804,7 +2804,57 @@ def _resolve_active_public_order_key(session: Session, public_key: str) -> dict[
         .mappings()
         .first()
     )
-    return dict(row) if row else None
+    if row:
+        return dict(row)
+
+    # Fallback: if public_key matches a branch code or branch ID, find or provision an active key
+    branch = (
+        session.execute(
+            sa.select(models.branches).where(
+                sa.or_(
+                    models.branches.c.id == public_key,
+                    sa.func.upper(models.branches.c.code) == public_key.upper(),
+                ),
+                models.branches.c.status == "active",
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if branch:
+        existing = (
+            session.execute(
+                sa.select(models.public_order_keys).where(
+                    models.public_order_keys.c.branch_id == branch["id"],
+                    models.public_order_keys.c.status == "active",
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if existing:
+            return dict(existing)
+        gen_pk = f"pk_{str(branch['id']).replace('-', '')[:24]}"
+        now = datetime.now(timezone.utc)
+        session.execute(
+            models.public_order_keys.insert().values(
+                public_key=gen_pk,
+                organization_id=branch["organization_id"],
+                branch_id=branch["id"],
+                status="active",
+                created_at=now,
+            )
+        )
+        session.flush()
+        return {
+            "public_key": gen_pk,
+            "organization_id": branch["organization_id"],
+            "branch_id": branch["id"],
+            "status": "active",
+            "created_at": now,
+        }
+
+    return None
 
 
 @router.get("/public/branches/{public_key}/catalog")

@@ -23,7 +23,12 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("RESTAURANTOS_REDIS_URL", "REDIS_URL"),
     )
-    public_order_intents_enabled: bool = Field(default=False)
+    public_order_intents_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED", "PUBLIC_ORDER_INTENTS_ENABLED"
+        ),
+    )
     public_order_global_rate_limit_per_minute: int = Field(default=20, ge=1, le=1000)
     public_order_client_rate_limit_per_minute: int = Field(default=5, ge=1, le=1000)
     public_order_rate_limit_hmac_secret: str | None = Field(default=None, min_length=32)

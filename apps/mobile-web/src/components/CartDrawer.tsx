@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package } from 'lucide-react';
 import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Product } from '../types';
 import { formatMoney, fetchOrderUpsellRecommendations } from '../api';
-import { getProductIconMeta } from '../imageMap';
+import { getProductIconMeta, getProductImage } from '../imageMap';
 
 const getRecommendationIcon = (product: Product, size: number = 38) => {
   const category = (product.category_name || '').toLowerCase();
@@ -107,11 +107,63 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const recommendedProducts = useMemo<Array<Product & { ai_reason?: string }>>(() => {
     if (!allProducts || allProducts.length === 0 || items.length === 0) return [];
     const cartProductIds = new Set(items.map((i) => i.product.id));
-    return aiRecs.flatMap((recommendation) => {
-      const product = allProducts.find((candidate) => candidate.id === recommendation.product_id);
-      if (!product || cartProductIds.has(product.id) || product.is_available === false) return [];
-      return [{ ...product, ai_reason: recommendation.reason }];
-    }).slice(0, 4);
+
+    const results: Array<Product & { ai_reason?: string }> = [];
+    const seenIds = new Set<string>();
+
+    // 1. Backend recommendations
+    for (const recommendation of aiRecs) {
+      const product = allProducts.find((candidate) => candidate.id === recommendation.product_id || candidate.sku === recommendation.product_id);
+      if (product && !cartProductIds.has(product.id) && !seenIds.has(product.id) && product.is_available !== false) {
+        results.push({ ...product, ai_reason: recommendation.reason });
+        seenIds.add(product.id);
+      }
+    }
+
+    // 2. Client-side catalog fallback if fewer than 3 recommendations were found
+    if (results.length < 3) {
+      const cartHasFood = items.some((item) => {
+        const n = (item.product.name + ' ' + (item.product.category_name || '')).toLowerCase();
+        return !n.includes('jugo') && !n.includes('bebida') && !n.includes('cafe') && !n.includes('smoothie') && !n.includes('agua') && !n.includes('refresco');
+      });
+
+      const candidates = allProducts.filter(
+        (p) => !cartProductIds.has(p.id) && !seenIds.has(p.id) && p.is_available !== false
+      );
+
+      const sortedCandidates = [...candidates].sort((a, b) => {
+        const aName = (a.name + ' ' + (a.category_name || '')).toLowerCase();
+        const bName = (b.name + ' ' + (b.category_name || '')).toLowerCase();
+        const aIsBev = aName.includes('jugo') || aName.includes('bebida') || aName.includes('cafe') || aName.includes('smoothie') || aName.includes('refresco') || aName.includes('agua');
+        const bIsBev = bName.includes('jugo') || bName.includes('bebida') || bName.includes('cafe') || bName.includes('smoothie') || bName.includes('refresco') || bName.includes('agua');
+        if (cartHasFood) {
+          if (aIsBev && !bIsBev) return -1;
+          if (!aIsBev && bIsBev) return 1;
+        } else {
+          if (!aIsBev && bIsBev) return -1;
+          if (aIsBev && !bIsBev) return 1;
+        }
+        return 0;
+      });
+
+      for (const prod of sortedCandidates) {
+        if (results.length >= 4) break;
+        const pName = (prod.name + ' ' + (prod.category_name || '')).toLowerCase();
+        const isBev = pName.includes('jugo') || pName.includes('bebida') || pName.includes('cafe') || pName.includes('smoothie') || pName.includes('refresco') || pName.includes('agua');
+        let reason = 'Recomendación especial ⭐';
+        if (isBev && cartHasFood) {
+          reason = '¿Acompañas con una bebida fresca? 🥤';
+        } else if (!isBev && !cartHasFood) {
+          reason = 'El complemento ideal para tu orden 🍽️';
+        } else if (pName.includes('postre') || pName.includes('galleta') || pName.includes('pan')) {
+          reason = 'Un toque dulce delicioso 🍰';
+        }
+        results.push({ ...prod, ai_reason: reason });
+        seenIds.add(prod.id);
+      }
+    }
+
+    return results.slice(0, 4);
   }, [items, allProducts, aiRecs]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -193,6 +245,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <section className="cart-items-modern-list" aria-label="Platillos en el carrito">
                 {items.map((item) => {
                   const iconMeta = getProductIconMeta(item.product);
+                  const itemImg = item.product.image_url || getProductImage(item.product);
                   return (
                     <div key={item.cart_id} className="cart-item-modern-card">
                       <div
@@ -202,7 +255,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           borderColor: iconMeta.borderColor,
                         }}
                       >
-                        <span className="cart-item-thumbnail-emoji">{iconMeta.emoji}</span>
+                        {itemImg ? (
+                          <img
+                            src={itemImg}
+                            alt={item.product.name}
+                            className="cart-item-thumbnail-img"
+                            onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <span className="cart-item-thumbnail-emoji">{iconMeta.emoji}</span>
+                        )}
                       </div>
 
                       <div className="cart-item-details">
@@ -272,6 +334,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <div className="cart-upsell-scroll-track">
                     {recommendedProducts.map((prod) => {
                       const iconMeta = getProductIconMeta(prod);
+                      const upsellImg = prod.image_url || getProductImage(prod);
                       return (
                         <div key={prod.id} className="cart-upsell-card">
                           <div
@@ -279,12 +342,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             style={{
                               background: iconMeta.bgGradient,
                               borderColor: iconMeta.borderColor,
-                              color: iconMeta.textColor,
                             }}
                           >
-                            <span className="cart-upsell-card-icon" aria-hidden="true">
-                              {getRecommendationIcon(prod)}
-                            </span>
+                            {upsellImg ? (
+                              <img
+                                src={upsellImg}
+                                alt={prod.name}
+                                className="cart-upsell-card-img"
+                                onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <span className="cart-upsell-card-icon" aria-hidden="true">
+                                {getRecommendationIcon(prod)}
+                              </span>
+                            )}
                           </div>
                           <div className="cart-upsell-card-info">
                             <strong className="cart-upsell-card-name" title={prod.name}>{prod.name}</strong>

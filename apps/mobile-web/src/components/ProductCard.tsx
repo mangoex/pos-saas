@@ -2,7 +2,7 @@ import React from 'react';
 import { Heart, Plus, Flame } from 'lucide-react';
 import { Product } from '../types';
 import { formatMoney } from '../api';
-import { getProductIconMeta, detectProductSize, cleanBaseProductName } from '../imageMap';
+import { getProductIconMeta, detectProductSize, cleanBaseProductName, getProductImage } from '../imageMap';
 
 interface ProductCardProps {
   product: Product;
@@ -22,6 +22,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const size = detectProductSize(product.name);
   const displayName = cleanBaseProductName(product.name);
   const iconMeta = getProductIconMeta(product);
+  const productImg = product.image_url || getProductImage(product);
 
   return (
     <article
@@ -31,20 +32,37 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       role="button"
       aria-label={`Ver detalles de ${product.name}`}
     >
-      <div
-        className="product-card-visual-wrapper product-card-icon-avatar"
-        style={{
-          background: iconMeta.bgGradient,
-          borderColor: iconMeta.borderColor,
-        }}
-      >
-        <span className="product-card-icon-emoji" role="img" aria-label={iconMeta.badgeLabel}>
-          {iconMeta.emoji}
-        </span>
+      <div className="product-card-visual-wrapper">
+        {productImg ? (
+          <img
+            src={productImg}
+            alt={displayName}
+            className="product-card-real-food-img"
+            loading="lazy"
+            onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+          />
+        ) : (
+          <div
+            className="product-card-icon-avatar"
+            style={{
+              background: iconMeta.bgGradient,
+              borderColor: iconMeta.borderColor,
+            }}
+          >
+            <span className="product-card-icon-emoji" role="img" aria-label={iconMeta.badgeLabel}>
+              {iconMeta.emoji}
+            </span>
+          </div>
+        )}
 
-        <span className="product-card-icon-type-chip" style={{ color: iconMeta.textColor }}>
-          {iconMeta.badgeLabel}
-        </span>
+        <div className="product-card-top-badges">
+          <span className="product-card-rating-badge">
+            ★ 4.8
+          </span>
+          <span className="product-card-time-badge">
+            {product.prep_time || '15-25 min'}
+          </span>
+        </div>
 
         <button
           type="button"
@@ -56,9 +74,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           aria-label={isLiked ? 'Quitar de favoritos' : 'Agregar a favoritos'}
         >
           <Heart
-            size={17}
+            size={16}
             fill={isLiked ? '#ef4444' : 'none'}
-            color={isLiked ? '#ef4444' : '#64748b'}
+            color={isLiked ? '#ef4444' : '#ffffff'}
           />
         </button>
 
