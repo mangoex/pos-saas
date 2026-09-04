@@ -7,8 +7,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
 import sqlalchemy as sa
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
@@ -19,7 +19,13 @@ from restaurant_os.auth import (
     hash_password,
 )
 from restaurant_os.config import get_settings
-from restaurant_os.operations import BusinessError, _audit, _id, _now
+from restaurant_os.operations import (
+    BusinessError,
+    _assign_default_role_permissions,
+    _audit,
+    _id,
+    _now,
+)
 
 UTC = timezone.utc
 
@@ -83,8 +89,10 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     business_unit_id = _id()
     branch_id = _id()
     warehouse_id = _id()
-    owner_role_id = _id()
+    admin_role_id = _id()
     supervisor_role_id = _id()
+    leader_role_id = _id()
+    head_cashier_role_id = _id()
     cashier_role_id = _id()
     user_id = _id()
 
@@ -159,39 +167,30 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         )
     )
 
-    # 6. Roles
-    session.execute(
-        models.roles.insert().values(
-            id=owner_role_id,
-            organization_id=org_id,
-            name="Owner",
-            scope="organization",
-            created_at=now,
+    # 6. Canonical 5 Roles in Spanish
+    canonical_roles = [
+        (admin_role_id, "Administrador de Restaurante", "organization"),
+        (supervisor_role_id, "Supervisor", "branch"),
+        (leader_role_id, "Líder", "branch"),
+        (head_cashier_role_id, "Cajero Jefe", "branch"),
+        (cashier_role_id, "Cajero", "branch"),
+    ]
+    for r_id, r_name, r_scope in canonical_roles:
+        session.execute(
+            models.roles.insert().values(
+                id=r_id,
+                organization_id=org_id,
+                name=r_name,
+                scope=r_scope,
+                created_at=now,
+            )
         )
-    )
-    session.execute(
-        models.roles.insert().values(
-            id=supervisor_role_id,
-            organization_id=org_id,
-            name="Supervisor",
-            scope="branch",
-            created_at=now,
-        )
-    )
-    session.execute(
-        models.roles.insert().values(
-            id=cashier_role_id,
-            organization_id=org_id,
-            name="Cajero",
-            scope="branch",
-            created_at=now,
-        )
-    )
+        _assign_default_role_permissions(session, r_id, r_name)
 
-    # 7. Role Grants & Permissions for Owner
+    # 7. Role Grants & Permissions for Administrator
     session.execute(
         models.role_authority_grants.insert().values(
-            role_id=owner_role_id,
+            role_id=admin_role_id,
             authority_kind="organization_all_permissions",
             created_at=now,
         )
@@ -201,12 +200,12 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     for perm_id in all_permissions:
         session.execute(
             models.role_permissions.insert().values(
-                role_id=owner_role_id,
+                role_id=admin_role_id,
                 permission_id=perm_id,
             )
         )
 
-    # 8. User (Owner)
+    # 8. User (Administrator / Owner)
     session.execute(
         models.users.insert().values(
             id=user_id,
@@ -237,7 +236,7 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     session.execute(
         models.user_roles.insert().values(
             user_id=user_id,
-            role_id=owner_role_id,
+            role_id=admin_role_id,
             branch_id=branch_id,
         )
     )
@@ -562,9 +561,11 @@ def import_custom_catalog_for_org(
                     )
                 )
 
-            created_products += 1
-
-    return {"status": "ok", "created_products": created_products, "mobile_theme": mobile_theme or "light"}
+    return {
+        "status": "ok",
+        "created_products": created_products,
+        "mobile_theme": mobile_theme or "light",
+    }
 
 
 def seed_starter_catalog_for_org(

@@ -32,9 +32,11 @@ const CANONICAL_ROLES_META: Record<string, { rank: number; label: string; desc: 
   'líder': { rank: 3, label: 'Líder', desc: 'Cortes por usuario (X/Z), cancelaciones de pedidos autorizados' },
   'lider': { rank: 3, label: 'Líder', desc: 'Cortes por usuario (X/Z), cancelaciones de pedidos autorizados' },
   'supervisor': { rank: 4, label: 'Supervisor', desc: 'Gestión de recetas, inventario/kardex, reportes de insumos y mermas' },
-  'administrador': { rank: 5, label: 'Administrador', desc: 'Reportes analíticos de ventas y gastos de sucursal' },
-  'dueño': { rank: 6, label: 'Dueño', desc: 'Acceso total a todas las sucursales, autorizaciones y catálogos globales' },
-  'dueno': { rank: 6, label: 'Dueño', desc: 'Acceso total a todas las sucursales, autorizaciones y catálogos globales' },
+  'administrador de restaurante': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
+  'administrador': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
+  'dueño': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
+  'dueno': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
+  'owner': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
 };
 
 const UsersList = () => {
@@ -132,7 +134,7 @@ const UsersList = () => {
       return;
     }
     if (!formData.role_id) {
-      setFormError('Debes seleccionar uno de los 6 roles oficiales.');
+      setFormError('Debes seleccionar uno de los roles oficiales.');
       return;
     }
     if (requiresBranch && !formData.branch_id) {
@@ -199,12 +201,15 @@ const UsersList = () => {
                     </td>
                     <td>
                       {user.roles && user.roles.length > 0 ? (
-                        user.roles.map((r: any) => (
-                          <div key={`${r.role_id}-${r.branch_id || 'org'}`} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Badge variant="info">{r.role_name}</Badge>
-                            {r.branch_name && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>{r.branch_name}</span>}
-                          </div>
-                        ))
+                        user.roles.map((r: any) => {
+                          const canonicalLabel = CANONICAL_ROLES_META[r.role_name?.trim()?.toLowerCase()]?.label || r.role_name;
+                          return (
+                            <div key={`${r.role_id}-${r.branch_id || 'org'}`} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Badge variant="info">{canonicalLabel}</Badge>
+                              {r.branch_name && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>{r.branch_name}</span>}
+                            </div>
+                          );
+                        })
                       ) : (
                         <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>Sin rol</span>
                       )}
@@ -256,7 +261,7 @@ const UsersList = () => {
               onChange={(e) => setFormData({...formData, role_id: e.target.value})}
               style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontSize: '0.95rem', outline: 'none' }}
             >
-              <option value="">Selecciona uno de los 6 roles oficiales</option>
+              <option value="">Selecciona uno de los roles oficiales</option>
               {canonicalRoles.map(r => {
                 const meta = CANONICAL_ROLES_META[r.name.trim().toLowerCase()];
                 return (

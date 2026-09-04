@@ -2577,7 +2577,7 @@ def set_mobile_theme_endpoint(
     session.execute(
         models.organizations.update()
         .where(models.organizations.c.id == ORGANIZATION_ID)
-        .values(mobile_theme=theme, updated_at=_now())
+        .values(mobile_theme=theme, updated_at=datetime.now(timezone.utc))
     )
     session.commit()
     return {"status": "ok", "mobile_theme": theme}
@@ -2619,6 +2619,10 @@ from restaurant_os.superadmin import (
     update_tenant_details,
     impersonate_tenant,
     parse_and_import_menu_ai,
+    list_restaurant_administrators,
+    create_restaurant_administrator,
+    setup_my_restaurant,
+    migrate_tenant_canonical_roles,
 )
 
 
@@ -2719,6 +2723,55 @@ def post_superadmin_tenant_impersonate_endpoint(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_superadmin(session, actor_id)
     return impersonate_tenant(session, tenant_id, actor_superadmin_id=actor_id)
+
+
+@router.get("/superadmin/administrators")
+@router.get("/v1/superadmin/administrators")
+def get_superadmin_administrators_endpoint(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> list[dict[str, Any]]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return list_restaurant_administrators(session)
+
+
+@router.post("/superadmin/administrators", status_code=201)
+@router.post("/v1/superadmin/administrators", status_code=201)
+def post_superadmin_administrators_endpoint(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return create_restaurant_administrator(session, payload)
+
+
+@router.post("/superadmin/migrate-roles")
+@router.post("/v1/superadmin/migrate-roles")
+def post_superadmin_migrate_roles_endpoint(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return migrate_tenant_canonical_roles(session)
+
+
+@router.post("/onboarding/setup-my-restaurant", status_code=201)
+@router.post("/v1/onboarding/setup-my-restaurant", status_code=201)
+def post_onboarding_setup_my_restaurant_endpoint(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return setup_my_restaurant(session, actor_id, payload)
 
 
 @router.post("/superadmin/tenants/{tenant_id}/ai-menu-import")
@@ -4696,9 +4749,9 @@ def post_parse_menu_file(
     try:
         return parse_menu_document(file_base64, mime_type, filename, options)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/catalog/import-custom-catalog")

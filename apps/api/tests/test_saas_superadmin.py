@@ -338,3 +338,98 @@ def test_superadmin_update_tenant_details() -> None:
         json={"email": "juancarlos@elpastor.com", "password": "Password123!"},
     )
     assert login_resp.status_code == 200
+
+
+def test_tenant_creation_has_5_canonical_roles() -> None:
+    """Verify newly created tenants have exactly the 5 canonical roles in Spanish
+    and owner has Administrador de Restaurante.
+    """
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+    create_resp = client.post(
+        "/api/v1/superadmin/tenants",
+        headers=headers,
+        json={
+            "business_name": "Pizzeria Napoli",
+            "owner_name": "Marco Rossi",
+            "email": "marco@napoli.com",
+            "password": "Password123!",
+            "business_type": "pizzeria",
+            "plan": "starter_349",
+            "menu_mode": "blank",
+        },
+    )
+    assert create_resp.status_code == 201
+    owner_token = create_resp.json()["token"]
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    # Fetch tenant roles
+    roles_resp = client.get("/api/v1/roles", headers=owner_headers)
+    assert roles_resp.status_code == 200
+    roles = roles_resp.json()
+    role_names = [r["name"] for r in roles]
+
+    assert "Cajero" in role_names
+    assert "Cajero Jefe" in role_names
+    assert "Líder" in role_names
+    assert "Supervisor" in role_names
+    assert "Administrador de Restaurante" in role_names
+
+    # Fetch tenant users and check owner role
+    users_resp = client.get("/api/v1/users", headers=owner_headers)
+    assert users_resp.status_code == 200
+    users = users_resp.json()
+    owner = next(u for u in users if u["email"] == "marco@napoli.com")
+    assert any(r["role_name"] == "Administrador de Restaurante" for r in owner.get("roles", []))
+
+
+def test_superadmin_list_and_create_administrators() -> None:
+    """Verify superadmin can list all restaurant administrators
+    and create an independent administrator account.
+    """
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+
+    # List administrators
+    list_resp = client.get("/api/v1/superadmin/administrators", headers=headers)
+    assert list_resp.status_code == 200
+    admins = list_resp.json()
+    assert isinstance(admins, list)
+
+    # Create new administrator without initial restaurant
+    create_admin_resp = client.post(
+        "/api/v1/superadmin/administrators",
+        headers=headers,
+        json={
+            "display_name": "Carlos Gomez",
+            "email": "carlos@nuevotaqueria.com",
+            "password": "Password123!",
+            "phone": "5544332211",
+        },
+    )
+    assert create_admin_resp.status_code == 201
+    admin_data = create_admin_resp.json()
+    assert admin_data["email"] == "carlos@nuevotaqueria.com"
+
+    # Carlos logs in
+    login_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "carlos@nuevotaqueria.com", "password": "Password123!"},
+    )
+    assert login_resp.status_code == 200
+    carlos_token = login_resp.json()["token"]
+    carlos_headers = {"Authorization": f"Bearer {carlos_token}"}
+
+    # Carlos completes self-onboarding for his restaurant
+    setup_resp = client.post(
+        "/api/v1/onboarding/setup-my-restaurant",
+        headers=carlos_headers,
+        json={
+            "business_name": "Taquería El Tapatío",
+            "business_type": "taqueria",
+        },
+    )
+    assert setup_resp.status_code == 201
+    setup_data = setup_resp.json()
+    assert setup_data["tenant"]["name"] == "Taquería El Tapatío"
+    assert setup_data["branch"]["name"] == "Sucursal Matriz"

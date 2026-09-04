@@ -61,6 +61,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       && !userRoles.includes('Líder')
       && !userRoles.includes('Supervisor')
       && !userRoles.includes('Administrador')
+      && !userRoles.includes('Administrador de Restaurante')
       && !userRoles.includes('Dueño')
       && !permissions.includes('admin.manage')
       && !permissions.includes('dashboard.read')

@@ -12,9 +12,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
-from restaurant_os.auth import create_session_token
+from restaurant_os.auth import (
+    PASSWORD_ALGORITHM,
+    create_session_token,
+    generate_password_salt,
+    hash_password,
+)
 from restaurant_os.config import get_settings
-from restaurant_os.operations import _now
+from restaurant_os.operations import _assign_default_role_permissions, _id, _now
 from restaurant_os.saas_onboarding import signup_tenant
 
 
@@ -626,3 +631,479 @@ def impersonate_tenant(
             "assigned_branch_id": str(branch["id"]) if branch else None,
         },
     }
+
+
+def list_restaurant_administrators(session: Session) -> list[dict[str, Any]]:
+    """Returns all restaurant administrator accounts across the platform."""
+    admin_roles_subq = (
+        sa.select(models.user_roles.c.user_id, models.roles.c.name.label("role_name"))
+        .select_from(models.user_roles.join(models.roles, models.user_roles.c.role_id == models.roles.c.id))
+        .where(models.roles.c.name.in_(["Administrador de Restaurante", "Dueño", "Owner", "Administrador"]))
+        .subquery()
+    )
+
+    query = (
+        sa.select(
+            models.users.c.id,
+            models.users.c.display_name,
+            models.users.c.email,
+            models.users.c.status,
+            models.users.c.created_at,
+            models.users.c.organization_id,
+            models.organizations.c.name.label("tenant_name"),
+            models.organizations.c.owner_phone,
+            admin_roles_subq.c.role_name,
+        )
+        .outerjoin(admin_roles_subq, models.users.c.id == admin_roles_subq.c.user_id)
+        .outerjoin(models.organizations, models.users.c.organization_id == models.organizations.c.id)
+        .where(
+            sa.or_(
+                admin_roles_subq.c.role_name.isnot(None),
+                models.users.c.email == models.organizations.c.owner_email,
+                sa.and_(
+                    models.users.c.organization_id.is_(None),
+                    models.users.c.is_superadmin.is_(False),
+                ),
+            )
+        )
+        .order_by(models.users.c.created_at.desc())
+    )
+
+    rows = session.execute(query).mappings().all()
+    seen = set()
+    result = []
+    for r in rows:
+        uid = str(r["id"])
+        if uid in seen:
+            continue
+        seen.add(uid)
+        result.append({
+            "id": uid,
+            "display_name": str(r["display_name"]),
+            "email": str(r["email"]),
+            "status": str(r["status"]),
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "tenant_id": str(r["organization_id"]) if r["organization_id"] else None,
+            "tenant_name": str(r["tenant_name"]) if r["tenant_name"] else None,
+            "phone": str(r["owner_phone"]) if r["owner_phone"] else None,
+            "role_name": str(r["role_name"]) if r["role_name"] else "Administrador de Restaurante",
+        })
+    return result
+
+
+def create_restaurant_administrator(
+    session: Session,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Superadmin creates a restaurant administrator account."""
+    email = str(data.get("email", "")).strip().lower()
+    display_name = str(data.get("display_name", "")).strip()
+    password = str(data.get("password", "")).strip()
+    phone = data.get("phone")
+    tenant_id = data.get("tenant_id")
+
+    if not email or not display_name or not password:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "missing_fields", "message": "Nombre, correo y contraseña son obligatorios."},
+        )
+
+    existing = session.execute(
+        sa.select(models.users.c.id).where(sa.func.lower(models.users.c.email) == email)
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "email_already_registered", "message": f"El correo {email} ya está registrado."},
+        )
+
+    now = _now()
+    user_id = _id()
+
+    tenant_name = None
+    if not tenant_id:
+        target_org_id = _id()
+        tenant_name = f"Restaurante de {display_name}"
+        session.execute(
+            models.organizations.insert().values(
+                id=target_org_id,
+                name=tenant_name,
+                owner_name=display_name,
+                owner_email=email,
+                owner_phone=phone,
+                status="pending_setup",
+                plan="starter_349",
+                subscription_status="trialing",
+                monthly_fee_cents=34900,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    else:
+        target_org_id = tenant_id
+        org = session.execute(
+            sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
+        ).mappings().first()
+        if org:
+            tenant_name = str(org["name"])
+
+    user_vals = {
+        "id": user_id,
+        "email": email,
+        "display_name": display_name,
+        "organization_id": target_org_id,
+        "status": "active",
+        "created_at": now,
+        "updated_at": now,
+    }
+    session.execute(models.users.insert().values(**user_vals))
+
+    salt = generate_password_salt()
+    pw_hash = hash_password(password, salt)
+    session.execute(
+        models.user_credentials.insert().values(
+            user_id=user_id,
+            password_hash=pw_hash,
+            password_salt=salt,
+            password_algorithm=PASSWORD_ALGORITHM,
+            updated_at=now,
+        )
+    )
+
+    if tenant_id:
+        role = session.execute(
+            sa.select(models.roles).where(
+                models.roles.c.organization_id == tenant_id,
+                models.roles.c.name == "Administrador de Restaurante",
+            )
+        ).mappings().first()
+        if role:
+            session.execute(
+                models.user_roles.insert().values(
+                    user_id=user_id,
+                    role_id=role["id"],
+                )
+            )
+
+    session.commit()
+
+    return {
+        "id": user_id,
+        "email": email,
+        "display_name": display_name,
+        "status": "active",
+        "tenant_id": target_org_id,
+        "tenant_name": tenant_name,
+        "phone": phone,
+        "created_at": now.isoformat(),
+        "credentials": {
+            "email": email,
+            "password": password,
+            "display_name": display_name,
+        },
+    }
+
+
+def setup_my_restaurant(
+    session: Session,
+    user_id: str,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Allows an administrator who has no restaurant or is pending setup to configure their business."""
+    user = session.execute(
+        sa.select(models.users).where(models.users.c.id == user_id)
+    ).mappings().first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "Usuario no encontrado"})
+
+    business_name = str(data.get("business_name", "")).strip()
+    business_type = str(data.get("business_type", "general")).strip()
+    phone = data.get("phone")
+
+    if not business_name:
+        raise HTTPException(status_code=400, detail={"code": "missing_business_name", "message": "Nombre del restaurante requerido"})
+
+    now = _now()
+    org_id = user["organization_id"]
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == org_id)
+    ).mappings().first()
+
+    if org:
+        session.execute(
+            models.organizations.update()
+            .where(models.organizations.c.id == org_id)
+            .values(
+                name=business_name,
+                business_type=business_type,
+                owner_name=user["display_name"],
+                owner_email=user["email"],
+                owner_phone=phone or org.get("owner_phone"),
+                status="active",
+                updated_at=now,
+            )
+        )
+    else:
+        org_id = _id()
+        session.execute(
+            models.organizations.insert().values(
+                id=org_id,
+                name=business_name,
+                business_type=business_type,
+                owner_name=user["display_name"],
+                owner_email=user["email"],
+                owner_phone=phone,
+                plan="starter_349",
+                subscription_status="active",
+                monthly_fee_cents=34900,
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.execute(
+            models.users.update()
+            .where(models.users.c.id == user_id)
+            .values(organization_id=org_id, updated_at=now)
+        )
+
+    legal_entity_id = _id()
+    business_unit_id = _id()
+    branch_id = _id()
+    warehouse_id = _id()
+    admin_role_id = _id()
+    supervisor_role_id = _id()
+    leader_role_id = _id()
+    head_cashier_role_id = _id()
+    cashier_role_id = _id()
+
+    # 2. Legal Entity
+    session.execute(
+        models.legal_entities.insert().values(
+            id=legal_entity_id,
+            organization_id=org_id,
+            name=f"{business_name} SA de CV",
+            tax_id="XAXX010101000",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    # 3. Business Unit
+    session.execute(
+        models.business_units.insert().values(
+            id=business_unit_id,
+            organization_id=org_id,
+            legal_entity_id=legal_entity_id,
+            name=business_name,
+            code="MATRIZ",
+            unit_type="restaurant",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    # 4. Branch
+    session.execute(
+        models.branches.insert().values(
+            id=branch_id,
+            organization_id=org_id,
+            legal_entity_id=legal_entity_id,
+            business_unit_id=business_unit_id,
+            name="Sucursal Matriz",
+            code="MATRIZ",
+            timezone="America/Mexico_City",
+            status="active",
+            phone=phone or "",
+            city="México",
+            state="CDMX",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    # 5. Warehouse
+    session.execute(
+        models.warehouses.insert().values(
+            id=warehouse_id,
+            organization_id=org_id,
+            branch_id=branch_id,
+            name="Almacén Matriz",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    # 6. Canonical 5 Roles
+    canonical_roles = [
+        (admin_role_id, "Administrador de Restaurante", "organization"),
+        (supervisor_role_id, "Supervisor", "branch"),
+        (leader_role_id, "Líder", "branch"),
+        (head_cashier_role_id, "Cajero Jefe", "branch"),
+        (cashier_role_id, "Cajero", "branch"),
+    ]
+    for r_id, r_name, r_scope in canonical_roles:
+        session.execute(
+            models.roles.insert().values(
+                id=r_id,
+                organization_id=org_id,
+                name=r_name,
+                scope=r_scope,
+                created_at=now,
+            )
+        )
+        _assign_default_role_permissions(session, r_id, r_name)
+
+    session.execute(
+        models.role_authority_grants.insert().values(
+            role_id=admin_role_id,
+            authority_kind="organization_all_permissions",
+            created_at=now,
+        )
+    )
+
+    all_permissions = session.execute(sa.select(models.permissions.c.id)).scalars().all()
+    for perm_id in all_permissions:
+        session.execute(
+            models.role_permissions.insert().values(
+                role_id=admin_role_id,
+                permission_id=perm_id,
+            )
+        )
+
+    # Update user organization_id
+    session.execute(
+        models.users.update()
+        .where(models.users.c.id == user_id)
+        .values(organization_id=org_id, updated_at=now)
+    )
+
+    # Assign role
+    session.execute(
+        models.user_roles.insert().values(
+            user_id=user_id,
+            role_id=admin_role_id,
+            branch_id=branch_id,
+        )
+    )
+
+    session.commit()
+
+    return {
+        "tenant": {
+            "id": org_id,
+            "name": business_name,
+            "business_type": business_type,
+            "plan": "starter_349",
+        },
+        "branch": {
+            "id": branch_id,
+            "name": "Sucursal Matriz",
+        },
+        "user_id": user_id,
+    }
+
+
+def migrate_tenant_canonical_roles(session: Session) -> dict[str, int]:
+    """Ensures all existing tenants have the 5 canonical roles and their owner is assigned Administrador de Restaurante."""
+    orgs = session.execute(sa.select(models.organizations.c.id, models.organizations.c.name)).all()
+    created_roles = 0
+    assigned_users = 0
+
+    canonical_defs = [
+        ("Administrador de Restaurante", "organization"),
+        ("Supervisor", "branch"),
+        ("Líder", "branch"),
+        ("Cajero Jefe", "branch"),
+        ("Cajero", "branch"),
+    ]
+
+    all_permissions = session.execute(sa.select(models.permissions.c.id)).scalars().all()
+
+    for org in orgs:
+        org_id = str(org[0])
+        existing_roles = {
+            r["name"]: r["id"]
+            for r in session.execute(
+                sa.select(models.roles.c.id, models.roles.c.name).where(models.roles.c.organization_id == org_id)
+            ).mappings().all()
+        }
+
+        admin_role_id = existing_roles.get("Administrador de Restaurante")
+        if not admin_role_id:
+            if "Owner" in existing_roles:
+                admin_role_id = existing_roles["Owner"]
+                session.execute(
+                    models.roles.update()
+                    .where(models.roles.c.id == admin_role_id)
+                    .values(name="Administrador de Restaurante")
+                )
+                existing_roles["Administrador de Restaurante"] = admin_role_id
+            else:
+                admin_role_id = _id()
+                now = _now()
+                session.execute(
+                    models.roles.insert().values(
+                        id=admin_role_id,
+                        organization_id=org_id,
+                        name="Administrador de Restaurante",
+                        scope="organization",
+                        created_at=now,
+                    )
+                )
+                _assign_default_role_permissions(session, admin_role_id, "Administrador de Restaurante")
+                session.execute(
+                    models.role_authority_grants.insert().values(
+                        role_id=admin_role_id,
+                        authority_kind="organization_all_permissions",
+                        created_at=now,
+                    )
+                )
+                for perm_id in all_permissions:
+                    session.execute(
+                        models.role_permissions.insert().values(
+                            role_id=admin_role_id,
+                            permission_id=perm_id,
+                        )
+                    )
+                existing_roles["Administrador de Restaurante"] = admin_role_id
+                created_roles += 1
+
+        for r_name, r_scope in canonical_defs:
+            if r_name not in existing_roles:
+                r_id = _id()
+                now = _now()
+                session.execute(
+                    models.roles.insert().values(
+                        id=r_id,
+                        organization_id=org_id,
+                        name=r_name,
+                        scope=r_scope,
+                        created_at=now,
+                    )
+                )
+                _assign_default_role_permissions(session, r_id, r_name)
+                created_roles += 1
+
+        users = session.execute(
+            sa.select(models.users.c.id).where(models.users.c.organization_id == org_id)
+        ).scalars().all()
+        for u_id in users:
+            has_role = session.execute(
+                sa.select(models.user_roles.c.role_id).where(models.user_roles.c.user_id == str(u_id))
+            ).scalar_one_or_none()
+            if not has_role and admin_role_id:
+                session.execute(
+                    models.user_roles.insert().values(
+                        user_id=str(u_id),
+                        role_id=admin_role_id,
+                    )
+                )
+                assigned_users += 1
+
+    session.commit()
+    return {"created_roles": created_roles, "assigned_users": assigned_users}

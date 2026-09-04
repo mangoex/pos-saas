@@ -27,6 +27,8 @@ import {
   Eye,
   EyeOff,
   Check,
+  RefreshCw,
+  Users,
 } from 'lucide-react';
 
 interface SaaSMetrics {
@@ -57,8 +59,24 @@ interface Tenant {
   orders_count: number;
 }
 
+interface RestaurantAdmin {
+  id: string;
+  display_name: string;
+  email: string;
+  phone?: string | null;
+  status: string;
+  organization_id: string;
+  restaurant_name: string;
+  business_type?: string | null;
+  plan?: string | null;
+  subscription_status?: string | null;
+  role_name?: string | null;
+  created_at?: string | null;
+}
+
 export const SaaSConsoleView: React.FC = () => {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'tenants' | 'administrators'>('tenants');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [planFilter, setPlanFilter] = useState<string>('all');
@@ -106,6 +124,17 @@ export const SaaSConsoleView: React.FC = () => {
   const [newPlan, setNewPlan] = useState('pro_599');
   const [suspendReason, setSuspendReason] = useState('Falta de pago mensual');
 
+  // Administrator states & mutations
+  const [adminSearchTerm, setAdminSearchTerm] = useState('');
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [adminFormEmail, setAdminFormEmail] = useState('');
+  const [adminFormName, setAdminFormName] = useState('');
+  const [adminFormPassword, setAdminFormPassword] = useState('Password123!');
+  const [adminFormPhone, setAdminFormPhone] = useState('');
+  const [adminFormTenantId, setAdminFormTenantId] = useState<string>('');
+  const [adminFormError, setAdminFormError] = useState<string | null>(null);
+  const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
+
   // Queries
   const { data: metrics } = useQuery<SaaSMetrics>({
     queryKey: ['saas-metrics'],
@@ -121,6 +150,65 @@ export const SaaSConsoleView: React.FC = () => {
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (planFilter !== 'all') params.set('plan', planFilter);
       return fetchApi<Tenant[]>(`/superadmin/tenants?${params.toString()}`);
+    },
+  });
+
+  const { data: administrators = [], isLoading: isLoadingAdmins } = useQuery<RestaurantAdmin[]>({
+    queryKey: ['saas-administrators', adminSearchTerm],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (adminSearchTerm.trim()) params.set('search', adminSearchTerm.trim());
+      return fetchApi<RestaurantAdmin[]>(`/superadmin/administrators?${params.toString()}`);
+    },
+    enabled: activeTab === 'administrators',
+  });
+
+  // Mutations
+  const createAdminMutation = useMutation({
+    mutationFn: (payload: any) =>
+      fetchApi('/superadmin/administrators', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['saas-administrators'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
+      setIsAdminModalOpen(false);
+      if (data?.credentials) {
+        setCreatedCredentials({
+          restaurant_name: data.credentials.restaurant_name || 'Nuevo Restaurante (Pendiente de configuración)',
+          owner_name: data.credentials.display_name || adminFormName,
+          email: data.credentials.email || adminFormEmail,
+          password: data.credentials.password || adminFormPassword,
+          branch_name: 'Sucursal Matriz',
+          tenant_id: data.user?.organization_id,
+        });
+      }
+      setAdminFormEmail('');
+      setAdminFormName('');
+      setAdminFormPassword('Password123!');
+      setAdminFormPhone('');
+      setAdminFormTenantId('');
+      setAdminFormError(null);
+    },
+    onError: (err: any) => {
+      setAdminFormError(err.message || 'Error al crear la cuenta de administrador');
+    },
+  });
+
+  const migrateRolesMutation = useMutation({
+    mutationFn: () => fetchApi<{ message: string; organizations_checked: number }>('/superadmin/migrate-roles', { method: 'POST' }),
+    onSuccess: (res) => {
+      setMigrationMessage(`✓ ${res.message || 'Roles oficiales sincronizados con éxito'}`);
+      queryClient.invalidateQueries({ queryKey: ['saas-administrators'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setTimeout(() => setMigrationMessage(null), 6000);
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Error al sincronizar roles');
     },
   });
 
@@ -320,30 +408,58 @@ export const SaaSConsoleView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            resetForm();
-            setIsCreateModalOpen(true);
-          }}
-          style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '14px 22px',
-            fontWeight: 700,
-            fontSize: '14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-          }}
-        >
-          <Plus size={18} />
-          <span>+ Dar de Alta Restaurante</span>
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setAdminFormError(null);
+              setIsAdminModalOpen(true);
+            }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.14)',
+              color: '#fff',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '12px',
+              padding: '13px 18px',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              backdropFilter: 'blur(8px)',
+              transition: 'background 0.2s',
+            }}
+          >
+            <User size={16} />
+            <span>+ Nuevo Administrador</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              resetForm();
+              setIsCreateModalOpen(true);
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '13px 20px',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+            }}
+          >
+            <Plus size={16} />
+            <span>+ Dar de Alta Restaurante</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -445,305 +561,632 @@ export const SaaSConsoleView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: '16px',
-          padding: '16px 20px',
-          border: '1px solid #e2e8f0',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: '16px',
-          marginBottom: '20px',
-        }}
-      >
-        <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
-          <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '11px' }} />
-          <input
-            type="text"
-            placeholder="Buscar por restaurante, dueño o correo..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+      {/* Tab Switcher & Secondary Actions */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px', background: '#e2e8f0', padding: '4px', borderRadius: '12px' }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab('tenants')}
             style={{
-              width: '100%',
-              padding: '10px 12px 10px 38px',
+              padding: '10px 20px',
+              borderRadius: '9px',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: activeTab === 'tenants' ? '#fff' : 'transparent',
+              color: activeTab === 'tenants' ? '#0f172a' : '#64748b',
+              boxShadow: activeTab === 'tenants' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s ease-in-out',
+            }}
+          >
+            <Building size={16} />
+            <span>Restaurantes Clientes ({tenants.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('administrators')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '9px',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: activeTab === 'administrators' ? '#fff' : 'transparent',
+              color: activeTab === 'administrators' ? '#0f172a' : '#64748b',
+              boxShadow: activeTab === 'administrators' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s ease-in-out',
+            }}
+          >
+            <Users size={16} />
+            <span>Administradores de Restaurante</span>
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {migrationMessage && (
+            <span style={{ fontSize: '12px', color: '#059669', background: '#ecfdf5', padding: '6px 12px', borderRadius: '8px', fontWeight: 600, border: '1px solid #a7f3d0' }}>
+              {migrationMessage}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => migrateRolesMutation.mutate()}
+            disabled={migrateRolesMutation.isPending}
+            title="Sincroniza y crea los 5 roles canónicos en español para todas las organizaciones y asigna el rol Administrador a los dueños."
+            style={{
+              background: '#fff',
+              border: '1px solid #cbd5e1',
+              color: '#334155',
+              padding: '9px 14px',
               borderRadius: '10px',
-              border: '1px solid #cbd5e1',
-              fontSize: '13px',
-              boxSizing: 'border-box',
-              outline: 'none',
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Estado:</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              fontSize: '13px',
-              fontWeight: 500,
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
             }}
           >
-            <option value="all">Todos los estados</option>
-            <option value="active">Activos</option>
-            <option value="trialing">En Prueba</option>
-            <option value="suspended">Suspendidos</option>
-          </select>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Plan:</label>
-          <select
-            value={planFilter}
-            onChange={(e) => setPlanFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
-          >
-            <option value="all">Todos los planes</option>
-            <option value="starter_349">Básico ($349)</option>
-            <option value="pro_599">Pro ($599)</option>
-            <option value="trial">Prueba (14 días)</option>
-          </select>
+            <RefreshCw size={14} className={migrateRolesMutation.isPending ? 'animate-spin' : ''} />
+            <span>{migrateRolesMutation.isPending ? 'Sincronizando...' : 'Sincronizar 5 Roles Oficiales'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Tenants Table */}
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: '16px',
-          border: '1px solid #e2e8f0',
-          overflow: 'hidden',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        }}
-      >
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
-              <th style={{ padding: '14px 18px', fontWeight: 700 }}>Restaurante</th>
-              <th style={{ padding: '14px 18px', fontWeight: 700 }}>Dueño y Contacto</th>
-              <th style={{ padding: '14px 18px', fontWeight: 700 }}>Plan y Cuota</th>
-              <th style={{ padding: '14px 18px', fontWeight: 700 }}>Estado Suscripción</th>
-              <th style={{ padding: '14px 18px', fontWeight: 700 }}>Catálogo & POS</th>
-              <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Acciones Master</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoadingTenants ? (
-              <tr>
-                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
-                  Cargando directorio de restaurantes...
-                </td>
-              </tr>
-            ) : tenants.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
-                  No se encontraron restaurantes con los filtros aplicados.
-                </td>
-              </tr>
-            ) : (
-              tenants.map((t) => {
-                const isSuspended = t.subscription_status === 'suspended';
-                return (
-                  <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }}>
-                    <td style={{ padding: '14px 18px' }}>
-                      <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>{t.name}</strong>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          fontSize: '11px',
-                          color: '#64748b',
-                          background: '#f1f5f9',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          marginTop: '4px',
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {t.business_type || 'General'}
-                      </span>
-                    </td>
+      {/* Pestaña: Restaurantes Clientes */}
+      {activeTab === 'tenants' && (
+        <>
+          {/* Filters Bar */}
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '16px',
+              marginBottom: '20px',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
+              <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '11px' }} />
+              <input
+                type="text"
+                placeholder="Buscar por restaurante, dueño o correo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 38px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                }}
+              />
+            </div>
 
-                    <td style={{ padding: '14px 18px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#334155' }}>
-                        <User size={13} color="#64748b" />
-                        <span>{t.owner_name || 'Sin nombre'}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '12px', marginTop: '2px' }}>
-                        <Mail size={12} />
-                        <span>{t.owner_email || 'Sin correo'}</span>
-                      </div>
-                      {t.owner_phone && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '12px', marginTop: '2px' }}>
-                          <Phone size={12} />
-                          <span>{t.owner_phone}</span>
-                        </div>
-                      )}
-                    </td>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Estado:</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                }}
+              >
+                <option value="all">Todos los estados</option>
+                <option value="active">Activos</option>
+                <option value="trialing">En Prueba</option>
+                <option value="suspended">Suspendidos</option>
+              </select>
+            </div>
 
-                    <td style={{ padding: '14px 18px' }}>
-                      <span
-                        style={{
-                          fontWeight: 700,
-                          fontSize: '12px',
-                          color: t.plan === 'pro_599' ? '#7c3aed' : '#0284c7',
-                          background: t.plan === 'pro_599' ? '#f5f3ff' : '#f0f9ff',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          display: 'inline-block',
-                          marginBottom: '4px',
-                        }}
-                      >
-                        {t.plan === 'pro_599'
-                          ? 'Plan Pro ($599/mes)'
-                          : t.plan === 'starter_349'
-                          ? 'Plan Básico ($349/mes)'
-                          : 'Prueba (14 días)'}
-                      </span>
-                      <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
-                        {formatMoney(t.monthly_fee_cents)}/mes
-                      </div>
-                    </td>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Plan:</label>
+              <select
+                value={planFilter}
+                onChange={(e) => setPlanFilter(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                }}
+              >
+                <option value="all">Todos los planes</option>
+                <option value="starter_349">Básico ($349)</option>
+                <option value="pro_599">Pro ($599)</option>
+                <option value="trial">Prueba (14 días)</option>
+              </select>
+            </div>
+          </div>
 
-                    <td style={{ padding: '14px 18px' }}>
-                      {isSuspended ? (
-                        <span
-                          style={{
-                            background: '#fee2e2',
-                            color: '#b91c1c',
-                            fontWeight: 700,
-                            fontSize: '11px',
-                            padding: '4px 10px',
-                            borderRadius: '9999px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          <PauseCircle size={12} />
-                          <span>Suspendido</span>
-                        </span>
-                      ) : (
-                        <span
-                          style={{
-                            background: '#dcfce7',
-                            color: '#15803d',
-                            fontWeight: 700,
-                            fontSize: '11px',
-                            padding: '4px 10px',
-                            borderRadius: '9999px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          <CheckCircle2 size={12} />
-                          <span>Activo</span>
-                        </span>
-                      )}
-                      {t.suspended_reason && (
-                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px' }}>
-                          ↳ {t.suspended_reason}
-                        </div>
-                      )}
-                    </td>
-
-                    <td style={{ padding: '14px 18px', color: '#64748b' }}>
-                      <div>🍽️ <strong>{t.products_count}</strong> platillos</div>
-                      <div style={{ fontSize: '12px', marginTop: '2px' }}>🏪 {t.branches_count} sucursal(es)</div>
-                    </td>
-
-                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                        <button
-                          type="button"
-                          title="Entrar al panel de este cliente como soporte"
-                          onClick={() => impersonateMutation.mutate(t.id)}
-                          style={{
-                            background: '#0f172a',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '6px 12px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          <LogIn size={13} />
-                          <span>Soporte</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          title="Editar datos del restaurante y plan"
-                          onClick={() => {
-                            setSelectedTenantForEdit(t);
-                            setEditName(t.name);
-                            setEditBusinessType(t.business_type || 'general');
-                            setEditOwnerName(t.owner_name || '');
-                            setEditEmail(t.owner_email || '');
-                            setEditPhone(t.owner_phone || '');
-                            setEditPlan(t.plan || 'starter_349');
-                            setEditStatus(t.subscription_status || 'active');
-                          }}
-                          style={{
-                            background: '#f8fafc',
-                            color: '#334155',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '8px',
-                            padding: '6px 8px',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Edit size={13} />
-                        </button>
-
-                        <button
-                          type="button"
-                          title={isSuspended ? 'Reactivar acceso' : 'Suspender acceso por falta de pago'}
-                          onClick={() => {
-                            if (isSuspended) {
-                              updateStatusMutation.mutate({ tenantId: t.id, status: 'active' });
-                            } else {
-                              setSelectedTenantForStatus(t);
-                            }
-                          }}
-                          style={{
-                            background: isSuspended ? '#dcfce7' : '#fee2e2',
-                            color: isSuspended ? '#15803d' : '#b91c1c',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '6px 8px',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {isSuspended ? <PlayCircle size={13} /> : <PauseCircle size={13} />}
-                        </button>
-                      </div>
+          {/* Tenants Table */}
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Restaurante</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Dueño y Contacto</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Plan y Cuota</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Estado Suscripción</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Catálogo & POS</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Acciones Master</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoadingTenants ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                      Cargando directorio de restaurantes...
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ) : tenants.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                      No se encontraron restaurantes con los filtros aplicados.
+                    </td>
+                  </tr>
+                ) : (
+                  tenants.map((t) => {
+                    const isSuspended = t.subscription_status === 'suspended';
+                    return (
+                      <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }}>
+                        <td style={{ padding: '14px 18px' }}>
+                          <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>{t.name}</strong>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '11px',
+                              color: '#64748b',
+                              background: '#f1f5f9',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              marginTop: '4px',
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {t.business_type || 'General'}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#334155' }}>
+                            <User size={13} color="#64748b" />
+                            <span>{t.owner_name || 'Sin nombre'}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '12px', marginTop: '2px' }}>
+                            <Mail size={12} />
+                            <span>{t.owner_email || 'Sin correo'}</span>
+                          </div>
+                          {t.owner_phone && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '12px', marginTop: '2px' }}>
+                              <Phone size={12} />
+                              <span>{t.owner_phone}</span>
+                            </div>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '14px 18px' }}>
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              fontSize: '12px',
+                              color: t.plan === 'pro_599' ? '#7c3aed' : '#0284c7',
+                              background: t.plan === 'pro_599' ? '#f5f3ff' : '#f0f9ff',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              display: 'inline-block',
+                              marginBottom: '4px',
+                            }}
+                          >
+                            {t.plan === 'pro_599'
+                              ? 'Plan Pro ($599/mes)'
+                              : t.plan === 'starter_349'
+                              ? 'Plan Básico ($349/mes)'
+                              : 'Prueba (14 días)'}
+                          </span>
+                          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                            {formatMoney(t.monthly_fee_cents)}/mes
+                          </div>
+                        </td>
+
+                        <td style={{ padding: '14px 18px' }}>
+                          {isSuspended ? (
+                            <span
+                              style={{
+                                background: '#fee2e2',
+                                color: '#b91c1c',
+                                fontWeight: 700,
+                                fontSize: '11px',
+                                padding: '4px 10px',
+                                borderRadius: '9999px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <PauseCircle size={12} />
+                              <span>Suspendido</span>
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                background: '#dcfce7',
+                                color: '#15803d',
+                                fontWeight: 700,
+                                fontSize: '11px',
+                                padding: '4px 10px',
+                                borderRadius: '9999px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <CheckCircle2 size={12} />
+                              <span>Activo</span>
+                            </span>
+                          )}
+                          {t.suspended_reason && (
+                            <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px' }}>
+                              ↳ {t.suspended_reason}
+                            </div>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '14px 18px', color: '#64748b' }}>
+                          <div>🍽️ <strong>{t.products_count}</strong> platillos</div>
+                          <div style={{ fontSize: '12px', marginTop: '2px' }}>🏪 {t.branches_count} sucursal(es)</div>
+                        </td>
+
+                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                            <button
+                              type="button"
+                              title="Entrar al panel de este cliente como soporte"
+                              onClick={() => impersonateMutation.mutate(t.id)}
+                              style={{
+                                background: '#0f172a',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <LogIn size={13} />
+                              <span>Soporte</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Editar datos del restaurante y plan"
+                              onClick={() => {
+                                setSelectedTenantForEdit(t);
+                                setEditName(t.name);
+                                setEditBusinessType(t.business_type || 'general');
+                                setEditOwnerName(t.owner_name || '');
+                                setEditEmail(t.owner_email || '');
+                                setEditPhone(t.owner_phone || '');
+                                setEditPlan(t.plan || 'starter_349');
+                                setEditStatus(t.subscription_status || 'active');
+                              }}
+                              style={{
+                                background: '#f8fafc',
+                                color: '#334155',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                padding: '6px 8px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Edit size={13} />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isSuspended ? 'Reactivar acceso' : 'Suspender acceso por falta de pago'}
+                              onClick={() => {
+                                if (isSuspended) {
+                                  updateStatusMutation.mutate({ tenantId: t.id, status: 'active' });
+                                } else {
+                                  setSelectedTenantForStatus(t);
+                                }
+                              }}
+                              style={{
+                                background: isSuspended ? '#dcfce7' : '#fee2e2',
+                                color: isSuspended ? '#15803d' : '#b91c1c',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '6px 8px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {isSuspended ? <PlayCircle size={13} /> : <PauseCircle size={13} />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Pestaña: Administradores de Restaurante */}
+      {activeTab === 'administrators' && (
+        <>
+          {/* Filters Bar for Admins */}
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '16px',
+              marginBottom: '20px',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
+              <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '11px' }} />
+              <input
+                type="text"
+                placeholder="Buscar por nombre de administrador, correo o restaurante..."
+                value={adminSearchTerm}
+                onChange={(e) => setAdminSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 38px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAdminFormError(null);
+                setIsAdminModalOpen(true);
+              }}
+              style={{
+                background: '#0f172a',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '10px 18px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Plus size={16} />
+              <span>Crear Administrador</span>
+            </button>
+          </div>
+
+          {/* Administrators Table */}
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Administrador</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Contacto</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Restaurante Enlazado</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Rol Oficial</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Estado Cuenta</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoadingAdmins ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                      Cargando cuentas de administradores...
+                    </td>
+                  </tr>
+                ) : administrators.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                      No se encontraron cuentas de administradores de restaurante.
+                    </td>
+                  </tr>
+                ) : (
+                  administrators.map((admin) => {
+                    const isPendingOrg = admin.restaurant_name?.startsWith('Restaurante de ') || !admin.organization_id;
+                    return (
+                      <tr key={admin.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div
+                              style={{
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '10px',
+                                background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
+                                color: '#0369a1',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                              }}
+                            >
+                              {admin.display_name?.charAt(0)?.toUpperCase() || 'A'}
+                            </div>
+                            <div>
+                              <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>
+                                {admin.display_name}
+                              </strong>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                ID: {admin.id.substring(0, 8)}...
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#334155' }}>
+                            <Mail size={12} color="#64748b" />
+                            <span>{admin.email}</span>
+                          </div>
+                          {admin.phone && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '12px', marginTop: '3px' }}>
+                              <Phone size={12} />
+                              <span>{admin.phone}</span>
+                            </div>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '14px 18px' }}>
+                          {isPendingOrg ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              ⏳ Pendiente de configurar restaurante
+                            </span>
+                          ) : (
+                            <div>
+                              <strong style={{ color: '#0f172a', fontSize: '13px', display: 'block' }}>
+                                {admin.restaurant_name}
+                              </strong>
+                              <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'capitalize' }}>
+                                {admin.business_type || 'General'}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '14px 18px' }}>
+                          <span
+                            style={{
+                              background: '#eff6ff',
+                              color: '#1d4ed8',
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <Crown size={12} />
+                            {admin.role_name || 'Administrador de Restaurante'}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '14px 18px' }}>
+                          <span
+                            style={{
+                              background: admin.status === 'active' ? '#dcfce7' : '#f1f5f9',
+                              color: admin.status === 'active' ? '#15803d' : '#64748b',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {admin.status === 'active' ? 'Activo' : admin.status}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                          {admin.organization_id && (
+                            <button
+                              type="button"
+                              title="Iniciar sesión de soporte como este restaurante"
+                              onClick={() => impersonateMutation.mutate(admin.organization_id)}
+                              disabled={impersonateMutation.isPending}
+                              style={{
+                                background: '#eff6ff',
+                                color: '#1d4ed8',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: '8px',
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <LogIn size={13} />
+                              <span>Soporte</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {/* Modal 1: Alta Manual de Restaurante Cliente */}
       {isCreateModalOpen && (
@@ -1668,6 +2111,240 @@ export const SaaSConsoleView: React.FC = () => {
               >
                 Cerrar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Crear Administrador de Restaurante */}
+      {isAdminModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '20px',
+              maxWidth: '520px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                color: '#fff',
+                padding: '20px 24px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <User size={20} color="#38bdf8" />
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
+                  Nuevo Administrador de Restaurante
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdminModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              {adminFormError && (
+                <div
+                  style={{
+                    background: '#fee2e2',
+                    color: '#991b1b',
+                    padding: '12px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  <span>{adminFormError}</span>
+                </div>
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setAdminFormError(null);
+                  createAdminMutation.mutate({
+                    email: adminFormEmail,
+                    display_name: adminFormName,
+                    password: adminFormPassword,
+                    phone: adminFormPhone || null,
+                    tenant_id: adminFormTenantId || null,
+                  });
+                }}
+              >
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Nombre Completo del Administrador *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ej. Lic. Roberto Gómez"
+                    value={adminFormName}
+                    onChange={(e) => setAdminFormName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Correo Electrónico *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="admin@restaurante.com"
+                    value={adminFormEmail}
+                    onChange={(e) => setAdminFormEmail(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Teléfono Móvil
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="55 1234 5678"
+                      value={adminFormPhone}
+                      onChange={(e) => setAdminFormPhone(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Contraseña Temporal *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={adminFormPassword}
+                      onChange={(e) => setAdminFormPassword(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Asignación de Restaurante
+                  </label>
+                  <select
+                    value={adminFormTenantId}
+                    onChange={(e) => setAdminFormTenantId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <option value="">(Auto-Onboarding) Dejar pendiente para que el administrador configure su propio restaurante</option>
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.owner_email || 'Sin email'})
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Si se deja pendiente, el usuario completará los datos de su restaurante en su primer acceso.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsAdminModalOpen(false)}
+                    style={{
+                      padding: '10px 18px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createAdminMutation.isPending}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#0f172a',
+                      color: '#fff',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {createAdminMutation.isPending ? 'Creando...' : 'Crear Administrador'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
