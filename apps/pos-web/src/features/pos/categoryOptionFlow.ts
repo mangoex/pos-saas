@@ -56,11 +56,34 @@ export function categoriesWithAvailableProducts<
 export function productsForCatalogMenuGroup<TProduct extends CatalogMenuProduct>(
   products: readonly TProduct[], groupId: CatalogMenuGroupId, favoriteProductIds: readonly string[],
 ): TProduct[] {
+  const norm = (v?: string) => (v || '').trim().toLowerCase();
   if (groupId === 'all') return [...products];
-  if (groupId === 'food') return products.filter((product) => product.station === 'kitchen');
-  if (groupId === 'drinks') return products.filter((product) => product.station === 'drinks');
+  if (groupId === 'food') {
+    return products.filter((product) => {
+      const s = norm(product.station);
+      const c = norm(product.category);
+      return s === 'kitchen' || s === 'cocina' || s === 'comida' || s === 'alimentos'
+        || c.includes('alimento') || c.includes('comida');
+    });
+  }
+  if (groupId === 'drinks') {
+    return products.filter((product) => {
+      const s = norm(product.station);
+      const c = norm(product.category);
+      return s === 'drinks' || s === 'barra' || s === 'bebida' || s === 'bebidas'
+        || c.includes('bebida') || c.includes('refresco') || c.includes('cerveza') || c.includes('trago') || c.includes('bar');
+    });
+  }
   if (groupId === 'other') {
-    return products.filter((product) => product.station !== 'kitchen' && product.station !== 'drinks');
+    return products.filter((product) => {
+      const s = norm(product.station);
+      const c = norm(product.category);
+      const isFood = s === 'kitchen' || s === 'cocina' || s === 'comida' || s === 'alimentos'
+        || c.includes('alimento') || c.includes('comida');
+      const isDrink = s === 'drinks' || s === 'barra' || s === 'bebida' || s === 'bebidas'
+        || c.includes('bebida') || c.includes('refresco') || c.includes('cerveza') || c.includes('trago') || c.includes('bar');
+      return !isFood && !isDrink;
+    });
   }
   const favorites = new Set(favoriteProductIds);
   return products.filter((product) => favorites.has(product.id));
@@ -75,9 +98,32 @@ export function categoriesForCatalogMenuGroup<
 ): TCategory[] {
   if (groupId === 'favorites') return [];
   const groupedProducts = productsForCatalogMenuGroup(products, groupId, favoriteProductIds);
-  return categoriesWithAvailableProducts(categories, groupedProducts).filter(
+  const withProducts = categoriesWithAvailableProducts(categories, groupedProducts).filter(
     (category) => category.id !== '' && category.name !== 'Todas',
   );
+  if (withProducts.length > 0) return withProducts;
+
+  // Fallback: If no products exist yet for this group, allow defined categories
+  // matching the group to display so the user sees their catalog structure.
+  if (groupId === 'all') {
+    return categories.filter((c) => c.id !== '' && c.name !== 'Todas');
+  }
+  if (groupId === 'drinks') {
+    return categories.filter((c) => {
+      const name = c.name.toLowerCase();
+      return c.id !== '' && c.name !== 'Todas' && (
+        name.includes('bebida') || name.includes('cerveza') || name.includes('refresco') || name.includes('bar') || name.includes('trago')
+      );
+    });
+  }
+  if (groupId === 'food') {
+    return categories.filter((c) => {
+      const name = c.name.toLowerCase();
+      const isDrink = name.includes('bebida') || name.includes('cerveza') || name.includes('refresco') || name.includes('bar') || name.includes('trago');
+      return c.id !== '' && c.name !== 'Todas' && !isDrink;
+    });
+  }
+  return withProducts;
 }
 
 export interface CategoryOptionState {

@@ -98,6 +98,23 @@ export const App: React.FC = () => {
       setBranches(branchList);
       setIsLoadingLocation(false);
       if (branchList.length > 0) {
+        // Direct link or QR code resolution via URL parameters (?branch=PILOTO, ?slug=PILOTO, ?b=PILOTO)
+        const urlParams = new URLSearchParams(window.location.search);
+        const slugParam = urlParams.get('branch') || urlParams.get('slug') || urlParams.get('b');
+        if (slugParam) {
+          const cleanParam = slugParam.trim().toLowerCase();
+          const match = branchList.find((b) =>
+            b.code?.toLowerCase() === cleanParam
+            || b.id.toLowerCase() === cleanParam
+            || b.name?.toLowerCase().includes(cleanParam)
+          );
+          if (match) {
+            setSelectedBranch(match);
+            localStorage.setItem('restaurantos_selected_branch_id', match.id);
+            return;
+          }
+        }
+
         if (forceNearest && isGps) {
           // When user explicitly clicks GPS button, choose the nearest branch
           setSelectedBranch(branchList[0]);

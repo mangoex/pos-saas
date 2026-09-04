@@ -145,12 +145,12 @@ const BranchesList = () => {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
         <div>
-          <h1 className="premium-header-title">Branches & Locations</h1>
-          <p className="premium-header-subtitle">Administra las sucursales, domicilios exactos, coordenadas GPS y enlaces de Google Reviews.</p>
+          <h1 className="premium-header-title">Mi Restaurante y Sucursales</h1>
+          <p className="premium-header-subtitle">Administra los datos de tu restaurante, domicilio, coordenadas GPS y enlace de tu Menú Web Móvil.</p>
         </div>
         <button className="premium-add-btn" onClick={() => openModal()}>
           <Plus size={18} />
-          Nueva Sucursal
+          Nuevo Restaurante / Sucursal
         </button>
       </div>
 
@@ -248,18 +248,21 @@ const BranchesList = () => {
         )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingBranch ? `Editar Sucursal: ${editingBranch.name}` : 'Nueva Sucursal'}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingBranch ? `Restaurante: ${editingBranch.name}` : 'Nuevo Restaurante'}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
           <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 12 }}>
-            <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Datos Generales</h4>
+            <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Datos del Restaurante</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Nombre de la sucursal *</label>
-                <Input value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} placeholder="Ej. Constitución" />
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Nombre del restaurante o sucursal *</label>
+                <Input value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} placeholder="Ej. Mi Taquería / Sucursal Centro" />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Código (ej. SUC07) *</label>
-                <Input value={formData.code} onChange={(e: any) => setFormData({...formData, code: e.target.value})} placeholder="Ej. SUC07" />
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Código / Slug móvil (ej. PILOTO) *</label>
+                <Input value={formData.code} onChange={(e: any) => setFormData({...formData, code: e.target.value})} placeholder="Ej. PILOTO o MITAQUERIA" />
+                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
+                  Identificador para tu Menú Web Móvil y QR (<code>?slug={formData.code || 'CODIGO'}</code>)
+                </span>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
