@@ -499,3 +499,71 @@ def test_update_user_permission_and_canonical_role_assignment() -> None:
     )
     assert owner_put_resp.status_code == 200, owner_put_resp.text
     assert owner_put_resp.json()["display_name"] == "Alberto Vázquez Updated"
+
+
+def test_new_restaurant_pos_endpoints_and_branch_scope_authorization() -> None:
+    """Verify newly created restaurant owner can load POS menu and channels
+    without branch_scope_denied or 500 errors.
+    """
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+
+    # 1. Create new restaurant tenant
+    create_resp = client.post(
+        "/api/v1/superadmin/tenants",
+        headers=headers,
+        json={
+            "business_name": "Tacos El Güero",
+            "owner_name": "Alberto Vázquez",
+            "email": "contacto@tacoselguero.com",
+            "password": "Password123!",
+            "business_type": "taqueria",
+            "plan": "starter_349",
+            "menu_mode": "generate_by_type",
+        },
+    )
+    assert create_resp.status_code == 201
+    tenant_data = create_resp.json()
+    branch_id = tenant_data["branch"]["id"]
+    owner_token = tenant_data["token"]
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    # 2. Test POS categories loading
+    cat_resp = client.get(f"/api/v1/categories?branch_id={branch_id}", headers=owner_headers)
+    assert cat_resp.status_code == 200, cat_resp.text
+    categories = cat_resp.json()
+    assert isinstance(categories, list)
+
+    # 3. Test POS catalog products loading
+    prod_resp = client.get(f"/api/v1/catalog/products?branch_id={branch_id}", headers=owner_headers)
+    assert prod_resp.status_code == 200, prod_resp.text
+    products = prod_resp.json()
+    assert isinstance(products, list)
+    assert len(products) > 0  # since taqueria generates starter products
+
+    # 4. Test Rappi POS orders endpoint (the one that previously threw 500)
+    rappi_resp = client.get(
+        f"/api/v1/pos/rappi/orders?branch_id={branch_id}", headers=owner_headers
+    )
+    assert rappi_resp.status_code == 200, rappi_resp.text
+    assert isinstance(rappi_resp.json(), list)
+
+    # 5. Test Uber Eats POS orders endpoint
+    uber_resp = client.get(
+        f"/api/v1/pos/uber-eats/orders?branch_id={branch_id}", headers=owner_headers
+    )
+    assert uber_resp.status_code == 200, uber_resp.text
+    assert isinstance(uber_resp.json(), list)
+
+    # 6. Test DiDi Food POS orders endpoint
+    didi_resp = client.get(
+        f"/api/v1/pos/didi-food/orders?branch_id={branch_id}", headers=owner_headers
+    )
+    assert didi_resp.status_code == 200, didi_resp.text
+    assert isinstance(didi_resp.json(), list)
+
+    # 7. Test pending orders count endpoint
+    pending_resp = client.get(
+        f"/api/v1/orders/pending-count?branch_id={branch_id}", headers=owner_headers
+    )
+    assert pending_resp.status_code == 200, pending_resp.text

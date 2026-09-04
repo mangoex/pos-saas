@@ -1,15 +1,15 @@
 import logging
 import os
 import re
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from restaurant_os.api import router as platform_router
 from restaurant_os.config import get_settings
 from restaurant_os.health import readiness_payload
+from restaurant_os.operations import AuthorizationError, BusinessError
 from restaurant_os.public_order_rate_limit import (
     InMemoryPublicOrderRateLimiter,
     RedisPublicOrderRateLimiter,
@@ -77,6 +77,22 @@ def create_app() -> FastAPI:
                 or "restaurantos-dev-secret-key-32chars",
             )
     app.include_router(platform_router)
+
+    @app.exception_handler(AuthorizationError)
+    async def authorization_error_handler(
+        request: Request, exc: AuthorizationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
+            content={"code": exc.code, "message": exc.message},
+        )
+
+    @app.exception_handler(BusinessError)
+    async def business_error_handler(request: Request, exc: BusinessError) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"code": exc.code, "message": exc.message},
+        )
 
     static_dir = os.environ.get("STATIC_DIR", "/app/static")
     # For local dev fallback
