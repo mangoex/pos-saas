@@ -2541,6 +2541,44 @@ def public_branches_endpoint(
     )
 
 
+@router.get("/catalog/mobile-theme")
+@router.get("/public/mobile-theme")
+def get_mobile_theme_endpoint(session: SessionDep) -> dict[str, Any]:
+    theme_val = "light"
+    try:
+        val = session.execute(
+            sa.select(models.organizations.c.mobile_theme).where(
+                models.organizations.c.id == ORGANIZATION_ID
+            )
+        ).scalar_one_or_none()
+        if val:
+            theme_val = str(val)
+    except Exception:
+        pass
+    return {"mobile_theme": theme_val}
+
+
+@router.put("/catalog/mobile-theme")
+def set_mobile_theme_endpoint(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_permission(session, actor_id, "admin.manage")
+    theme = str(payload.get("mobile_theme") or payload.get("theme") or "light").lower().strip()
+    if theme not in ("light", "dark"):
+        theme = "light"
+    session.execute(
+        models.organizations.update()
+        .where(models.organizations.c.id == ORGANIZATION_ID)
+        .values(mobile_theme=theme, updated_at=_now())
+    )
+    session.commit()
+    return {"status": "ok", "mobile_theme": theme}
+
+
 from restaurant_os.whatsapp_menu import get_public_menu_for_branch, submit_whatsapp_order
 
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier } from './types';
-import { fetchMobileMenu, submitMobileOrder, fetchPublicBranches } from './api';
+import { fetchMobileMenu, submitMobileOrder, fetchPublicBranches, fetchMobileTheme } from './api';
 import { HeroHeader } from './components/HeroHeader';
 import { CategoryCircles } from './components/CategoryCircles';
 import { SizeSelectorFilter } from './components/SizeSelectorFilter';
@@ -61,6 +61,19 @@ export const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Synchronize theme with backend organization setting if not explicitly forced via URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.get('theme')) {
+      fetchMobileTheme().then((remoteTheme) => {
+        if (remoteTheme) {
+          setTheme(remoteTheme);
+          localStorage.setItem('restaurantos_mobile_theme', remoteTheme);
+        }
+      });
+    }
+  }, []);
 
   // Favorites state with localStorage
   const [likedProductIds, setLikedProductIds] = useState<Set<string>>(() => {
@@ -123,6 +136,14 @@ export const App: React.FC = () => {
           const savedId = localStorage.getItem('restaurantos_selected_branch_id') || localStorage.getItem('kiwi_selected_branch_id');
           const match = branchList.find((b) => b.id === savedId);
           setSelectedBranch(match || branchList[0]);
+        }
+
+        if (!urlParams.get('theme')) {
+          const branchTheme = branchList[0]?.mobile_theme;
+          if (branchTheme === 'dark' || branchTheme === 'light') {
+            setTheme(branchTheme);
+            localStorage.setItem('restaurantos_mobile_theme', branchTheme);
+          }
         }
       }
     };

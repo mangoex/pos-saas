@@ -1414,10 +1414,7 @@ const PointOfSale = () => {
             : <>
           {catalogStage === 'categories' && <section className="pos-sale-category-panel" aria-label={`Categorías de ${CATALOG_MENU_GROUPS.find((group) => group.id === activeMenuGroup)?.label || 'TODO'}`}>
             <div className="pos-sale-category-heading">
-              <div>
-                <span>Categorías</span>
-                <small style={{ display: 'block', fontSize: '0.75rem', color: '#64748b' }}>Toca una categoría para ver sus productos</small>
-              </div>
+              <span>Categorías</span>
               <strong>{categoryChoices.length} disponibles</strong>
             </div>
             {categoryChoices.length === 0 ? (
@@ -1433,9 +1430,6 @@ const PointOfSale = () => {
                       <button type="button" className="pos-sale-category-select" aria-pressed={isActive} onClick={() => changeActiveCategory(cat)}>
                         {getProductIcon(cat.name, 42)}
                         <span>{cat.name}</span>
-                        <span style={{ fontSize: '0.7rem', color: '#0284c7', background: 'rgba(2,132,199,0.08)', padding: '2px 8px', borderRadius: 6, marginTop: 4 }}>
-                          📂 Ver productos
-                        </span>
                       </button>
                     </div>
                   );

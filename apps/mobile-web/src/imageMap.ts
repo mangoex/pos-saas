@@ -17,6 +17,13 @@ import aguasFrescasImg from './assets/products/aguas_frescas.jpg';
 import focacciaArtesanalImg from './assets/products/focaccia_artesanal.jpg';
 import omeletteGourmetImg from './assets/products/omelette_gourmet.jpg';
 import quesadillasDoradasImg from './assets/products/quesadillas_doradas.jpg';
+import sushiRollsImg from './assets/products/sushi_rolls.jpg';
+import gratinadosSushiImg from './assets/products/gratinados_sushi.jpg';
+import naturalSushiImg from './assets/products/natural_sushi.jpg';
+import bebidasBarImg from './assets/products/bebidas_bar.jpg';
+import tacosMexicanosImg from './assets/products/tacos_mexicanos.jpg';
+import gourmetBurgersImg from './assets/products/gourmet_burgers.jpg';
+import artisanPizzaImg from './assets/products/artisan_pizza.jpg';
 
 const SKU_IMAGE_MAP: Record<string, string> = {
   // Direct SKU matches
@@ -64,6 +71,27 @@ export function getProductImage(product: { sku?: string; name?: string; category
   const nameLower = (product.name || '').toLowerCase();
   const catLower = (product.category_name || '').toLowerCase();
 
+  if (nameLower.includes('gratinado') || catLower.includes('gratinado') || catLower.includes('horneado')) {
+    return gratinadosSushiImg;
+  }
+  if (nameLower.includes('natural') && (catLower.includes('sushi') || catLower.includes('rollo') || nameLower.includes('roll'))) {
+    return naturalSushiImg;
+  }
+  if (nameLower.includes('sushi') || nameLower.includes('roll') || nameLower.includes('maki') || catLower.includes('sushi') || catLower.includes('rollo')) {
+    return sushiRollsImg;
+  }
+  if (nameLower.includes('coca') || nameLower.includes('pepsi') || nameLower.includes('refresco') || nameLower.includes('cerveza') || nameLower.includes('drink') || catLower.includes('bebida') || catLower.includes('refresco') || catLower.includes('bar')) {
+    return bebidasBarImg;
+  }
+  if (nameLower.includes('taco') || catLower.includes('taco') || nameLower.includes('pastor') || nameLower.includes('asada')) {
+    return tacosMexicanosImg;
+  }
+  if (nameLower.includes('burger') || nameLower.includes('hamburguesa') || catLower.includes('burger') || catLower.includes('hamburguesa') || nameLower.includes('boneless') || nameLower.includes('alita')) {
+    return gourmetBurgersImg;
+  }
+  if (nameLower.includes('pizza') || catLower.includes('pizza') || nameLower.includes('pasta') || catLower.includes('pasta')) {
+    return artisanPizzaImg;
+  }
   if (nameLower.includes('fruta') || nameLower.includes('avena') || nameLower.includes('cereal') || catLower.includes('fruta')) {
     return frutasFrescasImg;
   }
@@ -121,6 +149,27 @@ export function getCategoryCover(categoryName: string): string {
   if (cat === 'todos' || cat === 'all' || cat === 'menú' || cat === 'todo el menú' || cat === '') {
     return todosMenuHeroImg;
   }
+  if (cat.includes('gratinado') || cat.includes('horneado')) {
+    return gratinadosSushiImg;
+  }
+  if (cat.includes('natural') || cat.includes('fresco') || cat.includes('frio') || cat.includes('frío')) {
+    return naturalSushiImg;
+  }
+  if (cat.includes('sushi') || cat.includes('rollo') || cat.includes('roll') || cat.includes('maki') || cat.includes('nigiri') || cat.includes('sashimi') || cat.includes('tampico')) {
+    return sushiRollsImg;
+  }
+  if (cat.includes('bebida') || cat.includes('refresco') || cat.includes('cerveza') || cat.includes('trago') || cat.includes('bar') || cat.includes('cocktail') || cat.includes('coctel') || cat.includes('drink')) {
+    return bebidasBarImg;
+  }
+  if (cat.includes('taco') || cat.includes('asada') || cat.includes('pastor') || cat.includes('gringa')) {
+    return tacosMexicanosImg;
+  }
+  if (cat.includes('burger') || cat.includes('hamburguesa') || cat.includes('alita') || cat.includes('boneless')) {
+    return gourmetBurgersImg;
+  }
+  if (cat.includes('pizza') || cat.includes('pasta')) {
+    return artisanPizzaImg;
+  }
   if (cat.includes('fruta') || cat.includes('cereal') || cat.includes('avena')) {
     return frutasFrescasImg;
   }
@@ -133,10 +182,10 @@ export function getCategoryCover(categoryName: string): string {
   if (cat.includes('omelette') || cat.includes('omelet') || cat.includes('huevo') || cat.includes('desayuno')) {
     return omeletteGourmetImg;
   }
-  if (cat.includes('quesadilla') || cat.includes('taco')) {
+  if (cat.includes('quesadilla')) {
     return quesadillasDoradasImg;
   }
-  if (cat.includes('agua') || cat.includes('bebida') || cat.includes('refresco') || cat.includes('infusión') || cat.includes('infusion')) {
+  if (cat.includes('agua') || cat.includes('infusión') || cat.includes('infusion')) {
     return aguasFrescasImg;
   }
   if (cat.includes('ensalada')) {

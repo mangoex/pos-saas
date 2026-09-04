@@ -21,6 +21,17 @@ export async function fetchPublicBranches(lat?: number, lng?: number): Promise<B
   }
 }
 
+export async function fetchMobileTheme(): Promise<'light' | 'dark' | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/public/mobile-theme`, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.mobile_theme === 'dark' || data?.mobile_theme === 'light' ? data.mobile_theme : null;
+  } catch {
+    return null;
+  }
+}
+
 // Seed catalog fallback to guarantee 100% fail-safe display if API server is not running
 const BACKUP_CATALOG: Product[] = [
   {

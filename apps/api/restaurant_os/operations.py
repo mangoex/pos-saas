@@ -10949,10 +10949,22 @@ def list_public_branches(
         )
         .order_by(models.branches.c.name)
     ).mappings()
+    org_theme = "light"
+    try:
+        theme_val = session.execute(
+            sa.select(models.organizations.c.mobile_theme).where(
+                models.organizations.c.id == ORGANIZATION_ID
+            )
+        ).scalar_one_or_none()
+        if theme_val:
+            org_theme = str(theme_val)
+    except Exception:
+        pass
 
     branches = []
     for r in rows:
         b = dict(r)
+        b["mobile_theme"] = org_theme
         if include_public_key and not b.get("public_key"):
             generated_key = f"pk_{str(b['id']).replace('-', '')[:24]}"
             try:

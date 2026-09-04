@@ -20,6 +20,7 @@ organizations = sa.Table(
     sa.Column("owner_email", sa.String(160), nullable=True),
     sa.Column("owner_phone", sa.String(32), nullable=True),
     sa.Column("business_type", sa.String(32), nullable=True),
+    sa.Column("mobile_theme", sa.String(16), nullable=False, server_default="light"),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )

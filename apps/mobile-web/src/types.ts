@@ -65,6 +65,7 @@ export interface BranchInfo {
   distance_km?: number | null;
   public_key?: string | null;
   google_review_url?: string | null;
+  mobile_theme?: 'light' | 'dark' | string;
 }
 
 export interface CartItem {
