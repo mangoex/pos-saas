@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { ApiError, fetchApi } from '@restaurantos/api-client';
-import { Plus, Package, Edit, Trash2, Search, Sparkles, UploadCloud, FileText, Check, Sun, Moon } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, Search, Sparkles, UploadCloud, FileText, Check } from 'lucide-react';
 import { resolveBranchId } from '../../lib/branchContext';
 
 import '../../premium-catalogs.css';
@@ -88,13 +88,6 @@ const ProductsList = () => {
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'templates' | 'ai_upload'>('templates');
-  const [selectedMobileTheme, setSelectedMobileTheme] = useState<'light' | 'dark'>(() => {
-    try {
-      return (localStorage.getItem('restaurantos_mobile_theme') as 'light' | 'dark') || 'light';
-    } catch {
-      return 'light';
-    }
-  });
   const [selectedTemplate, setSelectedTemplate] = useState('taqueria');
   const [selectedFile, setSelectedFile] = useState<{ file: File; base64: string; previewUrl?: string } | null>(null);
   const [parsedCategories, setParsedCategories] = useState<Array<{ name: string; products: Array<{ name: string; price: number; description: string; station: string }> }>>([]);
@@ -750,107 +743,11 @@ const ProductsList = () => {
             /* Tab: Subir Menú PDF / Imagen */
             <>
               {parsedCategories.length === 0 ? (
-                <div style={{ display: 'grid', gap: 20 }}>
+                <div style={{ display: 'grid', gap: 16 }}>
+                  {/* File Upload Dropzone */}
                   <div>
                     <h4 style={{ margin: '0 0 4px', fontSize: '0.9375rem', fontWeight: 600, color: '#0f172a' }}>
-                      1. Selecciona el formato visual para la Web App Móvil
-                    </h4>
-                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.8125rem' }}>
-                      Define la estética y experiencia que verán tus clientes al abrir el menú en su teléfono:
-                    </p>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-                      {/* Opción Formato Claro */}
-                      <div
-                        onClick={() => {
-                          setSelectedMobileTheme('light');
-                          localStorage.setItem('restaurantos_mobile_theme', 'light');
-                        }}
-                        style={{
-                          border: selectedMobileTheme === 'light' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                          background: selectedMobileTheme === 'light' ? '#eff6ff' : '#ffffff',
-                          borderRadius: 12,
-                          padding: 14,
-                          cursor: 'pointer',
-                          position: 'relative',
-                          transition: 'all 0.15s ease',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ padding: 6, borderRadius: 8, background: '#fef3c7', color: '#d97706' }}>
-                              <Sun size={18} />
-                            </div>
-                            <strong style={{ fontSize: '0.875rem', color: '#0f172a' }}>Formato Claro</strong>
-                          </div>
-                          {selectedMobileTheme === 'light' && (
-                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#3b82f6', color: '#fff' }}>
-                              SELECCIONADO
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#475569', lineHeight: 1.4 }}>
-                          Diseño <strong>Light Modern</strong>: limpio, luminoso, fondo blanco/gris tenue, cuadrícula redondeada con sombras suaves y acentos vibrantes de alta legibilidad.
-                        </p>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
-                          <span style={{ fontSize: '0.6875rem', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>Fondo #F8FAFC</span>
-                          <span style={{ fontSize: '0.6875rem', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>Tarjetas Blancas</span>
-                        </div>
-                      </div>
-
-                      {/* Opción Formato Oscuro */}
-                      <div
-                        onClick={() => {
-                          setSelectedMobileTheme('dark');
-                          localStorage.setItem('restaurantos_mobile_theme', 'dark');
-                        }}
-                        style={{
-                          border: selectedMobileTheme === 'dark' ? '2px solid #d97706' : '1px solid #e2e8f0',
-                          background: selectedMobileTheme === 'dark' ? '#1c1917' : '#ffffff',
-                          color: selectedMobileTheme === 'dark' ? '#f5f5f4' : 'inherit',
-                          borderRadius: 12,
-                          padding: 14,
-                          cursor: 'pointer',
-                          position: 'relative',
-                          transition: 'all 0.15s ease',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ padding: 6, borderRadius: 8, background: '#451a03', color: '#fbbf24' }}>
-                              <Moon size={18} />
-                            </div>
-                            <strong style={{ fontSize: '0.875rem', color: selectedMobileTheme === 'dark' ? '#fef3c7' : '#0f172a' }}>
-                              Formato Oscuro
-                            </strong>
-                          </div>
-                          {selectedMobileTheme === 'dark' && (
-                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#d97706', color: '#fff' }}>
-                              SELECCIONADO
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: selectedMobileTheme === 'dark' ? '#d6d3d1' : '#475569', lineHeight: 1.4 }}>
-                          Diseño <strong>Warm Dark & Gold</strong>: estética cálida gourmet / lounge, espresso oscuro, acentos en oro cálido y tipografía premium con contrastes refinados.
-                        </p>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
-                          <span style={{ fontSize: '0.6875rem', background: selectedMobileTheme === 'dark' ? '#292524' : '#f1f5f9', color: selectedMobileTheme === 'dark' ? '#fbbf24' : '#475569', padding: '2px 6px', borderRadius: 4 }}>Fondo #18110B</span>
-                          <span style={{ fontSize: '0.6875rem', background: selectedMobileTheme === 'dark' ? '#292524' : '#f1f5f9', color: selectedMobileTheme === 'dark' ? '#fbbf24' : '#475569', padding: '2px 6px', borderRadius: 4 }}>Acento Oro</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 2. File Upload Dropzone */}
-                  <div>
-                    <h4 style={{ margin: '0 0 4px', fontSize: '0.9375rem', fontWeight: 600, color: '#0f172a' }}>
-                      2. Carga la foto o PDF de tu menú
+                      Carga la foto o PDF de tu menú
                     </h4>
                     <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '0.8125rem' }}>
                       Nuestra IA extraerá platillos, ingredientes/descripción, precios y estación. A los productos sin foto se les asigna un icono culinario alusivo que llena el espacio visual.
@@ -1034,36 +931,11 @@ const ProductsList = () => {
                         Verifica nombre, descripción/ingredientes, precio y estación. Se asignó automáticamente el icono alusivo al espacio de imagen.
                       </p>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Tema móvil:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextTheme = selectedMobileTheme === 'light' ? 'dark' : 'light';
-                          setSelectedMobileTheme(nextTheme);
-                          localStorage.setItem('restaurantos_mobile_theme', nextTheme);
-                        }}
-                        style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          padding: '3px 8px',
-                          borderRadius: 6,
-                          border: '1px solid #cbd5e1',
-                          background: selectedMobileTheme === 'dark' ? '#1c1917' : '#f8fafc',
-                          color: selectedMobileTheme === 'dark' ? '#fbbf24' : '#0f172a',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
-                      >
-                        {selectedMobileTheme === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
-                        {selectedMobileTheme === 'dark' ? 'Oscuro (Gold)' : 'Claro (Light)'}
-                      </button>
+                    <div>
                       <button
                         type="button"
                         onClick={() => { setParsedCategories([]); setSelectedFile(null); }}
-                        style={{ fontSize: '0.8125rem', color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginLeft: 4 }}
+                        style={{ fontSize: '0.8125rem', color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                       >
                         Volver a escanear
                       </button>
@@ -1251,7 +1123,7 @@ const ProductsList = () => {
                     <Button
                       variant="primary"
                       disabled={parsedCategories.length === 0 || importMutation.isPending}
-                      onClick={() => importMutation.mutate({ categories: parsedCategories, mobile_theme: selectedMobileTheme })}
+                      onClick={() => importMutation.mutate({ categories: parsedCategories })}
                     >
                       {importMutation.isPending ? 'Guardando en el menú...' : 'Guardar en el menú'}
                     </Button>
