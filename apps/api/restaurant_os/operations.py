@@ -1368,6 +1368,19 @@ def _authorize_governed_profile_assignment(
     organization_id = session.execute(
         sa.select(models.roles.c.organization_id).where(models.roles.c.id == role_id)
     ).scalar_one()
+
+    # Superadmin or organization owner bypass
+    actor_user = session.execute(
+        sa.select(models.users).where(models.users.c.id == actor_user_id)
+    ).mappings().first()
+    if actor_user and actor_user.get("is_superadmin"):
+        return
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == organization_id)
+    ).mappings().first()
+    if org and actor_user and (org.get("owner_email") == actor_user.get("email")):
+        return
+
     actor_has_owner_authority = session.execute(
         sa.select(models.user_roles.c.user_id)
         .select_from(
@@ -9747,7 +9760,15 @@ def require_permission(
         )
         raise AuthorizationError("actor_not_authorized", "Actor is not authorized")
 
+    if actor.get("is_superadmin"):
+        return
+
     org_id = str(actor["organization_id"])
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == org_id)
+    ).mappings().first()
+    if org and (org.get("owner_email") == actor.get("email")):
+        return
     role_rows = session.execute(
         sa.select(
             models.roles.c.id.label("role_id"),
@@ -10676,7 +10697,6 @@ def update_user(
     user_exists = session.execute(
         sa.select(models.users.c.id).where(
             models.users.c.id == user_id,
-            models.users.c.organization_id == ORGANIZATION_ID,
         )
     ).scalar_one_or_none()
     if not user_exists:

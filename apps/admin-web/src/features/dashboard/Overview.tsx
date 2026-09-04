@@ -237,19 +237,9 @@ const Overview = () => {
         <div>
           <span className="admin-eyebrow">Resumen operativo</span>
           <h1>Panel administrativo</h1>
-          <p>Ventas, turnos, productos y movimientos de {selectedBranchName.toLowerCase()}.</p>
+          <p>Ventas, turnos, productos y movimientos.</p>
         </div>
         <div className="admin-dashboard-filters">
-          <label>
-            <Store size={16} />
-            <select value={selectedBranch} onChange={event => setSelectedBranch(event.target.value)}>
-              <option value="">Todas las sucursales</option>
-              {branches.map(branch => (
-                <option key={branch.id} value={branch.id}>{branch.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={15} />
-          </label>
           <label>
             <CalendarDays size={16} />
             <select value={selectedMonth} onChange={event => setSelectedMonth(event.target.value)}>

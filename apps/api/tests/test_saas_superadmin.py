@@ -433,3 +433,69 @@ def test_superadmin_list_and_create_administrators() -> None:
     setup_data = setup_resp.json()
     assert setup_data["tenant"]["name"] == "Taquería El Tapatío"
     assert setup_data["branch"]["name"] == "Sucursal Matriz"
+
+
+def test_update_user_permission_and_canonical_role_assignment() -> None:
+    """Verify superadmin and org owner can update a user and assign Administrador de Restaurante
+    without encountering 'Actor does not have the required permission'.
+    """
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+
+    # 1. Create a tenant
+    create_resp = client.post(
+        "/api/v1/superadmin/tenants",
+        headers=headers,
+        json={
+            "business_name": "Mariscos El Güero",
+            "owner_name": "Alberto Vázquez",
+            "email": "contacto@elguero.com",
+            "password": "Password123!",
+            "business_type": "general",
+            "plan": "starter_349",
+            "menu_mode": "blank",
+        },
+    )
+    assert create_resp.status_code == 201
+    tenant_data = create_resp.json()
+    owner_token = tenant_data["token"]
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    # Fetch users and roles for this tenant
+    users_resp = client.get("/api/v1/users", headers=owner_headers)
+    assert users_resp.status_code == 200
+    alberto = next(u for u in users_resp.json() if u["email"] == "contacto@elguero.com")
+
+    roles_resp = client.get("/api/v1/roles", headers=owner_headers)
+    assert roles_resp.status_code == 200
+    admin_role = next(r for r in roles_resp.json() if r["name"] == "Administrador de Restaurante")
+
+    # 2. Superadmin edits Alberto Vázquez to update display_name and re-assert canonical role
+    put_resp = client.put(
+        f"/api/v1/users/{alberto['id']}",
+        headers=headers,
+        json={
+            "display_name": "Alberto Vázquez G.",
+            "email": "contacto@elguero.com",
+            "employee_code": "ADM001",
+            "role_id": admin_role["id"],
+            "password": "NewSecretPassword123!",
+        },
+    )
+    assert put_resp.status_code == 200, put_resp.text
+    updated = put_resp.json()
+    assert updated["display_name"] == "Alberto Vázquez G."
+
+    # 3. Alberto (as org owner) can also edit a user
+    owner_put_resp = client.put(
+        f"/api/v1/users/{alberto['id']}",
+        headers=owner_headers,
+        json={
+            "display_name": "Alberto Vázquez Updated",
+            "email": "contacto@elguero.com",
+            "employee_code": "ADM001",
+            "role_id": admin_role["id"],
+        },
+    )
+    assert owner_put_resp.status_code == 200, owner_put_resp.text
+    assert owner_put_resp.json()["display_name"] == "Alberto Vázquez Updated"
