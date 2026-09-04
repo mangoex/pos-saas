@@ -547,7 +547,14 @@ const PointOfSale = () => {
         setCategories(mappedCategories);
         setProducts(mappedProducts);
         setActiveMenuGroup('all');
-        setActiveCategory('');
+        const initialCats = categoriesForCatalogMenuGroup(
+          mappedCategories, mappedProducts, 'all', [],
+        );
+        if (initialCats.length === 1) {
+          setActiveCategory(initialCats[0].name);
+        } else {
+          setActiveCategory('');
+        }
       } catch (e) {
         console.error('Error al cargar datos del POS:', e);
         setCatalogError('No se pudo cargar el menú de la sucursal.');
@@ -963,7 +970,16 @@ const PointOfSale = () => {
     }, '', '');
     if (next.transient.modifierProductId === null) resetCatalogTransientState();
     setActiveMenuGroup(groupId);
-    setActiveCategory('');
+
+    const targetCategories = categoriesForCatalogMenuGroup(
+      categories, products, groupId, favoriteProductIds,
+    );
+    if (targetCategories.length === 1) {
+      setActiveCategory(targetCategories[0].name);
+    } else {
+      setActiveCategory('');
+    }
+
     setSelectedOptionValueId(next.valueId);
     setSearchQuery(next.search);
   };
@@ -1398,7 +1414,10 @@ const PointOfSale = () => {
             : <>
           {catalogStage === 'categories' && <section className="pos-sale-category-panel" aria-label={`Categorías de ${CATALOG_MENU_GROUPS.find((group) => group.id === activeMenuGroup)?.label || 'TODO'}`}>
             <div className="pos-sale-category-heading">
-              <span>Categorías</span>
+              <div>
+                <span>Categorías</span>
+                <small style={{ display: 'block', fontSize: '0.75rem', color: '#64748b' }}>Toca una categoría para ver sus productos</small>
+              </div>
               <strong>{categoryChoices.length} disponibles</strong>
             </div>
             {categoryChoices.length === 0 ? (
@@ -1414,6 +1433,9 @@ const PointOfSale = () => {
                       <button type="button" className="pos-sale-category-select" aria-pressed={isActive} onClick={() => changeActiveCategory(cat)}>
                         {getProductIcon(cat.name, 42)}
                         <span>{cat.name}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#0284c7', background: 'rgba(2,132,199,0.08)', padding: '2px 8px', borderRadius: 6, marginTop: 4 }}>
+                          📂 Ver productos
+                        </span>
                       </button>
                     </div>
                   );
@@ -1426,7 +1448,9 @@ const PointOfSale = () => {
             <div className="pos-sale-progressive-context">
               {activeMenuGroup === 'favorites' ? <span>Productos favoritos</span> : <>
                 <span>{activeCategoryDetails?.name}</span>
-                <button type="button" onClick={() => changeActiveMenuGroup(activeMenuGroup)}>Cambiar categoría</button>
+                {categoryChoices.length > 1 && (
+                  <button type="button" onClick={() => { setActiveCategory(''); setSelectedOptionValueId(''); }}>Cambiar categoría</button>
+                )}
                 {activeSelectionValue && <button type="button" onClick={() => changeCategoryOption('')}>Cambiar {activeSelectionGroup?.name}</button>}
               </>}
             </div>

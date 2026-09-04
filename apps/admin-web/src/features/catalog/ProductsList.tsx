@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { ApiError, fetchApi } from '@restaurantos/api-client';
-import { Plus, Package, Edit, Trash2, SlidersHorizontal, Search, Sparkles, UploadCloud, FileText, Check, Sun, Moon } from 'lucide-react';
-import { ModifierManager } from './ModifierManager';
+import { Plus, Package, Edit, Trash2, Search, Sparkles, UploadCloud, FileText, Check, Sun, Moon } from 'lucide-react';
 import { resolveBranchId } from '../../lib/branchContext';
 
 import '../../premium-catalogs.css';
@@ -58,13 +57,32 @@ function getProductAlusiveEmoji(catName: string, prodName: string): string {
   return '🍽️';
 }
 
+function inferStationFromCategory(catName: string): string {
+  const text = (catName || '').toLowerCase().trim();
+  if (
+    text.includes('bebida') ||
+    text.includes('refresco') ||
+    text.includes('cerveza') ||
+    text.includes('trago') ||
+    text.includes('bar') ||
+    text.includes('café') ||
+    text.includes('cafe') ||
+    text.includes('agua') ||
+    text.includes('jugo') ||
+    text.includes('licor') ||
+    text.includes('vino')
+  ) {
+    return 'drinks';
+  }
+  return 'kitchen';
+}
+
 const ProductsList = () => {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState(emptyForm);
   const [modalError, setModalError] = useState<string | null>(null);
   const [isCustomCategory, setIsCustomCategory] = useState(false);
@@ -397,7 +415,11 @@ const ProductsList = () => {
                     </td>
                     <td style={{ color: 'var(--color-text-muted)' }}>{product.sku}</td>
                     <td><Badge variant="info">{product.category_name}</Badge></td>
-                    <td>{product.station}</td>
+                    <td>
+                      {product.station === 'drinks' || product.station === 'barra' ? 'Bebidas (Barra)' :
+                       product.station === 'kitchen' || product.station === 'cocina' ? 'Cocina (Alimentos)' :
+                       product.station === 'packing' ? 'Empaque' : 'Sin asignar'}
+                    </td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>{product.price_cents == null ? 'No vendible' : `$${(product.price_cents / 100).toFixed(2)}`}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600, color: product.delivery_price_cents ? '#0284c7' : '#64748b' }}>
                       {product.delivery_price_cents != null
@@ -406,9 +428,8 @@ const ProductsList = () => {
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button className="premium-action-btn edit" title="Modificadores" onClick={() => setModifierProduct(product)}><SlidersHorizontal size={18} /></button>
-                        <button className="premium-action-btn edit" onClick={() => openModal(product)}><Edit size={18} /></button>
-                        <button className="premium-action-btn delete" onClick={() => deleteMutation.mutate(product.id)}><Trash2 size={18} /></button>
+                        <button className="premium-action-btn edit" title="Editar producto" onClick={() => openModal(product)}><Edit size={18} /></button>
+                        <button className="premium-action-btn delete" title="Eliminar producto" onClick={() => deleteMutation.mutate(product.id)}><Trash2 size={18} /></button>
                       </div>
                     </td>
                   </tr>
@@ -448,7 +469,9 @@ const ProductsList = () => {
                       setIsCustomCategory(true);
                       setFormData({ ...formData, category_name: '' });
                     } else {
-                      setFormData({ ...formData, category_name: e.target.value });
+                      const catName = e.target.value;
+                      const inferred = inferStationFromCategory(catName);
+                      setFormData({ ...formData, category_name: catName, station: inferred });
                     }
                   }}
                   style={{
@@ -474,7 +497,11 @@ const ProductsList = () => {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <Input
                   value={formData.category_name}
-                  onChange={(e: any) => setFormData({ ...formData, category_name: e.target.value })}
+                  onChange={(e: any) => {
+                    const catName = e.target.value;
+                    const inferred = inferStationFromCategory(catName);
+                    setFormData({ ...formData, category_name: catName, station: inferred });
+                  }}
                   placeholder="Escribe el nombre de la categoría"
                 />
                 {sortedCategories.length > 0 && (
@@ -482,7 +509,8 @@ const ProductsList = () => {
                     type="button"
                     onClick={() => {
                       setIsCustomCategory(false);
-                      setFormData({ ...formData, category_name: sortedCategories[0]?.name || '' });
+                      const defaultCat = sortedCategories[0]?.name || '';
+                      setFormData({ ...formData, category_name: defaultCat, station: inferStationFromCategory(defaultCat) });
                     }}
                     style={{
                       padding: '8px 12px',
@@ -614,8 +642,6 @@ const ProductsList = () => {
           </div>
         </div>
       </Modal>
-
-      {modifierProduct && <ModifierManager isOpen productId={modifierProduct.id} productName={modifierProduct.name} onClose={() => setModifierProduct(null)} />}
 
       <Modal
         isOpen={isTemplateModalOpen}
