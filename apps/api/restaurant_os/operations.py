@@ -451,11 +451,23 @@ def _assign_employee_code(
     *,
     subject_type: str,
     subject_id: str,
+    organization_id: str | None = None,
 ) -> None:
+    if not organization_id:
+        if subject_type == "user":
+            organization_id = session.execute(
+                sa.select(models.users.c.organization_id).where(models.users.c.id == subject_id)
+            ).scalar_one_or_none()
+        elif subject_type == "driver":
+            organization_id = session.execute(
+                sa.select(models.drivers.c.organization_id).where(models.drivers.c.id == subject_id)
+            ).scalar_one_or_none()
+    org_id = organization_id or ORGANIZATION_ID
+
     owner = (
         session.execute(
             sa.select(models.employee_code_registry).where(
-                models.employee_code_registry.c.organization_id == ORGANIZATION_ID,
+                models.employee_code_registry.c.organization_id == org_id,
                 models.employee_code_registry.c.employee_code == employee_code,
             )
         )
@@ -470,7 +482,7 @@ def _assign_employee_code(
     current = (
         session.execute(
             sa.select(models.employee_code_registry).where(
-                models.employee_code_registry.c.organization_id == ORGANIZATION_ID,
+                models.employee_code_registry.c.organization_id == org_id,
                 models.employee_code_registry.c.subject_type == subject_type,
                 models.employee_code_registry.c.subject_id == subject_id,
             )
@@ -486,7 +498,7 @@ def _assign_employee_code(
             session.execute(
                 models.employee_code_registry.update()
                 .where(
-                    models.employee_code_registry.c.organization_id == ORGANIZATION_ID,
+                    models.employee_code_registry.c.organization_id == org_id,
                     models.employee_code_registry.c.subject_type == subject_type,
                     models.employee_code_registry.c.subject_id == subject_id,
                 )
@@ -495,7 +507,7 @@ def _assign_employee_code(
         else:
             session.execute(
                 models.employee_code_registry.insert().values(
-                    organization_id=ORGANIZATION_ID,
+                    organization_id=org_id,
                     employee_code=employee_code,
                     subject_type=subject_type,
                     subject_id=subject_id,
@@ -539,9 +551,12 @@ def create_user(
         raise BusinessError("user_already_exists", "User already exists")
     normalized_employee_code = _normalize_employee_code(employee_code)
     assert normalized_employee_code is not None
+    actor_user = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
+    target_org = actor_user["organization_id"] if actor_user and actor_user.get("organization_id") else ORGANIZATION_ID
+
     role_scope = None
     if role_id:
-        role_scope = _validate_role_assignment_scope(session, role_id, ORGANIZATION_ID, branch_id)
+        role_scope = _validate_role_assignment_scope(session, role_id, target_org, branch_id)
         _authorize_governed_profile_assignment(session, actor_id, role_scope)
 
     now = _now()
@@ -552,9 +567,8 @@ def create_user(
         normalized_employee_code,
         subject_type="user",
         subject_id=user_id,
+        organization_id=target_org,
     )
-    actor_user = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
-    target_org = actor_user["organization_id"] if actor_user and actor_user.get("organization_id") else ORGANIZATION_ID
     user = {
         "id": user_id,
         "organization_id": target_org,
@@ -10694,13 +10708,14 @@ def update_user(
     elif not actor_id:
         require_permission(session, actor_id, "admin.manage")
 
-    user_exists = session.execute(
-        sa.select(models.users.c.id).where(
+    user_row = session.execute(
+        sa.select(models.users).where(
             models.users.c.id == user_id,
         )
-    ).scalar_one_or_none()
-    if not user_exists:
+    ).mappings().first()
+    if not user_row:
         raise BusinessError("user_not_found", "User was not found")
+    user_org_id = user_row["organization_id"]
 
     role_assignment = None
     if role_id:
@@ -10720,6 +10735,7 @@ def update_user(
             normalized_employee_code,
             subject_type="user",
             subject_id=user_id,
+            organization_id=user_org_id,
         )
         update_data["employee_code"] = normalized_employee_code
 

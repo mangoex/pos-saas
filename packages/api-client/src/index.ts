@@ -8,7 +8,11 @@ export class ApiError extends Error {
 }
 
 export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
+  const isSuperadminEndpoint = endpoint.startsWith("/superadmin");
+  const masterToken = typeof window !== "undefined" ? localStorage.getItem("saas_master_token") : null;
+  const token = (isSuperadminEndpoint && masterToken)
+    ? masterToken
+    : (typeof window !== "undefined" ? (localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")) : null);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> || {}),
