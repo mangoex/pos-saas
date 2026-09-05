@@ -334,7 +334,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <div className="cart-upsell-scroll-track">
                     {recommendedProducts.map((prod) => {
                       const iconMeta = getProductIconMeta(prod);
-                      const upsellImg = prod.image_url || getProductImage(prod);
                       return (
                         <div key={prod.id} className="cart-upsell-card">
                           <div
@@ -344,18 +343,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                               borderColor: iconMeta.borderColor,
                             }}
                           >
-                            {upsellImg ? (
-                              <img
-                                src={upsellImg}
-                                alt={prod.name}
-                                className="cart-upsell-card-img"
-                                onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                              />
-                            ) : (
-                              <span className="cart-upsell-card-icon" aria-hidden="true">
-                                {getRecommendationIcon(prod)}
-                              </span>
-                            )}
+                            <span className="cart-upsell-card-icon" aria-hidden="true">
+                              {getRecommendationIcon(prod)}
+                            </span>
                           </div>
                           <div className="cart-upsell-card-info">
                             <strong className="cart-upsell-card-name" title={prod.name}>{prod.name}</strong>

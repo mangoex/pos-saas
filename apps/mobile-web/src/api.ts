@@ -3,12 +3,15 @@ import { getProductImage, getProductNutritionMeta } from './imageMap';
 
 const API_BASE_URL = '/api/v1';
 
-export async function fetchPublicBranches(lat?: number, lng?: number): Promise<BranchInfo[]> {
+export async function fetchPublicBranches(lat?: number, lng?: number, restaurant?: string | null): Promise<BranchInfo[]> {
   try {
     const params = new URLSearchParams();
     if (lat !== undefined && lng !== undefined) {
       params.set('lat', String(lat));
       params.set('lng', String(lng));
+    }
+    if (restaurant) {
+      params.set('restaurant', restaurant);
     }
     const url = `${API_BASE_URL}/public/branches${params.toString() ? `?${params.toString()}` : ''}`;
     const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
@@ -21,12 +24,43 @@ export async function fetchPublicBranches(lat?: number, lng?: number): Promise<B
   }
 }
 
-export async function fetchMobileTheme(): Promise<'light' | 'dark' | null> {
+export async function fetchMobileTheme(restaurant?: string | null): Promise<'light' | 'dark' | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/public/mobile-theme`, { headers: { 'Cache-Control': 'no-cache' } });
+    const params = new URLSearchParams();
+    if (restaurant) {
+      params.set('restaurant', restaurant);
+    }
+    const url = `${API_BASE_URL}/public/mobile-theme${params.toString() ? `?${params.toString()}` : ''}`;
+    const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
     if (!res.ok) return null;
     const data = await res.json();
     return data?.mobile_theme === 'dark' || data?.mobile_theme === 'light' ? data.mobile_theme : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface PublicRestaurantInfo {
+  id: string;
+  name: string;
+  slug: string;
+  business_type?: string;
+  branches_count: number;
+  branches: Array<{
+    id: string;
+    name: string;
+    slug?: string;
+    public_key?: string;
+  }>;
+}
+
+export async function fetchPublicRestaurantInfo(slug: string): Promise<PublicRestaurantInfo | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/public/restaurants/${encodeURIComponent(slug)}`, {
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
     return null;
   }
@@ -121,11 +155,16 @@ const DEFAULT_CATEGORIES: Category[] = [
 
 let activeBranchId: string | undefined = undefined;
 
-export async function fetchMobileMenu(publicKey?: string | null): Promise<{ products: Product[]; categories: Category[] }> {
+export async function fetchMobileMenu(publicKey?: string | null, restaurant?: string | null): Promise<{ products: Product[]; categories: Category[] }> {
   try {
-    const catalogUrl = publicKey
-      ? `${API_BASE_URL}/public/branches/${publicKey}/catalog`
-      : `${API_BASE_URL}/public/catalog`;
+    let catalogUrl: string;
+    if (publicKey) {
+      catalogUrl = `${API_BASE_URL}/public/branches/${publicKey}/catalog`;
+    } else if (restaurant) {
+      catalogUrl = `${API_BASE_URL}/public/restaurants/${encodeURIComponent(restaurant)}/catalog`;
+    } else {
+      catalogUrl = `${API_BASE_URL}/public/catalog`;
+    }
     const res = await fetch(catalogUrl, {
       headers: { 'Cache-Control': 'no-cache' },
     });
@@ -356,7 +395,10 @@ export async function submitMobileOrder(
     if (useIntent && response.status === 409) {
       try {
         const errorBody = await response.json() as { detail?: { code?: unknown } };
-        if (errorBody.detail?.code === 'idempotency_conflict') localStorage.removeItem(storageKey);
+        if (errorBody.detail?.code === 'idempotency_conflict') {
+          localStorage.removeItem(storageKey);
+          if (legacyStorageKey) localStorage.removeItem(legacyStorageKey);
+        }
       } catch { /* retain the key when the rejection cannot be classified */ }
     }
     let errorDetail = '';
@@ -386,6 +428,7 @@ export async function submitMobileOrder(
     ) throw new Error('public_order_invalid_response');
     const totalCents = intent.total_cents as number;
     localStorage.removeItem(storageKey);
+    if (legacyStorageKey) localStorage.removeItem(legacyStorageKey);
     return {
       kind: 'public_order_intent',
       public_reference: intent.public_reference,

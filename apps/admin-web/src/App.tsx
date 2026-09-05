@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Overview from './features/dashboard/Overview';
 import Login from './features/auth/Login';
+import Register from './features/auth/Register';
 import AdminLayout from './components/AdminLayout';
 import ProductsList from './features/catalog/ProductsList';
 import CategoriesList from './features/catalog/CategoriesList';
@@ -146,6 +147,8 @@ export const App = () => {
     <BrowserRouter basename="/admin">
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/signup" element={<Register />} />
         
         <Route path="/" element={
           <ProtectedRoute>

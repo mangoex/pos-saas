@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import sqlalchemy as sa
@@ -96,12 +96,23 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     cashier_role_id = _id()
     user_id = _id()
 
+    slug = _generate_slug(req.business_name)
+    trial_ends = now + timedelta(days=14)
+
     # 1. Organizations
     session.execute(
         models.organizations.insert().values(
             id=org_id,
             name=req.business_name,
+            slug=slug,
             status="active",
+            plan="trial",
+            subscription_status="active",
+            trial_ends_at=trial_ends,
+            owner_name=req.owner_name,
+            owner_email=normalized_email,
+            owner_phone=req.phone,
+            business_type=req.business_type or "general",
             created_at=now,
             updated_at=now,
         )
@@ -136,6 +147,7 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     # 4. Branch
+    branch_slug = "matriz"
     session.execute(
         models.branches.insert().values(
             id=branch_id,
@@ -144,6 +156,7 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             business_unit_id=business_unit_id,
             name="Sucursal Matriz",
             code="MATRIZ",
+            slug=branch_slug,
             timezone="America/Mexico_City",
             status="active",
             phone=req.phone or "",
@@ -187,7 +200,7 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         )
         _assign_default_role_permissions(session, r_id, r_name)
 
-    # 7. Role Grants & Permissions for Administrator
+    # 7. Role Grants for Administrator
     session.execute(
         models.role_authority_grants.insert().values(
             role_id=admin_role_id,
@@ -195,15 +208,6 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             created_at=now,
         )
     )
-
-    all_permissions = session.execute(sa.select(models.permissions.c.id)).scalars().all()
-    for perm_id in all_permissions:
-        session.execute(
-            models.role_permissions.insert().values(
-                role_id=admin_role_id,
-                permission_id=perm_id,
-            )
-        )
 
     # 8. User (Administrator / Owner)
     session.execute(
@@ -242,7 +246,6 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     # 11. FacturAPI Default Config
-    slug = _generate_slug(req.business_name)
     session.execute(
         models.facturapi_config.insert().values(
             id=_id(),
@@ -306,15 +309,24 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         "organization": {
             "id": org_id,
             "name": req.business_name,
+            "slug": slug,
             "status": "active",
+            "plan": "trial",
+            "subscription_status": "active",
+            "trial_ends_at": trial_ends.isoformat(),
+            "owner_name": req.owner_name,
+            "owner_email": normalized_email,
+            "owner_phone": req.phone,
+            "business_type": req.business_type or "general",
         },
         "branch": {
             "id": branch_id,
             "name": "Sucursal Matriz",
+            "slug": branch_slug,
             "status": "active",
             "timezone": "America/Mexico_City",
         },
-        "roles": ["Owner"],
+        "roles": ["Administrador de Restaurante"],
     }
 
 

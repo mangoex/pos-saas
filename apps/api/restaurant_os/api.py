@@ -1718,9 +1718,10 @@ def list_cash_shifts_endpoint(
         if not 1 <= limit <= 100:
             raise BusinessError("cash_shift_list_invalid", "limit must be between 1 and 100")
         actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
         scoped_branch = authorize_branch_scope(session, actor_id, "cash.shift.read", branch_id)
         query = sa.select(models.cash_shifts).where(
-            models.cash_shifts.c.organization_id == ORGANIZATION_ID,
+            models.cash_shifts.c.organization_id == org_id,
             models.cash_shifts.c.branch_id == scoped_branch,
         )
         if register_id:
@@ -1762,11 +1763,12 @@ def get_cash_shift_endpoint(
 ) -> dict[str, Any]:
     def operation() -> dict[str, Any]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
         shift = (
             session.execute(
                 sa.select(models.cash_shifts).where(
                     models.cash_shifts.c.id == cash_shift_id,
-                    models.cash_shifts.c.organization_id == ORGANIZATION_ID,
+                    models.cash_shifts.c.organization_id == org_id,
                 )
             )
             .mappings()
@@ -2532,6 +2534,8 @@ def public_branches_endpoint(
     session: SessionDep,
     lat: float | None = None,
     lng: float | None = None,
+    restaurant: str | None = None,
+    organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
     return _business_response(
         lambda: list_public_branches(
@@ -2541,22 +2545,45 @@ def public_branches_endpoint(
             include_public_key=bool(
                 getattr(request.app.state, "public_order_intents_enabled", False)
             ),
+            restaurant_slug=restaurant,
+            organization_id=organization_id,
         )
     )
 
 
 @router.get("/catalog/mobile-theme")
 @router.get("/public/mobile-theme")
-def get_mobile_theme_endpoint(session: SessionDep) -> dict[str, Any]:
+def get_mobile_theme_endpoint(
+    session: SessionDep,
+    restaurant: str | None = None,
+    organization_id: str | None = None,
+) -> dict[str, Any]:
     theme_val = "light"
     try:
-        val = session.execute(
-            sa.select(models.organizations.c.mobile_theme).where(
-                models.organizations.c.id == ORGANIZATION_ID
-            )
-        ).scalar_one_or_none()
-        if val:
-            theme_val = str(val)
+        if restaurant:
+            val = session.execute(
+                sa.select(models.organizations.c.mobile_theme).where(
+                    sa.func.lower(models.organizations.c.slug) == restaurant.strip().lower()
+                )
+            ).scalar_one_or_none()
+            if val:
+                theme_val = str(val)
+        elif organization_id:
+            val = session.execute(
+                sa.select(models.organizations.c.mobile_theme).where(
+                    models.organizations.c.id == organization_id
+                )
+            ).scalar_one_or_none()
+            if val:
+                theme_val = str(val)
+        else:
+            val = session.execute(
+                sa.select(models.organizations.c.mobile_theme).where(
+                    models.organizations.c.id == ORGANIZATION_ID
+                )
+            ).scalar_one_or_none()
+            if val:
+                theme_val = str(val)
     except Exception:
         pass
     return {"mobile_theme": theme_val}
@@ -2574,9 +2601,10 @@ def set_mobile_theme_endpoint(
     theme = str(payload.get("mobile_theme") or payload.get("theme") or "light").lower().strip()
     if theme not in ("light", "dark"):
         theme = "light"
+    org_id = _actor_org_from_request(session, actor_id)
     session.execute(
         models.organizations.update()
-        .where(models.organizations.c.id == ORGANIZATION_ID)
+        .where(models.organizations.c.id == org_id)
         .values(mobile_theme=theme, updated_at=datetime.now(timezone.utc))
     )
     session.commit()
@@ -2587,8 +2615,37 @@ from restaurant_os.whatsapp_menu import get_public_menu_for_branch, submit_whats
 
 
 @router.get("/public/catalog")
-def public_catalog_endpoint(session: SessionDep) -> dict[str, Any]:
-    return _business_response(lambda: get_public_catalog(session))
+def public_catalog_endpoint(
+    session: SessionDep,
+    branch_id: str | None = None,
+    restaurant: str | None = None,
+    organization_id: str | None = None,
+) -> dict[str, Any]:
+    return _business_response(
+        lambda: get_public_catalog(
+            session,
+            branch_id=branch_id,
+            restaurant_slug=restaurant,
+            organization_id=organization_id,
+        )
+    )
+
+
+@router.get("/public/restaurants/{slug}/catalog")
+@router.get("/public/{slug}/catalog")
+def public_restaurant_catalog_endpoint(slug: str, session: SessionDep) -> dict[str, Any]:
+    return _business_response(
+        lambda: get_public_catalog(session, restaurant_slug=slug)
+    )
+
+
+@router.get("/public/restaurants/{slug}")
+def public_restaurant_info_endpoint(slug: str, session: SessionDep) -> dict[str, Any]:
+    from restaurant_os.operations import get_public_restaurant_info
+
+    return _business_response(
+        lambda: get_public_restaurant_info(session, slug=slug)
+    )
 
 
 @router.get("/public/menu")
@@ -3108,6 +3165,7 @@ def list_admin_feedbacks_endpoint(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "orders.read")
+    org_id = _actor_org_from_request(session, actor_id)
 
     query = (
         sa.select(
@@ -3127,7 +3185,7 @@ def list_admin_feedbacks_endpoint(
                 models.customer_feedbacks.c.branch_id == models.branches.c.id,
             )
         )
-        .where(models.customer_feedbacks.c.organization_id == ORGANIZATION_ID)
+        .where(models.customer_feedbacks.c.organization_id == org_id)
     )
     if branch_id:
         query = query.where(models.customer_feedbacks.c.branch_id == branch_id)
@@ -3585,13 +3643,14 @@ def offline_cash_grant(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
+    org_id = _actor_org_from_request(session, actor_id)
     if set(payload) != {"branch_id", "source_device_id"}:
         raise HTTPException(status_code=422, detail={"code": "offline_grant_payload_invalid"})
     return _business_response(
         lambda: issue_offline_cash_grant(
             session,
             actor_user_id=actor_id,
-            organization_id=ORGANIZATION_ID,
+            organization_id=org_id,
             branch_id=str(payload["branch_id"]),
             source_device_id=str(payload["source_device_id"]),
         )
@@ -3877,6 +3936,8 @@ def _business_response(operation: Callable[[], ResponseT]) -> ResponseT:
             "public_order_unavailable": 503,
             "public_order_rate_limited": 429,
             "public_order_schema_invalid": 422,
+            "restaurant_not_found": 404,
+            "restaurant_context_required": 400,
         }.get(exc.code, 409)
         raise HTTPException(
             status_code=status_code,
@@ -4328,6 +4389,7 @@ def post_recipe_ai_parse(
     def operation() -> dict[str, Any]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "catalog.manage")
+        org_id = _actor_org_from_request(session, actor_id)
 
         # 1. Fetch available supplies with base units and costs
         items_query = (
@@ -4353,7 +4415,7 @@ def post_recipe_ai_parse(
                 )
             )
             .where(
-                models.inventory_items.c.organization_id == ORGANIZATION_ID,
+                models.inventory_items.c.organization_id == org_id,
                 models.inventory_items.c.status == "active",
             )
         )
@@ -4380,7 +4442,7 @@ def post_recipe_ai_parse(
                     )
                     .where(
                         models.products.c.id == payload.product_id,
-                        models.products.c.organization_id == ORGANIZATION_ID,
+                        models.products.c.organization_id == org_id,
                     )
                 )
                 .mappings()
@@ -4700,14 +4762,14 @@ def post_seed_starter_template(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "catalog.manage")
+    org_id = _actor_org_from_request(session, actor_id)
     template_type = str(payload.get("template_type") or "general").strip()
     branch_id = payload.get("branch_id")
     from restaurant_os.saas_onboarding import seed_starter_catalog_for_org
-    from restaurant_os.operations import ORGANIZATION_ID
     return _business_response(
         lambda: seed_starter_catalog_for_org(
             session=session,
-            organization_id=ORGANIZATION_ID,
+            organization_id=org_id,
             branch_id=branch_id,
             business_type=template_type,
         )
@@ -4763,15 +4825,15 @@ def post_import_custom_catalog(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "catalog.manage")
+    org_id = _actor_org_from_request(session, actor_id)
     categories = payload.get("categories") or []
     branch_id = payload.get("branch_id")
     mobile_theme = payload.get("mobile_theme")
     from restaurant_os.saas_onboarding import import_custom_catalog_for_org
-    from restaurant_os.operations import ORGANIZATION_ID
 
     res = import_custom_catalog_for_org(
         session=session,
-        organization_id=ORGANIZATION_ID,
+        organization_id=org_id,
         branch_id=branch_id,
         catalog_data=categories,
         mobile_theme=mobile_theme,
@@ -6072,16 +6134,72 @@ def get_integrations_channels_status(
 
 
 
+def _resolve_webhook_organization_id(
+    session: Session,
+    restaurant: str | None = None,
+    organization_id: str | None = None,
+    store_id: str | None = None,
+    provider: str | None = None,
+) -> str:
+    if organization_id:
+        return organization_id
+    if restaurant:
+        row = session.execute(
+            sa.select(models.organizations.c.id).where(
+                sa.or_(
+                    models.organizations.c.slug == restaurant,
+                    models.organizations.c.id == restaurant,
+                )
+            )
+        ).scalar_one_or_none()
+        if row:
+            return str(row)
+    if store_id and provider:
+        mapping = session.execute(
+            sa.select(models.channel_store_mappings.c.organization_id).where(
+                models.channel_store_mappings.c.provider == provider,
+                models.channel_store_mappings.c.external_store_id == store_id,
+                models.channel_store_mappings.c.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if mapping:
+            return str(mapping)
+    return ORGANIZATION_ID
+
+
 @router.post("/integrations/uber-eats/webhook")
 @router.post("/v1/integrations/uber-eats/webhook")
 async def post_uber_eats_webhook(
     request: Request,
     session: SessionDep,
+    restaurant: str | None = None,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
     body_bytes = await request.body()
     signature = request.headers.get("x-uber-signature") or request.headers.get("X-Uber-Signature")
 
-    config = channel_service.get_config(session, ORGANIZATION_ID, "UBER_EATS")
+    raw_payload: dict[str, Any] = {}
+    if body_bytes:
+        try:
+            raw_payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            pass
+
+    store_id = None
+    if isinstance(raw_payload, dict):
+        store_obj = raw_payload.get("store")
+        if isinstance(store_obj, dict):
+            store_id = store_obj.get("id") or store_obj.get("store_id")
+
+    target_org_id = _resolve_webhook_organization_id(
+        session,
+        restaurant=restaurant,
+        organization_id=organization_id,
+        store_id=str(store_id) if store_id else None,
+        provider="UBER_EATS",
+    )
+
+    config = channel_service.get_config(session, target_org_id, "UBER_EATS")
     webhook_secret = config.get("webhook_secret") if config else None
 
     # Validate HMAC signature if secret is configured
@@ -6092,7 +6210,7 @@ async def post_uber_eats_webhook(
         if not is_valid:
             channel_service.log_webhook(
                 session,
-                ORGANIZATION_ID,
+                target_org_id,
                 "UBER_EATS",
                 "unauthorized_webhook",
                 None,
@@ -6103,17 +6221,19 @@ async def post_uber_eats_webhook(
             )
             raise HTTPException(status_code=401, detail="Firma de webhook inválida.")
 
-    try:
-        payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
-    except Exception:
-        raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
+    payload = raw_payload
+    if not payload and body_bytes:
+        try:
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
 
     event_type, event_id = channel_service.uber_adapter.parse_webhook_event(payload)
 
     # Log webhook
     channel_service.log_webhook(
         session,
-        ORGANIZATION_ID,
+        target_org_id,
         "UBER_EATS",
         event_type,
         event_id,
@@ -6130,14 +6250,14 @@ async def post_uber_eats_webhook(
     ):
         try:
             result = channel_service.process_webhook_order(
-                session, ORGANIZATION_ID, "UBER_EATS", payload
+                session, target_org_id, "UBER_EATS", payload
             )
             return {"status": "ok", "result": result}
         except Exception as e:
             logger.exception("Error procesando orden de Uber Eats")
             channel_service.log_webhook(
                 session,
-                ORGANIZATION_ID,
+                target_org_id,
                 "UBER_EATS",
                 event_type,
                 event_id,
@@ -6256,6 +6376,7 @@ def post_uber_eats_test_order(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
+    org_id = _actor_org_from_request(session, actor_id)
 
     customer_name = payload.get("customer_name") or "Carlos M. (Prueba)"
     items_count = int(payload.get("items_count") or 1)
@@ -6285,12 +6406,12 @@ def post_uber_eats_test_order(
     }
 
     result = channel_service.process_webhook_order(
-        session, ORGANIZATION_ID, "UBER_EATS", simulated_order
+        session, org_id, "UBER_EATS", simulated_order
     )
 
     channel_service.log_webhook(
         session,
-        ORGANIZATION_ID,
+        org_id,
         "UBER_EATS",
         "orders.notification",
         simulated_order["id"],
@@ -6312,6 +6433,8 @@ def post_uber_eats_test_order(
 async def post_didi_food_webhook(
     request: Request,
     session: SessionDep,
+    restaurant: str | None = None,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
     body_bytes = await request.body()
     signature = (
@@ -6321,7 +6444,30 @@ async def post_didi_food_webhook(
         or request.headers.get("Sign")
     )
 
-    config = channel_service.get_config(session, ORGANIZATION_ID, "DIDI_FOOD")
+    raw_payload: dict[str, Any] = {}
+    if body_bytes:
+        try:
+            raw_payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            pass
+
+    store_id = None
+    if isinstance(raw_payload, dict):
+        store_id = (
+            raw_payload.get("shop_id")
+            or raw_payload.get("store_id")
+            or raw_payload.get("external_store_id")
+        )
+
+    target_org_id = _resolve_webhook_organization_id(
+        session,
+        restaurant=restaurant,
+        organization_id=organization_id,
+        store_id=str(store_id) if store_id else None,
+        provider="DIDI_FOOD",
+    )
+
+    config = channel_service.get_config(session, target_org_id, "DIDI_FOOD")
     webhook_secret = config.get("webhook_secret") if config else None
 
     # Validate HMAC signature if secret is configured
@@ -6332,7 +6478,7 @@ async def post_didi_food_webhook(
         if not is_valid:
             channel_service.log_webhook(
                 session,
-                ORGANIZATION_ID,
+                target_org_id,
                 "DIDI_FOOD",
                 "unauthorized_webhook",
                 None,
@@ -6343,17 +6489,19 @@ async def post_didi_food_webhook(
             )
             raise HTTPException(status_code=401, detail="Firma de webhook inválida.")
 
-    try:
-        payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
-    except Exception:
-        raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
+    payload = raw_payload
+    if not payload and body_bytes:
+        try:
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
 
     event_type, event_id = channel_service.didi_adapter.parse_webhook_event(payload)
 
     # Log webhook
     channel_service.log_webhook(
         session,
-        ORGANIZATION_ID,
+        target_org_id,
         "DIDI_FOOD",
         event_type,
         event_id,
@@ -6371,14 +6519,14 @@ async def post_didi_food_webhook(
     ):
         try:
             result = channel_service.process_webhook_order(
-                session, ORGANIZATION_ID, "DIDI_FOOD", payload
+                session, target_org_id, "DIDI_FOOD", payload
             )
             return {"status": "ok", "result": result}
         except Exception as e:
             logger.exception("Error procesando orden de DiDi Food")
             channel_service.log_webhook(
                 session,
-                ORGANIZATION_ID,
+                target_org_id,
                 "DIDI_FOOD",
                 event_type,
                 event_id,
@@ -6497,6 +6645,7 @@ def post_didi_food_test_order(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
+    org_id = _actor_org_from_request(session, actor_id)
 
     customer_name = payload.get("customer_name") or "Carlos D. (Prueba)"
     customer_phone = payload.get("customer_phone") or "+526671234567"
@@ -6510,7 +6659,7 @@ def post_didi_food_test_order(
     raw_items = payload.get("items") or []
 
     if branch_id and not payload.get("shop_id"):
-        mappings = channel_service.list_store_mappings(session, ORGANIZATION_ID, "DIDI_FOOD")
+        mappings = channel_service.list_store_mappings(session, org_id, "DIDI_FOOD")
         matched = next(
             (m for m in mappings if m["branch_id"] == branch_id and m.get("is_active")), None
         )
@@ -6519,7 +6668,7 @@ def post_didi_food_test_order(
         else:
             store_id = f"didi_shop_{branch_id[:8]}"
             channel_service.save_store_mapping(
-                session, ORGANIZATION_ID, "DIDI_FOOD", branch_id, store_id, True
+                session, org_id, "DIDI_FOOD", branch_id, store_id, True
             )
 
     sim_id = f"didi-test-{uuid.uuid4().hex[:8]}"
@@ -6575,12 +6724,12 @@ def post_didi_food_test_order(
     }
 
     result = channel_service.process_webhook_order(
-        session, ORGANIZATION_ID, "DIDI_FOOD", simulated_order
+        session, org_id, "DIDI_FOOD", simulated_order
     )
 
     channel_service.log_webhook(
         session,
-        ORGANIZATION_ID,
+        org_id,
         "DIDI_FOOD",
         "order.created",
         sim_id,
@@ -6611,6 +6760,8 @@ def post_didi_food_test_order(
 async def post_rappi_webhook(
     request: Request,
     session: SessionDep,
+    restaurant: str | None = None,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
     body_bytes = await request.body()
     signature = (
@@ -6622,7 +6773,30 @@ async def post_rappi_webhook(
         or request.headers.get("Sign")
     )
 
-    config = channel_service.get_config(session, ORGANIZATION_ID, "RAPPI")
+    raw_payload: dict[str, Any] = {}
+    if body_bytes:
+        try:
+            raw_payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            pass
+
+    store_id = None
+    if isinstance(raw_payload, dict):
+        store_id = (
+            raw_payload.get("store_id")
+            or raw_payload.get("shop_id")
+            or raw_payload.get("external_store_id")
+        )
+
+    target_org_id = _resolve_webhook_organization_id(
+        session,
+        restaurant=restaurant,
+        organization_id=organization_id,
+        store_id=str(store_id) if store_id else None,
+        provider="RAPPI",
+    )
+
+    config = channel_service.get_config(session, target_org_id, "RAPPI")
     webhook_secret = config.get("webhook_secret") if config else None
 
     # Validate HMAC signature if secret is configured
@@ -6633,7 +6807,7 @@ async def post_rappi_webhook(
         if not is_valid:
             channel_service.log_webhook(
                 session,
-                ORGANIZATION_ID,
+                target_org_id,
                 "RAPPI",
                 "unauthorized_webhook",
                 None,
@@ -6644,17 +6818,19 @@ async def post_rappi_webhook(
             )
             raise HTTPException(status_code=401, detail="Firma de webhook inválida.")
 
-    try:
-        payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
-    except Exception:
-        raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
+    payload = raw_payload
+    if not payload and body_bytes:
+        try:
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
 
     event_type, event_id = channel_service.rappi_adapter.parse_webhook_event(payload)
 
     # Log webhook
     channel_service.log_webhook(
         session,
-        ORGANIZATION_ID,
+        target_org_id,
         "RAPPI",
         event_type,
         event_id,
@@ -6675,14 +6851,14 @@ async def post_rappi_webhook(
     ):
         try:
             result = channel_service.process_webhook_order(
-                session, ORGANIZATION_ID, "RAPPI", payload
+                session, target_org_id, "RAPPI", payload
             )
             return {"status": "ok", "result": result}
         except Exception as e:
             logger.exception("Error procesando orden de Rappi")
             channel_service.log_webhook(
                 session,
-                ORGANIZATION_ID,
+                target_org_id,
                 "RAPPI",
                 event_type,
                 event_id,
@@ -6801,6 +6977,7 @@ def post_rappi_test_order(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
+    org_id = _actor_org_from_request(session, actor_id)
 
     customer_name = payload.get("customer_name") or "Sofia R. (Prueba Rappi)"
     customer_phone = payload.get("customer_phone") or "+525598765432"
@@ -6814,7 +6991,7 @@ def post_rappi_test_order(
     raw_items = payload.get("items") or []
 
     if branch_id and not payload.get("store_id"):
-        mappings = channel_service.list_store_mappings(session, ORGANIZATION_ID, "RAPPI")
+        mappings = channel_service.list_store_mappings(session, org_id, "RAPPI")
         matched = next(
             (m for m in mappings if m["branch_id"] == branch_id and m.get("is_active")), None
         )
@@ -6823,7 +7000,7 @@ def post_rappi_test_order(
         else:
             store_id = f"rappi_store_{branch_id[:8]}"
             channel_service.save_store_mapping(
-                session, ORGANIZATION_ID, "RAPPI", branch_id, store_id, True
+                session, org_id, "RAPPI", branch_id, store_id, True
             )
 
     sim_id = f"rappi-test-{uuid.uuid4().hex[:8]}"
@@ -6880,12 +7057,12 @@ def post_rappi_test_order(
     }
 
     result = channel_service.process_webhook_order(
-        session, ORGANIZATION_ID, "RAPPI", simulated_order
+        session, org_id, "RAPPI", simulated_order
     )
 
     channel_service.log_webhook(
         session,
-        ORGANIZATION_ID,
+        org_id,
         "RAPPI",
         "NEW_ORDER",
         sim_id,
@@ -7032,8 +7209,7 @@ def get_facturapi_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
-    org_id = str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+    org_id = _actor_org_from_request(session, actor_id)
     cfg = invoicing_service.get_config(session, org_id)
     return cfg or {
         "is_enabled": False,
@@ -7061,8 +7237,7 @@ def save_facturapi_config(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
-    org_id = str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+    org_id = _actor_org_from_request(session, actor_id)
     return invoicing_service.save_config(session, org_id, payload)
 
 
@@ -7074,8 +7249,7 @@ def test_facturapi_connection(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
-    org_id = str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+    org_id = _actor_org_from_request(session, actor_id)
     return invoicing_service.test_connection(session, org_id)
 
 
@@ -7091,8 +7265,9 @@ def list_cfdi_invoices(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "orders.read")
+    org_id = _actor_org_from_request(session, actor_id)
     return invoicing_service.list_invoices(
-        session, ORGANIZATION_ID, branch_id, status, limit, offset
+        session, org_id, branch_id, status, limit, offset
     )
 
 
@@ -7105,7 +7280,8 @@ def get_cfdi_invoice_detail(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "orders.read")
-    inv = invoicing_service.get_invoice_detail(session, ORGANIZATION_ID, invoice_id)
+    org_id = _actor_org_from_request(session, actor_id)
+    inv = invoicing_service.get_invoice_detail(session, org_id, invoice_id)
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada.")
     return inv
@@ -7120,6 +7296,7 @@ def issue_cfdi_invoice(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "orders.read")
+    org_id = _actor_org_from_request(session, actor_id)
 
     order_ids = payload.get("order_ids") or []
     if isinstance(order_ids, str):
@@ -7140,7 +7317,7 @@ def issue_cfdi_invoice(
     receptor = payload.get("receptor") or {}
     try:
         return invoicing_service.issue_invoice(
-            session, ORGANIZATION_ID, branch_id, order_ids, receptor
+            session, org_id, branch_id, order_ids, receptor
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -7156,11 +7333,12 @@ def cancel_cfdi_invoice(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
+    org_id = _actor_org_from_request(session, actor_id)
     motive = str(payload.get("motive") or "02")
     substitution_uuid = payload.get("substitution_uuid")
     try:
         return invoicing_service.cancel_invoice(
-            session, ORGANIZATION_ID, invoice_id, motive, substitution_uuid
+            session, org_id, invoice_id, motive, substitution_uuid
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -7174,16 +7352,19 @@ def generate_order_receipt(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     _required_actor_from_request(actor_user_id, authorization)
-    first_order = session.execute(
-        sa.select(models.orders.c.branch_id).where(models.orders.c.id == order_id)
-    ).scalar_one_or_none()
-    if not first_order:
+    order_row = session.execute(
+        sa.select(models.orders.c.branch_id, models.orders.c.organization_id).where(
+            models.orders.c.id == order_id
+        )
+    ).mappings().first()
+    if not order_row:
         raise HTTPException(status_code=404, detail="Pedido no encontrado.")
-    branch_id = str(first_order)
+    branch_id = str(order_row["branch_id"])
+    org_id = str(order_row["organization_id"])
 
     try:
         return invoicing_service.create_receipt_for_order(
-            session, ORGANIZATION_ID, branch_id, order_id
+            session, org_id, branch_id, order_id
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

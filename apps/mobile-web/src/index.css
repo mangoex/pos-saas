@@ -1656,13 +1656,6 @@ body {
   place-items: center;
 }
 
-.cart-upsell-card-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
 .cart-upsell-card-icon {
   display: grid;
   place-items: center;

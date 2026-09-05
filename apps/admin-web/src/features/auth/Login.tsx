@@ -113,6 +113,29 @@ export const Login = () => {
           <Button type="submit" variant="primary" style={{ width: '100%', marginTop: 8 }} disabled={loading}>
             {loading ? 'Ingresando...' : 'Iniciar Sesión'}
           </Button>
+
+          <div style={{
+            textAlign: 'center',
+            marginTop: 14,
+            fontSize: '0.875rem',
+            color: 'var(--color-text-muted, #64748b)',
+          }}>
+            ¿No tienes una cuenta aún?{' '}
+            <a
+              href="/register"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/register');
+              }}
+              style={{
+                color: 'var(--color-blue, #2563eb)',
+                textDecoration: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Registra tu restaurante (14 días gratis)
+            </a>
+          </div>
         </form>
       </Card>
     </div>

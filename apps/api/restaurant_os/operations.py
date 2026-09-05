@@ -11020,12 +11020,63 @@ def list_public_branches(
     customer_lat: float | None = None,
     customer_lng: float | None = None,
     include_public_key: bool = False,
+    restaurant_slug: str | None = None,
+    organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    target_org_id: str | None = None
+    org_theme = "light"
+
+    if restaurant_slug:
+        org_row = session.execute(
+            sa.select(models.organizations.c.id, models.organizations.c.mobile_theme).where(
+                sa.func.lower(models.organizations.c.slug) == restaurant_slug.strip().lower()
+            )
+        ).first()
+        if not org_row:
+            return []
+        target_org_id = str(org_row[0])
+        org_theme = str(org_row[1] or "light")
+    elif organization_id:
+        target_org_id = organization_id
+        theme_val = session.execute(
+            sa.select(models.organizations.c.mobile_theme).where(
+                models.organizations.c.id == target_org_id
+            )
+        ).scalar_one_or_none()
+        if theme_val:
+            org_theme = str(theme_val)
+    else:
+        legacy_exists = session.scalar(
+            sa.select(models.organizations.c.id).where(models.organizations.c.id == ORGANIZATION_ID)
+        )
+        if legacy_exists:
+            target_org_id = ORGANIZATION_ID
+            theme_val = session.execute(
+                sa.select(models.organizations.c.mobile_theme).where(
+                    models.organizations.c.id == ORGANIZATION_ID
+                )
+            ).scalar_one_or_none()
+            if theme_val:
+                org_theme = str(theme_val)
+        else:
+            first_org = session.execute(
+                sa.select(models.organizations.c.id, models.organizations.c.mobile_theme)
+                .where(models.organizations.c.status == "active")
+                .order_by(models.organizations.c.created_at.asc())
+                .limit(1)
+            ).first()
+            if first_org:
+                target_org_id = str(first_org[0])
+                org_theme = str(first_org[1] or "light")
+            else:
+                return []
+
     rows = session.execute(
         sa.select(
             models.branches.c.id,
             models.branches.c.name,
             models.branches.c.code,
+            models.branches.c.slug,
             models.branches.c.street,
             models.branches.c.exterior_number,
             models.branches.c.interior_number,
@@ -11050,22 +11101,11 @@ def list_public_branches(
             ),
         )
         .where(
-            models.branches.c.organization_id == ORGANIZATION_ID,
+            models.branches.c.organization_id == target_org_id,
             models.branches.c.status == "active",
         )
         .order_by(models.branches.c.name)
     ).mappings()
-    org_theme = "light"
-    try:
-        theme_val = session.execute(
-            sa.select(models.organizations.c.mobile_theme).where(
-                models.organizations.c.id == ORGANIZATION_ID
-            )
-        ).scalar_one_or_none()
-        if theme_val:
-            org_theme = str(theme_val)
-    except Exception:
-        pass
 
     branches = []
     for r in rows:
@@ -11077,7 +11117,7 @@ def list_public_branches(
                 session.execute(
                     models.public_order_keys.insert().values(
                         public_key=generated_key,
-                        organization_id=ORGANIZATION_ID,
+                        organization_id=target_org_id,
                         branch_id=b["id"],
                         status="active",
                         created_at=_now(),
@@ -23891,43 +23931,128 @@ def set_branch_product_availability(
     }
 
 
-def get_public_catalog(session: Session, branch_id: str | None = None) -> dict[str, Any]:
+def get_public_restaurant_info(session: Session, slug: str) -> dict[str, Any]:
+    org = session.execute(
+        sa.select(
+            models.organizations.c.id,
+            models.organizations.c.name,
+            models.organizations.c.slug,
+            models.organizations.c.mobile_theme,
+            models.organizations.c.business_type,
+        ).where(sa.func.lower(models.organizations.c.slug) == slug.strip().lower())
+    ).mappings().first()
+    if not org:
+        raise BusinessError("restaurant_not_found", f"Restaurante con slug '{slug}' no encontrado.")
+
+    org_dict = dict(org)
+    branches = list_public_branches(session, restaurant_slug=slug, include_public_key=True)
+    org_dict["branches"] = branches
+    return org_dict
+
+
+def get_public_catalog(
+    session: Session,
+    branch_id: str | None = None,
+    restaurant_slug: str | None = None,
+    organization_id: str | None = None,
+) -> dict[str, Any]:
     from restaurant_os.platform_data import _project_pos_catalog
 
-    active_branch_id = branch_id
-    if active_branch_id is None:
-        # Legacy catalog keeps its historical default selection while the key route is exact.
-        active_branch_id = (
-            session.scalar(
-                sa.select(models.cash_shifts.c.branch_id)
-                .where(
-                    models.cash_shifts.c.organization_id == ORGANIZATION_ID,
-                    sa.func.upper(models.cash_shifts.c.status) == "OPEN",
-                )
-                .order_by(models.cash_shifts.c.opened_at.desc())
-                .limit(1)
-            )
-            or session.scalar(
-                sa.select(models.cash_shifts.c.branch_id)
-                .where(models.cash_shifts.c.organization_id == ORGANIZATION_ID)
-                .order_by(models.cash_shifts.c.opened_at.desc())
-                .limit(1)
-            )
-            or session.scalar(
-                sa.select(models.branches.c.id)
-                .where(models.branches.c.organization_id == ORGANIZATION_ID)
-                .order_by(models.branches.c.created_at.desc())
-                .limit(1)
-            )
-            or BRANCH_ID
-        )
+    active_branch_id: str | None = branch_id
+    target_org_id: str | None = organization_id
+    target_org_slug: str | None = None
+    branch_name: str | None = None
+    org_theme: str = "light"
 
-    branch_name = (
-        session.scalar(
-            sa.select(models.branches.c.name).where(models.branches.c.id == active_branch_id)
+    if restaurant_slug:
+        org_row = session.execute(
+            sa.select(
+                models.organizations.c.id,
+                models.organizations.c.name,
+                models.organizations.c.slug,
+                models.organizations.c.mobile_theme,
+            ).where(sa.func.lower(models.organizations.c.slug) == restaurant_slug.strip().lower())
+        ).first()
+        if not org_row:
+            raise BusinessError("restaurant_not_found", f"Restaurante con slug '{restaurant_slug}' no encontrado.")
+        target_org_id = str(org_row[0])
+        target_org_slug = str(org_row[2])
+        org_theme = str(org_row[3] or "light")
+
+        branch_row = session.execute(
+            sa.select(models.branches.c.id, models.branches.c.name)
+            .where(
+                models.branches.c.organization_id == target_org_id,
+                models.branches.c.status == "active",
+            )
+            .order_by(models.branches.c.created_at.asc())
+            .limit(1)
+        ).first()
+        if not branch_row:
+            raise BusinessError("branch_not_found", "El restaurante no tiene sucursales activas.")
+        active_branch_id = str(branch_row[0])
+        branch_name = str(branch_row[1])
+
+    elif active_branch_id:
+        branch_row = session.execute(
+            sa.select(
+                models.branches.c.id,
+                models.branches.c.name,
+                models.branches.c.organization_id,
+            ).where(models.branches.c.id == active_branch_id)
+        ).first()
+        if not branch_row:
+            raise BusinessError("branch_not_found", f"Sucursal '{active_branch_id}' no encontrada.")
+        branch_name = str(branch_row[1])
+        target_org_id = str(branch_row[2])
+
+        org_meta = session.execute(
+            sa.select(models.organizations.c.slug, models.organizations.c.mobile_theme).where(
+                models.organizations.c.id == target_org_id
+            )
+        ).first()
+        if org_meta:
+            target_org_slug = str(org_meta[0]) if org_meta[0] else None
+            org_theme = str(org_meta[1] or "light")
+
+    elif target_org_id:
+        org_meta = session.execute(
+            sa.select(models.organizations.c.slug, models.organizations.c.mobile_theme).where(
+                models.organizations.c.id == target_org_id
+            )
+        ).first()
+        if org_meta:
+            target_org_slug = str(org_meta[0]) if org_meta[0] else None
+            org_theme = str(org_meta[1] or "light")
+
+        branch_row = session.execute(
+            sa.select(models.branches.c.id, models.branches.c.name)
+            .where(
+                models.branches.c.organization_id == target_org_id,
+                models.branches.c.status == "active",
+            )
+            .order_by(models.branches.c.created_at.asc())
+            .limit(1)
+        ).first()
+        if not branch_row:
+            raise BusinessError("branch_not_found", "El restaurante no tiene sucursales activas.")
+        active_branch_id = str(branch_row[0])
+        branch_name = str(branch_row[1])
+
+    else:
+        legacy_exists = session.scalar(
+            sa.select(models.organizations.c.id).where(models.organizations.c.id == ORGANIZATION_ID)
         )
-        or "Kiwi Restaurante"
-    )
+        total_orgs = session.scalar(sa.select(sa.func.count(models.organizations.c.id))) or 0
+        if legacy_exists and total_orgs <= 1:
+            active_branch_id = BRANCH_ID
+            branch_name = "Kiwi Restaurante"
+            target_org_id = ORGANIZATION_ID
+        else:
+            raise BusinessError(
+                "restaurant_context_required",
+                "Se requiere especificar la sucursal (branch_id) o el identificador del restaurante (restaurant slug).",
+            )
 
     categories, products = _project_pos_catalog(session, active_branch_id)
 
@@ -23977,7 +24102,10 @@ def get_public_catalog(session: Session, branch_id: str | None = None) -> dict[s
 
     return {
         "branch_id": active_branch_id,
-        "branch_name": branch_name,
+        "branch_name": branch_name or "",
+        "organization_id": target_org_id,
+        "restaurant_slug": target_org_slug,
+        "mobile_theme": org_theme,
         "categories": categories,
         "items": items,
     }

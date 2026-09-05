@@ -79,6 +79,25 @@ export const App: React.FC = () => {
   const [createdOrderResult, setCreatedOrderResult] = useState<CreatedOrderResult | null>(null);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
 
+  // Restaurant Context (SaaS Multi-tenant)
+  const [restaurantSlug] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const pathSegments = window.location.pathname.split('/').filter(Boolean);
+      let slug = urlParams.get('restaurant') || urlParams.get('r') || urlParams.get('org');
+      if (!slug && ['r', 'restaurant', 'org'].includes(pathSegments[0]) && pathSegments[1]) {
+        slug = pathSegments[1];
+      }
+      if (slug) {
+        localStorage.setItem('restaurantos_restaurant_slug', slug);
+        return slug;
+      }
+      return localStorage.getItem('restaurantos_restaurant_slug');
+    } catch {
+      return null;
+    }
+  });
+
   // Geolocation detector
   const detectLocationAndFetchBranches = useCallback((forceNearest = false) => {
     setIsLoadingLocation(true);
@@ -127,7 +146,7 @@ export const App: React.FC = () => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           setCustomerCoords({ lat, lng });
-          const branchList = await fetchPublicBranches(lat, lng);
+          const branchList = await fetchPublicBranches(lat, lng, restaurantSlug);
           applyBranchSelection(branchList, true);
         },
         async (err) => {
@@ -137,12 +156,12 @@ export const App: React.FC = () => {
               const lat = fallbackPos.coords.latitude;
               const lng = fallbackPos.coords.longitude;
               setCustomerCoords({ lat, lng });
-              const branchList = await fetchPublicBranches(lat, lng);
+              const branchList = await fetchPublicBranches(lat, lng, restaurantSlug);
               applyBranchSelection(branchList, true);
             },
             async (fallbackErr) => {
               console.warn('Geolocation unavailable, loading default branches:', fallbackErr);
-              const branchList = await fetchPublicBranches();
+              const branchList = await fetchPublicBranches(undefined, undefined, restaurantSlug);
               applyBranchSelection(branchList, false);
             },
             { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
@@ -151,11 +170,11 @@ export const App: React.FC = () => {
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
       );
     } else {
-      fetchPublicBranches().then((branchList) => {
+      fetchPublicBranches(undefined, undefined, restaurantSlug).then((branchList) => {
         applyBranchSelection(branchList, false);
       });
     }
-  }, []);
+  }, [restaurantSlug]);
 
   // Load branches on mount; the catalog follows the selected branch key exactly.
   useEffect(() => {
@@ -165,7 +184,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    fetchMobileMenu(selectedBranch?.public_key).then(({ products: prods, categories: cats }) => {
+    fetchMobileMenu(selectedBranch?.public_key, restaurantSlug).then(({ products: prods, categories: cats }) => {
       if (isMounted) {
         setProducts(prods);
         setCategories(cats);
@@ -175,7 +194,7 @@ export const App: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedBranch?.public_key]);
+  }, [selectedBranch?.public_key, restaurantSlug]);
 
   const handleSelectBranch = (branch: BranchInfo) => {
     setSelectedBranch(branch);
