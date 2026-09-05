@@ -35,10 +35,14 @@ import {
   ShoppingCart,
   Layers,
   Trash2,
+  Sparkles,
+  QrCode,
 } from 'lucide-react';
 import { fetchApi } from '@restaurantos/api-client';
 import { redirectToPos } from '../../lib/posHandoff';
 import { ExecutiveCopilot } from './ExecutiveCopilot';
+import { OnboardingWizardModal } from '../onboarding/OnboardingWizardModal';
+import { QRCodeCard } from '../onboarding/QRCodeCard';
 
 type Branch = {
   id: string;
@@ -178,6 +182,35 @@ const Overview = () => {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue);
   const [loading, setLoading] = useState(true);
+  const [orgProfile, setOrgProfile] = useState<{
+    id: string;
+    name: string;
+    slug: string;
+    owner_phone?: string;
+    trial_days_remaining: number;
+    products_count: number;
+  } | null>(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => localStorage.getItem('restaurantos_onboarding_dismissed') === 'true'
+  );
+
+  useEffect(() => {
+    fetchApi<{
+      id: string;
+      name: string;
+      slug: string;
+      owner_phone?: string;
+      trial_days_remaining: number;
+      products_count: number;
+    }>('/organization/profile')
+      .then((profile) => {
+        if (profile) setOrgProfile(profile);
+      })
+      .catch((err) => {
+        console.warn('Error al cargar perfil de organización en panel:', err);
+      });
+  }, []);
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -251,6 +284,93 @@ const Overview = () => {
           </label>
         </div>
       </div>
+
+      {!onboardingDismissed && (products.length === 0 || (orgProfile && orgProfile.products_count === 0) || !localStorage.getItem('restaurantos_onboarding_completed')) && (
+        <section
+          style={{
+            background: 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%)',
+            borderRadius: 16,
+            padding: '24px 28px',
+            color: '#fff',
+            marginBottom: 24,
+            boxShadow: '0 10px 25px -5px rgba(5, 150, 105, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 20,
+            flexWrap: 'wrap',
+          }}
+          aria-label="Asistente de configuración inicial"
+        >
+          <div style={{ maxWidth: 640 }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '4px 12px',
+                borderRadius: 9999,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                marginBottom: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              <Sparkles size={14} /> Asistente de Configuración Inicial
+            </div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 8px', color: '#fff', letterSpacing: '-0.02em' }}>
+              ¡Bienvenido a RestaurantOS{orgProfile?.name ? `, ${orgProfile.name}` : ''}!
+            </h2>
+            <p style={{ margin: 0, fontSize: '0.92rem', color: '#d1fae5', lineHeight: 1.5 }}>
+              Configura tu identidad comercial, carga tu menú inicial de prueba con 1 solo clic y genera tu Código QR listo para imprimir y recibir pedidos de clientes.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              type="button"
+              onClick={() => setIsWizardOpen(true)}
+              style={{
+                background: '#fff',
+                color: '#065f46',
+                border: 'none',
+                borderRadius: 12,
+                padding: '12px 24px',
+                fontWeight: 700,
+                fontSize: '0.92rem',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Sparkles size={16} style={{ color: '#10b981' }} />
+              Iniciar Asistente (3 min)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem('restaurantos_onboarding_dismissed', 'true');
+                setOnboardingDismissed(true);
+              }}
+              style={{
+                background: 'transparent',
+                color: '#a7f3d0',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: 12,
+                padding: '12px 16px',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+              }}
+            >
+              Ocultar
+            </button>
+          </div>
+        </section>
+      )}
 
       <ExecutiveCopilot selectedBranchId={selectedBranch} branches={branches} />
 
@@ -572,6 +692,42 @@ const Overview = () => {
         </div>
 
         <aside className="admin-side-column">
+          {orgProfile?.slug && (
+            <div className="admin-card admin-qr-widget-card" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Menú Digital QR
+                  </span>
+                  <h2 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '2px 0 0', color: '#0f172a' }}>
+                    Código de Mesa
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsWizardOpen(true)}
+                  style={{
+                    background: '#f1f5f9',
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '4px 8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    color: '#475569',
+                    fontWeight: 600,
+                  }}
+                >
+                  Asistente
+                </button>
+              </div>
+              <QRCodeCard
+                restaurantName={orgProfile.name}
+                restaurantSlug={orgProfile.slug}
+                whatsappPhone={orgProfile.owner_phone}
+              />
+            </div>
+          )}
+
           <div className="admin-card admin-trending-card">
             <div className="admin-card-header">
               <div>
@@ -670,6 +826,15 @@ const Overview = () => {
           </div>
         </div>
       </section>
+
+      <OnboardingWizardModal
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onCompleted={() => {
+          setIsWizardOpen(false);
+          window.location.reload();
+        }}
+      />
     </main>
   );
 };

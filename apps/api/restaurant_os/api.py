@@ -159,6 +159,9 @@ from restaurant_os.operations import (
     get_ingredient_variation,
     get_open_cash_shift,
     get_order_detail,
+    get_organization_profile,
+    update_organization_profile,
+    get_organization_qr_info,
     get_public_catalog,
     get_public_order_intent,
     reject_public_order_intent,
@@ -574,6 +577,58 @@ def get_organizations(
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "admin.manage")
         return list_organizations(session)
+
+    return _business_response(operation)
+
+
+@router.get("/organization/profile")
+def get_organization_profile_endpoint(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        return get_organization_profile(session, org_id)
+
+    return _business_response(operation)
+
+
+@router.patch("/organization/profile")
+def update_organization_profile_endpoint(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        return update_organization_profile(
+            session,
+            org_id,
+            name=payload.get("name"),
+            owner_name=payload.get("owner_name"),
+            owner_phone=payload.get("owner_phone"),
+            business_type=payload.get("business_type"),
+            mobile_theme=payload.get("mobile_theme"),
+            actor_id=actor_id,
+        )
+
+    return _business_response(operation)
+
+
+@router.get("/organization/qr-info")
+def get_organization_qr_info_endpoint(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        return get_organization_qr_info(session, org_id)
 
     return _business_response(operation)
 

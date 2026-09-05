@@ -24941,3 +24941,167 @@ def accept_pending_order(
     )
     session.commit()
     return get_order_detail(session, order_id, actor_id)
+
+
+def get_organization_profile(session: Session, organization_id: str) -> dict[str, Any]:
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == organization_id)
+    ).mappings().first()
+    if not org:
+        raise BusinessError("organization_not_found", "Organización no encontrada.")
+
+    # Calculate trial days remaining
+    trial_days = 0
+    if org["trial_ends_at"]:
+        trial_end = org["trial_ends_at"]
+        if trial_end.tzinfo is None:
+            trial_end = trial_end.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        diff = trial_end - now
+        trial_days = max(0, diff.days + (1 if diff.seconds > 0 else 0))
+
+    # Count products
+    prod_count = session.execute(
+        sa.select(sa.func.count(models.products.c.id)).where(
+            models.products.c.organization_id == organization_id,
+            models.products.c.status == "active",
+        )
+    ).scalar() or 0
+
+    # Get branches with active public key
+    branch_rows = session.execute(
+        sa.select(
+            models.branches.c.id,
+            models.branches.c.name,
+            models.branches.c.slug,
+            models.branches.c.code,
+            models.branches.c.phone,
+        )
+        .where(
+            models.branches.c.organization_id == organization_id,
+            models.branches.c.status == "active",
+        )
+        .order_by(models.branches.c.created_at.asc())
+    ).mappings().all()
+
+    branches_list = []
+    for b in branch_rows:
+        pk_row = session.execute(
+            sa.select(models.public_order_keys.c.public_key).where(
+                models.public_order_keys.c.branch_id == b["id"],
+                models.public_order_keys.c.status == "active",
+            )
+        ).first()
+        branches_list.append({
+            "id": b["id"],
+            "name": b["name"],
+            "slug": b["slug"] or "matriz",
+            "code": b["code"],
+            "phone": b["phone"] or org["owner_phone"],
+            "public_key": pk_row[0] if pk_row else None,
+        })
+
+    return {
+        "id": org["id"],
+        "name": org["name"],
+        "slug": org["slug"],
+        "business_type": org["business_type"] or "restaurant",
+        "owner_name": org["owner_name"],
+        "owner_email": org["owner_email"],
+        "owner_phone": org["owner_phone"],
+        "plan": org["plan"],
+        "subscription_status": org["subscription_status"],
+        "trial_ends_at": org["trial_ends_at"].isoformat() if org["trial_ends_at"] else None,
+        "trial_days_remaining": trial_days,
+        "monthly_fee_cents": org["monthly_fee_cents"],
+        "mobile_theme": org["mobile_theme"] or "light",
+        "products_count": prod_count,
+        "branches": branches_list,
+    }
+
+
+def update_organization_profile(
+    session: Session,
+    organization_id: str,
+    *,
+    name: str | None = None,
+    owner_name: str | None = None,
+    owner_phone: str | None = None,
+    business_type: str | None = None,
+    mobile_theme: str | None = None,
+    actor_id: str | None = None,
+) -> dict[str, Any]:
+    updates: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
+    if name is not None and name.strip():
+        updates["name"] = name.strip()
+    if owner_name is not None and owner_name.strip():
+        updates["owner_name"] = owner_name.strip()
+    if owner_phone is not None:
+        updates["owner_phone"] = owner_phone.strip()
+    if business_type is not None and business_type.strip():
+        updates["business_type"] = business_type.strip()
+    if mobile_theme is not None and mobile_theme in ("light", "dark"):
+        updates["mobile_theme"] = mobile_theme
+
+    session.execute(
+        models.organizations.update()
+        .where(models.organizations.c.id == organization_id)
+        .values(**updates)
+    )
+
+    # If owner_phone was updated, sync with main branch phone if empty
+    if owner_phone is not None:
+        session.execute(
+            models.branches.update()
+            .where(
+                models.branches.c.organization_id == organization_id,
+                sa.or_(models.branches.c.phone.is_(None), models.branches.c.phone == ""),
+            )
+            .values(phone=owner_phone.strip(), updated_at=datetime.now(timezone.utc))
+        )
+
+    _audit(
+        session,
+        action="organization.profile.updated",
+        entity_type="organization",
+        entity_id=organization_id,
+        payload=updates,
+        actor_user_id=actor_id,
+    )
+    session.commit()
+    return get_organization_profile(session, organization_id)
+
+
+def get_organization_qr_info(session: Session, organization_id: str) -> dict[str, Any]:
+    profile = get_organization_profile(session, organization_id)
+    main_branch = profile["branches"][0] if profile["branches"] else None
+    slug = profile["slug"] or organization_id
+    whatsapp = profile["owner_phone"] or (main_branch["phone"] if main_branch else "")
+    public_key = main_branch["public_key"] if main_branch else None
+
+    if not public_key and main_branch:
+        import uuid
+        public_key = f"pk_{slug[:20]}_{main_branch.get('slug', 'matriz')[:10]}_{uuid.uuid4().hex[:8]}"
+        session.execute(
+            models.public_order_keys.insert().values(
+                public_key=public_key,
+                organization_id=organization_id,
+                branch_id=main_branch["id"],
+                status="active",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    menu_url = f"/r/{slug}"
+
+    return {
+        "restaurant_name": profile["name"],
+        "restaurant_slug": slug,
+        "menu_url": menu_url,
+        "full_url": f"https://restaurantos.app{menu_url}",
+        "whatsapp_phone": whatsapp,
+        "branch_name": main_branch["name"] if main_branch else "Matriz",
+        "public_key": public_key,
+        "business_type": profile["business_type"],
+    }

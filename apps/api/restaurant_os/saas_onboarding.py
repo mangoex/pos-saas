@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import sqlalchemy as sa
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
@@ -31,12 +31,25 @@ UTC = timezone.utc
 
 
 class SignUpRequest(BaseModel):
-    business_name: str = Field(..., min_length=1, max_length=160)
+    business_name: str = Field(default="", max_length=160)
     owner_name: str = Field(..., min_length=1, max_length=160)
-    email: str = Field(..., min_length=5, max_length=180)
+    email: str = Field(default="", max_length=180)
     password: str = Field(..., min_length=8, max_length=128)
     phone: str | None = Field(default=None, max_length=32)
     business_type: str | None = Field(default="general", max_length=32)
+    branch_name: str | None = Field(default=None, max_length=160)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("business_name") and data.get("restaurant_name"):
+                data["business_name"] = data["restaurant_name"]
+            if not data.get("email") and data.get("owner_email"):
+                data["email"] = data["owner_email"]
+            if not data.get("phone") and data.get("owner_phone"):
+                data["phone"] = data["owner_phone"]
+        return data
 
     @field_validator("business_name", "owner_name")
     @classmethod
@@ -147,14 +160,23 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     # 4. Branch
-    branch_slug = "matriz"
+    branch_name = (
+        req.branch_name.strip()
+        if req.branch_name and req.branch_name.strip()
+        else "Sucursal Matriz"
+    )
+    branch_slug = (
+        "matriz"
+        if not req.branch_name or req.branch_name.strip().lower() in ("matriz", "sucursal matriz")
+        else re.sub(r"[^a-z0-9]+", "-", branch_name.lower()).strip("-")
+    )
     session.execute(
         models.branches.insert().values(
             id=branch_id,
             organization_id=org_id,
             legal_entity_id=legal_entity_id,
             business_unit_id=business_unit_id,
-            name="Sucursal Matriz",
+            name=branch_name,
             code="MATRIZ",
             slug=branch_slug,
             timezone="America/Mexico_City",
@@ -164,6 +186,18 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             state="CDMX",
             created_at=now,
             updated_at=now,
+        )
+    )
+
+    # Auto-generate public_order_key for the initial branch so QR ordering is immediately ready
+    initial_public_key = f"pk_{slug[:20]}_{branch_slug[:10]}_{uuid.uuid4().hex[:8]}"
+    session.execute(
+        models.public_order_keys.insert().values(
+            public_key=initial_public_key,
+            organization_id=org_id,
+            branch_id=branch_id,
+            status="active",
+            created_at=now,
         )
     )
 
@@ -321,8 +355,9 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         },
         "branch": {
             "id": branch_id,
-            "name": "Sucursal Matriz",
+            "name": branch_name,
             "slug": branch_slug,
+            "public_key": initial_public_key,
             "status": "active",
             "timezone": "America/Mexico_City",
         },

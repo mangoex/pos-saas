@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Settings, BarChart2, Bell, Search, UserRound,
   LogOut, Package, Store, Carrot, ChevronLeft, ChevronRight, Camera,
-  ShoppingCart, Receipt, Share2, Crown
+  ShoppingCart, Receipt, Share2, Crown, Sparkles
 } from 'lucide-react';
 import { Modal, Input, Button } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
@@ -14,6 +14,7 @@ import AdminProposalReview from '../features/admin-ai/AdminProposalReview';
 import { CategorySubNav } from './CategorySubNav';
 import { canManageCashConcepts } from '../features/cash/cashConceptState';
 import { ImpersonationBanner } from '../features/superadmin/ImpersonationBanner';
+import { OnboardingWizardModal } from '../features/onboarding/OnboardingWizardModal';
 
 const compressImage = (dataUrl: string, maxWidth = 128, maxHeight = 128): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -71,7 +72,31 @@ const AdminLayout = () => {
   const [branchId, setBranchId] = useState(resolveBranchId());
   const [branchReady, setBranchReady] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [orgProfile, setOrgProfile] = useState<{
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+    subscription_status: string;
+    trial_days_remaining: number;
+  } | null>(null);
+  const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
   const proposalId = new URLSearchParams(location.search).get('admin_ai_proposal');
+
+  useEffect(() => {
+    fetchApi<{
+      id: string;
+      name: string;
+      slug: string;
+      plan: string;
+      subscription_status: string;
+      trial_days_remaining: number;
+    }>('/organization/profile')
+      .then((data) => {
+        if (data) setOrgProfile(data);
+      })
+      .catch(() => {});
+  }, []);
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const hasCatalogManage = Boolean(
@@ -368,7 +393,55 @@ const AdminLayout = () => {
       <div className="admin-main">
         {/* Topbar */}
         <header className="admin-topbar">
-          <div style={{ flex: 1 }} />
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+            {orgProfile && orgProfile.subscription_status === 'trial' && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  background: orgProfile.trial_days_remaining <= 3 ? '#fef2f2' : '#ecfdf5',
+                  color: orgProfile.trial_days_remaining <= 3 ? '#b91c1c' : '#047857',
+                  border: `1px solid ${orgProfile.trial_days_remaining <= 3 ? '#fca5a5' : '#a7f3d0'}`,
+                }}
+                title={`Periodo de prueba activo (${orgProfile.trial_days_remaining} días restantes)`}
+              >
+                <span>🌱</span>
+                <span>
+                  Prueba:{' '}
+                  <strong>
+                    {orgProfile.trial_days_remaining}{' '}
+                    {orgProfile.trial_days_remaining === 1 ? 'día restante' : 'días restantes'}
+                  </strong>
+                </span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsOnboardingWizardOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 20,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                background: '#f8fafc',
+                color: '#334155',
+                border: '1px solid #e2e8f0',
+                cursor: 'pointer',
+              }}
+              title="Abrir Asistente de Configuración Inicial"
+            >
+              <Sparkles size={14} style={{ color: '#10b981' }} />
+              <span>Asistente Inicial</span>
+            </button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <button style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><Bell size={18} /></button>
             {hasCatalogManage && <button type="button" aria-label="Abrir asistente de configuración" title="Asistente de configuración" onClick={() => setIsAssistantOpen(true)} style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><UserRound size={18} /></button>}
@@ -437,6 +510,14 @@ const AdminLayout = () => {
         branchName={branches.find((branch) => branch.id === branchId)?.name || 'Sucursal'}
       />
       {proposalId && <AdminProposalReview proposalId={proposalId} onClose={() => navigate(`${location.pathname}${location.search.replace(/([?&])admin_ai_proposal=[^&]*&?/, '$1').replace(/[?&]$/, '')}`)} />}
+      <OnboardingWizardModal
+        isOpen={isOnboardingWizardOpen}
+        onClose={() => setIsOnboardingWizardOpen(false)}
+        onCompleted={() => {
+          setIsOnboardingWizardOpen(false);
+          window.location.reload();
+        }}
+      />
       </div>
     </div>
   );
