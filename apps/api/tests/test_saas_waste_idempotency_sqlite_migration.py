@@ -39,7 +39,7 @@ def test_0077_sqlite_upgrade_downgrade_and_reupgrade_to_current_head(tmp_path: P
         with engine.begin() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0080_delivery_inbox_idempotency"
+                == "0081_restaurant_domains"
             )
     finally:
         engine.dispose()
