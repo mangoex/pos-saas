@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
 import sqlalchemy as sa
+from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
@@ -109,7 +110,14 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
 
     now = _now()
     org_id = _id()
-    slug = _generate_slug(req.business_name)
+    from restaurant_os.public_names import available_slug
+
+    for _ in range(16):
+        slug = _generate_slug(req.business_name)
+        if available_slug(session, slug):
+            break
+    else:
+        raise HTTPException(409, detail={"code": "storefront_identity_unavailable"})
     legal_entity_id = _id()
     business_unit_id = _id()
     branch_id = _id()

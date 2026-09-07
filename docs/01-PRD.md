@@ -1,4 +1,12 @@
 # PRD — Product Requirements Document: POS-SaaS
+
+## Enlaces personalizados aprobados (septiembre 2026)
+
+- `PRD-FR-084`: El administrador consulta/copia accesos Admin, POS, KDS y menú/QR de
+  su restaurante; puede reservar un alias público preferido conservando URLs anteriores.
+- `PRD-FR-085`: El administrador solicita un dominio propio y verifica control mediante
+  TXT. Sólo el superadministrador activa tras verificar DNS y confirmar HTTPS/enrutamiento.
+  El dominio nunca cambia la autoridad de la sesión ni sirve datos de otro restaurante.
 ## Micro-POS de Alto Impacto para Restaurantes
 
 ---

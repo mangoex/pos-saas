@@ -489,6 +489,9 @@ def login(payload: dict[str, Any], session: SessionDep) -> dict[str, Any]:
 
     def operation() -> dict[str, Any]:
         user = authenticate_user(session, email, password)
+        from restaurant_os.domain_host import assert_host_organization
+
+        assert_host_organization(session, str(user["organization_id"]))
         token = create_session_token(
             {"sub": user["id"], "email": user["email"]},
             get_settings().secret_key,

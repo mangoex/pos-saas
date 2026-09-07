@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     service_name: str = Field(default="restaurant-os-api")
     app_version: str = Field(default="0.0.0")
     git_commit: str = Field(default="unknown")
+    public_base_url: str = Field(default="https://pos.humanio.digital")
+    platform_hosts: str = Field(default="")
     database_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RESTAURANTOS_DATABASE_URL", "DATABASE_URL"),

@@ -4,10 +4,11 @@ import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from restaurant_os.api import router as platform_router
 from restaurant_os.config import get_settings
+from restaurant_os.domain_host import bind_domain_host
 from restaurant_os.health import readiness_payload
 from restaurant_os.operations import AuthorizationError, BusinessError
 from restaurant_os.public_order_rate_limit import (
@@ -16,6 +17,7 @@ from restaurant_os.public_order_rate_limit import (
 )
 from restaurant_os.public_storefront import router as storefront_router
 from restaurant_os.request_audit import bind_support_audit_context
+from restaurant_os.restaurant_domains import router as domains_router
 from restaurant_os.saas_setup import router as setup_router
 
 logger = logging.getLogger(__name__)
@@ -45,7 +47,11 @@ def _with_device_variant_headers(response: Response) -> Response:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="RestaurantOS API", version=settings.app_version)
+    app = FastAPI(
+        title="RestaurantOS API",
+        version=settings.app_version,
+        dependencies=[Depends(bind_domain_host)] if settings.platform_hosts.strip() else [],
+    )
     intents_enabled = settings.public_order_intents_enabled
     app.state.public_order_intents_enabled = intents_enabled
     if intents_enabled:
@@ -85,6 +91,7 @@ def create_app() -> FastAPI:
     app.include_router(platform_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(storefront_router)
     app.include_router(setup_router, dependencies=[Depends(bind_support_audit_context)])
+    app.include_router(domains_router, dependencies=[Depends(bind_support_audit_context)])
 
     @app.exception_handler(AuthorizationError)
     async def authorization_error_handler(
@@ -143,6 +150,9 @@ def create_app() -> FastAPI:
 
     @app.get("/", tags=["platform"])
     def platform_home(request: Request) -> Response:
+        slug = getattr(request.state, "restaurant_slug", None)
+        if slug:
+            return RedirectResponse(f"/menu/{slug}/", headers={"Cache-Control": "no-store"})
         return _with_device_variant_headers(serve_spa("landing-web", ""))
 
     @app.get("/landing-assets/{full_path:path}", tags=["platform"])

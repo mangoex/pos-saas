@@ -18,7 +18,7 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
   const [copied, setCopied] = useState(false);
 
   const baseUrl = window.location.origin;
-  const menuPath = `/r/${restaurantSlug}`;
+  const menuPath = `/menu/${restaurantSlug}/`;
   const resolvedUrl = fullUrl || `${baseUrl}${menuPath}`;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(resolvedUrl)}&margin=10`;
 
@@ -37,7 +37,7 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
   };
 
   const handleOpenPreview = () => {
-    window.open(menuPath, '_blank');
+    window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (

@@ -56,12 +56,11 @@ class CreateTenantAdminRequest(BaseModel):
 
 
 def _allocate_storefront_slug(session: Session, organization_name: str) -> str:
+    from restaurant_os.public_names import available_slug
+
     for _ in range(16):
         candidate = _generate_slug(organization_name)
-        exists = session.scalar(
-            sa.select(models.organizations.c.id).where(models.organizations.c.slug == candidate)
-        )
-        if not exists:
+        if available_slug(session, candidate):
             return candidate
     raise HTTPException(status_code=409, detail={"code": "storefront_identity_unavailable"})
 
