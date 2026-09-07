@@ -27,3 +27,5 @@ R3 revisión: contraejemplo tenant pre-0066 con trial/active/NULL bloquearía po
 - Se encontraron tres sesiones locales QA del4septiembre con transacciones/bloqueos abiertos durante casi3días; se cerraron sólo esos pids en PGloopback55432/base saas_remediation_qa después de verificarlos. Ninguna conexión productiva intervenida.
 
 - QA navegador aislado confirmó negocio→menú persistido→QR→caja CAJA-QA-03→completar y recarga sin wizard. Cierre móvil recupera imágenes propias/artwork neutro; elimina nutrición inferida, preferencias de sucursal globales y código muerto de selección por nombre. Acepta ruta publicada /menu/{slug} y muestra error/reintento de catálogo. Regresión de fotos RED→GREEN y12pruebas móviles aprobadas.
+
+- QA real /menu/bistro-wizard-final-qa-54605d/ detectó assets relativos y pantalla vacía con diagonal final. Base Vite /menu/ corregida; recarga muestra título propio y tres productos del catálogo sintético, sin fotos heredadas. CI inicial baae9a8: frontend completo, Docker e integridad aprobados; revisión de dependencias bloqueada por Dependency graph no disponible/habilitado en GitHub (no vulnerabilidad detectada). No se desactiva el gate.

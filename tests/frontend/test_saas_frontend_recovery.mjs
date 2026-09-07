@@ -41,3 +41,5 @@ console.log('✓ SaaS frontend recovery semantic tests passed');
 assert.match(mobileApp, /'menu', 'order', 'mobile'/, 'published menu paths must resolve the storefront');
 assert.doesNotMatch(mobileApp, /restaurantos_selected_branch_id|kiwi_selected_branch_id/, 'branch preferences must not be browser-global');
 assert.match(mobileApp, /catalogError/, 'catalog failures must show a recoverable state');
+
+assert.match(readFileSync(join(root, 'apps/mobile-web/vite.config.ts'), 'utf8'), /base: '\/menu\/'/, 'nested and trailing-slash menu URLs must share the absolute asset root');
