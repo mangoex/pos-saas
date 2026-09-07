@@ -49,6 +49,11 @@ interface OnboardingWizardModalProps {
   onCompleted?: () => void;
 }
 
+type OnboardingStatus = { step: 'business' | 'menu' | 'register' | 'complete'; branch: { name: string }; register_name: string | null };
+const onboardingTemplate = (businessType: string) => ({
+  cafe: 'cafeteria', restaurant: 'general', bar: 'general', dark_kitchen: 'general', bakery: 'general', other: 'general',
+}[businessType] || businessType);
+
 export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   isOpen,
   onClose,
@@ -63,16 +68,22 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   const [businessType, setBusinessType] = useState('restaurant');
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [mobileTheme, setMobileTheme] = useState('light');
+  const [registerName, setRegisterName] = useState('CAJA-01');
   const [savingStep1, setSavingStep1] = useState(false);
 
   // Step 2 Seed State
   const [seedingMenu, setSeedingMenu] = useState(false);
   const [menuSeeded, setMenuSeeded] = useState(false);
   const [seedSuccessMsg, setSeedSuccessMsg] = useState('');
+  const [setupError, setSetupError] = useState('');
 
   // Load organization profile on mount
   useEffect(() => {
     if (isOpen) {
+      fetchApi<OnboardingStatus>('/saas/onboarding').then((setup) => {
+        setStep(({ business: 1, menu: 2, register: 3, complete: 4 }[setup.step] ?? 1) as 1 | 2 | 3 | 4);
+        setRegisterName(setup.register_name || 'CAJA-01');
+      }).catch(() => undefined);
       fetchApi<OrganizationProfile>('/organization/profile')
         .then((data) => {
           setProfile(data);
@@ -106,6 +117,13 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
         }),
       });
       setProfile(updated);
+      await fetchApi<OnboardingStatus>('/saas/onboarding', {
+        method: 'PUT',
+        body: JSON.stringify({
+          step: 'business', business_name: restaurantName.trim(), branch_name: updated.branches?.[0]?.name || 'Matriz',
+          phone: whatsappPhone.trim() || undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      });
       setStep(2);
     } catch (err) {
       console.error('Error saving profile step 1:', err);
@@ -117,11 +135,11 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   const handleSeedStarterMenu = async () => {
     setSeedingMenu(true);
     setSeedSuccessMsg('');
+    setSetupError('');
     try {
-      const templateKind = businessType === 'cafe' ? 'cafeteria' : businessType;
-      await fetchApi('/catalog/seed-starter-template', {
-        method: 'POST',
-        body: JSON.stringify({ template: templateKind }),
+      await fetchApi<OnboardingStatus>('/saas/onboarding', {
+        method: 'PUT',
+        body: JSON.stringify({ step: 'menu', business_type: onboardingTemplate(businessType) }),
       });
       setMenuSeeded(true);
       setSeedSuccessMsg('¡Menú inicial importado exitosamente con platillos y precios!');
@@ -130,23 +148,58 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
       setProfile(updated);
     } catch (err: any) {
       console.warn('Could not seed menu automatically:', err);
-      // Even if already seeded or error, mark ready so user can proceed
-      setMenuSeeded(true);
+      setSeedSuccessMsg('No pudimos guardar el menú. Inténtalo de nuevo.');
     } finally {
       setSeedingMenu(false);
     }
   };
 
-  const handleFinishOnboarding = () => {
-    localStorage.setItem('restaurantos_onboarding_completed', 'true');
-    if (onCompleted) onCompleted();
-    onClose();
+  const handleContinueToQr = async () => {
+    setSeedingMenu(true);
+    setSetupError('');
+    try {
+      await fetchApi<OnboardingStatus>('/saas/onboarding', {
+        method: 'PUT',
+        body: JSON.stringify({ step: 'menu', business_type: 'blank' }),
+      });
+      setStep(3);
+    } catch {
+      setSetupError('No pudimos guardar el estado del menú. Inténtalo de nuevo.');
+    } finally {
+      setSeedingMenu(false);
+    }
+  };
+
+  const persistRegisterStep = async (): Promise<boolean> => {
+    setSetupError('');
+    try {
+      await fetchApi<OnboardingStatus>('/saas/onboarding', {
+        method: 'PUT', body: JSON.stringify({ step: 'register', register_name: registerName.trim() || 'CAJA-01' }),
+      });
+      return true;
+    } catch {
+      setSetupError('No pudimos guardar el identificador de caja. Inténtalo de nuevo.');
+      return false;
+    }
+  };
+
+  const handleAdvanceToFinish = async () => {
+    if (await persistRegisterStep()) setStep(4);
+  };
+
+  const handleFinishOnboarding = async () => {
+    if (await persistRegisterStep()) {
+      if (onCompleted) onCompleted();
+      onClose();
+    }
   };
 
   const handleOpenPos = async () => {
-    localStorage.setItem('restaurantos_onboarding_completed', 'true');
-    onClose();
-    await redirectToPos('pos');
+    if (await persistRegisterStep()) {
+      if (onCompleted) onCompleted();
+      onClose();
+      await redirectToPos('pos');
+    }
   };
 
   const currentSlug = profile?.slug || 'matriz';
@@ -225,6 +278,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
             <X size={18} />
           </button>
         </div>
+
+        {setupError && <p role="alert" style={{ margin: '12px 28px 0', color: '#b91c1c', fontSize: '0.9rem' }}>{setupError}</p>}
 
         {/* Stepper Progress Indicator */}
         <div style={{
@@ -450,10 +505,11 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={() => setStep(3)}
+                  disabled={seedingMenu}
+                  onClick={handleContinueToQr}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', fontWeight: 700 }}
                 >
-                  Siguiente: Código QR <ArrowRight size={18} />
+                  {seedingMenu ? 'Guardando menú...' : <>Siguiente: Código QR <ArrowRight size={18} /></>}
                 </Button>
               </div>
             </div>
@@ -472,6 +528,13 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                 whatsappPhone={whatsappPhone}
               />
 
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
+                  Identificador de tu primera caja
+                </label>
+                <Input value={registerName} onChange={(event) => setRegisterName(event.target.value)} placeholder="CAJA-01" style={{ width: '100%' }} />
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                 <Button
                   type="button"
@@ -485,7 +548,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={() => setStep(4)}
+                  onClick={handleAdvanceToFinish}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', fontWeight: 700 }}
                 >
                   Siguiente: Finalizar <ArrowRight size={18} />

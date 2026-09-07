@@ -3,7 +3,7 @@
 ## BDD-FEAT-051 Centro administrativo de sucursal dentro del POS
 
 ```gherkin
-@PRD-FR-005 @PRD-FR-008 @PRD-FR-017 @PRD-FR-018 @PRD-FR-019 @pos @branch @frontend
+@PRD-FR-505 @PRD-FR-508 @PRD-FR-517 @PRD-FR-518 @PRD-FR-519 @pos @branch @frontend
 Feature: El Supervisor administra su sucursal dentro del POS sin entrar al admin corporativo
 
   @BDD-SC-125

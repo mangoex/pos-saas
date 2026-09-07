@@ -3,7 +3,7 @@
 ## BDD-FEAT-074 POS-CAT-004 selector obligatorio antes del producto
 
 ```gherkin
-@PRD-FR-213 @PRD-NFR-004 @PRD-NFR-010 @PRD-NFR-012 @PRD-NFR-016 @PRD-NFR-017 @PRD-NFR-018 @pos @catalog
+@PRD-FR-713 @PRD-NFR-504 @PRD-NFR-510 @PRD-NFR-512 @PRD-NFR-516 @PRD-NFR-517 @PRD-NFR-518 @pos @catalog
 Feature: Seleccionar una opción de categoría antes del producto
 
   @BDD-SC-255
@@ -69,12 +69,12 @@ Feature: Seleccionar una opción de categoría antes del producto
 
 ## Compatibilidad técnica de migraciones
 
-`PRD-NFR-017` exige que el adaptador Alembic acepte una URL SQLAlchemy percent-encoded sin alterar
+`PRD-NFR-517` exige que el adaptador Alembic acepte una URL SQLAlchemy percent-encoded sin alterar
 el valor que recibirá el driver. Es una garantía técnica de arranque de migración, no un selector ni
 una regla de negocio POS.
 
 ```gherkin
-@PRD-NFR-017 @alembic
+@PRD-NFR-517 @alembic
 @BDD-SC-264
 Scenario: URL percent-encoded se conserva a través de ConfigParser
   Given una URL SQLAlchemy con escapes %xx de socket o credenciales

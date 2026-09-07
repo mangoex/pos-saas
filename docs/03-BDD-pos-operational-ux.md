@@ -3,7 +3,7 @@
 ## BDD-FEAT-055 Experiencia operativa del POS en español
 
 ```gherkin
-@PRD-FR-019 @PRD-FR-020 @PRD-FR-024 @PRD-FR-031 @PRD-FR-032 @PRD-FR-034 @PRD-FR-070 @PRD-FR-195 @PRD-FR-209 @PRD-NFR-018 @pos @ux
+@PRD-FR-519 @PRD-FR-520 @PRD-FR-524 @PRD-FR-531 @PRD-FR-532 @PRD-FR-534 @PRD-FR-570 @PRD-FR-695 @PRD-FR-709 @PRD-NFR-518 @pos @ux
 Feature: El POS es operativa y visualmente íntegro en español con búsqueda y domicilios funcionales
 
   @BDD-SC-156

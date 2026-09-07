@@ -3,7 +3,7 @@
 ## BDD-FEAT-093 Convertir lenguaje natural en un borrador revisable
 
 ```gherkin
-@PRD-FR-228 @PRD-NFR-029 @pos @orders @privacy
+@PRD-FR-728 @PRD-NFR-529 @pos @orders @privacy
 Feature: El cajero prepara un pedido mediante texto o dictado sin delegar la confirmación
 
   @BDD-SC-406

@@ -3,7 +3,7 @@
 ## BDD-FEAT-049 Ampliar la columna version_num antes de revisiones largas
 
 ```gherkin
-@PRD-NFR-017 @db @migrations
+@PRD-NFR-517 @db @migrations
 Feature: Migrar la cadena sin truncar identificadores de revisión
 
   @BDD-SC-116

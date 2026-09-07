@@ -3,6 +3,8 @@
 
 ---
 
+> Documento normativo de diseño objetivo, no inventario de funciones implementadas. El suplemento `02-SDD-saas-remediation.md` precisa los contratos A01–A12; los nombres de dependencias y automatismos aquí descritos requieren evidencia de implementación.
+
 ## 1. Objetivo y Alcance Técnico
 
 Definir la arquitectura de software, modelo de aislamiento multi-tenant, contratos de API, estrategia de persistencia y flujo de datos para **POS-SaaS**, una solución cloud ligera, resiliente y autoservicio orientada a micro y pequeños restaurantes en México y Latinoamérica.
@@ -267,3 +269,7 @@ Para mantener la base de código limpia, mantenible y enfocada en el éxito del 
    - Tokens de sesión JWT firmados con HMAC-SHA256 y expiración determinista.
 3. **Resguardo de Certificados SAT (CSD):**
    - Las llaves privadas (`.key`) y certificados (`.cer`) de los clientes para facturación se delegan de forma segura en la bóveda de FacturAPI o se almacenan cifrados con AES-256 en el backend.
+
+## Recuperación SaaS 2026-09-07
+
+Base cee907b. Se conserva organizations.slug de la migración publicada 0069. Las ampliaciones locales se integran secuencialmente después de ella; public_slug puede mantenerse como alias de respuesta para clientes, nunca como segunda identidad editable. El resolver acepta sólo identificadores exactos e inequívocos; no hay catálogo de respaldo ni selección piloto. Guards comprueban actor/organización/sucursal y vigencia. Onboarding se persiste por tenant. Inbox/outbox y confirmación de proveedor conservan auditoría y reintentos. Ver docs/plan-recuperacion-2026-09-07.md para evidencia y preguntas operativas.

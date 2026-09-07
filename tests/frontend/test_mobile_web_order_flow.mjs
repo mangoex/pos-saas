@@ -312,3 +312,19 @@ test('Cart AI recommendations use category icons instead of product photos', () 
   assert.doesNotMatch(source, /className="cart-upsell-card-img"/);
   assert.doesNotMatch(styles, /\.cart-upsell-card-img\s*\{/);
 });
+
+
+test('Catalog photographs and nutrition are never inferred from a legacy SKU', async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ items: [
+    { id: 'own-product', name: 'Jugo Verde', sku: 'JUG-VER', price_cents: 5000 },
+    { id: 'own-photo', name: 'Own dish', price_cents: 6000, image_url: '/uploads/own-dish.jpg' },
+  ] }) });
+  try {
+    const { products } = await fetchMobileMenu('tenant-branch-key');
+    assert.equal(products[0].image_url, '');
+    assert.equal(products[0].calories, undefined);
+    assert.equal(products[0].prep_time, undefined);
+    assert.equal(products[1].image_url, '/uploads/own-dish.jpg');
+  } finally { globalThis.fetch = previousFetch; }
+});

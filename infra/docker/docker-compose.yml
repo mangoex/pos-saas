@@ -18,8 +18,17 @@ services:
       - redis
 
   worker:
-    image: python:3.12-slim
-    command: ["python", "-c", "print('restaurant-os-worker placeholder')"]
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["python", "-m", "restaurant_os.uber_availability_worker"]
+    environment:
+      RESTAURANTOS_ENVIRONMENT: local
+      RESTAURANTOS_SERVICE_NAME: restaurant-os-uber-availability-worker
+      RESTAURANTOS_DATABASE_URL: postgresql+psycopg://restaurantos:restaurantos@postgres:5432/restaurantos
+      RESTAURANTOS_REDIS_URL: redis://redis:6379/0
+      RESTAURANTOS_SECRET_KEY: local-compose-dev-secret-key-do-not-use-in-production
+    restart: unless-stopped
     depends_on:
       - postgres
       - redis

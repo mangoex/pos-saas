@@ -1,16 +1,15 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-saas-test-saas-delivery-hub-synthetic-v1
 """TDD Test Suite for POS-SaaS Sprint 3: Unified Delivery Hub & Global Kill-Switch."""
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
 import sqlalchemy as sa
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from restaurant_os.main import app
-from restaurant_os.database import get_session
+from fastapi.testclient import TestClient
 from restaurant_os import models
+from restaurant_os.database import get_session
+from restaurant_os.main import app
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def _client_with_db() -> TestClient:
@@ -83,6 +82,39 @@ def test_kill_switch_pauses_product_globally_and_locally() -> None:
     updated_product = next((p for p in prod_resp_after.json() if p["id"] == product_id), None)
     # Fail-closed / unavailable: either excluded or is_available is False
     assert updated_product is None or updated_product["is_available"] is False
+
+
+def test_kill_switch_never_claims_provider_sync_without_confirmation() -> None:
+    """A08: a configured provider has no outbound availability contract yet."""
+    client = _client_with_db()
+    signup_resp = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "business_name": "Cocina Pendiente",
+            "owner_name": "Ana",
+            "email": "ana@pendiente.com",
+            "password": "Password123!",
+            "business_type": "general",
+        },
+    )
+    headers = {"Authorization": f"Bearer {signup_resp.json()['token']}"}
+    config = client.put(
+        "/api/v1/integrations/uber-eats/config",
+        headers=headers,
+        json={"is_enabled": True, "webhook_secret": "configured-but-not-outbound"},
+    )
+    assert config.status_code == 200
+    product_id = client.get("/api/v1/catalog/products", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        "/api/v1/integrations/kill-switch",
+        headers=headers,
+        json={"product_id": product_id, "is_available": False},
+    )
+    assert response.status_code == 200
+    channel = response.json()["channel_statuses"]["uber_eats"]
+    assert channel["status"] == "provider_confirmation_required"
+    assert "confirmó" in channel["message"]
 
 
 def test_kill_switch_restores_product_availability() -> None:

@@ -33,6 +33,9 @@ interface ChannelConfig {
   webhook_secret: string;
   auto_accept: boolean;
   default_prep_time_minutes: number;
+  integration_status?: 'PENDING_VALIDATION';
+  has_client_secret?: boolean;
+  has_webhook_secret?: boolean;
 }
 
 interface FacturapiConfig {
@@ -109,6 +112,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
   const [selectedProvider, setSelectedProvider] = useState<'UBER_EATS' | 'DIDI_FOOD' | 'RAPPI' | 'FACTURAPI'>(
     isInvoicingRoute ? 'FACTURAPI' : (defaultProvider || 'UBER_EATS')
   );
+  const isDeferredProvider = selectedProvider === 'DIDI_FOOD' || selectedProvider === 'RAPPI';
 
   useEffect(() => {
     if (isInvoicingRoute) {
@@ -182,11 +186,17 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
   }, [facturapiConfig, selectedProvider]);
 
   const saveConfigMutation = useMutation({
-    mutationFn: (payload: Partial<ChannelConfig>) =>
-      fetchApi('/integrations/' + selectedProvider.toLowerCase().replace('_', '-') + '/config', {
+    mutationFn: (payload: Partial<ChannelConfig>) => {
+      const { client_secret, webhook_secret, ...nonSecretFields } = payload;
+      const preservedSecrets = {
+        ...(client_secret?.trim() ? { client_secret: client_secret.trim() } : {}),
+        ...(webhook_secret?.trim() ? { webhook_secret: webhook_secret.trim() } : {}),
+      };
+      return fetchApi('/integrations/' + selectedProvider.toLowerCase().replace('_', '-') + '/config', {
         method: 'PUT',
-        body: JSON.stringify(payload),
-      }),
+        body: JSON.stringify({ ...nonSecretFields, ...preservedSecrets, ...(isDeferredProvider ? { is_enabled: false } : {}) }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', selectedProvider, 'config'] });
       alert('Configuración guardada exitosamente.');
@@ -992,18 +1002,20 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   Configuración de API & Webhooks ({selectedProvider})
                 </h2>
                 <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-                  Registra estas credenciales en el Developer Portal de {selectedProvider} para recibir pedidos en vivo.
+                  {isDeferredProvider
+                    ? 'Guarda los datos de tu cuenta. Este proveedor queda pendiente de validación y no se conecta al guardarlo.'
+                    : `Registra estas credenciales en el Developer Portal de ${selectedProvider} para recibir pedidos en vivo.`}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
-                <Button
+                {!isDeferredProvider && <Button
                   variant="secondary"
                   onClick={() => setTestOrderModalOpen(true)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                 >
                   <Play size={16} />
                   Simular Pedido de Prueba
-                </Button>
+                </Button>}
                 <Button
                   variant="primary"
                   onClick={() => saveConfigMutation.mutate(formData)}
@@ -1015,7 +1027,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             </div>
 
             {/* Webhook URL Box */}
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '16px 20px', marginBottom: 24 }}>
+            {!isDeferredProvider && <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '16px 20px', marginBottom: 24 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <strong style={{ color: '#166534', fontSize: '0.875rem', display: 'block', marginBottom: 4 }}>
@@ -1032,10 +1044,10 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   {copied ? '¡Copiado!' : 'Copiar URL'}
                 </Button>
               </div>
-            </div>
+            </div>}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-              <div>
+              {!isDeferredProvider ? <div>
                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
                   Estado de la Integración
                 </label>
@@ -1048,7 +1060,9 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   />
                   <span style={{ fontWeight: 600 }}>Activar recepción de pedidos en tiempo real</span>
                 </label>
-              </div>
+              </div> : <div style={{ color: '#92400e', fontSize: '0.875rem', paddingTop: 22 }}>
+                <strong>Pendiente de validación.</strong> Guardar no habilita recepción, webhooks ni sincronización externa.
+              </div>}
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
@@ -1088,6 +1102,9 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   value={formData.client_secret ?? ''}
                   onChange={(e) => setFormData({ ...formData, client_secret: e.target.value })}
                 />
+                {isDeferredProvider && formData.has_client_secret && (
+                  <small style={{ color: '#64748b' }}>Secreto guardado. Déjalo vacío para conservarlo.</small>
+                )}
               </div>
 
               <div>
@@ -1101,6 +1118,9 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   value={formData.webhook_secret ?? ''}
                   onChange={(e) => setFormData({ ...formData, webhook_secret: e.target.value })}
                 />
+                {isDeferredProvider && formData.has_webhook_secret && (
+                  <small style={{ color: '#64748b' }}>Secreto guardado. Déjalo vacío para conservarlo.</small>
+                )}
               </div>
 
               <div>

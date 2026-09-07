@@ -316,3 +316,16 @@ Se descartan acceso directo del modelo a la base, tool-calling de mutación, apl
 conversación, change sets multiacción con commits parciales, confiar en permisos del cliente y
 persistir prompts/transcripts. La contrapartida es una configuración compuesta por pasos revisables;
 se acepta para preservar atomicidad, reversibilidad y auditoría del MVP.
+
+
+## SDD-ADR-035 — Transporte HTTP y worker de disponibilidad SaaS
+
+Estado: adoptada en el paquete local autorizado de remediación SaaS; publicación/configuración
+productiva conserva autorización separada. Se mueve `httpx`, ya utilizado en pruebas, a
+runtime para el adaptador Uber y el worker. OAuth y disponibilidad usan tiempos límite,
+respuestas verificadas y no exponen credenciales. No se acopla dominio a tipos del cliente:
+el adaptador conserva la frontera. Alternativa descartada: marcar sincronizado sin I/O;
+`urllib` directo exigiría duplicar transporte inyectable y manejo uniforme de errores.
+Consecuencia: nueva dependencia runtime con revisión de vulnerabilidades en CI; fallos de
+red se modelan como reintento/error, nunca confirmación. Lease/CAS y reconciliación de versión
+están definidos en SDD SaaS; el worker se detiene sin borrar comandos pendientes.

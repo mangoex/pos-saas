@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
-from pydantic import BaseModel, Field
 import sqlalchemy as sa
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..operations import AuthorizationError, BusinessError, NotFoundError, _audit, _now
+from ..operations import (
+    AuthorizationError,
+    NotFoundError,
+    _audit,
+    _now,
+    _require_active_actor_organization,
+    require_permission,
+)
+from .service import channel_service
 
 UTC = timezone.utc
 
@@ -35,10 +43,11 @@ def toggle_kill_switch(
         .mappings()
         .first()
     )
-    if not actor:
+    if not actor or actor["status"] != "active":
         raise AuthorizationError("actor_required", "Actor is not valid")
 
     org_id = str(actor["organization_id"])
+    _require_active_actor_organization(session, actor_user_id)
 
     # Verify product exists in tenant
     product = (
@@ -58,8 +67,19 @@ def toggle_kill_switch(
 
     # 1. Update local branch availability for all branches in organization (or specific branch)
     if req.branch_id:
-        target_branches = [req.branch_id]
+        target_branch = session.scalar(
+            sa.select(models.branches.c.id).where(
+                models.branches.c.id == req.branch_id,
+                models.branches.c.organization_id == org_id,
+                models.branches.c.status == "active",
+            )
+        )
+        if not target_branch:
+            raise AuthorizationError("branch_scope_denied", "Branch scope is denied")
+        require_permission(session, actor_user_id, "catalog.manage", str(target_branch))
+        target_branches = [str(target_branch)]
     else:
+        require_permission(session, actor_user_id, "catalog.manage")
         target_branches = list(
             session.execute(
                 sa.select(models.branches.c.id).where(
@@ -106,7 +126,12 @@ def toggle_kill_switch(
         .values(is_active=req.is_available)
     )
 
-    # 3. Retrieve configured integrations
+    uber_sync_jobs = channel_service.enqueue_uber_availability_sync(
+        session, org_id, req.product_id, req.is_available, req.branch_id
+    )
+
+    # 3. Retrieve configured integrations.  A configuration by itself is not
+    # proof that an external provider accepted the availability update.
     active_integrations = set(
         session.execute(
             sa.select(models.channel_integrations.c.provider).where(
@@ -137,11 +162,17 @@ def toggle_kill_switch(
 
     for key, prov_code, prov_name in providers_catalog:
         if prov_code in active_integrations:
-            action_desc = "reactivado" if req.is_available else "pausado"
+            if prov_code == "UBER_EATS" and uber_sync_jobs:
+                channel_statuses[key] = {
+                    "status": "pending_confirmation",
+                    "is_available": req.is_available,
+                    "message": "Cambio durable en cola para confirmación de Uber Eats.",
+                }
+                continue
             channel_statuses[key] = {
-                "status": "synced",
+                "status": "provider_confirmation_required",
                 "is_available": req.is_available,
-                "message": f"Producto {action_desc} en {prov_name}",
+                "message": f"Disponibilidad local actualizada; {prov_name} no confirmó el cambio.",
             }
         else:
             channel_statuses[key] = {
@@ -180,16 +211,18 @@ def toggle_kill_switch(
 
 
 def get_channels_status(session: Session, actor_user_id: str) -> list[dict[str, Any]]:
-    """Get the connection status, mapped store counts, and today's order metrics per delivery channel."""
+    """Get connection, mapped-store, and current-order status per delivery channel."""
     actor = (
         session.execute(sa.select(models.users).where(models.users.c.id == actor_user_id))
         .mappings()
         .first()
     )
-    if not actor:
+    if not actor or actor["status"] != "active":
         raise AuthorizationError("actor_required", "Actor is not valid")
 
     org_id = str(actor["organization_id"])
+    _require_active_actor_organization(session, actor_user_id)
+    require_permission(session, actor_user_id, "admin.manage")
 
     channels_def = [
         {"provider": "UBER_EATS", "key": "uber_eats", "name": "Uber Eats"},
@@ -211,13 +244,16 @@ def get_channels_status(session: Session, actor_user_id: str) -> list[dict[str, 
             .first()
         )
 
-        stores_count = session.execute(
-            sa.select(sa.func.count(models.channel_store_mappings.c.id)).where(
-                models.channel_store_mappings.c.organization_id == org_id,
-                models.channel_store_mappings.c.provider == prov,
-                models.channel_store_mappings.c.is_active.is_(True),
-            )
-        ).scalar() or 0
+        stores_count = (
+            session.execute(
+                sa.select(sa.func.count(models.channel_store_mappings.c.id)).where(
+                    models.channel_store_mappings.c.organization_id == org_id,
+                    models.channel_store_mappings.c.provider == prov,
+                    models.channel_store_mappings.c.is_active.is_(True),
+                )
+            ).scalar()
+            or 0
+        )
 
         is_enabled = bool(cfg["is_enabled"]) if cfg else False
         environment = str(cfg["environment"]) if cfg else "sandbox"
@@ -229,7 +265,9 @@ def get_channels_status(session: Session, actor_user_id: str) -> list[dict[str, 
                 "name": c["name"],
                 "is_enabled": is_enabled,
                 "environment": environment,
-                "status": "connected" if is_enabled and stores_count > 0 else ("ready" if is_enabled else "disconnected"),
+                "status": "connected"
+                if is_enabled and stores_count > 0
+                else ("ready" if is_enabled else "disconnected"),
                 "mapped_stores_count": stores_count,
                 "auto_accept": bool(cfg["auto_accept"]) if cfg else True,
                 "default_prep_time_minutes": int(cfg["default_prep_time_minutes"]) if cfg else 20,

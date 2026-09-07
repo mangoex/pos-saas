@@ -56,23 +56,27 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
-def test_workspace_is_recipe_authorized_and_scope_is_explicit() -> None:
+def test_recipe_workspace_fails_closed_at_the_saas_boundary() -> None:
     client = _client()
-    scoped = client.get("/api/v1/recipes/workspace", headers={"X-Actor-User-Id": CASHIER_ID})
-    assert scoped.status_code == 403 and scoped.json()["detail"]["code"] == "recipe_branch_required"
-    headers = {"X-Actor-User-Id": CASHIER_ID}
-    allowed = client.get(f"/api/v1/recipes/workspace?branch_id={BRANCH_A}", headers=headers)
-    assert allowed.status_code == 200
-    assert allowed.json()["products"] == [
-        {"id": PRODUCT_ID, "name": "Producto PCO007", "sku": "PCO007-P", "has_recipe": False}
-    ]
-    foreign = client.get(f"/api/v1/recipes/workspace?branch_id={BRANCH_B}", headers=headers)
-    assert foreign.status_code == 403
-    owner = client.get("/api/v1/recipes/workspace", headers={"X-Actor-User-Id": OWNER_ID})
-    assert owner.status_code == 200 and owner.json()["corporate_allowed"] is True
+    requests = (
+        client.get("/api/v1/recipes/workspace", headers={"X-Actor-User-Id": CASHIER_ID}),
+        client.get(
+            f"/api/v1/recipes/workspace?branch_id={BRANCH_A}",
+            headers={"X-Actor-User-Id": CASHIER_ID},
+        ),
+        client.get(
+            f"/api/v1/recipes/workspace?branch_id={BRANCH_B}",
+            headers={"X-Actor-User-Id": CASHIER_ID},
+        ),
+        client.get("/api/v1/recipes/workspace", headers={"X-Actor-User-Id": OWNER_ID}),
+    )
+
+    for response in requests:
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "feature_out_of_saas_scope"
 
 
-def test_recipe_http_requires_actor_key_and_strict_json() -> None:
+def test_recipe_write_requires_actor_then_fails_closed_at_the_saas_boundary() -> None:
     client = _client()
     base = {
         "branch_id": BRANCH_A,
@@ -87,49 +91,10 @@ def test_recipe_http_requires_actor_key_and_strict_json() -> None:
     actor_headers = {"X-Actor-User-Id": CASHIER_ID}
     missing_actor = client.put(path, json=base, headers={"Idempotency-Key": "http-key"})
     assert missing_actor.status_code == 401
-    missing_key = client.put(path, json=base, headers=actor_headers)
-    assert missing_key.status_code == 409
-    assert missing_key.json()["detail"]["code"] == "idempotency_key_required"
-    extra = client.put(
+    response = client.put(
         path,
-        json={**base, "unexpected": True},
-        headers={**actor_headers, "Idempotency-Key": "http-extra"},
-    )
-    assert extra.status_code == 422
-    invalid_uuid = client.put(
-        "/api/v1/products/not-a-uuid/recipe",
         json=base,
-        headers={**actor_headers, "Idempotency-Key": "http-invalid"},
+        headers={**actor_headers, "Idempotency-Key": "http-recipe-out-of-scope"},
     )
-    assert invalid_uuid.status_code == 422
-    created = client.put(
-        path, json=base, headers={**actor_headers, "Idempotency-Key": "http-create"}
-    )
-    assert created.status_code == 200
-    replay = client.put(
-        path, json=base, headers={**actor_headers, "Idempotency-Key": "http-create"}
-    )
-    assert replay.status_code == 200 and replay.json()["id"] == created.json()["id"]
-    manager_payload = {
-        **base,
-        "expected_active_recipe_id": created.json()["id"],
-        "yield_quantity": "1",
-        "components": [{
-            "item_id": ITEM_ID, "unit_id": UNIT_ID, "net_quantity": "1", "waste_rate": "0",
-        }],
-    }
-    manager_compatible = client.put(
-        path, json=manager_payload,
-        headers={**actor_headers, "Idempotency-Key": "recipe-manager-string-payload"},
-    )
-    assert manager_compatible.status_code == 200
-    changed_key = client.put(
-        path,
-        json={**base, "expected_active_recipe_id": created.json()["id"]},
-        headers={**actor_headers, "Idempotency-Key": "http-create"},
-    )
-    assert changed_key.status_code == 409
-    assert changed_key.json()["detail"]["code"] == "idempotency_conflict"
-    stale = client.put(path, json=base, headers={**actor_headers, "Idempotency-Key": "http-stale"})
-    assert stale.status_code == 409
-    assert stale.json()["detail"]["code"] == "recipe_version_conflict"
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "feature_out_of_saas_scope"

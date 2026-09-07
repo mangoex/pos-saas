@@ -11,11 +11,11 @@ def _read(relative: str) -> str:
 
 def test_pos_category_option_specs_and_traceability_exist() -> None:
     prd = _read("docs/01-PRD.md")
-    sdd = _read("docs/02-SDD.md")
     bdd = _read("docs/03-BDD-pos-category-option-first.md")
     tdd = _read("docs/04-TDD-pos-category-option-first.md")
     matrix = _read("docs/05-matriz-trazabilidad.md")
-    assert "PRD-FR-213" in prd and "POS-CAT-004" in sdd
+    assert "PRD-FR-713" in prd and "PRD-FR-713" in matrix
+    assert "POS-CAT-004" in bdd
     assert "BDD-FEAT-074" in bdd
     for identifier in range(255, 264):
         assert f"BDD-SC-{identifier}" in bdd and f"BDD-SC-{identifier}" in matrix
@@ -27,7 +27,7 @@ def test_percent_safe_alembic_adapter_maps_to_its_technical_bdd_scenario() -> No
     tdd = _read("docs/04-TDD-pos-category-option-first.md")
     matrix = _read("docs/05-matriz-trazabilidad.md")
     report = _read("docs/implementation-reports/POS-CAT-004.md")
-    nfr_row = next(line for line in matrix.splitlines() if line.startswith("| PRD-NFR-017 |"))
+    nfr_row = next(line for line in matrix.splitlines() if line.startswith("| PRD-NFR-517 |"))
     assert "BDD-SC-264" in bdd
     assert "URL percent-encoded se conserva a través de ConfigParser" in bdd
     assert "driver recupera exactamente el URL lógico original" in bdd

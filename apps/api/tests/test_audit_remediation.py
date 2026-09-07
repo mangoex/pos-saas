@@ -231,9 +231,10 @@ def test_dashboard_overview_revenue_only_counts_confirmed_payments(session: Any)
     )
     session.commit()
 
-    overview = get_dashboard_overview(session, branch_id=BRANCH_ID)
+    overview = get_dashboard_overview(session, organization_id=ORGANIZATION_ID)
     # Revenue must not include unconfirmed payments
     # (Only confirmed payments count towards total_revenue_cents)
     assert isinstance(overview["total_revenue_cents"], int)
+    assert overview["total_revenue_cents"] == 0
     assert "order_types" in overview
     assert "mostrador" in overview["order_types"]

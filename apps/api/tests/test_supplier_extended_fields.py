@@ -157,7 +157,7 @@ def test_delete_supplier_deactivates(setup_db: sa.Engine):
         assert res["status"] == "deleted"
         assert res["deleted"] is True
 
-        all_suppliers = list_suppliers(session)
+        all_suppliers = list_suppliers(session, SUPERADMIN_ID)
         assert not any(s["id"] == supplier["id"] for s in all_suppliers)
 
         # 2. Referenced supplier gets deactivated (marked inactive)
@@ -199,7 +199,7 @@ def test_delete_supplier_deactivates(setup_db: sa.Engine):
         assert res2["status"] == "inactive"
         assert res2["deleted"] is False
 
-        all_suppliers2 = list_suppliers(session)
+        all_suppliers2 = list_suppliers(session, SUPERADMIN_ID)
         matching2 = next(s for s in all_suppliers2 if s["id"] == supplier2["id"])
         assert matching2["status"] == "inactive"
 
@@ -369,6 +369,7 @@ def test_create_supplier_by_branch_scoped_manager(setup_db: sa.Engine):
         json={
             "code": "PROV-PRIM-01",
             "commercial_name": "Panadería Local Culiacán",
+            "branch_id": branch_id,
         },
         headers=headers,
     )

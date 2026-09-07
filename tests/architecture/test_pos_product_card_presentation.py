@@ -14,12 +14,12 @@ def _read(relative: str) -> str:
 
 def test_pos_product_card_specs_and_traceability_exist() -> None:
     prd = _read("docs/01-PRD.md")
-    sdd = _read("docs/02-SDD.md")
     bdd = _read("docs/03-BDD-pos-product-card-presentation.md")
     tdd = _read("docs/04-TDD-pos-product-card-presentation.md")
     matrix = _read("docs/05-matriz-trazabilidad.md")
 
-    assert "PRD-FR-214" in prd and "POS-UX-002" in sdd
+    assert "PRD-FR-714" in prd and "PRD-FR-714" in matrix
+    assert "POS-UX-002" in bdd
     assert "BDD-FEAT-075" in bdd
     for identifier in range(265, 270):
         assert f"BDD-SC-{identifier}" in bdd and f"BDD-SC-{identifier}" in matrix

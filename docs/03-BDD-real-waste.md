@@ -3,7 +3,7 @@
 ## BDD-FEAT-043 Captura y autorización de merma
 
 ```gherkin
-@PRD-FR-071 @PRD-FR-072 @inventory @waste
+@PRD-FR-571 @PRD-FR-572 @inventory @waste
 Feature: Capturar merma real clasificada
 
   @BDD-SC-095
@@ -20,7 +20,7 @@ Feature: Capturar merma real clasificada
     Then el sistema rechaza el documento
     And no modifica inventario
 
-@PRD-FR-073 @PRD-FR-075 @inventory @waste
+@PRD-FR-573 @PRD-FR-575 @inventory @waste
 Feature: Confirmar merma idempotente
 
   @BDD-SC-097
@@ -38,7 +38,7 @@ Feature: Confirmar merma idempotente
     When el supervisor intenta confirmarla
     Then se rechaza sin efectos parciales
 
-@PRD-FR-074 @PRD-FR-075 @inventory @waste
+@PRD-FR-574 @PRD-FR-575 @inventory @waste
 Feature: Corregir mediante compensación
 
   @BDD-SC-099

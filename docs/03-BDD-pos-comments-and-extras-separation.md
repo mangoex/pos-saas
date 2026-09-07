@@ -6,7 +6,7 @@
 ## BDD-FEAT-059 Comentarios del pedido e ingredientes adicionales
 
 ```gherkin
-@PRD-FR-199 @PRD-FR-200 @PRD-FR-201 @pos @catalog @inventory
+@PRD-FR-699 @PRD-FR-700 @PRD-FR-701 @pos @catalog @inventory
 Feature: Separar semántica de comentarios y adicionales
 
   @BDD-SC-185

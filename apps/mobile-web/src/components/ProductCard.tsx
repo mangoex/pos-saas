@@ -55,14 +55,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
 
-        <div className="product-card-top-badges">
-          <span className="product-card-rating-badge">
-            ★ 4.8
-          </span>
-          <span className="product-card-time-badge">
-            {product.prep_time || '15-25 min'}
-          </span>
-        </div>
+        {product.prep_time && (
+          <div className="product-card-top-badges">
+            <span className="product-card-time-badge">{product.prep_time}</span>
+          </div>
+        )}
 
         <button
           type="button"

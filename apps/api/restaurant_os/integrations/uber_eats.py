@@ -4,12 +4,87 @@ import hashlib
 import hmac
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
+
+import httpx
 
 from .base import IOrderChannelAdapter, NormalizedOrder, NormalizedOrderItem
 
 
+class UberAvailabilityRetryableError(RuntimeError):
+    """A provider outcome which can be retried without declaring success."""
+
+
+class UberAvailabilityPermanentError(ValueError):
+    """A provider or configuration error which must not be retried blindly."""
+
+
 class UberEatsAdapter(IOrderChannelAdapter):
     PROVIDER_NAME = "UBER_EATS"
+    TOKEN_URL = "https://auth.uber.com/oauth/v2/token"
+    API_BASE_URL = "https://api.uber.com"
+
+    def update_item_availability(
+        self,
+        *,
+        client_id: str,
+        client_secret: str,
+        store_id: str,
+        item_id: str,
+        is_available: bool,
+        client: httpx.Client | None = None,
+    ) -> None:
+        """Issue the documented availability command; only HTTP 204 confirms it."""
+        if not client_id or not client_secret:
+            raise UberAvailabilityPermanentError("uber_credentials_required")
+        own_client = client is None
+        http_client = client or httpx.Client(timeout=10.0)
+        try:
+            token_response = http_client.post(
+                self.TOKEN_URL,
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "grant_type": "client_credentials",
+                    "scope": "eats.store",
+                },
+            )
+            if token_response.status_code >= 500:
+                raise UberAvailabilityRetryableError(
+                    f"uber_token_unavailable:{token_response.status_code}"
+                )
+            if token_response.status_code >= 400:
+                raise UberAvailabilityPermanentError(
+                    f"uber_token_rejected:{token_response.status_code}"
+                )
+            token = str(token_response.json().get("access_token") or "")
+            if not token:
+                raise UberAvailabilityPermanentError("uber_access_token_missing")
+            response = http_client.post(
+                f"{self.API_BASE_URL}/v2/eats/stores/{quote(store_id, safe='')}/menus/items/"
+                f"{quote(item_id, safe='')}",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "suspension_info": {
+                        "suspension": None if is_available else {"reason": "sold_out"}
+                    }
+                },
+            )
+            if response.status_code != 204:
+                if response.status_code >= 500 or response.status_code in {408, 429}:
+                    raise UberAvailabilityRetryableError(
+                        f"uber_update_item_retryable:{response.status_code}"
+                    )
+                raise UberAvailabilityPermanentError(
+                    f"uber_update_item_rejected:{response.status_code}"
+                )
+        except httpx.TimeoutException as exc:
+            raise UberAvailabilityRetryableError("uber_update_item_timeout") from exc
+        except httpx.TransportError as exc:
+            raise UberAvailabilityRetryableError("uber_update_item_transport_error") from exc
+        finally:
+            if own_client:
+                http_client.close()
 
     def verify_webhook_signature(
         self,

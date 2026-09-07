@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import {
   Building2, Package, Receipt,
   ShieldCheck, Trash2, Clock3,
-  BarChart3, Lock,
+  BarChart3, Lock, MessageSquare, PlusCircle,
 } from 'lucide-react';
 import { usePosSession } from '../../session';
 
@@ -69,7 +69,24 @@ const enabledCards: EnabledCard[] = [
 ];
 
 export function branchAdministrationCards(canManageVariations: boolean): EnabledCard[] {
-  return enabledCards;
+  if (!canManageVariations) return enabledCards;
+  return [
+    ...enabledCards,
+    {
+      to: '/administration/variations',
+      label: 'Comentarios del pedido',
+      description: 'Consulta y configura las indicaciones disponibles para cocina.',
+      icon: MessageSquare,
+      permission: 'catalog.branch.manage',
+    },
+    {
+      to: '/administration/ingredient-extras',
+      label: 'Ingredientes adicionales',
+      description: 'Gestiona la disponibilidad de los extras del menú de tu sucursal.',
+      icon: PlusCircle,
+      permission: 'catalog.branch.manage',
+    },
+  ];
 }
 
 const AdminHub: React.FC = () => {

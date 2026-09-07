@@ -107,6 +107,42 @@ def sample_crm_data(test_db: Session) -> dict[str, str]:
             updated_at=now,
         )
     )
+    role_id = "018f6f73-2d0a-74f0-8f1c-000000000071"
+    permission_id = "018f6f73-2d0a-74f0-8f1c-000000000072"
+    test_db.execute(
+        models.users.insert().values(
+            id=USER_ID,
+            organization_id=ORGANIZATION_ID,
+            email="customer-reader@kiwi.test",
+            display_name="Customer reader",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.roles.insert().values(
+            id=role_id,
+            organization_id=ORGANIZATION_ID,
+            name="Customer reader",
+            scope="branch",
+            created_at=now,
+        )
+    )
+    test_db.execute(
+        models.permissions.insert().values(
+            id=permission_id,
+            code="customers.read",
+            description="Read customers",
+            created_at=now,
+        )
+    )
+    test_db.execute(
+        models.user_roles.insert().values(user_id=USER_ID, role_id=role_id, branch_id=BRANCH_ID)
+    )
+    test_db.execute(
+        models.role_permissions.insert().values(role_id=role_id, permission_id=permission_id)
+    )
 
     # 2. Product Category & Products
     test_db.execute(
@@ -293,10 +329,12 @@ def test_get_customer_upsell_recommendations(
 ) -> None:
     recs = get_customer_upsell_recommendations(
         test_db,
+        organization_id=ORGANIZATION_ID,
         customer_id=sample_crm_data["customer_id"],
         current_product_ids=[sample_crm_data["product_a_id"]],
     )
     assert isinstance(recs, list)
+    assert all("confidence_score" not in recommendation for recommendation in recs)
 
 
 def test_branch_scoped_cross_category_recommendations(
@@ -364,10 +402,177 @@ def test_public_upsell_endpoint_requires_branch_context(
 
 
 def test_get_crm_segments_and_churn_risk(test_db: Session, sample_crm_data: dict[str, str]) -> None:
-    crm_summary = get_crm_segments_and_churn_risk(test_db, branch_id=sample_crm_data["branch_id"])
+    crm_summary = get_crm_segments_and_churn_risk(
+        test_db,
+        organization_id=ORGANIZATION_ID,
+        branch_id=sample_crm_data["branch_id"],
+    )
     assert "vip_customers" in crm_summary
     assert "churn_risk_customers" in crm_summary
     assert "new_customers" in crm_summary
+
+
+def test_crm_ignores_customers_and_orders_from_another_organization(
+    test_db: Session, sample_crm_data: dict[str, str]
+) -> None:
+    now = datetime.now(UTC)
+    other_org_id = "018f6f73-2d0a-74f0-8f1c-000000000501"
+    other_customer_id = "018f6f73-2d0a-74f0-8f1c-000000000502"
+    other_branch_id = "018f6f73-2d0a-74f0-8f1c-000000000504"
+    other_product_id = "018f6f73-2d0a-74f0-8f1c-000000000505"
+    other_category_id = "018f6f73-2d0a-74f0-8f1c-000000000507"
+    test_db.execute(
+        models.organizations.insert().values(
+            id=other_org_id,
+            name="Another tenant",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.customers.insert().values(
+            id=other_customer_id,
+            organization_id=other_org_id,
+            name="Other tenant customer",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.product_categories.insert().values(
+            id=other_category_id,
+            organization_id=other_org_id,
+            name="Other category",
+            display_order=1,
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.products.insert().values(
+            id=other_product_id,
+            organization_id=other_org_id,
+            category_id=other_category_id,
+            name="Other tenant product",
+            sku="OTHER-PRODUCT",
+            station="drinks",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.price_versions.insert().values(
+            id="018f6f73-2d0a-74f0-8f1c-000000000506",
+            organization_id=other_org_id,
+            product_id=other_product_id,
+            price_cents=1,
+            valid_from=now,
+            created_at=now,
+        )
+    )
+    test_db.execute(
+        models.orders.insert().values(
+            id="018f6f73-2d0a-74f0-8f1c-000000000503",
+            organization_id=other_org_id,
+            branch_id=other_branch_id,
+            folio="OTHER-1",
+            customer_id=other_customer_id,
+            channel="UBER_EATS",
+            status="delivered",
+            total_cents=999999,
+            created_at=now,
+        )
+    )
+    test_db.commit()
+
+    segments = get_crm_segments_and_churn_risk(test_db, organization_id=ORGANIZATION_ID)
+
+    customer_ids = {
+        customer["id"]
+        for segment in ("vips", "churn_risk", "new_customers")
+        for customer in segments[segment]
+    }
+    assert other_customer_id not in customer_ids
+    assert segments["summary"]["total_customers"] == 1
+    recommendations = get_customer_upsell_recommendations(
+        test_db,
+        organization_id=ORGANIZATION_ID,
+        current_product_ids=[sample_crm_data["product_b_id"]],
+    )
+    recommendation_ids = {recommendation["product_id"] for recommendation in recommendations}
+    assert other_product_id not in recommendation_ids
+
+
+def test_customer_recommendations_rejects_another_tenant_branch(
+    client: TestClient, test_db: Session, sample_crm_data: dict[str, str]
+) -> None:
+    now = datetime.now(UTC)
+    other_org_id = "018f6f73-2d0a-74f0-8f1c-000000000511"
+    other_entity_id = "018f6f73-2d0a-74f0-8f1c-000000000512"
+    other_unit_id = "018f6f73-2d0a-74f0-8f1c-000000000513"
+    other_branch_id = "018f6f73-2d0a-74f0-8f1c-000000000514"
+    test_db.execute(
+        models.organizations.insert().values(
+            id=other_org_id,
+            name="Another tenant",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.legal_entities.insert().values(
+            id=other_entity_id,
+            organization_id=other_org_id,
+            name="Another legal entity",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.business_units.insert().values(
+            id=other_unit_id,
+            organization_id=other_org_id,
+            legal_entity_id=other_entity_id,
+            name="Another unit",
+            code="OTHER",
+            unit_type="branch",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.branches.insert().values(
+            id=other_branch_id,
+            organization_id=other_org_id,
+            legal_entity_id=other_entity_id,
+            business_unit_id=other_unit_id,
+            name="Another branch",
+            code="OTHER",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.commit()
+    token = create_session_token({"user_id": USER_ID}, get_settings().secret_key)
+
+    response = client.post(
+        "/api/v1/admin-ai/customer-recommendations",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "branch_id": other_branch_id,
+            "current_product_ids": [sample_crm_data["product_a_id"]],
+        },
+    )
+
+    assert response.status_code == 403
 
 
 def test_generate_churn_recovery_message() -> None:

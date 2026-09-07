@@ -317,7 +317,11 @@ def test_unrelated_modifier_options_remain_visible() -> None:
         )
         session.commit()
     with factory() as session:
-        modifiers = list_product_modifiers(session, BURGER_ID)
+        modifiers = list_product_modifiers(
+            session,
+            BURGER_ID,
+            organization_id="018f6f73-2d0a-74f0-8f1c-000000000001",
+        )
     option_ids = {option["id"] for group in modifiers for option in group["options"]}
     assert {"ordinary-add-option", "ordinary-remove-option"} <= option_ids
 

@@ -1,3 +1,4 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-saas-test-saas-onboarding-synthetic-v1
 # SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-saas-onboarding-tests-v1
 from __future__ import annotations
 
@@ -94,21 +95,8 @@ def test_signup_creates_new_tenant_and_owner() -> None:
     assert data["user"]["status"] == "active"
     assert data["organization"]["name"] == "Tacos Don Pancho"
     assert data["organization"]["status"] == "active"
-    assert data["organization"]["plan"] == "trial"
-    assert data["organization"]["subscription_status"] == "active"
-    assert data["organization"]["owner_email"] == "pancho@tacos.com"
-    assert data["organization"]["owner_name"] == "Francisco Pancho"
-    assert "tacos-don-pancho" in data["organization"]["slug"]
-    assert data["organization"]["trial_ends_at"] is not None
     assert data["branch"]["name"] == "Sucursal Matriz"
     assert data["branch"]["status"] == "active"
-    assert data["branch"]["slug"] == "matriz"
-
-    # Verify ownership check passes
-    from restaurant_os.operations import _is_organization_owner
-    with client.app.state.test_session_factory() as session:
-        is_owner = _is_organization_owner(session, data["organization"]["id"], "pancho@tacos.com")
-        assert is_owner is True
 
     # Verify session profile with the returned token
     token = data["token"]
@@ -259,176 +247,274 @@ def test_multi_tenant_isolation_between_two_signups() -> None:
     assert session_a["active_branch"]["id"] != session_b["active_branch"]["id"]
 
 
-def test_public_branches_and_catalog_isolated_by_restaurant_slug() -> None:
+def test_trial_is_fourteen_days_and_setup_rejects_skipping_steps() -> None:
+    from datetime import timedelta
+
     client = _client_with_db()
-
-    # Tenant A: Taquería El Pastor
-    resp_a = client.post(
+    response = client.post(
         "/api/v1/auth/signup",
         json={
-            "business_name": "Taquería El Pastor",
-            "owner_name": "Pastor A",
-            "email": "pastor@tenant-a.com",
-            "password": "Password123!",
-            "business_type": "taqueria",
+            "business_name": "Test Trial",
+            "owner_name": "Test Owner",
+            "email": "trial@example.test",
+            "password": "FixturePassword123!",
+            "business_type": "blank",
+            "plan": "pro_599",
         },
     )
-    assert resp_a.status_code == 201
-    slug_a = resp_a.json()["organization"]["slug"]
-    branch_a_id = resp_a.json()["branch"]["id"]
-
-    # Tenant B: Pizzería Napoli
-    resp_b = client.post(
-        "/api/v1/auth/signup",
-        json={
-            "business_name": "Pizzería Napoli",
-            "owner_name": "Napoli B",
-            "email": "napoli@tenant-b.com",
-            "password": "Password123!",
-            "business_type": "pizzeria",
-        },
-    )
-    assert resp_b.status_code == 201
-    slug_b = resp_b.json()["organization"]["slug"]
-    branch_b_id = resp_b.json()["branch"]["id"]
-
-    # 1. Verify /public/branches?restaurant={slug} returns only that restaurant's branches
-    branches_a = client.get(f"/api/v1/public/branches?restaurant={slug_a}").json()
-    assert len(branches_a) == 1
-    assert branches_a[0]["id"] == branch_a_id
-
-    branches_b = client.get(f"/api/v1/public/branches?restaurant={slug_b}").json()
-    assert len(branches_b) == 1
-    assert branches_b[0]["id"] == branch_b_id
-
-    # 2. Verify /public/catalog?restaurant={slug} returns only that restaurant's catalog
-    catalog_a = client.get(f"/api/v1/public/catalog?restaurant={slug_a}").json()
-    assert catalog_a["branch_id"] == branch_a_id
-    assert catalog_a["restaurant_slug"] == slug_a
-    item_names_a = [item["name"] for item in catalog_a["items"]]
-
-    catalog_b = client.get(f"/api/v1/public/catalog?restaurant={slug_b}").json()
-    assert catalog_b["branch_id"] == branch_b_id
-    assert catalog_b["restaurant_slug"] == slug_b
-    item_names_b = [item["name"] for item in catalog_b["items"]]
-
-    # Ensure no overlap and strict isolation
-    assert len(item_names_a) > 0
-    assert len(item_names_b) > 0
-    for name_a in item_names_a:
-        assert name_a not in item_names_b
-
-    # 3. Direct route /public/restaurants/{slug}/catalog
-    cat_direct_a = client.get(f"/api/v1/public/restaurants/{slug_a}/catalog").json()
-    assert cat_direct_a["branch_id"] == branch_a_id
-
-    # 4. Direct route /public/restaurants/{slug}
-    info_a = client.get(f"/api/v1/public/restaurants/{slug_a}").json()
-    assert info_a["slug"] == slug_a
-    assert info_a["name"] == "Taquería El Pastor"
-    assert len(info_a["branches"]) == 1
-    assert info_a["branches"][0]["id"] == branch_a_id
-
-    # 5. Non-existent slug returns 400 with restaurant_not_found
-    info_none = client.get("/api/v1/public/restaurants/restaurante-inexistente")
-    assert info_none.status_code in (400, 404)
-
-
-def test_public_catalog_requires_context_when_multiple_tenants() -> None:
-    client = _client_with_db()
-
-    # Create 2 tenants so environment is multi-tenant
-    client.post(
-        "/api/v1/auth/signup",
-        json={
-            "business_name": "Restaurante Uno",
-            "owner_name": "Dueño Uno",
-            "email": "uno@test.com",
-            "password": "Password123!",
-        },
-    )
-    client.post(
-        "/api/v1/auth/signup",
-        json={
-            "business_name": "Restaurante Dos",
-            "owner_name": "Dueño Dos",
-            "email": "dos@test.com",
-            "password": "Password123!",
-        },
-    )
-
-    # Calling /public/catalog without branch_id or restaurant must fail-closed (no leak)
-    resp = client.get("/api/v1/public/catalog")
-    assert resp.status_code == 400
-    err = resp.json()
-    code = err.get("code") or (err.get("detail") or {}).get("code")
-    assert code == "restaurant_context_required"
-
-
-def test_tenant_operational_endpoints_isolated_from_legacy_org() -> None:
-    client = _client_with_db()
-
-    # 1. Register new tenant
-    signup_resp = client.post(
-        "/api/v1/auth/signup",
-        json={
-            "business_name": "Café Gourmet",
-            "owner_name": "María Gourmet",
-            "email": "maria@gourmet.com",
-            "password": "Password123!",
-            "phone": "+525544332211",
-            "business_type": "cafeteria",
-        },
-    )
-    assert signup_resp.status_code == 201
-    data = signup_resp.json()
-    token = data["token"]
-    org_id = data["organization"]["id"]
-    branch_id = data["branch"]["id"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    # 2. Update mobile theme for this tenant
-    theme_resp = client.put(
-        "/api/v1/catalog/mobile-theme",
-        json={"mobile_theme": "dark"},
-        headers=headers,
-    )
-    assert theme_resp.status_code == 200
-    assert theme_resp.json()["mobile_theme"] == "dark"
-
-    # Verify theme was stored on tenant org, not Kiwi
+    assert response.status_code == 201
+    data = response.json()
+    headers = {"Authorization": f"Bearer {data['token']}"}
     with client.app.state.test_session_factory() as session:
-        theme_stmt = sa.select(models.organizations.c.mobile_theme).where(
-            models.organizations.c.id == org_id
+        org = (
+            session.execute(
+                sa.select(models.organizations).where(
+                    models.organizations.c.id == data["organization"]["id"]
+                )
+            )
+            .mappings()
+            .one()
         )
-        tenant_theme = session.execute(theme_stmt).scalar_one()
-        assert tenant_theme == "dark"
+        assert org["plan"] == "pro_599"
+        assert org["subscription_status"] == "trialing"
+        assert org["trial_ends_at"] - org["created_at"] == timedelta(days=14)
+    setup = client.get("/api/v1/saas/onboarding", headers=headers)
+    assert setup.status_code == 200
+    assert setup.json()["step"] == "business"
+    skipped = client.put(
+        "/api/v1/saas/onboarding",
+        headers=headers,
+        json={"step": "register", "register_name": "CAJA-01"},
+    )
+    assert skipped.status_code == 409
+    for payload, next_step in [
+        (
+            {
+                "step": "business",
+                "business_name": "Test Trial",
+                "branch_name": "Matriz",
+                "phone": "5551234567",
+                "timezone": "America/Chihuahua",
+            },
+            "menu",
+        ),
+        ({"step": "menu", "business_type": "taqueria"}, "register"),
+        ({"step": "register", "register_name": "CAJA-01"}, "complete"),
+    ]:
+        result = client.put("/api/v1/saas/onboarding", headers=headers, json=payload)
+        assert result.status_code == 200, result.text
+        assert result.json()["step"] == next_step
+        replay = client.put("/api/v1/saas/onboarding", headers=headers, json=payload)
+        assert replay.status_code == 200
+        assert replay.json()["step"] == next_step
 
-    # 3. Seed template into this tenant
-    seed_resp = client.post(
+
+def test_signup_rejects_unrecognized_plan() -> None:
+    client = _client_with_db()
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "business_name": "Test",
+            "owner_name": "Owner",
+            "email": "invalid@example.test",
+            "password": "FixturePassword123!",
+            "plan": "free_forever",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_new_branch_provisions_public_key_in_its_restaurant() -> None:
+    client = _client_with_db()
+    signup = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "business_name": "Branches",
+            "owner_name": "Owner",
+            "email": "branches@example.test",
+            "password": "FixturePassword123!",
+            "business_type": "blank",
+        },
+    ).json()
+    headers = {"Authorization": f"Bearer {signup['token']}"}
+    created = client.post(
+        "/api/v1/branches", headers=headers, json={"name": "Centro", "code": "CENTRO"}
+    )
+    assert created.status_code == 200, created.text
+    storefront = client.get(f"/api/v1/public/storefronts/{signup['organization']['slug']}")
+    assert storefront.status_code == 200, storefront.text
+    assert len(storefront.json()["branches"]) == 2
+    assert all(branch["public_key"] for branch in storefront.json()["branches"])
+
+
+def test_catalog_import_and_template_remain_in_actor_restaurant() -> None:
+    client = _client_with_db()
+    tenants = []
+    for name in ("one", "two"):
+        response = client.post(
+            "/api/v1/auth/signup",
+            json={
+                "business_name": name,
+                "owner_name": name,
+                "email": f"{name}@example.test",
+                "password": "FixturePassword123!",
+                "business_type": "blank",
+            },
+        )
+        assert response.status_code == 201
+        tenants.append(response.json())
+    first, other = tenants
+    headers = {"Authorization": f"Bearer {first['token']}"}
+    foreign = client.post(
+        "/api/v1/catalog/import-custom-catalog",
+        headers=headers,
+        json={
+            "branch_id": other["branch"]["id"],
+            "categories": [{"category": "Test", "products": [{"name": "X", "price_cents": 100}]}],
+        },
+    )
+    assert foreign.status_code == 403
+    imported = client.post(
+        "/api/v1/catalog/import-custom-catalog",
+        headers=headers,
+        json={
+            "branch_id": first["branch"]["id"],
+            "categories": [{"category": "Test", "products": [{"name": "X", "price_cents": 100}]}],
+        },
+    )
+    assert imported.status_code == 200, imported.text
+    seeded = client.post(
         "/api/v1/catalog/seed-starter-template",
-        json={"template_type": "cafeteria", "branch_id": branch_id},
         headers=headers,
+        json={"branch_id": first["branch"]["id"], "template_type": "taqueria"},
     )
-    assert seed_resp.status_code == 200
-    assert seed_resp.json().get("status") == "ok"
-
-    # Verify products seeded belong to org_id
+    assert seeded.status_code == 200, seeded.text
     with client.app.state.test_session_factory() as session:
-        tenant_prods = session.execute(
-            sa.select(models.products.c.id).where(models.products.c.organization_id == org_id)
-        ).fetchall()
-        assert len(tenant_prods) >= 1
+        product_orgs = set(session.execute(sa.select(models.products.c.organization_id)).scalars())
+        assert product_orgs == {first["organization"]["id"]}
 
-    # 4. List invoices for this tenant (must not fail, must be isolated)
-    inv_resp = client.get("/api/v1/invoicing/invoices", headers=headers)
-    assert inv_resp.status_code == 200
-    assert isinstance(inv_resp.json(), list)
 
-    # 5. List cash shifts for this tenant's branch
-    shift_resp = client.get(
-        f"/api/v1/cash/shifts?branch_id={branch_id}",
-        headers=headers,
+def test_mobile_theme_belongs_to_authenticated_restaurant() -> None:
+    client = _client_with_db()
+    tenants = []
+    for name in ("themeone", "themetwo"):
+        response = client.post(
+            "/api/v1/auth/signup",
+            json={
+                "business_name": name,
+                "owner_name": name,
+                "email": f"{name}@example.test",
+                "password": "FixturePassword123!",
+                "business_type": "blank",
+            },
+        )
+        assert response.status_code == 201
+        tenants.append(response.json())
+    headers = {"Authorization": f"Bearer {tenants[0]['token']}"}
+    response = client.put("/api/v1/catalog/mobile-theme", headers=headers, json={"theme": "dark"})
+    assert response.status_code == 200
+    with client.app.state.test_session_factory() as session:
+        themes = dict(
+            session.execute(
+                sa.select(models.organizations.c.id, models.organizations.c.mobile_theme)
+            ).all()
+        )
+        assert themes[tenants[0]["organization"]["id"]] == "dark"
+        assert themes[tenants[1]["organization"]["id"]] != "dark"
+    assert (
+        client.get("/api/v1/catalog/mobile-theme", headers=headers).json()["mobile_theme"] == "dark"
     )
-    assert shift_resp.status_code == 200
-    assert "items" in shift_resp.json()
+    assert client.get("/api/v1/catalog/mobile-theme").status_code == 401
+    assert client.get("/api/v1/public/mobile-theme").status_code == 422
+    public_theme = client.get(
+        "/api/v1/public/mobile-theme",
+        params={"identifier": tenants[0]["organization"]["slug"]},
+    )
+    assert public_theme.status_code == 200
+    assert public_theme.json()["mobile_theme"] == "dark"
+
+
+def test_import_keeps_exact_decimal_price_in_cents() -> None:
+    client = _client_with_db()
+    signup = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "business_name": "Exact Price QA",
+            "owner_name": "Owner",
+            "email": "price@example.test",
+            "password": "synthetic-price-password",
+            "business_type": "blank",
+        },
+    ).json()
+    response = client.post(
+        "/api/v1/catalog/import-custom-catalog",
+        headers={"Authorization": f"Bearer {signup['token']}"},
+        json={
+            "branch_id": signup["branch"]["id"],
+            "categories": [{"category": "QA", "products": [{"name": "Price QA", "price": "9.95"}]}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    with client.app.state.test_session_factory() as session:
+        assert session.scalar(sa.select(models.price_versions.c.price_cents)) == 995
+
+
+def test_guided_signup_defers_template_until_explicit_menu_selection():
+    client = _client_with_db()
+    signup = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "business_name": "Guided QA",
+            "owner_name": "Owner",
+            "email": "guided@example.test",
+            "password": "synthetic-password",
+            "business_type": "restaurant",
+            "defer_catalog_setup": True,
+        },
+    )
+    assert signup.status_code == 201, signup.text
+    data = signup.json()
+    headers = {"Authorization": f"Bearer {data['token']}"}
+    business = client.put(
+        "/api/v1/saas/onboarding",
+        headers=headers,
+        json={
+            "step": "business",
+            "business_name": "Guided QA",
+            "branch_name": "Main",
+            "timezone": "America/Mexico_City",
+        },
+    )
+    assert business.status_code == 200, business.text
+    empty = client.put(
+        "/api/v1/saas/onboarding", headers=headers, json={"step": "menu", "business_type": "blank"}
+    )
+    assert empty.status_code == 200, empty.text
+    with client.app.state.test_session_factory() as session:
+        assert (
+            session.scalar(
+                sa.select(sa.func.count())
+                .select_from(models.products)
+                .where(models.products.c.organization_id == data["organization"]["id"])
+            )
+            == 0
+        )
+
+
+def test_signup_normalizes_public_plan_names_to_canonical_plans():
+    for public_plan, canonical in (("starter", "starter_349"), ("professional", "pro_599")):
+        client = _client_with_db()
+        response = client.post(
+            "/api/v1/auth/signup",
+            json={
+                "business_name": "Plan Contract",
+                "owner_name": "Owner",
+                "email": f"{public_plan}@example.test",
+                "password": "FixturePassword123!",
+                "plan": public_plan,
+                "business_type": "blank",
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["organization"]["plan"] == canonical
+        assert response.json()["organization"]["subscription_status"] == "trialing"

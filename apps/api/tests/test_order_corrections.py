@@ -17,6 +17,7 @@ from restaurant_os import models
 from restaurant_os.operations import (
     AuthorizationError,
     BusinessError,
+    NotFoundError,
     ReportingProjectionService,
     apply_order_reopen_request,
     calculate_expected_cash,
@@ -981,9 +982,9 @@ def test_cross_organization_actor_is_denied_before_idempotency_replay() -> None:
             status="active", created_at=NOW, updated_at=NOW,
         ))
         session.commit()
-        with pytest.raises(AuthorizationError) as denied:
+        with pytest.raises(NotFoundError) as denied:
             apply_order_reopen_request(session, str(request["id"]), _plan([]), "pco005b-cross-org", outsider)
-        assert denied.value.code == "actor_not_authorized"
+        assert denied.value.code == "order_reopen_request_not_found"
         assert session.execute(sa.select(sa.func.count()).select_from(models.order_corrections)).scalar_one() == 0
         assert session.execute(sa.select(sa.func.count()).select_from(models.order_reopen_commands).where(
             models.order_reopen_commands.c.idempotency_key == "pco005b-cross-org"

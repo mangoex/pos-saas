@@ -3,7 +3,7 @@
 ## BDD-FEAT-020 POS minimo de catalogo
 
 ```gherkin
-@PRD-FR-010 @PRD-FR-012 @PRD-FR-014 @PRD-FR-015 @pos @phase0
+@PRD-FR-510 @PRD-FR-512 @PRD-FR-514 @PRD-FR-515 @pos @phase0
 Feature: POS con catalogo de solo lectura
 
   @BDD-SC-027

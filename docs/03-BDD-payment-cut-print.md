@@ -3,7 +3,7 @@
 ## BDD-FEAT-024 Pago basico
 
 ```gherkin
-@PRD-FR-025 @PRD-FR-053 @PRD-FR-054 @payments @phase1
+@PRD-FR-525 @PRD-FR-553 @PRD-FR-554 @payments @phase1
 Feature: Cobro basico de pedido local
 
   @BDD-SC-032
@@ -51,7 +51,7 @@ Feature: Cobro basico de pedido local
 ## BDD-FEAT-025 Corte de caja
 
 ```gherkin
-@PRD-FR-050 @PRD-FR-056 @PRD-FR-057 @cash @phase1
+@PRD-FR-550 @PRD-FR-556 @PRD-FR-557 @cash @phase1
 Feature: Corte final de caja
 
   @BDD-SC-034
@@ -69,7 +69,7 @@ Feature: Corte final de caja
 ## BDD-FEAT-026 Impresion simulada
 
 ```gherkin
-@PRD-FR-046 @PRD-FR-047 @PRD-FR-048 @printing @phase1
+@PRD-FR-546 @PRD-FR-547 @PRD-FR-548 @printing @phase1
 Feature: Cola de impresion simulada
 
   @BDD-SC-035

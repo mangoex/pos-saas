@@ -3,7 +3,7 @@
 ## BDD-FEAT-094 POS-UX-003 navegación progresiva y modificadores por pestaña
 
 ```gherkin
-@PRD-FR-229 @PRD-FR-213 @pos @ux
+@PRD-FR-729 @PRD-FR-713 @pos @ux
 Feature: Capturar productos POS por etapas progresivas
 
   @BDD-SC-425

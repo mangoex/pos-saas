@@ -6,7 +6,7 @@ auditoría posterior de Sol.
 
 ## BDD-FEAT-081 Frontera operacional y repositorio seguros
 
-@PRD-FR-221 @PRD-FR-222 @PRD-NFR-006 @PRD-NFR-026 @security @printing
+@PRD-FR-721 @PRD-FR-722 @PRD-NFR-506 @PRD-NFR-526 @security @printing
 Feature: Denegar operación sin autoridad y excluir artefactos sensibles
 
   @BDD-SC-355
@@ -70,7 +70,7 @@ Feature: Denegar operación sin autoridad y excluir artefactos sensibles
     And un fixture sintético permitido continúa verificándose por contenido y procedencia
     And detecta PEM u OpenSSH, credenciales en tests, sidecars SQLite y dumps o exportes SQL
 
-  @PRD-FR-215 @PRD-NFR-024
+  @PRD-FR-715 @PRD-NFR-524
   @BDD-SC-454
   Scenario: Revisión posterior contiene la semilla destructiva 0049 sin inventar roles
     Given 0049 ya forma parte de la historia y no guardó las asignaciones que eliminó
@@ -118,7 +118,7 @@ Feature: Denegar operación sin autoridad y excluir artefactos sensibles
 
 ## BDD-FEAT-082 Reparación de operaciones POS existentes
 
-@PRD-FR-205 @PRD-FR-206 @PRD-FR-207 @PRD-FR-222 @PRD-NFR-019 @PRD-NFR-027
+@PRD-FR-705 @PRD-FR-706 @PRD-FR-707 @PRD-FR-722 @PRD-NFR-519 @PRD-NFR-527
 Feature: Sustituir simulaciones por operaciones backend autoritativas
 
   @BDD-SC-361
@@ -179,7 +179,7 @@ Feature: Sustituir simulaciones por operaciones backend autoritativas
 
 ## BDD-FEAT-083 Pedidos web públicos gobernados
 
-@PRD-FR-223 @PRD-FR-224 @PRD-NFR-027 @PRD-NFR-028 @public-orders @mobile-web
+@PRD-FR-723 @PRD-FR-724 @PRD-NFR-527 @PRD-NFR-528 @public-orders @mobile-web
 Feature: Capturar y aceptar un pedido público sin inventar autoridad
 
   @BDD-SC-368
@@ -254,7 +254,7 @@ Feature: Capturar y aceptar un pedido público sin inventar autoridad
     Then responde public_order_transition_invalid o branch_scope_denied
     And no crea pedido, reserva, tarea, evento ni turno
 
-  @PRD-NFR-006
+  @PRD-NFR-506
   @BDD-SC-452
   Scenario: Cada SPA queda contenida en su raíz estática canónica
     Given una ruta estática con segmentos ascendentes codificados o un enlace simbólico externo

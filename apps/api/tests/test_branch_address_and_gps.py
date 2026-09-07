@@ -33,6 +33,7 @@ def test_db():
     session.execute(
         models.organizations.insert().values(
             id=ORGANIZATION_ID,
+            slug="test-restaurant",
             name="Kiwi Restaurante",
             status="active",
             created_at=now,
@@ -258,13 +259,15 @@ def test_public_branches_nearest_calculation(client: TestClient, admin_headers: 
     )
 
     # 1. Query without location (returns all active branches)
-    res = client.get("/api/v1/public/branches")
+    res = client.get("/api/v1/public/branches?identifier=test-restaurant")
     assert res.status_code == 200
     all_branches = res.json()
     assert len(all_branches) >= 2
 
     # 2. Query with location near Centro (24.8085, -107.3942)
-    res_centro = client.get("/api/v1/public/branches?lat=24.8085&lng=-107.3942")
+    res_centro = client.get(
+        "/api/v1/public/branches?identifier=test-restaurant&lat=24.8085&lng=-107.3942"
+    )
     assert res_centro.status_code == 200
     sorted_branches = res_centro.json()
     assert len(sorted_branches) >= 2

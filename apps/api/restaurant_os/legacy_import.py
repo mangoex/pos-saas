@@ -18,7 +18,6 @@ from .catalog_policy import (
     product_station,
 )
 from .operations import (
-    ORGANIZATION_ID,
     BusinessError,
     _audit,
     _now,
@@ -33,12 +32,24 @@ def _id() -> str:
     return str(uuid4())
 
 
-def _corporate_import_scope(session: Session, actor_user_id: str, branch_id: str) -> str:
+def _corporate_import_scope(
+    session: Session, actor_user_id: str, branch_id: str
+) -> tuple[str, str]:
     require_permission(session, actor_user_id, "admin.manage")
     authorized = authorize_branch_scope(session, actor_user_id, "catalog.manage", branch_id)
     if authorized != branch_id:
         raise BusinessError("invalid_branch_scope", "A target branch is required")
-    return branch_id
+    organization_id = session.scalar(
+        sa.select(models.users.c.organization_id).where(models.users.c.id == actor_user_id)
+    )
+    if not organization_id or not session.scalar(
+        sa.select(models.branches.c.id).where(
+            models.branches.c.id == branch_id,
+            models.branches.c.organization_id == organization_id,
+        )
+    ):
+        raise BusinessError("invalid_branch_scope", "The branch is outside the actor organization")
+    return str(organization_id), branch_id
 
 
 def create_legacy_import_batch(
@@ -49,7 +60,7 @@ def create_legacy_import_batch(
     manifest_checksum: str,
     manifest: dict[str, Any],
 ) -> dict[str, Any]:
-    target_branch = _corporate_import_scope(session, actor_user_id, branch_id)
+    organization_id, target_branch = _corporate_import_scope(session, actor_user_id, branch_id)
     normalized_source = source_system.strip().lower()
     normalized_checksum = manifest_checksum.strip().lower()
     if not normalized_source or len(normalized_checksum) != 64:
@@ -58,7 +69,7 @@ def create_legacy_import_batch(
     existing = (
         session.execute(
             sa.select(models.legacy_import_batches).where(
-                models.legacy_import_batches.c.organization_id == ORGANIZATION_ID,
+                models.legacy_import_batches.c.organization_id == organization_id,
                 models.legacy_import_batches.c.branch_id == target_branch,
                 models.legacy_import_batches.c.source_system == normalized_source,
                 models.legacy_import_batches.c.manifest_checksum == normalized_checksum,
@@ -73,7 +84,7 @@ def create_legacy_import_batch(
     now = _now()
     batch: dict[str, Any] = {
         "id": _id(),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": organization_id,
         "branch_id": target_branch,
         "source_system": normalized_source,
         "manifest_checksum": normalized_checksum,
@@ -92,6 +103,7 @@ def create_legacy_import_batch(
         batch["id"],
         {"source_system": normalized_source, "manifest_checksum": normalized_checksum},
         target_branch,
+        organization_id=organization_id,
         actor_user_id=actor_user_id,
     )
     session.commit()
@@ -99,11 +111,16 @@ def create_legacy_import_batch(
 
 
 def _batch_for_actor(session: Session, actor_user_id: str, batch_id: str) -> dict[str, Any]:
+    organization_id = session.scalar(
+        sa.select(models.users.c.organization_id).where(models.users.c.id == actor_user_id)
+    )
+    if not organization_id:
+        raise BusinessError("import_batch_not_found", "Import batch was not found")
     batch = (
         session.execute(
             sa.select(models.legacy_import_batches).where(
                 models.legacy_import_batches.c.id == batch_id,
-                models.legacy_import_batches.c.organization_id == ORGANIZATION_ID,
+                models.legacy_import_batches.c.organization_id == organization_id,
             )
         )
         .mappings()
@@ -111,11 +128,15 @@ def _batch_for_actor(session: Session, actor_user_id: str, batch_id: str) -> dic
     )
     if not batch:
         raise BusinessError("import_batch_not_found", "Import batch was not found")
-    _corporate_import_scope(session, actor_user_id, str(batch["branch_id"]))
+    batch_organization_id, _ = _corporate_import_scope(
+        session, actor_user_id, str(batch["branch_id"])
+    )
+    if batch_organization_id != str(batch["organization_id"]):
+        raise BusinessError("import_batch_not_found", "Import batch was not found")
     return dict(batch)
 
 
-def _ensure_unit(session: Session, payload: dict[str, Any]) -> str:
+def _ensure_unit(session: Session, organization_id: str, payload: dict[str, Any]) -> str:
     code = str(payload.get("unit_code", "")).strip().upper()
     aliases = {"LTS": "LITRO", "LT": "LITRO", "PZA": "PIEZA", "PZ": "PIEZA"}
     code = aliases.get(code, code)
@@ -123,7 +144,7 @@ def _ensure_unit(session: Session, payload: dict[str, Any]) -> str:
         raise BusinessError("missing_unit", "Inventory unit is required")
     existing = session.execute(
         sa.select(models.inventory_units.c.id).where(
-            models.inventory_units.c.organization_id == ORGANIZATION_ID,
+            models.inventory_units.c.organization_id == organization_id,
             models.inventory_units.c.code == code,
         )
     ).scalar_one_or_none()
@@ -135,7 +156,7 @@ def _ensure_unit(session: Session, payload: dict[str, Any]) -> str:
     session.execute(
         models.inventory_units.insert().values(
             id=unit_id,
-            organization_id=ORGANIZATION_ID,
+            organization_id=organization_id,
             code=code,
             name=name,
             dimension=dimension,
@@ -157,7 +178,7 @@ def _materialize_customer(
     session.execute(
         models.customers.insert().values(
             id=customer_id,
-            organization_id=ORGANIZATION_ID,
+            organization_id=batch["organization_id"],
             name=name[:160],
             email=None,
             customer_type="person",
@@ -184,7 +205,7 @@ def _materialize_inventory_item(
     existing = (
         session.execute(
             sa.select(models.inventory_items).where(
-                models.inventory_items.c.organization_id == ORGANIZATION_ID,
+                models.inventory_items.c.organization_id == batch["organization_id"],
                 models.inventory_items.c.sku == sku,
             )
         )
@@ -195,14 +216,14 @@ def _materialize_inventory_item(
         if existing["status"] != "archived":
             return "linked", str(existing["id"]), None
         return "needs_review", str(existing["id"]), "sku_conflict"
-    unit_id = _ensure_unit(session, payload)
+    unit_id = _ensure_unit(session, str(batch["organization_id"]), payload)
     item_id = _id()
     now = _now()
     category_name = canonical_category_name(payload.get("category_name"))
     session.execute(
         models.inventory_items.insert().values(
             id=item_id,
-            organization_id=ORGANIZATION_ID,
+            organization_id=batch["organization_id"],
             name=name[:160],
             sku=sku[:64],
             base_unit_id=unit_id,
@@ -218,11 +239,11 @@ def _materialize_inventory_item(
     return "imported", item_id, None
 
 
-def _ensure_category(session: Session, name: str) -> str:
+def _ensure_category(session: Session, organization_id: str, name: str) -> str:
     normalized = canonical_category_name(name)
     existing = session.execute(
         sa.select(models.product_categories.c.id).where(
-            models.product_categories.c.organization_id == ORGANIZATION_ID,
+            models.product_categories.c.organization_id == organization_id,
             models.product_categories.c.name == normalized,
             models.product_categories.c.status != "archived",
         )
@@ -234,7 +255,7 @@ def _ensure_category(session: Session, name: str) -> str:
     session.execute(
         models.product_categories.insert().values(
             id=category_id,
-            organization_id=ORGANIZATION_ID,
+            organization_id=organization_id,
             name=normalized[:120],
             display_order=999,
             status="active",
@@ -258,7 +279,7 @@ def _materialize_product(
     existing = (
         session.execute(
             sa.select(models.products).where(
-                models.products.c.organization_id == ORGANIZATION_ID,
+                models.products.c.organization_id == batch["organization_id"],
                 models.products.c.sku == sku,
             )
         )
@@ -270,13 +291,13 @@ def _materialize_product(
             return "linked", str(existing["id"]), None
         return "needs_review", str(existing["id"]), "sku_conflict"
 
-    category_id = _ensure_category(session, category_name)
+    category_id = _ensure_category(session, str(batch["organization_id"]), category_name)
     product_id = _id()
     now = _now()
     session.execute(
         models.products.insert().values(
             id=product_id,
-            organization_id=ORGANIZATION_ID,
+            organization_id=batch["organization_id"],
             category_id=category_id,
             name=name[:160],
             sku=sku[:64],
@@ -298,7 +319,7 @@ def _materialize_product(
         session.execute(
             models.price_versions.insert().values(
                 id=_id(),
-                organization_id=ORGANIZATION_ID,
+                organization_id=batch["organization_id"],
                 product_id=product_id,
                 price_cents=price_cents,
                 currency="MXN",
@@ -383,7 +404,10 @@ def ingest_legacy_import_records(
 
     session.execute(
         models.legacy_import_batches.update()
-        .where(models.legacy_import_batches.c.id == batch_id)
+        .where(
+            models.legacy_import_batches.c.id == batch_id,
+            models.legacy_import_batches.c.organization_id == batch["organization_id"],
+        )
         .values(updated_at=_now())
     )
     session.commit()
@@ -408,7 +432,10 @@ def complete_legacy_import_batch(
     )
     session.execute(
         models.legacy_import_batches.update()
-        .where(models.legacy_import_batches.c.id == batch_id)
+        .where(
+            models.legacy_import_batches.c.id == batch_id,
+            models.legacy_import_batches.c.organization_id == batch["organization_id"],
+        )
         .values(status=status, summary=summary, updated_at=_now())
     )
     _audit(
@@ -418,6 +445,7 @@ def complete_legacy_import_batch(
         batch_id,
         {"status": status, "summary": summary},
         str(batch["branch_id"]),
+        organization_id=str(batch["organization_id"]),
         actor_user_id=actor_user_id,
     )
     session.commit()
@@ -427,10 +455,13 @@ def complete_legacy_import_batch(
 def list_legacy_import_batches(
     session: Session, actor_user_id: str, branch_id: str
 ) -> list[dict[str, Any]]:
-    target_branch = _corporate_import_scope(session, actor_user_id, branch_id)
+    organization_id, target_branch = _corporate_import_scope(session, actor_user_id, branch_id)
     rows = session.execute(
         sa.select(models.legacy_import_batches)
-        .where(models.legacy_import_batches.c.branch_id == target_branch)
+        .where(
+            models.legacy_import_batches.c.organization_id == organization_id,
+            models.legacy_import_batches.c.branch_id == target_branch,
+        )
         .order_by(models.legacy_import_batches.c.created_at.desc())
     ).mappings()
     return [
@@ -466,6 +497,16 @@ def list_branch_legacy_import_batches(
     target_branch = authorize_branch_scope(session, actor_user_id, "branch.admin.access", branch_id)
     if not target_branch:
         raise BusinessError("invalid_branch_scope", "Select a branch to view its imports")
+    organization_id = session.scalar(
+        sa.select(models.users.c.organization_id).where(models.users.c.id == actor_user_id)
+    )
+    if not organization_id or not session.scalar(
+        sa.select(models.branches.c.id).where(
+            models.branches.c.id == target_branch,
+            models.branches.c.organization_id == organization_id,
+        )
+    ):
+        raise BusinessError("invalid_branch_scope", "The branch is outside the actor organization")
     batches = list(
         session.execute(
             sa.select(
@@ -475,7 +516,10 @@ def list_branch_legacy_import_batches(
                 models.legacy_import_batches.c.summary,
                 models.legacy_import_batches.c.created_at,
             )
-            .where(models.legacy_import_batches.c.branch_id == target_branch)
+            .where(
+                models.legacy_import_batches.c.organization_id == organization_id,
+                models.legacy_import_batches.c.branch_id == target_branch,
+            )
             .order_by(models.legacy_import_batches.c.created_at.desc())
         ).mappings()
     )

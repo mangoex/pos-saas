@@ -10,26 +10,47 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
-from restaurant_os.operations import ORGANIZATION_ID, BusinessError
+from restaurant_os.operations import BusinessError
 
 logger = logging.getLogger(__name__)
 
 
-def list_organizations(session: Session) -> list[dict[str, Any]]:
+def _resolve_organization_scope(
+    session: Session, organization_id: str | None, branch_id: str | None = None
+) -> str:
+    """Require a tenant scope, deriving it only from an active explicit branch."""
+    if branch_id:
+        branch_org = session.scalar(
+            sa.select(models.branches.c.organization_id).where(
+                models.branches.c.id == branch_id,
+                models.branches.c.status == "active",
+            )
+        )
+        if not branch_org:
+            raise BusinessError("invalid_branch", "Branch does not exist or is inactive")
+        if organization_id and str(branch_org) != str(organization_id):
+            raise BusinessError("invalid_branch", "Branch does not belong to organization")
+        return str(branch_org)
+    if organization_id:
+        return str(organization_id)
+    raise BusinessError("organization_required", "Tenant scope is required")
+
+
+def list_organizations(session: Session, organization_id: str) -> list[dict[str, Any]]:
     rows = session.execute(
         sa.select(
             models.organizations.c.id,
             models.organizations.c.name,
             models.organizations.c.status,
             models.organizations.c.created_at,
-        ).order_by(models.organizations.c.name)
+        ).where(models.organizations.c.id == _resolve_organization_scope(session, organization_id))
     ).mappings()
 
     return [dict(row) for row in rows]
 
 
 def list_business_units(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id)
     rows = session.execute(
         sa.select(
             models.business_units.c.id,
@@ -53,7 +74,7 @@ def list_business_units(session: Session, organization_id: str | None = None) ->
 
 
 def list_branches(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id)
     rows = session.execute(
         sa.select(
             models.branches.c.id,
@@ -106,7 +127,7 @@ def list_branches(session: Session, organization_id: str | None = None) -> list[
 
 
 def list_roles(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id)
     rows = session.execute(
         sa.select(
             models.roles.c.id,
@@ -143,7 +164,7 @@ def list_roles(session: Session, organization_id: str | None = None) -> list[dic
 
 
 def list_users(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id)
     rows = session.execute(
         sa.select(
             models.users.c.id,
@@ -197,15 +218,7 @@ def _list_catalog_products_base(
     branch_id: str | None = None,
     organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    org_id = organization_id
-    if branch_id and not org_id:
-        branch_org = session.execute(
-            sa.select(models.branches.c.organization_id).where(models.branches.c.id == branch_id)
-        ).scalar()
-        if branch_org:
-            org_id = str(branch_org)
-    if not org_id:
-        org_id = ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
 
     active_price = (
         sa.select(
@@ -309,15 +322,7 @@ def _project_pos_catalog(
     session: Session, branch_id: str, organization_id: str | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return one fail-closed source for POS categories and concrete products."""
-    org_id = organization_id
-    if not org_id:
-        branch_org = session.execute(
-            sa.select(models.branches.c.organization_id).where(models.branches.c.id == branch_id)
-        ).scalar()
-        if branch_org:
-            org_id = str(branch_org)
-    if not org_id:
-        org_id = ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
 
     base_products = _list_catalog_products_base(session, branch_id, organization_id=org_id)
     eligible = {
@@ -479,7 +484,7 @@ def list_inventory_stock(
     branch_id: str | None = None,
     organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
     stock_query = sa.select(
         models.inventory_movements.c.item_id,
         models.inventory_movements.c.warehouse_id,
@@ -578,7 +583,9 @@ def list_inventory_kardex(
     session: Session,
     item_id: str | None = None,
     branch_id: str | None = None,
+    organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
     query = (
         sa.select(
             models.inventory_movements.c.id,
@@ -624,6 +631,7 @@ def list_inventory_kardex(
         )
         .limit(80)
     )
+    query = query.where(models.inventory_movements.c.organization_id == org_id)
     if item_id:
         query = query.where(models.inventory_movements.c.item_id == item_id)
     if branch_id:
@@ -648,7 +656,7 @@ def _exact_quantity_json(value: Any) -> int | str:
     return format(decimal_value, "f")
 
 
-def list_active_recipes(session: Session) -> list[dict[str, Any]]:
+def list_active_recipes(session: Session, organization_id: str) -> list[dict[str, Any]]:
     rows = session.execute(
         sa.select(
             models.recipes.c.id,
@@ -682,7 +690,10 @@ def list_active_recipes(session: Session) -> list[dict[str, Any]]:
                 models.recipes.c.yield_unit_id == models.inventory_units.c.id,
             )
         )
-        .where(models.recipes.c.status == "active")
+        .where(
+            models.recipes.c.organization_id == _resolve_organization_scope(session, organization_id),
+            models.recipes.c.status == "active",
+        )
         .order_by(sa.func.coalesce(models.products.c.name, models.inventory_items.c.name))
     ).mappings()
     recipes_by_id = {
@@ -749,33 +760,34 @@ def list_active_recipes(session: Session) -> list[dict[str, Any]]:
     return list(recipes_by_id.values())
 
 
-def bootstrap_status(session: Session) -> dict[str, Any]:
+def bootstrap_status(session: Session, organization_id: str) -> dict[str, Any]:
+    org_id = _resolve_organization_scope(session, organization_id)
     counts = {
-        "organizations": _count(session, models.organizations),
-        "legal_entities": _count(session, models.legal_entities),
-        "branches": _count(session, models.branches),
-        "warehouses": _count(session, models.warehouses),
-        "users": _count(session, models.users),
-        "roles": _count(session, models.roles),
-        "audit_events": _count(session, models.audit_events),
-        "product_categories": _count_if_exists(session, models.product_categories),
-        "products": _count_if_exists(session, models.products),
-        "price_versions": _count_if_exists(session, models.price_versions),
-        "cash_shifts": _count_if_exists(session, models.cash_shifts),
-        "orders": _count_if_exists(session, models.orders),
-        "production_tasks": _count_if_exists(session, models.production_tasks),
-        "payments": _count_if_exists(session, models.payments),
-        "cash_shift_cuts": _count_if_exists(session, models.cash_shift_cuts),
-        "print_jobs": _count_if_exists(session, models.print_jobs),
-        "sync_commands": _count_if_exists(session, models.sync_commands),
-        "sync_events": _count_if_exists(session, models.sync_events),
-        "inventory_units": _count_if_exists(session, models.inventory_units),
-        "inventory_items": _count_if_exists(session, models.inventory_items),
-        "recipes": _count_if_exists(session, models.recipes),
-        "inventory_movements": _count_if_exists(session, models.inventory_movements),
+        "organizations": _count_if_exists(session, models.organizations, org_id),
+        "legal_entities": _count_if_exists(session, models.legal_entities, org_id),
+        "branches": _count_if_exists(session, models.branches, org_id),
+        "warehouses": _count_if_exists(session, models.warehouses, org_id),
+        "users": _count_if_exists(session, models.users, org_id),
+        "roles": _count_if_exists(session, models.roles, org_id),
+        "audit_events": _count_if_exists(session, models.audit_events, org_id),
+        "product_categories": _count_if_exists(session, models.product_categories, org_id),
+        "products": _count_if_exists(session, models.products, org_id),
+        "price_versions": _count_if_exists(session, models.price_versions, org_id),
+        "cash_shifts": _count_if_exists(session, models.cash_shifts, org_id),
+        "orders": _count_if_exists(session, models.orders, org_id),
+        "production_tasks": _count_if_exists(session, models.production_tasks, org_id),
+        "payments": _count_if_exists(session, models.payments, org_id),
+        "cash_shift_cuts": _count_if_exists(session, models.cash_shift_cuts, org_id),
+        "print_jobs": _count_if_exists(session, models.print_jobs, org_id),
+        "sync_commands": _count_if_exists(session, models.sync_commands, org_id),
+        "sync_events": _count_if_exists(session, models.sync_events, org_id),
+        "inventory_units": _count_if_exists(session, models.inventory_units, org_id),
+        "inventory_items": _count_if_exists(session, models.inventory_items, org_id),
+        "recipes": _count_if_exists(session, models.recipes, org_id),
+        "inventory_movements": _count_if_exists(session, models.inventory_movements, org_id),
     }
-    organizations = list_organizations(session)
-    branches = list_branches(session)
+    organizations = list_organizations(session, org_id)
+    branches = list_branches(session, org_id)
 
     return {
         "status": "ok" if counts["organizations"] and counts["branches"] else "needs_seed",
@@ -785,13 +797,20 @@ def bootstrap_status(session: Session) -> dict[str, Any]:
     }
 
 
-def _count(session: Session, table: sa.Table) -> int:
-    return int(session.execute(sa.select(sa.func.count()).select_from(table)).scalar_one())
+def _count(session: Session, table: sa.Table, organization_id: str) -> int:
+    column = table.c.id if table is models.organizations else table.c.get("organization_id")
+    if column is None:
+        return 0
+    return int(
+        session.execute(
+            sa.select(sa.func.count()).select_from(table).where(column == organization_id)
+        ).scalar_one()
+    )
 
 
-def _count_if_exists(session: Session, table: sa.Table) -> int:
+def _count_if_exists(session: Session, table: sa.Table, organization_id: str) -> int:
     try:
-        return _count(session, table)
+        return _count(session, table, organization_id)
     except sa.exc.SQLAlchemyError:
         return 0
 
@@ -811,17 +830,22 @@ def list_permissions(session: Session) -> list[dict[str, Any]]:
     ]
 
 
-def list_role_permissions(session: Session, role_id: str) -> list[str]:
+def list_role_permissions(session: Session, role_id: str, organization_id: str) -> list[str]:
+    org_id = _resolve_organization_scope(session, organization_id)
     rows = session.execute(
-        sa.select(models.role_permissions.c.permission_id).where(
-            models.role_permissions.c.role_id == role_id
+        sa.select(models.role_permissions.c.permission_id)
+        .select_from(
+            models.role_permissions.join(
+                models.roles, models.role_permissions.c.role_id == models.roles.c.id
+            )
         )
+        .where(models.role_permissions.c.role_id == role_id, models.roles.c.organization_id == org_id)
     ).fetchall()
     return [row.permission_id for row in rows]
 
 
 def list_warehouses(session: Session, branch_id: str | None = None, organization_id: str | None = None) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
     query = sa.select(models.warehouses).where(
         models.warehouses.c.organization_id == org_id,
     )
@@ -841,7 +865,7 @@ def list_warehouses(session: Session, branch_id: str | None = None, organization
 
 
 def list_inventory_units(session: Session, organization_id: str | None = None) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id)
     rows = session.execute(
         sa.select(models.inventory_units)
         .where(models.inventory_units.c.organization_id == org_id)
@@ -860,7 +884,7 @@ def list_inventory_units(session: Session, organization_id: str | None = None) -
 
 
 def list_inventory_items(session: Session, branch_id: str | None = None, organization_id: str | None = None) -> list[dict[str, Any]]:
-    org_id = organization_id or ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
     if branch_id:
         cost_subq = (
             sa.select(
@@ -937,15 +961,7 @@ def list_categories(
     branch_id: str | None = None,
     organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    org_id = organization_id
-    if branch_id and not org_id:
-        branch_org = session.execute(
-            sa.select(models.branches.c.organization_id).where(models.branches.c.id == branch_id)
-        ).scalar()
-        if branch_org:
-            org_id = str(branch_org)
-    if not org_id:
-        org_id = ORGANIZATION_ID
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
 
     if branch_id:
         return project_pos_catalog(session, branch_id, organization_id=org_id)[0]
@@ -990,12 +1006,16 @@ def get_catalog_cleanup_status(session: Session) -> dict[str, Any]:
     }
 
 
-def get_product_recipe(session: Session, product_id: str) -> dict[str, Any] | None:
+def get_product_recipe(
+    session: Session, product_id: str, organization_id: str
+) -> dict[str, Any] | None:
+    org_id = _resolve_organization_scope(session, organization_id)
     recipe = (
         session.execute(
             sa.select(models.recipes)
             .where(
                 models.recipes.c.product_id == product_id,
+                models.recipes.c.organization_id == org_id,
                 models.recipes.c.recipe_type == "sale",
                 models.recipes.c.status == "active",
             )
@@ -1076,8 +1096,10 @@ UTC = timezone.utc
 
 
 def get_dashboard_overview(
-    session: Session, branch_id: str | None = None, month: str | None = None
+    session: Session, branch_id: str | None = None, month: str | None = None,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
+    org_id = _resolve_organization_scope(session, organization_id, branch_id)
     now = datetime.now(UTC)
 
     if month:
@@ -1097,6 +1119,7 @@ def get_dashboard_overview(
         end_date = now
 
     snapshot_q = sa.select(models.sales_operation_snapshots).where(
+        models.sales_operation_snapshots.c.organization_id == org_id,
         models.sales_operation_snapshots.c.confirmed_at >= start_date,
         models.sales_operation_snapshots.c.confirmed_at < end_date,
     )
@@ -1128,7 +1151,8 @@ def get_dashboard_overview(
 
     # Total Products Active
     prod_q = sa.select(sa.func.count(models.products.c.id)).where(
-        models.products.c.status == "active"
+        models.products.c.status == "active",
+        models.products.c.organization_id == org_id,
     )
     total_products = int(session.execute(prod_q).scalar() or 0)
 
@@ -1170,7 +1194,8 @@ def get_dashboard_overview(
         .select_from(
             ae.outerjoin(cs, ae.c.entity_id == cs.c.id).outerjoin(us, ae.c.actor_user_id == us.c.id)
         )
-        .where(ae.c.action.in_(["cash_shift.opened", "cash_shift.closed"]))
+        .where(ae.c.action.in_(["cash_shift.opened", "cash_shift.closed"]),
+               ae.c.organization_id == org_id)
     )
     if branch_id:
         notif_q = notif_q.where(ae.c.branch_id == branch_id)

@@ -11,6 +11,8 @@ organizations = sa.Table(
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.String(160), nullable=False),
     sa.Column("slug", sa.String(80), nullable=True, unique=True),
+    sa.Column("onboarding_step", sa.String(16), nullable=False, server_default="business"),
+    sa.Column("onboarding_register_name", sa.String(80), nullable=True),
     sa.Column("status", sa.String(32), nullable=False, server_default="active"),
     sa.Column("plan", sa.String(32), nullable=False, server_default="trial"),
     sa.Column("subscription_status", sa.String(32), nullable=False, server_default="active"),
@@ -967,8 +969,18 @@ waste_records = sa.Table(
         sa.ForeignKey("inventory_movements.id"),
         nullable=True,
     ),
-    sa.Column("confirmation_idempotency_key", sa.String(180), nullable=True, unique=True),
-    sa.Column("reversal_idempotency_key", sa.String(180), nullable=True, unique=True),
+    sa.Column("confirmation_idempotency_key", sa.String(180), nullable=True),
+    sa.Column("reversal_idempotency_key", sa.String(180), nullable=True),
+    sa.UniqueConstraint(
+        "organization_id",
+        "confirmation_idempotency_key",
+        name="uq_waste_records_confirmation_idempotency",
+    ),
+    sa.UniqueConstraint(
+        "organization_id",
+        "reversal_idempotency_key",
+        name="uq_waste_records_reversal_idempotency",
+    ),
     sa.Column("reversal_reason", sa.String(400), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
@@ -1112,7 +1124,10 @@ inventory_movements = sa.Table(
     sa.Column("reference", sa.String(120), nullable=True),
     sa.Column("reason", sa.String(240), nullable=False),
     sa.Column("notes", sa.String(600), nullable=True),
-    sa.Column("idempotency_key", sa.String(180), nullable=True, unique=True),
+    sa.Column("idempotency_key", sa.String(180), nullable=True),
+    sa.UniqueConstraint(
+        "organization_id", "idempotency_key", name="uq_inventory_movements_org_idempotency"
+    ),
     sa.Column("status", sa.String(32), nullable=False, server_default="confirmed"),
     sa.Column(
         "reversal_of_id", sa.String(36), sa.ForeignKey("inventory_movements.id"), nullable=True
@@ -1293,13 +1308,17 @@ purchase_documents = sa.Table(
     sa.Column("created_by", sa.String(36), sa.ForeignKey("users.id"), nullable=False),
     sa.Column("confirmed_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
     sa.Column("cancelled_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
-    sa.Column("confirmation_idempotency_key", sa.String(180), nullable=True, unique=True),
+    sa.Column("confirmation_idempotency_key", sa.String(180), nullable=True),
     sa.Column("cancellation_reason", sa.String(400), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
     sa.UniqueConstraint(
         "branch_id", "supplier_id", "document_type", "folio", name="uq_purchase_document_identity"
+    ),
+    sa.UniqueConstraint(
+        "organization_id", "confirmation_idempotency_key",
+        name="uq_purchase_documents_org_confirmation_idempotency",
     ),
 )
 
@@ -2488,6 +2507,8 @@ pos_session_handoffs = sa.Table(
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
     sa.Column("user_id", sa.String(36), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("support_real_actor_user_id", sa.String(36), sa.ForeignKey("users.id")),
+    sa.Column("support_correlation_id", sa.String(36)),
     sa.Column("target_app", sa.String(16), nullable=False),
     sa.Column("code_hash", sa.String(64), nullable=False, unique=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -2784,6 +2805,48 @@ channel_product_mappings = sa.Table(
     ),
 )
 
+# An availability command is durable until the provider acknowledges it.  It is
+# intentionally separate from product mappings: a local desired state is never
+# evidence of a remote state.
+channel_availability_sync_jobs = sa.Table(
+    "channel_availability_sync_jobs",
+    metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
+    sa.Column("branch_id", sa.String(36), sa.ForeignKey("branches.id"), nullable=False),
+    sa.Column("provider", sa.String(32), nullable=False),
+    sa.Column("external_store_id", sa.String(128), nullable=False),
+    sa.Column("external_item_id", sa.String(128), nullable=False),
+    sa.Column("product_id", sa.String(36), sa.ForeignKey("products.id"), nullable=False),
+    sa.Column("is_available", sa.Boolean(), nullable=False),
+    sa.Column("desired_version", sa.Integer(), nullable=False, server_default="1"),
+    sa.Column("status", sa.String(24), nullable=False, server_default="PENDING"),
+    sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("last_error", sa.String(500), nullable=True),
+    sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("lease_token", sa.String(36), nullable=True),
+    sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint(
+        "status IN ('PENDING', 'RETRY', 'CLAIMED', 'CONFIRMED', 'FAILED')",
+        name="ck_channel_availability_sync_status",
+    ),
+    sa.UniqueConstraint(
+        "organization_id",
+        "provider",
+        "external_store_id",
+        "external_item_id",
+        name="uq_channel_availability_sync_target",
+    ),
+)
+sa.Index(
+    "ix_channel_availability_sync_due",
+    channel_availability_sync_jobs.c.status,
+    channel_availability_sync_jobs.c.next_attempt_at,
+)
+
 integration_webhook_logs = sa.Table(
     "integration_webhook_logs",
     metadata,
@@ -2800,10 +2863,35 @@ integration_webhook_logs = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+integration_webhook_inbox = sa.Table(
+    "integration_webhook_inbox",
+    metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
+    sa.Column("provider", sa.String(32), nullable=False),
+    sa.Column("event_id", sa.String(128), nullable=False),
+    sa.Column("payload_hash", sa.String(64), nullable=False),
+    sa.Column("status", sa.String(24), nullable=False, server_default="processing"),
+    sa.Column("attempts", sa.Integer(), nullable=False, server_default="1"),
+    sa.Column("last_error", sa.String(500), nullable=True),
+    sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("lease_token", sa.String(36), nullable=True),
+    sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.UniqueConstraint(
+        "organization_id", "provider", "event_id", name="uq_webhook_inbox_org_provider_event"
+    ),
+    sa.CheckConstraint(
+        "status IN ('processing', 'processed', 'error')", name="ck_webhook_inbox_status"
+    ),
+)
+
 channel_orders_meta = sa.Table(
     "channel_orders_meta",
     metadata,
     sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
     sa.Column("order_id", sa.String(36), sa.ForeignKey("orders.id"), nullable=False, unique=True),
     sa.Column("provider", sa.String(32), nullable=False),
     sa.Column("external_order_id", sa.String(128), nullable=False),
@@ -2816,6 +2904,12 @@ channel_orders_meta = sa.Table(
     sa.Column("raw_payload", sa.JSON(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.UniqueConstraint(
+        "organization_id",
+        "provider",
+        "external_order_id",
+        name="uq_channel_order_org_provider_external",
+    ),
 )
 
 facturapi_config = sa.Table(
@@ -2872,6 +2966,61 @@ cfdi_invoices = sa.Table(
     sa.Column("raw_sat_response", sa.JSON(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
+)
+
+# Durable local intent for a fiscal provider command. It prevents a process or
+# database failure after provider confirmation from turning a retry into a second CFDI.
+fiscal_commands = sa.Table(
+    "fiscal_commands",
+    metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
+    sa.Column("branch_id", sa.String(36), sa.ForeignKey("branches.id"), nullable=False),
+    sa.Column("operation", sa.String(32), nullable=False),
+    sa.Column("operation_fingerprint", sa.String(64), nullable=False),
+    sa.Column("payload_hash", sa.String(64), nullable=False),
+    sa.Column("order_ids", sa.JSON(), nullable=False),
+    sa.Column("invoice_draft", sa.JSON(), nullable=True),
+    sa.Column("status", sa.String(16), nullable=False),
+    sa.Column("provider_resource_id", sa.String(128), nullable=True),
+    sa.Column("invoice_id", sa.String(36), sa.ForeignKey("cfdi_invoices.id"), nullable=True),
+    sa.Column("actor_user_id", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
+    sa.Column("correlation_id", sa.String(36), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint(
+        "status IN ('pending', 'inflight', 'confirmed', 'unknown')",
+        name="ck_fiscal_commands_status",
+    ),
+    sa.UniqueConstraint(
+        "organization_id", "operation", "operation_fingerprint", name="uq_fiscal_commands_operation"
+    ),
+)
+
+# One claim per tenant, fiscal operation and order makes overlapping issue
+# commands mutually exclusive even when concurrent transactions read no rows.
+fiscal_command_order_claims = sa.Table(
+    "fiscal_command_order_claims",
+    metadata,
+    sa.Column(
+        "organization_id", sa.String(36), sa.ForeignKey("organizations.id"), primary_key=True
+    ),
+    sa.Column("operation", sa.String(32), primary_key=True),
+    sa.Column("order_id", sa.String(36), sa.ForeignKey("orders.id"), primary_key=True),
+    sa.Column("command_id", sa.String(36), sa.ForeignKey("fiscal_commands.id"), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+fiscal_command_resource_claims = sa.Table(
+    "fiscal_command_resource_claims",
+    metadata,
+    sa.Column(
+        "organization_id", sa.String(36), sa.ForeignKey("organizations.id"), primary_key=True
+    ),
+    sa.Column("operation", sa.String(32), primary_key=True),
+    sa.Column("target_id", sa.String(36), primary_key=True),
+    sa.Column("command_id", sa.String(36), sa.ForeignKey("fiscal_commands.id"), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 customer_feedbacks = sa.Table(

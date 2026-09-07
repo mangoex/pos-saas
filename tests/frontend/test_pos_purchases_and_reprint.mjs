@@ -90,15 +90,10 @@ function testCorporateInventoryAndWarehousesUseCanonicalBranchScope() {
     'utf-8'
   );
 
-  assert.ok(categorySubNavContent.includes("path: '/warehouses'"));
-  assert.ok(categorySubNavContent.includes("label: 'Almacenes'"));
+  assert.ok(!categorySubNavContent.includes("path: '/warehouses'"), 'Lite navigation must not expose blocked warehouse setup');
   assert.ok(
-    categorySubNavContent.includes("user.permissions || []).includes('catalog.manage')"),
-    'Admin should hide Warehouses without catalog.manage'
-  );
-  assert.ok(
-    appContent.includes('<Route path="warehouses" element={<CatalogManageRoute><WarehousesList /></CatalogManageRoute>} />'),
-    'Admin should guard direct Warehouse navigation with catalog.manage'
+    appContent.includes('<Route path="warehouses" element={<ExcludedCommercialModule module="Múltiples almacenes" />} />'),
+    'Direct warehouse navigation must explain its commercial exclusion'
   );
   assert.ok(warehouseContent.includes('Cada sucursal conserva un solo almacén'));
   assert.ok(warehouseContent.includes('No puede inactivarse mientras la sucursal esté activa.'));

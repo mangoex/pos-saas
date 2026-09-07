@@ -1,3 +1,4 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-starter-catalog-parser-tests-v1
 from __future__ import annotations
 
 import json
@@ -105,11 +106,15 @@ def test_seed_starter_catalog_with_multiple_branches_does_not_raise_multiple_res
         assert result["template"] == "taqueria"
 
         # Verify categories were created
-        cats = session.execute(
-            sa.select(models.product_categories.c.name).where(
-                models.product_categories.c.organization_id == ORG_ID
+        cats = (
+            session.execute(
+                sa.select(models.product_categories.c.name).where(
+                    models.product_categories.c.organization_id == ORG_ID
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert "Tacos" in cats
         assert "Bebidas" in cats
 
@@ -198,7 +203,10 @@ def test_parse_menu_document_with_mock_openrouter() -> None:
                                         {
                                             "name": "Espresso Doble",
                                             "price": 42.0,
-                                            "description": "Extracción doble de café de especialidad",
+                                            "description": (
+                                                "Extracción doble de "
+                                                "café de especialidad"
+                                            ),
                                             "station": "barra",
                                         }
                                     ],
@@ -241,32 +249,23 @@ def test_parse_menu_document_with_mock_openrouter() -> None:
     assert prod["station"] == "barra"
 
 
-def test_parse_menu_document_fallback_for_sushi_menu_without_key() -> None:
+@pytest.mark.parametrize(
+    "filename,size", [("menusushi.jpg", 10), ("tacos.jpg", 100), ("menu.pdf", 100)]
+)
+def test_menu_without_provider_never_invents_another_catalog(filename, size) -> None:
     options = OpenRouterOptions(
         api_key="",
         model="google/gemini-2.5-flash",
         base_url="https://openrouter.ai/api/v1",
         timeout_seconds=10.0,
     )
-
-    result = parse_menu_document(
-        file_base64="aW1hZ2VkYXRh" * 100,
-        mime_type="image/jpeg",
-        filename="menusushi.jpg",
-        options=options,
-    )
-
-    assert "categories" in result
-    category_names = [c["name"] for c in result["categories"]]
-    assert "Sushi" in category_names
-    assert "Gratinados" in category_names
-    assert "Bebidas" in category_names
-
-    sushi_cat = next(c for c in result["categories"] if c["name"] == "Sushi")
-    assert any(p["name"] == "Baby Roll" and p["price"] == 95.0 and p["station"] == "cocina" for p in sushi_cat["products"])
-
-    bebidas_cat = next(c for c in result["categories"] if c["name"] == "Bebidas")
-    assert any(p["name"] == "Té 1LT" and p["station"] == "barra" for p in bebidas_cat["products"])
+    with pytest.raises(ValueError, match="API Key"):
+        parse_menu_document(
+            file_base64="aW1hZ2VkYXRh" * size,
+            mime_type="image/jpeg",
+            filename=filename,
+            options=options,
+        )
 
 
 def test_parse_menu_document_with_gemini_direct_key() -> None:
@@ -285,7 +284,10 @@ def test_parse_menu_document_with_gemini_direct_key() -> None:
                                                 {
                                                     "name": "Limonada Rosa",
                                                     "price": 38.0,
-                                                    "description": "Limonada natural con frutos rojos",
+                                                    "description": (
+                                                        "Limonada natural "
+                                                        "con frutos rojos"
+                                                    ),
                                                     "station": "barra",
                                                 }
                                             ],

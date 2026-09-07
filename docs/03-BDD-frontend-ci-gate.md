@@ -3,7 +3,7 @@
 ## BDD-FEAT-048 Gate de CI para Admin, POS y KDS
 
 ```gherkin
-@PRD-NFR-016 @ci @frontend
+@PRD-NFR-516 @ci @frontend
 Feature: Validar frontend en integración continua
 
   @BDD-SC-115

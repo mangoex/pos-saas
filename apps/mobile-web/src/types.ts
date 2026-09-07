@@ -68,6 +68,19 @@ export interface BranchInfo {
   mobile_theme?: 'light' | 'dark' | string;
 }
 
+export interface StorefrontOrganization {
+  id: string;
+  name: string;
+  public_slug: string;
+  mobile_theme?: 'light' | 'dark' | string | null;
+}
+
+export interface Storefront {
+  organization: StorefrontOrganization;
+  branches: BranchInfo[];
+  selected_branch_id: string | null;
+}
+
 export interface CartItem {
   cart_id: string;
   product: Product;

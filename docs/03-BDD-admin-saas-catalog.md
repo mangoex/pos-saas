@@ -3,7 +3,7 @@
 ## BDD-FEAT-030 Consola Admin SaaS
 
 ```gherkin
-@PRD-FR-001 @PRD-FR-002 @PRD-FR-003 @PRD-FR-005 @admin @phase1
+@PRD-FR-501 @PRD-FR-502 @PRD-FR-503 @PRD-FR-505 @admin @phase1
 Feature: Consola administrativa SaaS
 
   @BDD-SC-046
@@ -37,7 +37,7 @@ Feature: Consola administrativa SaaS
 ## BDD-FEAT-031 Catalogos administrables
 
 ```gherkin
-@PRD-FR-002 @PRD-FR-003 @PRD-FR-010 @PRD-FR-011 @PRD-FR-012 @PRD-FR-014 @PRD-FR-015 @catalog @phase1
+@PRD-FR-502 @PRD-FR-503 @PRD-FR-510 @PRD-FR-511 @PRD-FR-512 @PRD-FR-514 @PRD-FR-515 @catalog @phase1
 Feature: Catalogos de sucursales y productos
 
   @BDD-SC-047
@@ -58,7 +58,7 @@ Feature: Catalogos de sucursales y productos
     And marca disponibilidad para la Sucursal Piloto
     And registra auditoria del alta
 
-  @PRD-FR-005
+  @PRD-FR-505
   @BDD-SC-453
   Scenario: Administrar un almacén por sucursal sin romper la operación
     Given un actor corporativo con `catalog.manage` y sin `admin.manage`
@@ -78,7 +78,7 @@ Feature: Catalogos de sucursales y productos
 ## BDD-FEAT-047 Catálogos consistentes y administración desde POS
 
 ```gherkin
-@PRD-FR-017 @PRD-FR-019 @catalog @branches
+@PRD-FR-517 @PRD-FR-519 @catalog @branches
 Feature: Compartir catálogos y contexto de sucursal
 
   @BDD-SC-110

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import sqlalchemy as sa
@@ -19,8 +21,26 @@ from restaurant_os.auth import (
     hash_password,
 )
 from restaurant_os.config import get_settings
-from restaurant_os.operations import _assign_default_role_permissions, _id, _now
-from restaurant_os.saas_onboarding import signup_tenant
+from restaurant_os.operations import _assign_default_role_permissions, _audit, _id, _now
+from restaurant_os.saas_onboarding import _generate_slug, signup_tenant
+
+_SUBSCRIPTION_PLANS = {"starter_349": 34900, "pro_599": 59900, "enterprise": 120000}
+_PLAN_FEES = {"trial": 0, **_SUBSCRIPTION_PLANS}
+
+
+def _subscription_audit(session: Session, action: str, tenant_id: str, actor_id: str, payload: dict[str, Any]) -> None:
+    support_context = session.info.get("support_audit_context")
+    if support_context:
+        actor_id = str(support_context["real_actor_user_id"])
+        payload = {**payload, **support_context}
+    correlation_id = (
+        str(support_context["correlation_id"]) if support_context else str(uuid.uuid4())
+    )
+    session.execute(models.audit_events.insert().values(
+        id=_id(), organization_id=tenant_id, branch_id=None, actor_user_id=actor_id,
+        action=action, entity_type="organization_subscription", entity_id=tenant_id,
+        payload=payload, correlation_id=correlation_id, created_at=_now(),
+    ))
 
 
 class CreateTenantAdminRequest(BaseModel):
@@ -28,11 +48,66 @@ class CreateTenantAdminRequest(BaseModel):
     owner_name: str = Field(..., min_length=2, max_length=160)
     email: str = Field(..., min_length=5, max_length=180)
     phone: str | None = None
-    password: str = Field(default="Password123!", min_length=8)
+    password: str = Field(..., min_length=12)
     business_type: str = Field(default="general")
     plan: str = Field(default="starter_349")  # trial, starter_349, pro_599, enterprise
     menu_mode: str = Field(default="generate_by_type")  # generate_by_type, blank, ai_import
     ai_menu_text: str | None = None
+
+
+def _allocate_storefront_slug(session: Session, organization_name: str) -> str:
+    for _ in range(16):
+        candidate = _generate_slug(organization_name)
+        exists = session.scalar(
+            sa.select(models.organizations.c.id).where(models.organizations.c.slug == candidate)
+        )
+        if not exists:
+            return candidate
+    raise HTTPException(status_code=409, detail={"code": "storefront_identity_unavailable"})
+
+
+def _ensure_storefront_identity(
+    session: Session,
+    organization_id: str,
+    branch_id: str,
+    organization_name: str,
+    now: Any,
+) -> tuple[str, str]:
+    """Provision missing public identity once; never rotate a live restaurant URL or key."""
+    slug = session.scalar(
+        sa.select(models.organizations.c.slug).where(models.organizations.c.id == organization_id)
+    )
+    if not slug:
+        slug = _allocate_storefront_slug(session, organization_name)
+        session.execute(
+            models.organizations.update()
+            .where(models.organizations.c.id == organization_id)
+            .values(slug=slug, updated_at=now)
+        )
+
+    keys = session.execute(
+        sa.select(models.public_order_keys.c.public_key).where(
+            models.public_order_keys.c.organization_id == organization_id,
+            models.public_order_keys.c.branch_id == branch_id,
+            models.public_order_keys.c.status == "active",
+        )
+    ).scalars().all()
+    if len(keys) > 1:
+        raise HTTPException(status_code=409, detail={"code": "storefront_key_ambiguous"})
+    if keys:
+        return str(slug), str(keys[0])
+
+    public_key = f"pk_{uuid.uuid4().hex}"
+    session.execute(
+        models.public_order_keys.insert().values(
+            public_key=public_key,
+            organization_id=organization_id,
+            branch_id=branch_id,
+            status="active",
+            created_at=now,
+        )
+    )
+    return str(slug), public_key
 
 
 def require_superadmin(session: Session, actor_user_id: str | None, email: str | None = None) -> dict[str, Any]:
@@ -59,15 +134,127 @@ def require_superadmin(session: Session, actor_user_id: str | None, email: str |
             detail={"code": "superadmin_forbidden", "message": "Acceso restringido a Superadministradores"},
         )
 
-    user_email = str(user["email"]).lower()
-    is_sa = bool(user.get("is_superadmin")) or user_email in ("admin@possaas.com", "mangoex@gmail.com")
-    if not is_sa:
+    if user["status"] != "active" or not bool(user.get("is_superadmin")):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "superadmin_forbidden", "message": "Acceso restringido a Superadministradores"},
+        )
+
+    organization = session.execute(
+        sa.select(models.organizations.c.status, models.organizations.c.subscription_status).where(
+            models.organizations.c.id == user["organization_id"]
+        )
+    ).mappings().first()
+    if not organization or (
+        organization["status"] == "suspended"
+        or organization["subscription_status"] == "suspended"
+    ):
         raise HTTPException(
             status_code=403,
             detail={"code": "superadmin_forbidden", "message": "Acceso restringido a Superadministradores"},
         )
 
     return dict(user)
+
+
+def provision_platform_superadmin(
+    session: Session,
+    *,
+    email: str,
+    password: str,
+    display_name: str,
+) -> dict[str, str | bool]:
+    """Persist an explicitly provisioned platform administrator without returning credentials."""
+    normalized_email = email.strip().lower()
+    normalized_name = display_name.strip()
+    if not normalized_email or not normalized_name or len(password) < 12:
+        raise ValueError("platform_superadmin_input_invalid")
+
+    user = session.execute(
+        sa.select(models.users).where(models.users.c.email == normalized_email)
+    ).mappings().first()
+    if user:
+        platform_org_id = session.execute(
+            sa.select(models.organizations.c.id).where(
+                models.organizations.c.name == "POS-SaaS Platform"
+            )
+        ).scalar_one_or_none()
+        if str(user["organization_id"] or "") != str(platform_org_id or ""):
+            raise ValueError("platform_superadmin_existing_tenant_user_forbidden")
+
+    now = _now()
+    platform_org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.name == "POS-SaaS Platform")
+    ).mappings().first()
+    if platform_org:
+        organization_id = str(platform_org["id"])
+    else:
+        organization_id = _id()
+        session.execute(
+            models.organizations.insert().values(
+                id=organization_id,
+                name="POS-SaaS Platform",
+                status="active",
+                plan="enterprise",
+                subscription_status="active",
+                monthly_fee_cents=0,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    created = user is None
+    if user:
+        user_id = str(user["id"])
+        session.execute(
+            models.users.update()
+            .where(models.users.c.id == user_id)
+            .values(is_superadmin=True, status="active", updated_at=now)
+        )
+    else:
+        user_id = _id()
+        session.execute(
+            models.users.insert().values(
+                id=user_id,
+                organization_id=organization_id,
+                email=normalized_email,
+                display_name=normalized_name,
+                status="active",
+                is_superadmin=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    salt = generate_password_salt()
+    session.execute(
+        models.user_credentials.delete().where(models.user_credentials.c.user_id == user_id)
+    )
+    session.execute(
+        models.user_credentials.insert().values(
+            user_id=user_id,
+            password_algorithm=PASSWORD_ALGORITHM,
+            password_hash=hash_password(password, salt),
+            password_salt=salt,
+            updated_at=now,
+        )
+    )
+    session.execute(
+        models.audit_events.insert().values(
+            id=_id(),
+            organization_id=organization_id,
+            branch_id=None,
+            actor_user_id=user_id,
+            action="platform.superadmin_provisioned",
+            entity_type="user",
+            entity_id=user_id,
+            payload={"created": created, "credential_rotated": True},
+            correlation_id=None,
+            created_at=now,
+        )
+    )
+    session.commit()
+    return {"id": user_id, "created": created}
 
 
 def get_saas_metrics(session: Session) -> dict[str, Any]:
@@ -186,6 +373,8 @@ def list_tenants(
                 "owner_email": org.get("owner_email"),
                 "owner_phone": org.get("owner_phone"),
                 "business_type": org.get("business_type"),
+                "slug": org.get("slug"),
+                "menu_url": f"/menu/{org['slug']}" if org.get("slug") else None,
                 "created_at": org["created_at"].isoformat() if org["created_at"] else None,
                 "branches_count": int(branches_count),
                 "products_count": int(products_count),
@@ -221,7 +410,7 @@ def parse_and_import_menu_ai(
     )
 
     categories_cache = {current_category_name: current_category_id}
-    imported_products = []
+    imported_products: list[dict[str, Any]] = []
 
     # Regex patterns for price detection: e.g. "Pizza Margarita - $180 - descripcion" or "Tacos al Pastor $25"
     price_pattern = re.compile(r"\$\s*(\d+(?:\.\d{1,2})?)")
@@ -248,9 +437,16 @@ def parse_and_import_menu_ai(
 
         match = price_pattern.search(line)
         if match:
-            price_val = float(match.group(1))
-            price_cents = int(price_val * 100)
-            delivery_price_cents = int(price_cents * 1.25)  # Auto +25% suggested for delivery apps
+            price_cents = int(
+                (Decimal(match.group(1)) * Decimal(100)).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP
+                )
+            )
+            delivery_price_cents = int(
+                (Decimal(price_cents) * Decimal("1.25")).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP
+                )
+            )
 
             # Split name and description
             before_price = line[: match.start()].strip(" -:")
@@ -331,6 +527,7 @@ def create_tenant_by_admin(session: Session, payload: dict[str, Any]) -> dict[st
         "password": req.password,
         "phone": req.phone,
         "business_type": b_type,
+        "plan": req.plan if req.plan in {"trial", "starter_349", "pro_599"} else "trial",
     }
 
     onboarding_res = signup_tenant(session, signup_payload)
@@ -343,7 +540,6 @@ def create_tenant_by_admin(session: Session, payload: dict[str, Any]) -> dict[st
         .where(models.organizations.c.id == org_id)
         .values(
             plan=req.plan,
-            subscription_status="active",
             monthly_fee_cents=monthly_fee,
             owner_name=req.owner_name,
             owner_email=req.email,
@@ -364,26 +560,28 @@ def create_tenant_by_admin(session: Session, payload: dict[str, Any]) -> dict[st
         )
     ) or 0
 
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == org_id)
+    ).mappings().one()
+
     return {
         "tenant": {
             "id": org_id,
             "name": req.business_name,
             "plan": req.plan,
-            "subscription_status": "active",
+            "subscription_status": org["subscription_status"],
+            "trial_ends_at": org["trial_ends_at"].isoformat() if org["trial_ends_at"] else None,
             "monthly_fee_cents": monthly_fee,
             "owner_name": req.owner_name,
             "owner_email": req.email,
             "business_type": req.business_type,
+            "slug": org["slug"],
+            "menu_url": f"/menu/{org['slug']}",
         },
         "branch": onboarding_res["branch"],
         "owner_user": onboarding_res["user"],
         "token": onboarding_res["token"],
         "products_count": products_count,
-        "credentials": {
-            "email": req.email,
-            "password": req.password,
-            "display_name": req.owner_name,
-        },
     }
 
 
@@ -392,31 +590,61 @@ def update_tenant_status(
     tenant_id: str,
     status: str,
     reason: str | None = None,
+    actor_superadmin_id: str | None = None,
 ) -> dict[str, Any]:
-    """Change tenant subscription status (e.g. active, suspended)."""
+    """Suspend a tenant; activation is a separately audited grant."""
+    actor_id = str(actor_superadmin_id or "")
+    require_superadmin(session, actor_id)
     org = session.execute(
         sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
     ).mappings().first()
 
     if not org:
         raise HTTPException(status_code=404, detail={"code": "tenant_not_found", "message": "Tenant no encontrado"})
+    if status != "suspended":
+        raise HTTPException(status_code=422, detail={"code": "tenant_activation_requires_administrative_grant"})
+    normalized_reason = str(reason or "").strip()
+    if not normalized_reason:
+        raise HTTPException(status_code=422, detail={"code": "suspension_reason_required"})
 
     session.execute(
         models.organizations.update()
         .where(models.organizations.c.id == tenant_id)
         .values(
-            subscription_status=status,
-            suspended_reason=reason if status == "suspended" else None,
+            subscription_status="suspended",
+            suspended_reason=normalized_reason,
             updated_at=_now(),
         )
     )
+    _subscription_audit(session, "tenant.subscription.suspended", tenant_id, actor_id, {
+        "from_subscription_status": org["subscription_status"], "to_subscription_status": "suspended", "reason": normalized_reason,
+    })
     session.commit()
 
     return {
         "tenant_id": tenant_id,
-        "subscription_status": status,
-        "suspended_reason": reason,
+        "subscription_status": "suspended",
+        "suspended_reason": normalized_reason,
     }
+
+
+def grant_tenant_administrative_activation(session: Session, tenant_id: str, plan: str, administrative_concession_reason: str, actor_superadmin_id: str) -> dict[str, Any]:
+    actor_id = str(actor_superadmin_id)
+    require_superadmin(session, actor_id)
+    org = session.execute(sa.select(models.organizations).where(models.organizations.c.id == tenant_id)).mappings().first()
+    if not org:
+        raise HTTPException(status_code=404, detail={"code": "tenant_not_found"})
+    if plan not in _SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=422, detail={"code": "subscription_plan_invalid"})
+    reason = administrative_concession_reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail={"code": "administrative_concession_reason_required"})
+    session.execute(models.organizations.update().where(models.organizations.c.id == tenant_id).values(plan=plan, monthly_fee_cents=_SUBSCRIPTION_PLANS[plan], subscription_status="active", suspended_reason=None, updated_at=_now()))
+    _subscription_audit(session, "tenant.subscription.administratively_activated", tenant_id, actor_id, {
+        "from_subscription_status": org["subscription_status"], "to_subscription_status": "active", "from_plan": org["plan"], "to_plan": plan, "administrative_concession_reason": reason,
+    })
+    session.commit()
+    return {"tenant_id": tenant_id, "plan": plan, "subscription_status": "active"}
 
 
 def update_tenant_plan(
@@ -424,8 +652,11 @@ def update_tenant_plan(
     tenant_id: str,
     plan: str,
     monthly_fee_cents: int | None = None,
+    actor_superadmin_id: str | None = None,
 ) -> dict[str, Any]:
     """Update tenant plan and pricing."""
+    actor_id = str(actor_superadmin_id or "")
+    require_superadmin(session, actor_id)
     org = session.execute(
         sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
     ).mappings().first()
@@ -433,13 +664,14 @@ def update_tenant_plan(
     if not org:
         raise HTTPException(status_code=404, detail={"code": "tenant_not_found", "message": "Tenant no encontrado"})
 
-    fee_map = {
-        "trial": 0,
-        "starter_349": 34900,
-        "pro_599": 59900,
-        "enterprise": 120000,
-    }
-    fee = monthly_fee_cents if monthly_fee_cents is not None else fee_map.get(plan, 0)
+    if plan not in _PLAN_FEES:
+        raise HTTPException(status_code=422, detail={"code": "subscription_plan_invalid"})
+    fee = _PLAN_FEES[plan]
+    if monthly_fee_cents is not None:
+        if not isinstance(monthly_fee_cents, int) or monthly_fee_cents < 0:
+            raise HTTPException(status_code=422, detail={"code": "subscription_fee_invalid"})
+        if monthly_fee_cents != fee:
+            raise HTTPException(status_code=422, detail={"code": "subscription_fee_not_canonical"})
 
     session.execute(
         models.organizations.update()
@@ -449,6 +681,18 @@ def update_tenant_plan(
             monthly_fee_cents=fee,
             updated_at=_now(),
         )
+    )
+    _subscription_audit(
+        session,
+        "tenant.plan.updated",
+        tenant_id,
+        actor_id,
+        {
+            "from_plan": org["plan"],
+            "to_plan": plan,
+            "from_monthly_fee_cents": int(org.get("monthly_fee_cents") or 0),
+            "to_monthly_fee_cents": fee,
+        },
     )
     session.commit()
 
@@ -463,8 +707,11 @@ def update_tenant_details(
     session: Session,
     tenant_id: str,
     data: dict[str, Any],
+    actor_superadmin_id: str | None = None,
 ) -> dict[str, Any]:
     """Update all tenant details: name, business_type, owner info, plan and subscription status."""
+    actor_id = str(actor_superadmin_id or "")
+    require_superadmin(session, actor_id)
     org = session.execute(
         sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
     ).mappings().first()
@@ -480,7 +727,9 @@ def update_tenant_details(
     }
 
     new_plan = data.get("plan", org["plan"])
-    new_fee = fee_map.get(new_plan, int(org.get("monthly_fee_cents") or 0))
+    if new_plan not in fee_map:
+        raise HTTPException(status_code=422, detail={"code": "subscription_plan_invalid"})
+    new_fee = fee_map[new_plan]
 
     update_values: dict[str, Any] = {"updated_at": _now()}
     if "name" in data:
@@ -497,9 +746,10 @@ def update_tenant_details(
         update_values["plan"] = new_plan
         update_values["monthly_fee_cents"] = new_fee
     if "subscription_status" in data:
-        update_values["subscription_status"] = data["subscription_status"]
-        if data["subscription_status"] != "suspended":
-            update_values["suspended_reason"] = None
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "tenant_subscription_status_read_only"},
+        )
 
     session.execute(
         models.organizations.update()
@@ -530,11 +780,23 @@ def update_tenant_details(
                 .values(**user_updates)
             )
 
+    _subscription_audit(
+        session,
+        "tenant.details.updated",
+        tenant_id,
+        actor_id,
+        {
+            "changed_fields": sorted(set(update_values) - {"updated_at"}),
+            "from_plan": org["plan"],
+            "to_plan": new_plan,
+        },
+    )
+
     session.commit()
 
     updated_org = session.execute(
         sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
-    ).mappings().first()
+    ).mappings().one()
 
     return {
         "id": tenant_id,
@@ -546,6 +808,8 @@ def update_tenant_details(
         "plan": updated_org.get("plan"),
         "subscription_status": updated_org.get("subscription_status"),
         "monthly_fee_cents": int(updated_org.get("monthly_fee_cents") or 0),
+        "slug": updated_org.get("slug"),
+        "menu_url": f"/menu/{updated_org['slug']}" if updated_org.get("slug") else None,
     }
 
 
@@ -607,9 +871,25 @@ def impersonate_tenant(
             "sub": str(user["id"]),
             "email": str(user["email"]),
             "impersonated_by": actor_superadmin_id,
+            "target_organization_id": tenant_id,
         },
         settings.secret_key,
     )
+    _audit(
+        session,
+        action="support.impersonation_issued",
+        entity_type="user",
+        entity_id=str(user["id"]),
+        payload={
+            "real_actor_user_id": actor_superadmin_id,
+            "effective_actor_user_id": str(user["id"]),
+            "target_organization_id": tenant_id,
+        },
+        organization_id=tenant_id,
+        actor_user_id=actor_superadmin_id,
+        branch_id=str(branch["id"]) if branch else None,
+    )
+    session.commit()
 
     return {
         "token": token,
@@ -724,16 +1004,20 @@ def create_restaurant_administrator(
     if not tenant_id:
         target_org_id = _id()
         tenant_name = f"Restaurante de {display_name}"
+        slug = _allocate_storefront_slug(session, tenant_name)
         session.execute(
             models.organizations.insert().values(
                 id=target_org_id,
                 name=tenant_name,
+                slug=slug,
+                onboarding_step="business",
                 owner_name=display_name,
                 owner_email=email,
                 owner_phone=phone,
                 status="pending_setup",
                 plan="starter_349",
                 subscription_status="trialing",
+                trial_ends_at=now + timedelta(days=14),
                 monthly_fee_cents=34900,
                 created_at=now,
                 updated_at=now,
@@ -794,13 +1078,12 @@ def create_restaurant_administrator(
         "status": "active",
         "tenant_id": target_org_id,
         "tenant_name": tenant_name,
+        "slug": slug if not tenant_id else (org["slug"] if org else None),
+        "menu_url": (
+            f"/menu/{slug}" if not tenant_id else f"/menu/{org['slug']}" if org and org["slug"] else None
+        ),
         "phone": phone,
         "created_at": now.isoformat(),
-        "credentials": {
-            "email": email,
-            "password": password,
-            "display_name": display_name,
-        },
     }
 
 
@@ -831,6 +1114,34 @@ def setup_my_restaurant(
     ).mappings().first()
 
     if org:
+        if org["subscription_status"] == "suspended":
+            raise HTTPException(status_code=403, detail={"code": "tenant_suspended"})
+        existing_branch = session.execute(
+            sa.select(models.branches)
+            .where(
+                models.branches.c.organization_id == org_id,
+                models.branches.c.status == "active",
+            )
+            .order_by(models.branches.c.created_at, models.branches.c.id)
+        ).mappings().first()
+        if existing_branch:
+            slug, _ = _ensure_storefront_identity(
+                session, str(org_id), str(existing_branch["id"]), str(org["name"]), now
+            )
+            session.commit()
+            return {
+                "tenant": {
+                    "id": org_id,
+                    "name": org["name"],
+                    "business_type": org.get("business_type"),
+                    "plan": org["plan"],
+                    "subscription_status": org["subscription_status"],
+                    "slug": slug,
+                    "menu_url": f"/menu/{slug}",
+                },
+                "branch": {"id": existing_branch["id"], "name": existing_branch["name"]},
+                "user_id": user_id,
+            }
         session.execute(
             models.organizations.update()
             .where(models.organizations.c.id == org_id)
@@ -841,23 +1152,30 @@ def setup_my_restaurant(
                 owner_email=user["email"],
                 owner_phone=phone or org.get("owner_phone"),
                 status="active",
+                subscription_status=org["subscription_status"] or "trialing",
+                trial_ends_at=org.get("trial_ends_at") or now + timedelta(days=14),
+                onboarding_step="complete",
                 updated_at=now,
             )
         )
     else:
         org_id = _id()
+        slug = _allocate_storefront_slug(session, business_name)
         session.execute(
             models.organizations.insert().values(
                 id=org_id,
                 name=business_name,
+                slug=slug,
                 business_type=business_type,
                 owner_name=user["display_name"],
                 owner_email=user["email"],
                 owner_phone=phone,
                 plan="starter_349",
-                subscription_status="active",
+                subscription_status="trialing",
+                trial_ends_at=now + timedelta(days=14),
                 monthly_fee_cents=34900,
                 status="active",
+                onboarding_step="complete",
                 created_at=now,
                 updated_at=now,
             )
@@ -991,14 +1309,28 @@ def setup_my_restaurant(
         )
     )
 
+    slug, _ = _ensure_storefront_identity(session, str(org_id), branch_id, business_name, now)
+
     session.commit()
+
+    completed_org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == org_id)
+    ).mappings().one()
 
     return {
         "tenant": {
             "id": org_id,
             "name": business_name,
             "business_type": business_type,
-            "plan": "starter_349",
+            "plan": completed_org["plan"],
+            "subscription_status": completed_org["subscription_status"],
+            "trial_ends_at": (
+                completed_org["trial_ends_at"].isoformat()
+                if completed_org["trial_ends_at"]
+                else None
+            ),
+            "slug": slug,
+            "menu_url": f"/menu/{slug}",
         },
         "branch": {
             "id": branch_id,

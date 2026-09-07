@@ -130,8 +130,8 @@ def test_pos_navigation_excludes_dashboard_and_inventory_shortcuts() -> None:
     assert '<Navigate to="/pos" replace />' in app
     assert '<Navigate to="/administration/inventory" replace />' in app
     assert 'path="administration/inventory"' in app
-    assert "to: '/administration/inventory'" in admin_hub
-    assert "label: 'Inventario'" in admin_hub
+    assert "to: '/administration/inventory'" not in admin_hub
+    assert "label: 'Inventario'" not in admin_hub
 
 
 def test_category_menu_uses_five_groups_and_large_dynamic_category_cards() -> None:
@@ -158,9 +158,10 @@ def test_category_menu_uses_five_groups_and_large_dynamic_category_cards() -> No
     assert category_card_rules
     assert "min-height: 158px" in category_card_rules.group("rules")
     assert ".pos-sale-menu-page-control" not in styles
-    assert "FAVORITOS inicia directamente en productos" in (
-        DOCS / "02-SDD.md"
-    ).read_text(encoding="utf-8")
+    progressive_bdd = (DOCS / "03-BDD-pos-progressive-catalog.md").read_text(
+        encoding="utf-8"
+    )
+    assert "FAVORITOS" in progressive_bdd
 
 
 def test_checkout_has_no_dead_controls_or_raw_fetch() -> None:
@@ -203,6 +204,6 @@ def test_pos_ux_specification_and_traceability_exist() -> None:
         assert f"BDD-SC-{scenario}" in bdd
     for test_id in ("TDD-TS-055", "TDD-TC-048", "TDD-TC-064", "TDD-TS-070", "TDD-TC-066"):
         assert test_id in tdd
-    assert "PRD-NFR-018" in matrix
+    assert "PRD-NFR-518" in matrix
     assert "TDD-TS-055" in matrix
-    assert "PRD-FR-209" in matrix
+    assert "PRD-FR-709" in matrix

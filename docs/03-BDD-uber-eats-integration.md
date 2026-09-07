@@ -3,7 +3,7 @@
 ## BDD-FEAT-096 Hub de Integraciones y Configuración en Backoffice
 
 ```gherkin
-@PRD-FR-140 @PRD-FR-232 @integrations @admin
+@PRD-FR-640 @PRD-FR-732 @integrations @admin
 Feature: Administración centralizada de credenciales y mapeo de Uber Eats
 
   @BDD-SC-459
@@ -31,7 +31,7 @@ Feature: Administración centralizada de credenciales y mapeo de Uber Eats
 ## BDD-FEAT-097 Ingestión Segura e Idempotente de Órdenes Uber Eats
 
 ```gherkin
-@PRD-FR-141 @PRD-FR-147 @PRD-FR-232 @webhooks @security
+@PRD-FR-641 @PRD-FR-647 @PRD-FR-732 @webhooks @security
 Feature: Recepción y normalización de pedidos de Uber Eats
 
   @BDD-SC-462
@@ -59,7 +59,7 @@ Feature: Recepción y normalización de pedidos de Uber Eats
 ## BDD-FEAT-098 Gestión Operativa de Pedidos Uber Eats en POS
 
 ```gherkin
-@PRD-FR-233 @pos @orders @uber_eats
+@PRD-FR-733 @pos @orders @uber_eats
 Feature: Visualización y control de pedidos Uber Eats en Punto de Venta
 
   @BDD-SC-465

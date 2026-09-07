@@ -84,4 +84,4 @@ def test_phone_flow_specification_is_traceable() -> None:
     for scenario in range(163, 168):
         assert f"BDD-SC-{scenario}" in bdd
     assert "TDD-TS-056" in tdd and "TDD-TC-049" in tdd
-    assert "PRD-FR-198" in matrix
+    assert "PRD-FR-698" in matrix

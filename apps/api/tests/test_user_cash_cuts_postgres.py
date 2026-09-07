@@ -75,7 +75,7 @@ def _postgres_engine() -> sa.Engine:
     environment = {**os.environ, "RESTAURANTOS_DATABASE_URL": url}
     environment.pop("DATABASE_URL", None)
     result = subprocess.run(
-        [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", CURRENT_TEST_REVISION],
+        [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
         cwd=API_DIR, env=environment, capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr

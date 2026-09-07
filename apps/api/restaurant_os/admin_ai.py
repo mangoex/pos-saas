@@ -25,7 +25,6 @@ from sqlalchemy.orm import Session
 
 from restaurant_os import models
 from restaurant_os.operations import (
-    ORGANIZATION_ID,
     AuthorizationError,
     BusinessError,
     authorize_branch_scope,
@@ -44,6 +43,43 @@ INVENTORY_PRICE_CLARIFICATION_OPTIONS = (
     {"id": "missing_purchase_price", "label": "Precio de compra"},
     {"id": "missing_average_cost", "label": "Costo promedio"},
 )
+
+
+def _actor_organization(session: Session, actor_id: str) -> str:
+    organization_id = session.scalar(
+        sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)
+    )
+    if not organization_id:
+        raise AuthorizationError("actor_not_authorized", "Actor is not authorized")
+    return str(organization_id)
+
+
+def _admin_ai_organization(session: Session) -> str:
+    organization_id = session.info.get("admin_ai_organization_id")
+    if not isinstance(organization_id, str) or not organization_id:
+        raise AuthorizationError(
+            "admin_ai_scope_required", "Admin AI organization scope is required"
+        )
+    return organization_id
+
+
+def _authorized_admin_ai_scope(
+    session: Session, actor_id: str, branch_id: str | None
+) -> tuple[str, str | None]:
+    organization_id = _actor_organization(session, actor_id)
+    authorized_branch = authorize_branch_scope(session, actor_id, "catalog.manage", branch_id)
+    if authorized_branch:
+        branch_organization_id = session.scalar(
+            sa.select(models.branches.c.organization_id).where(
+                models.branches.c.id == authorized_branch,
+                models.branches.c.status == "active",
+            )
+        )
+        if str(branch_organization_id or "") != organization_id:
+            raise AuthorizationError(
+                "branch_scope_denied", "Branch belongs to a different organization"
+            )
+    return organization_id, authorized_branch
 
 
 class AdminAiError(RuntimeError):
@@ -569,7 +605,7 @@ def _load_conversation_parent(
             sa.select(models.admin_ai_proposals)
             .where(
                 models.admin_ai_proposals.c.id == parent_proposal_id,
-                models.admin_ai_proposals.c.organization_id == ORGANIZATION_ID,
+                models.admin_ai_proposals.c.organization_id == _admin_ai_organization(session),
                 models.admin_ai_proposals.c.actor_user_id == actor_id,
             )
             .with_for_update()
@@ -623,7 +659,7 @@ def _find_conversation_replay(
     idempotency_key: str,
 ) -> dict[str, Any] | None:
     statement = sa.select(models.admin_ai_proposals).where(
-        models.admin_ai_proposals.c.organization_id == ORGANIZATION_ID,
+        models.admin_ai_proposals.c.organization_id == _admin_ai_organization(session),
         models.admin_ai_proposals.c.actor_user_id == actor_id,
         models.admin_ai_proposals.c.payload["conversation"]["parent_proposal_id"].as_string()
         == parent_proposal_id,
@@ -742,10 +778,10 @@ def _missing_purchase_price_payload(
     )
     valid_filters: list[Any] = [
         presentation.c.item_id == models.inventory_items.c.id,
-        presentation.c.organization_id == ORGANIZATION_ID,
+        presentation.c.organization_id == _admin_ai_organization(session),
         presentation.c.status == "active",
         presentation.c.last_net_price > Decimal("0"),
-        supplier.c.organization_id == ORGANIZATION_ID,
+        supplier.c.organization_id == _admin_ai_organization(session),
         supplier.c.status == "active",
     ]
     if branch_id:
@@ -775,8 +811,8 @@ def _missing_purchase_price_payload(
             )
         )
         .where(
-            models.inventory_items.c.organization_id == ORGANIZATION_ID,
-            models.inventory_units.c.organization_id == ORGANIZATION_ID,
+            models.inventory_items.c.organization_id == _admin_ai_organization(session),
+            models.inventory_units.c.organization_id == _admin_ai_organization(session),
             models.inventory_items.c.status == "active",
             sa.or_(
                 models.inventory_items.c.catalog_scope == "organization",
@@ -795,7 +831,7 @@ def _missing_purchase_price_payload(
         kind="missing_purchase_price",
         description="insumos sin precio de compra utilizable",
         sources=["PRD-FR-093", "PRD-FR-094"],
-        scope={"organization_id": ORGANIZATION_ID, "branch_id": branch_id},
+        scope={"organization_id": _admin_ai_organization(session), "branch_id": branch_id},
         total=total,
         rows=rows,
     )
@@ -825,7 +861,7 @@ def _missing_average_cost_payload(
                 models.warehouses.c.id,
                 models.warehouses.c.name,
             ).where(
-                models.warehouses.c.organization_id == ORGANIZATION_ID,
+                models.warehouses.c.organization_id == _admin_ai_organization(session),
                 models.warehouses.c.branch_id == branch_id,
                 models.warehouses.c.status == "active",
             )
@@ -864,8 +900,8 @@ def _missing_average_cost_payload(
             )
         )
         .where(
-            models.inventory_items.c.organization_id == ORGANIZATION_ID,
-            models.inventory_units.c.organization_id == ORGANIZATION_ID,
+            models.inventory_items.c.organization_id == _admin_ai_organization(session),
+            models.inventory_units.c.organization_id == _admin_ai_organization(session),
             models.inventory_items.c.status == "active",
             sa.or_(
                 models.inventory_items.c.catalog_scope == "organization",
@@ -885,7 +921,7 @@ def _missing_average_cost_payload(
         description="insumos sin costo promedio confirmado",
         sources=["PRD-FR-089", "PRD-FR-109"],
         scope={
-            "organization_id": ORGANIZATION_ID,
+            "organization_id": _admin_ai_organization(session),
             "branch_id": branch_id,
             "warehouse_id": str(warehouse["id"]),
             "warehouse_name": _safe_diagnostic_text(warehouse["name"]),
@@ -989,7 +1025,7 @@ def build_context(session: Session, branch_id: str | None) -> dict[str, Any]:
         valid_branch = session.execute(
             sa.select(models.branches.c.id).where(
                 models.branches.c.id == branch_id,
-                models.branches.c.organization_id == ORGANIZATION_ID,
+                models.branches.c.organization_id == _admin_ai_organization(session),
                 models.branches.c.status == "active",
             )
         ).scalar_one_or_none()
@@ -1018,7 +1054,7 @@ def build_context(session: Session, branch_id: str | None) -> dict[str, Any]:
                     ),
                 )
             )
-            .where(models.products.c.organization_id == ORGANIZATION_ID)
+            .where(models.products.c.organization_id == _admin_ai_organization(session))
             .order_by(models.products.c.id)
         )
         .mappings()
@@ -1034,7 +1070,7 @@ def build_context(session: Session, branch_id: str | None) -> dict[str, Any]:
                 models.inventory_items.c.status,
                 models.inventory_items.c.updated_at,
             )
-            .where(models.inventory_items.c.organization_id == ORGANIZATION_ID)
+            .where(models.inventory_items.c.organization_id == _admin_ai_organization(session))
             .order_by(models.inventory_items.c.id)
         )
         .mappings()
@@ -1047,7 +1083,7 @@ def build_context(session: Session, branch_id: str | None) -> dict[str, Any]:
                 models.inventory_units.c.code,
                 models.inventory_units.c.name,
             )
-            .where(models.inventory_units.c.organization_id == ORGANIZATION_ID)
+            .where(models.inventory_units.c.organization_id == _admin_ai_organization(session))
             .order_by(models.inventory_units.c.id)
         )
         .mappings()
@@ -1064,7 +1100,7 @@ def build_context(session: Session, branch_id: str | None) -> dict[str, Any]:
                 models.modifier_groups.c.status,
                 models.modifier_groups.c.updated_at,
             )
-            .where(models.modifier_groups.c.organization_id == ORGANIZATION_ID)
+            .where(models.modifier_groups.c.organization_id == _admin_ai_organization(session))
             .order_by(models.modifier_groups.c.id)
         )
         .mappings()
@@ -1080,7 +1116,7 @@ def build_context(session: Session, branch_id: str | None) -> dict[str, Any]:
                 models.recipes.c.updated_at,
             )
             .where(
-                models.recipes.c.organization_id == ORGANIZATION_ID,
+                models.recipes.c.organization_id == _admin_ai_organization(session),
                 models.recipes.c.status == "active",
             )
             .order_by(models.recipes.c.id)
@@ -1335,7 +1371,7 @@ def _unit_labels(session: Session, unit_id: str) -> list[Any]:
         session.execute(
             sa.select(models.inventory_units.c.code, models.inventory_units.c.name).where(
                 models.inventory_units.c.id == unit_id,
-                models.inventory_units.c.organization_id == ORGANIZATION_ID,
+                models.inventory_units.c.organization_id == _admin_ai_organization(session),
             )
         )
         .mappings()
@@ -1349,7 +1385,7 @@ def _item_labels(session: Session, item_id: str) -> list[Any]:
         session.execute(
             sa.select(models.inventory_items.c.sku, models.inventory_items.c.name).where(
                 models.inventory_items.c.id == item_id,
-                models.inventory_items.c.organization_id == ORGANIZATION_ID,
+                models.inventory_items.c.organization_id == _admin_ai_organization(session),
             )
         )
         .mappings()
@@ -1368,7 +1404,7 @@ def _require_reference(
         )
     query = sa.select(table.c.id).where(table.c.id == reference)
     if organization_column is not None:
-        query = query.where(organization_column == ORGANIZATION_ID)
+        query = query.where(organization_column == _admin_ai_organization(session))
     if session.execute(query).scalar_one_or_none() is None:
         raise AdminAiError(
             "admin_ai_reference_invalid", "La propuesta contiene un ID inexistente o ajeno."
@@ -1399,7 +1435,7 @@ def _product_snapshot(session: Session, product_id: str) -> dict[str, Any]:
             )
             .where(
                 models.products.c.id == product_id,
-                models.products.c.organization_id == ORGANIZATION_ID,
+                models.products.c.organization_id == _admin_ai_organization(session),
             )
         )
         .mappings()
@@ -1512,7 +1548,7 @@ def _normalize_change(
             session.execute(
                 sa.select(models.modifier_groups).where(
                     models.modifier_groups.c.id == target_id,
-                    models.modifier_groups.c.organization_id == ORGANIZATION_ID,
+                    models.modifier_groups.c.organization_id == _admin_ai_organization(session),
                     models.modifier_groups.c.status == "active",
                 )
             )
@@ -1607,7 +1643,7 @@ def _normalize_change(
         active = (
             session.execute(
                 sa.select(models.recipes).where(
-                    models.recipes.c.organization_id == ORGANIZATION_ID,
+                    models.recipes.c.organization_id == _admin_ai_organization(session),
                     models.recipes.c.product_id == target_id,
                     models.recipes.c.status == "active",
                     models.recipes.c.branch_id.is_(branch_id)
@@ -1710,7 +1746,7 @@ def _audit_event(
     session.execute(
         models.audit_events.insert().values(
             id=str(uuid4()),
-            organization_id=ORGANIZATION_ID,
+            organization_id=_admin_ai_organization(session),
             branch_id=branch_id,
             actor_user_id=actor_id,
             action=action,
@@ -1739,7 +1775,8 @@ def create_admin_ai_response(
     conversation_context: list[str] | None = None,
     conversation_idempotency_key: str | None = None,
 ) -> dict[str, Any]:
-    branch_id = authorize_branch_scope(session, actor_id, "catalog.manage", branch_id)
+    organization_id, branch_id = _authorized_admin_ai_scope(session, actor_id, branch_id)
+    session.info["admin_ai_organization_id"] = organization_id
     normalized_prompt = prompt.strip()
     if not normalized_prompt or len(normalized_prompt) > 1600:
         raise AdminAiError(
@@ -1865,7 +1902,7 @@ def create_admin_ai_response(
     now = _now()
     proposal = {
         "id": str(uuid4()),
-        "organization_id": ORGANIZATION_ID,
+        "organization_id": _admin_ai_organization(session),
         "branch_id": branch_id,
         "actor_user_id": actor_id,
         "status": "READY_FOR_REVIEW" if payload["change_set"] else "DRAFT",
@@ -1922,11 +1959,12 @@ def create_admin_ai_response(
 
 def get_proposal(session: Session, proposal_id: str, actor_id: str) -> dict[str, Any]:
     require_permission(session, actor_id, "catalog.manage")
+    session.info["admin_ai_organization_id"] = _actor_organization(session, actor_id)
     proposal = (
         session.execute(
             sa.select(models.admin_ai_proposals).where(
                 models.admin_ai_proposals.c.id == proposal_id,
-                models.admin_ai_proposals.c.organization_id == ORGANIZATION_ID,
+                models.admin_ai_proposals.c.organization_id == _admin_ai_organization(session),
             )
         )
         .mappings()
@@ -2025,12 +2063,13 @@ def review_proposal(
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     require_permission(session, actor_id, "catalog.manage")
+    session.info["admin_ai_organization_id"] = _actor_organization(session, actor_id)
     row = (
         session.execute(
             sa.select(models.admin_ai_proposals)
             .where(
                 models.admin_ai_proposals.c.id == proposal_id,
-                models.admin_ai_proposals.c.organization_id == ORGANIZATION_ID,
+                models.admin_ai_proposals.c.organization_id == _admin_ai_organization(session),
             )
             .with_for_update()
         )

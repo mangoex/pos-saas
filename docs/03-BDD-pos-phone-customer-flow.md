@@ -3,7 +3,7 @@
 ## BDD-FEAT-056 Buscar o registrar un cliente por teléfono durante el checkout
 
 ```gherkin
-@PRD-FR-031 @PRD-FR-195 @PRD-FR-198 @pos @customers
+@PRD-FR-531 @PRD-FR-695 @PRD-FR-698 @pos @customers
 Feature: El checkout identifica al cliente por teléfono y permite registrarlo si no existe
 
   @BDD-SC-163

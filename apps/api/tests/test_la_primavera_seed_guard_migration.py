@@ -96,9 +96,7 @@ def test_0058_verifies_clean_0049_seed_without_mutating_roles(tmp_path: Path) ->
         assert entity_id
         assert correlation_id is None
         assert json.loads(payload) == {
-            "assignment_snapshot": [
-                {"branch_id": branch_id, "role_id": CAJERO_ROLE_ID}
-            ],
+            "assignment_snapshot": [{"branch_id": branch_id, "role_id": CAJERO_ROLE_ID}],
             "decision": "clean_seed_fingerprint_verified",
             "source_revision": "0049_seed_la_primavera_branch_and_user",
             "verification_revision": "0058_verify_0049_la_primavera_seed",
@@ -116,9 +114,7 @@ def test_0058_verifies_clean_0049_seed_without_mutating_roles(tmp_path: Path) ->
     finally:
         connection.close()
 
-    downgrade = _alembic(
-        database_path, "downgrade", "0057_operational_human_scope_permissions"
-    )
+    downgrade = _alembic(database_path, "downgrade", "0057_operational_human_scope_permissions")
     assert downgrade.returncode != 0
     assert "forward-only" in downgrade.stderr
 
@@ -184,9 +180,7 @@ def test_0058_accepts_approved_suc06_warehouse_name_without_accent(
 
     connection = sqlite3.connect(database_path)
     try:
-        connection.execute(
-            "UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'"
-        )
+        connection.execute("UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'")
         connection.execute(
             """
             UPDATE warehouses
@@ -224,9 +218,7 @@ def test_0058_fails_closed_for_unapproved_suc06_warehouse_name(
 
     connection = sqlite3.connect(database_path)
     try:
-        connection.execute(
-            "UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'"
-        )
+        connection.execute("UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'")
         connection.execute(
             """
             UPDATE warehouses
@@ -246,9 +238,10 @@ def test_0058_fails_closed_for_unapproved_suc06_warehouse_name(
     connection = sqlite3.connect(database_path)
     try:
         assert _known_user_assignments(connection) == before
-        assert connection.execute(
-            "SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)
-        ).fetchone() is None
+        assert (
+            connection.execute("SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)).fetchone()
+            is None
+        )
     finally:
         connection.close()
 
@@ -281,9 +274,10 @@ def test_0058_does_not_extend_unaccented_warehouse_name_to_clean_seed(
     connection = sqlite3.connect(database_path)
     try:
         assert _known_user_assignments(connection) == before
-        assert connection.execute(
-            "SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)
-        ).fetchone() is None
+        assert (
+            connection.execute("SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)).fetchone()
+            is None
+        )
     finally:
         connection.close()
 
@@ -295,9 +289,7 @@ def test_0058_fails_closed_for_unapproved_exact_branch_code(tmp_path: Path) -> N
 
     connection = sqlite3.connect(database_path)
     try:
-        connection.execute(
-            "UPDATE branches SET code = 'SUC07' WHERE name = 'La Primavera'"
-        )
+        connection.execute("UPDATE branches SET code = 'SUC07' WHERE name = 'La Primavera'")
         connection.commit()
         before = _known_user_assignments(connection)
     finally:
@@ -310,9 +302,10 @@ def test_0058_fails_closed_for_unapproved_exact_branch_code(tmp_path: Path) -> N
     connection = sqlite3.connect(database_path)
     try:
         assert _known_user_assignments(connection) == before
-        assert connection.execute(
-            "SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)
-        ).fetchone() is None
+        assert (
+            connection.execute("SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)).fetchone()
+            is None
+        )
     finally:
         connection.close()
 
@@ -324,9 +317,7 @@ def test_0058_fails_closed_for_suc06_with_divergent_identity(tmp_path: Path) -> 
 
     connection = sqlite3.connect(database_path)
     try:
-        connection.execute(
-            "UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'"
-        )
+        connection.execute("UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'")
         connection.execute(
             """
             UPDATE users
@@ -346,9 +337,10 @@ def test_0058_fails_closed_for_suc06_with_divergent_identity(tmp_path: Path) -> 
     connection = sqlite3.connect(database_path)
     try:
         assert _known_user_assignments(connection) == before
-        assert connection.execute(
-            "SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)
-        ).fetchone() is None
+        assert (
+            connection.execute("SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)).fetchone()
+            is None
+        )
     finally:
         connection.close()
 
@@ -362,9 +354,7 @@ def test_0058_fails_closed_for_suc06_with_additional_assignment(
 
     connection = sqlite3.connect(database_path)
     try:
-        connection.execute(
-            "UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'"
-        )
+        connection.execute("UPDATE branches SET code = 'SUC06' WHERE name = 'La Primavera'")
         user_id = connection.execute(
             "SELECT id FROM users WHERE LOWER(email) = 'caja01laprimavera@kiwi.com'"
         ).fetchone()[0]
@@ -384,9 +374,10 @@ def test_0058_fails_closed_for_suc06_with_additional_assignment(
     connection = sqlite3.connect(database_path)
     try:
         assert _known_user_assignments(connection) == before
-        assert connection.execute(
-            "SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)
-        ).fetchone() is None
+        assert (
+            connection.execute("SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)).fetchone()
+            is None
+        )
     finally:
         connection.close()
 
@@ -422,9 +413,7 @@ def test_0058_fails_closed_when_0049_replaced_preexisting_roles(tmp_path: Path) 
     finally:
         connection.close()
 
-    legacy_upgrade = _alembic(
-        database_path, "upgrade", "0057_operational_human_scope_permissions"
-    )
+    legacy_upgrade = _alembic(database_path, "upgrade", "0057_operational_human_scope_permissions")
     assert legacy_upgrade.returncode == 0, legacy_upgrade.stdout + legacy_upgrade.stderr
     connection = sqlite3.connect(database_path)
     try:
@@ -443,9 +432,10 @@ def test_0058_fails_closed_when_0049_replaced_preexisting_roles(tmp_path: Path) 
     connection = sqlite3.connect(database_path)
     try:
         assert _known_user_assignments(connection) == replaced_assignments
-        assert connection.execute(
-            "SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)
-        ).fetchone() is None
+        assert (
+            connection.execute("SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)).fetchone()
+            is None
+        )
     finally:
         connection.close()
 
@@ -486,9 +476,7 @@ def test_0058_fails_closed_for_fuzzy_branch_selected_by_0049(tmp_path: Path) -> 
     finally:
         connection.close()
 
-    legacy_upgrade = _alembic(
-        database_path, "upgrade", "0057_operational_human_scope_permissions"
-    )
+    legacy_upgrade = _alembic(database_path, "upgrade", "0057_operational_human_scope_permissions")
     assert legacy_upgrade.returncode == 0, legacy_upgrade.stdout + legacy_upgrade.stderr
     rejected = _alembic(database_path, "upgrade", "head")
     assert rejected.returncode != 0
@@ -521,9 +509,10 @@ def test_0058_fails_closed_for_additional_current_assignment(tmp_path: Path) -> 
     connection = sqlite3.connect(database_path)
     try:
         assert _known_user_assignments(connection) == before
-        assert connection.execute(
-            "SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)
-        ).fetchone() is None
+        assert (
+            connection.execute("SELECT 1 FROM audit_events WHERE id = ?", (AUDIT_ID,)).fetchone()
+            is None
+        )
     finally:
         connection.close()
 
@@ -586,7 +575,7 @@ def test_postgres_0058_verifies_clean_seed_and_blocks_downgrade() -> None:
     finally:
         engine.dispose()
 
-    upgraded = _postgres_alembic(url, "upgrade", "head")
+    upgraded = _postgres_alembic(url, "upgrade", "0058_verify_0049_la_primavera_seed")
     assert upgraded.returncode == 0, upgraded.stdout + upgraded.stderr
     engine = create_engine(url, future=True)
     try:
@@ -603,17 +592,16 @@ def test_postgres_0058_verifies_clean_seed_and_blocks_downgrade() -> None:
                 ).tuples()
             )
             assert after == before
-            assert connection.execute(
-                sa.text(
-                    "SELECT action FROM audit_events WHERE id = :id"
-                ),
-                {"id": AUDIT_ID},
-            ).scalar_one() == "migration.0049_seed_state_verified"
+            assert (
+                connection.execute(
+                    sa.text("SELECT action FROM audit_events WHERE id = :id"),
+                    {"id": AUDIT_ID},
+                ).scalar_one()
+                == "migration.0049_seed_state_verified"
+            )
     finally:
         engine.dispose()
 
-    downgrade = _postgres_alembic(
-        url, "downgrade", "0057_operational_human_scope_permissions"
-    )
+    downgrade = _postgres_alembic(url, "downgrade", "0057_operational_human_scope_permissions")
     assert downgrade.returncode != 0
     assert "forward-only" in downgrade.stderr

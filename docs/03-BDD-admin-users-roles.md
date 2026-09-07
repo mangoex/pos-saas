@@ -3,7 +3,7 @@
 ## BDD-FEAT-029 Usuarios y roles operativos
 
 ```gherkin
-@PRD-FR-005 @PRD-FR-007 @security @admin @phase1
+@PRD-FR-505 @PRD-FR-507 @security @admin @phase1
 Feature: Gestion basica de usuarios y roles
 
   @BDD-SC-043

@@ -3,7 +3,7 @@ import os
 import re
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from restaurant_os.api import router as platform_router
@@ -14,6 +14,9 @@ from restaurant_os.public_order_rate_limit import (
     InMemoryPublicOrderRateLimiter,
     RedisPublicOrderRateLimiter,
 )
+from restaurant_os.public_storefront import router as storefront_router
+from restaurant_os.request_audit import bind_support_audit_context
+from restaurant_os.saas_setup import router as setup_router
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +47,6 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="RestaurantOS API", version=settings.app_version)
     intents_enabled = settings.public_order_intents_enabled
-    if not intents_enabled:
-        env_val = os.environ.get(
-            "RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED",
-            os.environ.get("PUBLIC_ORDER_INTENTS_ENABLED", ""),
-        ).strip().lower()
-        if env_val in ("true", "1", "yes"):
-            intents_enabled = True
-        elif env_val == "" and (
-            os.path.exists("/app/static")
-            or bool(os.environ.get("STATIC_DIR"))
-            or bool(os.environ.get("DATABASE_URL"))
-            or str(os.environ.get("ENVIRONMENT", "")).lower() in ("production", "prod")
-        ):
-            intents_enabled = True
-
     app.state.public_order_intents_enabled = intents_enabled
     if intents_enabled:
         if settings.redis_url and settings.public_order_rate_limit_hmac_secret:
@@ -76,7 +64,27 @@ def create_app() -> FastAPI:
                 or settings.secret_key
                 or "restaurantos-dev-secret-key-32chars",
             )
-    app.include_router(platform_router)
+    credential_limiter_secret = (
+        settings.public_order_rate_limit_hmac_secret
+        or settings.secret_key
+        or "restaurantos-dev-secret-key-32chars"
+    )
+    if settings.redis_url:
+        app.state.supervisor_authorization_rate_limiter = RedisPublicOrderRateLimiter(
+            settings.redis_url,
+            settings.supervisor_authorization_global_rate_limit_per_minute,
+            settings.supervisor_authorization_actor_rate_limit_per_minute,
+            credential_limiter_secret,
+        )
+    else:
+        app.state.supervisor_authorization_rate_limiter = InMemoryPublicOrderRateLimiter(
+            settings.supervisor_authorization_global_rate_limit_per_minute,
+            settings.supervisor_authorization_actor_rate_limit_per_minute,
+            credential_limiter_secret,
+        )
+    app.include_router(platform_router, dependencies=[Depends(bind_support_audit_context)])
+    app.include_router(storefront_router)
+    app.include_router(setup_router, dependencies=[Depends(bind_support_audit_context)])
 
     @app.exception_handler(AuthorizationError)
     async def authorization_error_handler(

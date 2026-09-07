@@ -352,6 +352,7 @@ def test_pco004_cumulative_profile_grants_and_scopes_use_seeded_0035_data(
 ) -> None:
     database_path = tmp_path / "pco004-cumulative-profiles.db"
     assert _sqlite_alembic(database_path, "upgrade", REVISION_0038).returncode == 0
+    assert _sqlite_alembic(database_path, "upgrade", "head").returncode == 0
     engine = sa.create_engine(f"sqlite+pysqlite:///{database_path}")
     try:
         with Session(engine) as session:
@@ -412,11 +413,9 @@ def test_pco004_cumulative_profile_grants_and_scopes_use_seeded_0035_data(
             assert owner_grant == "organization_all_permissions"
 
             now = session.execute(sa.select(sa.func.max(models.users.c.created_at))).scalar_one()
-            main_branch = session.execute(
-                sa.select(models.branches.c.id).where(models.branches.c.organization_id == ORG_ID)
-            ).scalar_one()
+            main_branch = BRANCH_ID
             users = {
-                name: f"018f6f73-2d0a-74f0-8f1c-000000007{index:02d}"
+                name: f"018f6f73-2d0a-74f0-8f1c-0000000070{index:02d}"
                 for index, name in enumerate(roles, start=1)
             }
             session.execute(

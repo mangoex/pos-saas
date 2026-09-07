@@ -1,9 +1,11 @@
 # BDD: Portada pública por dispositivo
 
+> Comportamiento histórico sustituido para SaaS: la raíz actual ofrece adquisición y registro tanto en móvil como escritorio. La redirección móvil siguiente se conserva como evidencia anterior, no debe restaurarse para pasar tests SaaS.
+
 ## BDD-FEAT-095 Acceso institucional desde la raíz
 
 ```gherkin
-@PRD-FR-231 @public-web
+@PRD-FR-731 @public-web
 Feature: Selección aislada de la experiencia pública en la raíz
 
   @BDD-SC-456

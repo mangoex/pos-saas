@@ -3,7 +3,7 @@
 ## BDD-FEAT-045 Fotografía y captura ciega
 
 ```gherkin
-@PRD-FR-068 @inventory @counts
+@PRD-FR-568 @inventory @counts
 Feature: Capturar inventario físico
 
   @BDD-SC-105
@@ -27,7 +27,7 @@ Feature: Capturar inventario físico
     When se intenta enviar a revisión
     Then el sistema lo rechaza sin calcular ajustes
 
-@PRD-FR-068 @inventory @reconciliation
+@PRD-FR-568 @inventory @reconciliation
 Feature: Revisar y autorizar diferencias
 
   @BDD-SC-108

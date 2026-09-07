@@ -3,7 +3,7 @@
 ## BDD-FEAT-052 Administración operativa completa sin acceso corporativo
 
 ```gherkin
-@PRD-FR-005 @PRD-FR-018 @PRD-FR-019 @pos @branch @frontend
+@PRD-FR-505 @PRD-FR-518 @PRD-FR-519 @pos @branch @frontend
 Feature: El Supervisor abre los módulos operativos de su sucursal dentro del POS
 
   @BDD-SC-136

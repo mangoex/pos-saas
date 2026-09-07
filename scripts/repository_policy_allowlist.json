@@ -2,23 +2,18 @@
   "synthetic_allowlist": [
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "e6af2bffee154d92e67785714ec80eee2ccfbeac4b93b6cf793650d209c85e61",
+      "sha256": "653b44caf1f805556fc66388129a40f96b8be4df2aa9a199567448322296daa4",
       "provenance": "restaurantos-ci-test-services-v1"
     },
     {
       "path": "apps/api/tests/test_admin_ai.py",
-      "sha256": "6b39acd24c87913a82036f9a6064dbf181474923f5de950aaa05c74934d532c3",
+      "sha256": "b0d7900379170474703a874a7b938e0464b8238418ef62ba2cdc1b41a81f0453",
       "provenance": "restaurantos-admin-ai-tests-v1"
     },
     {
       "path": "apps/api/tests/test_admin_ai_postgres.py",
-      "sha256": "8be4f89bf23329799ccd1c1c1570498e2e33aaca1de94336809ea5651534fad6",
+      "sha256": "c93ff595f85734156eeac628de54493e748183db6b0e81b980a9d84c8a149f7b",
       "provenance": "restaurantos-admin-ai-postgres-tests-v1"
-    },
-    {
-      "path": "apps/api/tests/test_audit_remediation.py",
-      "sha256": "5dcdc6505efd072238e0f4f93b9512a4c644b2fa81d00c20a6a41af852ad0f38",
-      "provenance": "restaurantos-audit-tests-v1"
     },
     {
       "path": "apps/api/tests/test_assisted_order.py",
@@ -26,24 +21,224 @@
       "provenance": "restaurantos-assisted-order-tests-v1"
     },
     {
+      "path": "apps/api/tests/test_audit_remediation.py",
+      "sha256": "d87a2fc4664b82e09d5a386970abbb84f20272283829a9604a2c32c1226fa524",
+      "provenance": "restaurantos-audit-tests-v1"
+    },
+    {
+      "path": "apps/api/tests/test_didi_food_integration.py",
+      "sha256": "20728c9b1ef13aac2ffdb9d061680d27724a7531f85015b902e90221154c705b",
+      "provenance": "restaurantos-recovery-test-didi-food-integration-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_facturapi_integration.py",
+      "sha256": "e189a504a7a7d894d75f97c80147ae3d827971cfba18b093c95bfaffecc7bc12",
+      "provenance": "restaurantos-saas-test-facturapi-integration-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_fiscal_issue_postgres.py",
+      "sha256": "2909bb511e137b5c7238398b7115e7b5ac6442186e5254e4440751533f3a8c53",
+      "provenance": "restaurantos-recovery-test-fiscal-issue-postgres-synthetic-v1"
+    },
+    {
       "path": "apps/api/tests/test_ingredient_variations.py",
-      "sha256": "faadf146bd5ca3e502ae2bd82e0840fcbcbcf381f2fcb33f9d5ea2f11f36d848",
+      "sha256": "20dfb3f752289d244b0c0271e899ba8b1b95eef6a999bd1fe272c264c9ea2868",
       "provenance": "restaurantos-ingredient-tests-v1"
     },
     {
+      "path": "apps/api/tests/test_legacy_import.py",
+      "sha256": "6ee3937d91ecd1a640b31d2558a1963f36f5b35a142ca43c7a931d62d1b3737d",
+      "provenance": "restaurantos-recovery-test-legacy-import-synthetic-v1"
+    },
+    {
       "path": "apps/api/tests/test_pco008_cash_sync.py",
-      "sha256": "5885412502575d6de7fbe63f3d474b90c46d9a72a23b5666d53f3a65016b5324",
+      "sha256": "91af17f14014a4983bc72556afe60fa3a24c6e5eb660047f70faed7ae18d743b",
       "provenance": "restaurantos-pco008-cash-sync-tests-v1"
     },
     {
       "path": "apps/api/tests/test_platform_api.py",
-      "sha256": "071d49e8d227f804020b71396fbe7244a6b62fd17a618b60527210e537ae8858",
+      "sha256": "6ca9993f2070e4ba2f084767dd667e5a2c5a6285220b851638f0d231009ee825",
       "provenance": "restaurantos-platform-tests-v1"
     },
     {
+      "path": "apps/api/tests/test_rappi_integration.py",
+      "sha256": "249eac940a757ef1395bffdc70cb3778f5129425cd7d0b10123fe75ff7ac249f",
+      "provenance": "restaurantos-recovery-test-rappi-integration-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_admin_ai_scope.py",
+      "sha256": "e97744e93cf4c02b16913b5c1e0cf0b68817f63b0d39c8d4f67fe179b1fe502b",
+      "provenance": "restaurantos-recovery-test-saas-admin-ai-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_analytics_scope.py",
+      "sha256": "e1cd99ff79e314fe4119db2849279f011ae5db378c0cb2cf6a8f393eaba6f2cb",
+      "provenance": "restaurantos-saas-test-analytics-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_branch_catalog_scope.py",
+      "sha256": "d415feb96f3aae7a51dc26f166b22032187fc4d0fa0fdab52a2c9fac7270947b",
+      "provenance": "restaurantos-saas-test-saas-branch-catalog-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_cash_scope.py",
+      "sha256": "9460a0dda99e552f9b30ed258d2786c0037b6bafe1aeb2ef3ecbf1803338ed9c",
+      "provenance": "restaurantos-saas-test-saas-cash-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_category_scope.py",
+      "sha256": "d5222dbb22ddd0cd745fe3dd1c8cdd96b03180b0220a3d28428d252068178c57",
+      "provenance": "restaurantos-recovery-test-saas-category-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_channel_pricing.py",
+      "sha256": "48ca6eeca7939cdf273f2e9367e30e3e301657eb48552259728894e3ca84eab8",
+      "provenance": "restaurantos-saas-test-saas-channel-pricing-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_customer_scope.py",
+      "sha256": "f849aee3c44403c5ea26e79a8a5ef4418b25216d6991855283148cd93827daff",
+      "provenance": "restaurantos-saas-test-saas-customer-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_dashboard_scope.py",
+      "sha256": "15499763a31cce51a22d2066a30fe1cbfe2cb5a53646f0e8ed97ff90150d0cec",
+      "provenance": "restaurantos-recovery-test-saas-dashboard-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_delivery_hub.py",
+      "sha256": "d163691a383e246f38d4eb9fc8c8eb035471401dc50d0eb8bcb805735550084f",
+      "provenance": "restaurantos-saas-test-saas-delivery-hub-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_feedback_scope.py",
+      "sha256": "2eeb78cad3324be8fcd68fa6ec836eba837a2350dc284518c175d96c9c509fc9",
+      "provenance": "restaurantos-recovery-test-saas-feedback-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_inventory_read_scope.py",
+      "sha256": "70be2fb5771f0b35004fdc3bc986bc0797d1e286672387151bb2134a3cc0b3d9",
+      "provenance": "recovery-78cd0224d1a7"
+    },
+    {
+      "path": "apps/api/tests/test_saas_invoicing_audit.py",
+      "sha256": "4797068934874beed95d230848e2c4c8263a7efa0804dc0437e5de697f143d17",
+      "provenance": "restaurantos-saas-test-saas-invoicing-audit-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_invoicing_scope.py",
+      "sha256": "d7cbfaa9c673f42d384f4efc6c729340e308f7b068f392af21ff429da9926af3",
+      "provenance": "restaurantos-saas-test-saas-invoicing-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_lean_erp_boundary.py",
+      "sha256": "eb5fb956cdcf3710c7780622e4dc23585cc0fa289dd5d1028b11c7bf25099670",
+      "provenance": "restaurantos-recovery-test-saas-lean-erp-boundary-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_legacy_import_postgres.py",
+      "sha256": "4c8b9991f1a625f3eeac47e22c58c8588eedd1406487571aca14aa7281f7bcec",
+      "provenance": "recovery-c61212672d61"
+    },
+    {
+      "path": "apps/api/tests/test_saas_modifier_scope.py",
+      "sha256": "44fcb4d89084f974fe59e8123ed4d5ef7b71ba36406ae9b9394ec6f0f9646c0f",
+      "provenance": "restaurantos-saas-test-saas-modifier-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_onboarding.py",
+      "sha256": "ca359ae4e8a8dca15352ba57ca06780875fbc5ded20435348324c7ea367e118c",
+      "provenance": "restaurantos-saas-test-saas-onboarding-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_onboarding_wizard.py",
+      "sha256": "e13b7790f31303aa632c30095be7bd64f490d342be65a60bf421f6be136fd0bc",
+      "provenance": "restaurantos-saas-wizard-tests-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_order_reopen_scope.py",
+      "sha256": "baa4f81e3c20fbd0ac7793d6b2bd3f8e57e91dee44191064d576457f9b0c0f09",
+      "provenance": "recovery-abba6cfc3d77"
+    },
+    {
+      "path": "apps/api/tests/test_saas_postgres_release.py",
+      "sha256": "e2ed8a412c957e275749b5f797f9f026c7e87a8eecadcffc49a6fc4a2a13aecf",
+      "provenance": "restaurantos-saas-test-saas-postgres-release-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_procurement_postgres.py",
+      "sha256": "ed562d9a1914e56f7dc44ce5ce6acaa0434f5d18ab1115a5baed37361bacc3a5",
+      "provenance": "recovery-aed286ad2494"
+    },
+    {
+      "path": "apps/api/tests/test_saas_procurement_scope.py",
+      "sha256": "13b60092a864cf1b06d7113b06e455823103102192fd0a6865582366240bb55a",
+      "provenance": "restaurantos-recovery-test-saas-procurement-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_recipe_scope.py",
+      "sha256": "cdf15767c3f7b42e38b72410e1b966a3868f0e14038daa7e840fa359bcbbaa2a",
+      "provenance": "restaurantos-recovery-test-saas-recipe-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_self_invoicing.py",
+      "sha256": "1a4ead48a20498750c5f113d9b2e45c46092bd73ac70d47c4f7a6e22e4f7064f",
+      "provenance": "restaurantos-saas-test-saas-self-invoicing-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_sensitive_authorization.py",
+      "sha256": "e2bcb38ef2434da979051ae5d060c80456606db514bf3df79d2db96a549cb86b",
+      "provenance": "restaurantos-saas-test-sensitive-authorization-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_simulation_scope.py",
+      "sha256": "8c7b388586f1a278f737e0925a9f8c39157603963cd173ef598af425e38e6972",
+      "provenance": "restaurantos-recovery-test-saas-simulation-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_superadmin.py",
+      "sha256": "ea1af50c0c75b417e2e4b65aa11f0540f1b51a22bd3c4d8db08fba8c79ae6711",
+      "provenance": "restaurantos-saas-test-saas-superadmin-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_support_context.py",
+      "sha256": "29b436531aeba1a276af4ceed3f127a6926e3bd1a6fd4f29f9ccf40554c08cb9",
+      "provenance": "restaurantos-saas-test-saas-support-context-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_support_handoff.py",
+      "sha256": "fb85ba6c9182822025c9f05b4a1ba6b10bb4a524b7d1f2f57706da9964ebe8e3",
+      "provenance": "restaurantos-saas-test-saas-support-handoff-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_waste_reason_scope.py",
+      "sha256": "5901d89bc884ff2417c41550cf8170bcf7eccef8fe89c5e92d28dffb0954cbe9",
+      "provenance": "recovery-dbcbc1a38f1a"
+    },
+    {
+      "path": "apps/api/tests/test_saas_waste_record_scope.py",
+      "sha256": "405b8b8d5af666cecba4321461b3d95c21f7766ac9996d6095d1310851350f2a",
+      "provenance": "restaurantos-saas-test-waste-record-scope-synthetic-v1"
+    },
+    {
+      "path": "apps/api/tests/test_saas_whatsapp_menu.py",
+      "sha256": "0c68faa7e012d0494c01587063028926bb4c613ecf75afbfd9ea5fc023439720",
+      "provenance": "restaurantos-saas-test-saas-whatsapp-menu-synthetic-v1"
+    },
+    {
       "path": "apps/api/tests/test_sec001_operational_boundary.py",
-      "sha256": "a1f27e91333a4a34274c5477857bd425e2e3e6b698a8729540f2407067b68380",
+      "sha256": "79f3599383c57647794db193f8b37f0ad821208e6953000fb59cf6600ba3c9d3",
       "provenance": "restaurantos-sec001-tests-v1"
+    },
+    {
+      "path": "apps/api/tests/test_starter_catalog_and_menu_parser.py",
+      "sha256": "b09de64a0a442314aa16ea36349a47ace082a508cd05d12b30c064553da0ea37",
+      "provenance": "restaurantos-starter-catalog-parser-tests-v1"
+    },
+    {
+      "path": "apps/api/tests/test_uber_eats_integration.py",
+      "sha256": "7972f6de233be97a89f329c0b5f3cf89ec9c9d60a98ef1440d508c4c67dac852",
+      "provenance": "restaurantos-recovery-test-uber-eats-integration-synthetic-v1"
     },
     {
       "path": "docs/10-operacion-easypanel.md",
@@ -52,18 +247,18 @@
     },
     {
       "path": "infra/docker/docker-compose.yml",
-      "sha256": "c585e9a2d0ae502f6b75ad9442da480821e9e9669c0ca541abfa851f4c11c006",
+      "sha256": "947a5573cc18a0e4f28e039e7ea6912ba16cf1a14abad8bb97ae316f0c750310",
       "provenance": "restaurantos-local-compose-v1"
+    },
+    {
+      "path": "tests/architecture/test_quality_ratchet.py",
+      "sha256": "b5c89d09def63580abe969f74868a46fe4506de2b1d080faf2305355a0006705",
+      "provenance": "restaurantos-recovery-test-quality-ratchet-synthetic-v1"
     },
     {
       "path": "tests/architecture/test_sec001_repository_policy.py",
       "sha256": "a4978dfd95f6a582da797b0c926bcbca6d0d0f2f4c0e8dea03893a4301232b07",
       "provenance": "restaurantos-repository-policy-tests-v1"
-    },
-    {
-      "path": "tests/edge_gateway/test_pco008_cash_outbox.py",
-      "sha256": "02f0b0e61939f48371597ade83e637b9e5f78b8a05b032acc4f4520d11ee1d0e",
-      "provenance": "restaurantos-pco008-edge-outbox-tests-v1"
     },
     {
       "path": "tests/e2e/cashier_sales_fixture.py",
@@ -74,6 +269,11 @@
       "path": "tests/e2e/cashier_sales_postgres_fixture.py",
       "sha256": "62b5252975059251eb59e8be54851f7eb9fae5cd1c0b0b4c95be74d2af086513",
       "provenance": "restaurantos-cashier-postgres-e2e-v1"
+    },
+    {
+      "path": "tests/edge_gateway/test_pco008_cash_outbox.py",
+      "sha256": "02f0b0e61939f48371597ade83e637b9e5f78b8a05b032acc4f4520d11ee1d0e",
+      "provenance": "restaurantos-pco008-edge-outbox-tests-v1"
     }
   ]
 }

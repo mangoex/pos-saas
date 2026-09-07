@@ -4,9 +4,10 @@ import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import HTTPException
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
@@ -220,7 +221,7 @@ class OperationalRouteGuard:
         )
 
     @staticmethod
-    def _scope_is_active(session: Session, credential: Mapping[str, Any]) -> bool:
+    def _scope_is_active(session: Session, credential: Mapping[str, Any] | RowMapping) -> bool:
         return bool(
             session.execute(
                 models.branches.select()
@@ -247,7 +248,7 @@ class OperationalRouteGuard:
         actor_user_id: str | None = None,
         device_id: str | None = None,
         organization_id: str = "018f6f73-2d0a-74f0-8f1c-000000000001",
-    ) -> None:
+    ) -> NoReturn:
         """Persist a credential-free denial before returning the stable public code."""
         _audit(
             session,

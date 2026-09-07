@@ -85,7 +85,7 @@ def _alembic(url: str, *arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _reset_and_upgrade(url: str) -> sa.Engine:
+def _reset_and_upgrade_revision(url: str, revision: str) -> sa.Engine:
     reset_engine = create_engine(url, future=True)
     try:
         with reset_engine.begin() as connection:
@@ -93,9 +93,13 @@ def _reset_and_upgrade(url: str) -> sa.Engine:
             connection.execute(sa.text("CREATE SCHEMA public"))
     finally:
         reset_engine.dispose()
-    upgraded = _alembic(url, "upgrade", "0055_admin_ai_proposals")
+    upgraded = _alembic(url, "upgrade", revision)
     assert upgraded.returncode == 0, upgraded.stdout + upgraded.stderr
     return create_engine(url, future=True, pool_pre_ping=True)
+
+
+def _reset_and_upgrade(url: str) -> sa.Engine:
+    return _reset_and_upgrade_revision(url, "head")
 
 
 def _provider_result() -> dict[str, object]:
@@ -129,6 +133,28 @@ def _seed_proposal(engine: sa.Engine) -> str:
             lambda *_args: _provider_result(),
         )
         return str(proposal["id"])
+
+
+def _seed_historical_proposal(engine: sa.Engine) -> None:
+    """Use the migration's canonical seed rows to exercise the 0055 downgrade guard."""
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO admin_ai_proposals
+                    (id, organization_id, branch_id, actor_user_id, status, base_fingerprint,
+                     payload, created_at, updated_at, expires_at)
+                VALUES (:proposal_id, :organization_id, :branch_id, :actor_user_id, 'DRAFT',
+                        'historical-fixture', '{}'::json, now(), now(), now());
+                """
+            ),
+            {
+                "organization_id": "018f6f73-2d0a-74f0-8f1c-000000000001",
+                "branch_id": BRANCH_ID,
+                "actor_user_id": ADMIN_USER_ID,
+                "proposal_id": "018f6f73-2d0a-74f0-8f1c-000000009999",
+            },
+        )
 
 
 @pytest.mark.parametrize(
@@ -223,17 +249,16 @@ def test_tdd_tc_203_postgres_different_keys_have_one_winner() -> None:
 
 def test_tdd_tc_203_postgres_migration_roundtrip_and_history_guard() -> None:
     url = _postgres_url()
-    engine = _reset_and_upgrade(url)
+    engine = _reset_and_upgrade_revision(url, "0055_admin_ai_proposals")
     engine.dispose()
 
     downgraded = _alembic(url, "downgrade", "0054_seed_standard_cash_movement_concepts")
     assert downgraded.returncode == 0, downgraded.stdout + downgraded.stderr
     upgraded = _alembic(url, "upgrade", "0055_admin_ai_proposals")
     assert upgraded.returncode == 0, upgraded.stdout + upgraded.stderr
-
     engine = create_engine(url, future=True)
     try:
-        _seed_proposal(engine)
+        _seed_historical_proposal(engine)
     finally:
         engine.dispose()
 

@@ -1,4 +1,5 @@
 """Focused security contracts for public-order Redis throttling."""
+
 from __future__ import annotations
 
 import pytest
@@ -169,6 +170,15 @@ def test_app_only_installs_limiter_with_redis_and_hmac_secret(
             settings.public_order_global_rate_limit_per_minute,
             settings.public_order_client_rate_limit_per_minute,
             settings.public_order_rate_limit_hmac_secret,
-        )
+        ),
+        (
+            "redis://example",
+            settings.supervisor_authorization_global_rate_limit_per_minute,
+            settings.supervisor_authorization_actor_rate_limit_per_minute,
+            settings.public_order_rate_limit_hmac_secret,
+        ),
     ]
     assert app.state.public_order_intents_enabled is True
+    assert (
+        app.state.public_order_rate_limiter is not app.state.supervisor_authorization_rate_limiter
+    )

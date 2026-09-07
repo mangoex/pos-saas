@@ -3,7 +3,7 @@
 ## BDD-FEAT-075 POS-UX-002 tarjetas de producto sin fotografía
 
 ```gherkin
-@PRD-FR-214 @PRD-NFR-010 @PRD-NFR-016 @PRD-NFR-018 @pos @ux
+@PRD-FR-714 @PRD-NFR-510 @PRD-NFR-516 @PRD-NFR-518 @pos @ux
 Feature: Presentar con claridad las tarjetas de producto concreto sin fotografía
 
   @BDD-SC-265

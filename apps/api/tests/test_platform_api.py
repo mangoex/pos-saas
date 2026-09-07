@@ -249,6 +249,157 @@ def test_admin_manages_driver_catalog_without_pii_in_audit() -> None:
         assert events[1]["payload"]["changed_fields"] == ["phone"]
 
 
+def test_drivers_and_attendance_are_isolated_by_actor_tenant() -> None:
+    client = _client_with_seeded_database()
+    now = datetime.now(UTC)
+    tenant_b = "018f6f73-2d0a-74f0-8f1c-000000009001"
+    legal_b = "018f6f73-2d0a-74f0-8f1c-000000009002"
+    unit_b = "018f6f73-2d0a-74f0-8f1c-000000009003"
+    branch_b = "018f6f73-2d0a-74f0-8f1c-000000009004"
+    user_b = "018f6f73-2d0a-74f0-8f1c-000000009005"
+    role_b = "018f6f73-2d0a-74f0-8f1c-000000009006"
+    with _test_session_factory(client)() as session:
+        session.execute(
+            organizations.insert().values(
+                id=tenant_b,
+                name="Tenant B",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.execute(
+            legal_entities.insert().values(
+                id=legal_b,
+                organization_id=tenant_b,
+                name="Tenant B SA",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.execute(
+            business_units.insert().values(
+                id=unit_b,
+                organization_id=tenant_b,
+                legal_entity_id=legal_b,
+                name="Tenant B Unit",
+                code="TENANT-B",
+                unit_type="restaurant",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.execute(
+            branches.insert().values(
+                id=branch_b,
+                organization_id=tenant_b,
+                legal_entity_id=legal_b,
+                business_unit_id=unit_b,
+                name="Tenant B Branch",
+                code="TENANT-B",
+                timezone="America/Chihuahua",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.execute(
+            users.insert().values(
+                id=user_b,
+                organization_id=tenant_b,
+                email="owner-b@example.test",
+                display_name="Owner B",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.execute(
+            roles.insert().values(
+                id=role_b,
+                organization_id=tenant_b,
+                name="Owner B",
+                scope="organization",
+                created_at=now,
+            )
+        )
+        session.execute(
+            user_roles.insert().values(user_id=user_b, role_id=role_b, branch_id=branch_b)
+        )
+        permission_ids = session.execute(
+            sa.select(permissions.c.id).where(
+                permissions.c.code.in_(
+                    ["admin.manage", "pos.operate", "branch.staff.read", "orders.create"]
+                )
+            )
+        ).scalars().all()
+        session.execute(
+            role_permissions.insert(),
+            [
+                {"role_id": role_b, "permission_id": permission_id}
+                for permission_id in permission_ids
+            ],
+        )
+        session.commit()
+
+    payload = {
+        "employee_code": "DRV900",
+        "name": "Driver Tenant A",
+        "license_number": "LIC-A",
+        "motorcycle_plate": "PLATE-A",
+        "branch_id": BRANCH_ID,
+        "phone": "6140000001",
+        "address": "Base A",
+        "emergency_contact_name": "Contact A",
+    }
+    driver_a_response = client.post("/api/v1/drivers", headers=_admin_headers(), json=payload)
+    assert driver_a_response.status_code == 200
+    driver_a = driver_a_response.json()
+
+    token_b = create_session_token({"sub": user_b}, get_settings().secret_key)
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+    driver_b_response = client.post(
+        "/api/v1/drivers",
+        headers=headers_b,
+        json={
+            **payload,
+            "name": "Driver Tenant B",
+            "branch_id": branch_b,
+            "license_number": "LIC-B",
+            "motorcycle_plate": "PLATE-B",
+        },
+    )
+    assert driver_b_response.status_code == 200
+    driver_b = driver_b_response.json()
+
+    drivers_a = client.get("/api/v1/drivers", headers=_admin_headers()).json()
+    assert [row["id"] for row in drivers_a] == [driver_a["id"]]
+    assert [row["id"] for row in client.get("/api/v1/drivers", headers=headers_b).json()] == [
+        driver_b["id"]
+    ]
+    cross_update = client.put(
+        f"/api/v1/drivers/{driver_a['id']}",
+        headers=headers_b,
+        json={**payload, "branch_id": branch_b, "name": "Cross tenant"},
+    )
+    assert cross_update.status_code == 409
+    assert cross_update.json()["detail"]["code"] == "driver_not_found"
+
+    check_b = client.post(
+        "/api/v1/attendance/checks",
+        headers=headers_b,
+        json={"employee_code": "DRV900", "branch_id": branch_b},
+    )
+    assert check_b.status_code == 200
+    assert check_b.json()["organization_id"] == tenant_b
+    assert check_b.json()["subject_id"] == driver_b["id"]
+    assert client.get("/api/v1/attendance/checks", headers=_admin_headers()).json() == []
+    report_b = client.get("/api/v1/attendance/checks", headers=headers_b)
+    assert [row["subject_id"] for row in report_b.json()] == [driver_b["id"]]
+
+
 def test_administrative_reads_and_purchase_presentations_fail_closed() -> None:
     client = _client_with_seeded_database()
     token = create_session_token(
@@ -961,6 +1112,11 @@ def test_delivery_order_assigns_available_branch_driver_and_preserves_history() 
     assert incomplete_recovery.json()["detail"]["code"] == "order_create_replay_incomplete"
 def test_superadmin_can_login_and_create_active_admin_user() -> None:
     client = _client_with_seeded_database()
+    with _test_session_factory(client)() as session:
+        session.execute(models.users.update().where(
+            models.users.c.id == "018f6f73-2d0a-74f0-8f1c-000000000006"
+        ).values(is_superadmin=True))
+        session.commit()
 
     login_response = client.post(
         "/api/v1/auth/login",
@@ -1093,7 +1249,7 @@ def test_catalog_inherits_branch_availability_and_keeps_products_without_price_v
             )
         )
         session.commit()
-        incomplete = list_catalog_products(session)
+        incomplete = list_catalog_products(session, organization_id=ORGANIZATION_ID)
         product = next(item for item in incomplete if item["id"] == product_id)
         assert product["price_cents"] is None
 
@@ -1916,18 +2072,15 @@ def test_admin_can_read_inventory_and_record_opening_balance() -> None:
     assert beef["warehouse_name"] == "Almacen Sucursal Piloto"
 
     recipes_response = client.get("/api/v1/recipes", headers=_admin_headers())
-    assert recipes_response.status_code == 200
-    burger_recipe = next(
-        item for item in recipes_response.json() if item["product_sku"] == "KIWI-BURGER"
-    )
-    assert burger_recipe["version"] == 1
-    assert any(component["item_sku"] == "INV-BEEF" for component in burger_recipe["components"])
+    assert recipes_response.status_code == 409
+    assert recipes_response.json()["detail"]["code"] == "feature_out_of_saas_scope"
 
     movement_response = client.post(
         "/api/v1/inventory/opening-balances",
         headers=_admin_headers(),
         json={
             "item_id": beef["id"],
+            "branch_id": BRANCH_ID,
             "quantity_base_units": 5000,
             "reason": "Conteo inicial adicional",
         },
@@ -1941,7 +2094,7 @@ def test_admin_can_read_inventory_and_record_opening_balance() -> None:
     invalid_movement = client.post(
         "/api/v1/inventory/opening-balances",
         headers=_admin_headers(),
-        json={"item_id": beef["id"], "quantity_base_units": 0},
+        json={"item_id": beef["id"], "branch_id": BRANCH_ID, "quantity_base_units": 0},
     )
     assert invalid_movement.status_code == 409
     assert invalid_movement.json()["detail"]["code"] == "invalid_inventory_quantity"
@@ -2016,6 +2169,7 @@ def test_rbac_rejects_inventory_adjustment_without_permission() -> None:
         headers={"X-Actor-User-Id": user["id"]},
         json={
             "item_id": beef["id"],
+            "branch_id": BRANCH_ID,
             "quantity_base_units": 1000,
             "reason": "Intento no autorizado",
         },
@@ -2035,6 +2189,7 @@ def test_rbac_rejects_inventory_adjustment_without_permission() -> None:
         headers=_admin_headers(),
         json={
             "item_id": beef["id"],
+            "branch_id": BRANCH_ID,
             "quantity_base_units": 1000,
             "reason": "Ajuste autorizado",
         },
@@ -2579,254 +2734,100 @@ def test_purchase_confirmation_rejects_negative_inventory_without_partial_effect
     )
 
 
-def test_recipe_versions_standard_waste_and_historical_order_snapshot() -> None:
+def test_recipe_version_routes_fail_closed_without_effects() -> None:
     client = _client_with_seeded_database()
-    burger_id = "018f6f73-2d0a-74f0-8f1c-000000000111"
-    beef_id = "018f6f73-2d0a-74f0-8f1c-000000000311"
-    gram_id = "018f6f73-2d0a-74f0-8f1c-000000000301"
-    piece_id = "018f6f73-2d0a-74f0-8f1c-000000000303"
+    factory = _test_session_factory(client)
+    tables = (models.recipes, models.recipe_components)
+    with factory() as session:
+        before = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
 
-    assert (
-        _open_shift(client, 50000).status_code
-        == 200
+    payload = {
+        "branch_id": BRANCH_ID,
+        "expected_active_recipe_id": None,
+        "yield_quantity": "1",
+        "yield_unit_id": "018f6f73-2d0a-74f0-8f1c-000000000303",
+        "components": [
+            {
+                "item_id": "018f6f73-2d0a-74f0-8f1c-000000000311",
+                "unit_id": "018f6f73-2d0a-74f0-8f1c-000000000301",
+                "net_quantity": "100",
+                "waste_rate": "0.2",
+            }
+        ],
+    }
+    write_response = client.put(
+        "/api/v1/products/018f6f73-2d0a-74f0-8f1c-000000000111/recipe",
+        headers={**_admin_headers(), "Idempotency-Key": "platform-recipe-out-of-scope"},
+        json=payload,
     )
-    order = client.post(
-        "/api/v1/orders",
+    read_response = client.get(
+        "/api/v1/products/018f6f73-2d0a-74f0-8f1c-000000000111/recipe"
+        f"?branch_id={BRANCH_ID}",
         headers=_admin_headers(),
-        json={"lines": [{"product_id": burger_id, "quantity": 1}]},
-    ).json()
-    snapshot = order["consumption_snapshots"][0]
-    original_beef = next(row for row in snapshot["components"] if row["item_id"] == beef_id)
-    assert float(original_beef["gross_quantity"]) == 120
-
-    updated = client.put(
-        f"/api/v1/products/{burger_id}/recipe",
-        headers={**_admin_headers(), "Idempotency-Key": "platform-recipe-v2"},
-        json={
-            "branch_id": "018f6f73-2d0a-74f0-8f1c-000000000003",
-            "expected_active_recipe_id": None,
-            "yield_quantity": "1",
-            "yield_unit_id": piece_id,
-            "components": [
-                {
-
-                    "item_id": beef_id,
-                    "unit_id": gram_id,
-                    "net_quantity": "100",
-                    "waste_rate": "0.2",
-                }
-            ],
-        },
-    )
-    assert updated.status_code == 200
-    assert updated.json()["version"] == 2
-    component = updated.json()["components"][0]
-    assert float(component["net_quantity"]) == 100
-    assert float(component["gross_quantity"]) == 125
-    assert float(component["waste_rate"]) == 0.2
-
-    current = client.get(
-        f"/api/v1/products/{burger_id}/recipe?branch_id=018f6f73-2d0a-74f0-8f1c-000000000003",
-        headers=_admin_headers(),
-    ).json()
-    assert current["version"] == 2
-    assert float(current["components"][0]["gross_quantity"]) == 125
-
-    task_id = order["production_tasks"][0]["id"]
-    assert (
-        client.post(
-            f"/api/v1/kds/tasks/{task_id}/transition",
-            headers=_admin_headers(),
-            json={"status": "IN_PROGRESS"},
-        ).status_code
-        == 200
-    )
-    assert (
-        client.post(
-            f"/api/v1/kds/tasks/{task_id}/transition",
-            headers=_admin_headers(),
-            json={"status": "COMPLETED"},
-        ).status_code
-        == 200
-    )
-    movements = client.get(
-        f"/api/v1/inventory/kardex?item_id={beef_id}", headers=_admin_headers()
-    ).json()
-    assert any(
-        row["movement_type"] == "SALE_CONSUMPTION" and float(row["quantity_delta"]) == -120
-        for row in movements
-    )
-    assert not any(
-        row["movement_type"] == "SALE_CONSUMPTION" and float(row["quantity_delta"]) == -125
-        for row in movements
     )
 
+    for response in (write_response, read_response):
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "feature_out_of_saas_scope"
+    with factory() as session:
+        after = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
+    assert after == before
 
-def test_production_batch_is_idempotent_and_production_recipes_reject_cycles() -> None:
+
+def test_production_routes_fail_closed_without_effects() -> None:
     client = _client_with_seeded_database()
-    gram_id = "018f6f73-2d0a-74f0-8f1c-000000000301"
-    beef_id = "018f6f73-2d0a-74f0-8f1c-000000000311"
+    factory = _test_session_factory(client)
+    tables = (models.recipes, models.production_batches, models.inventory_movements)
+    with factory() as session:
+        before = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
 
-    sauce = client.post(
-        "/api/v1/inventory/items",
-        headers=_admin_headers(),
-        json={
-            "name": "Salsa elaborada",
-            "sku": "09103",
-            "base_unit_id": gram_id,
-            "item_type": "elaborated",
-        },
-    ).json()
     recipe_response = client.post(
         "/api/v1/production-recipes",
         headers=_admin_headers(),
         json={
-            "output_item_id": sauce["id"],
+            "output_item_id": "018f6f73-2d0a-74f0-8f1c-000000000311",
             "yield_quantity": "1000",
-            "yield_unit_id": gram_id,
+            "yield_unit_id": "018f6f73-2d0a-74f0-8f1c-000000000301",
             "branch_id": BRANCH_ID,
-            "components": [{"item_id": beef_id, "net_quantity": "500", "waste_percent": "0"}],
+            "components": [
+                {
+                    "item_id": "018f6f73-2d0a-74f0-8f1c-000000000312",
+                    "net_quantity": "500",
+                    "waste_percent": "0",
+                }
+            ],
         },
     )
-    assert recipe_response.status_code == 200
-    recipe = recipe_response.json()
-
     batch_response = client.post(
         "/api/v1/production-batches",
         headers=_admin_headers(),
         json={
             "branch_id": BRANCH_ID,
-            "recipe_id": recipe["id"],
-            "lot_code": "SALSA-001",
+            "recipe_id": "018f6f73-2d0a-74f0-8f1c-000000009901",
+            "lot_code": "OUT-OF-SCOPE-001",
             "planned_quantity": "1000",
             "actual_quantity": "900",
         },
     )
-    assert batch_response.status_code == 200
-    batch = batch_response.json()
-    headers = {**_admin_headers(), "Idempotency-Key": "production-salsa-001"}
-    confirmed = client.post(
-        f"/api/v1/production-batches/{batch['id']}/confirm", headers=headers, json={}
-    )
-    assert confirmed.status_code == 200
-    assert confirmed.json()["status"] == "confirmed"
-    assert sorted(
-        (row["movement_type"], float(row["quantity_delta"]))
-        for row in confirmed.json()["movements"]
-    ) == [("PRODUCTION_INPUT", -500.0), ("PRODUCTION_OUTPUT", 900.0)]
 
-    replay = client.post(
-        f"/api/v1/production-batches/{batch['id']}/confirm", headers=headers, json={}
-    )
-    assert replay.status_code == 200
-    assert len(replay.json()["movements"]) == 2
-    conflict = client.post(
-        f"/api/v1/production-batches/{batch['id']}/confirm",
-        headers={**_admin_headers(), "Idempotency-Key": "different-key"},
-        json={},
-    )
-    assert conflict.status_code == 409
-    assert conflict.json()["detail"]["code"] == "production_batch_already_confirmed"
-
-    product = client.post(
-        "/api/v1/catalog/products",
-        headers=_admin_headers(),
-        json={
-            "name": "PLATILLO CON SALSA",
-            "sku": "09002",
-            "category_name": "COMIDA",
-            "station": "kitchen",
-            "price_cents": 7500,
-        },
-    ).json()
-    sale_recipe = client.put(
-        f"/api/v1/products/{product['id']}/recipe",
-        headers={**_admin_headers(), "Idempotency-Key": "platform-sauce-recipe"},
-        json={
-            "branch_id": "018f6f73-2d0a-74f0-8f1c-000000000003",
-            "expected_active_recipe_id": None,
-            "yield_quantity": "1",
-            "yield_unit_id": "018f6f73-2d0a-74f0-8f1c-000000000303",
-            "components": [{
-                "item_id": sauce["id"],
-                "unit_id": "018f6f73-2d0a-74f0-8f1c-000000000301",
-                "net_quantity": "100",
-                "waste_rate": "0",
-            }],
-        },
-    )
-    assert sale_recipe.status_code == 200
-    assert (
-        _open_shift(client, 10000).status_code
-        == 200
-    )
-    order = client.post(
-        "/api/v1/orders",
-        headers=_admin_headers(),
-        json={"lines": [{"product_id": product["id"], "quantity": 1}]},
-    ).json()
-    task_id = order["production_tasks"][0]["id"]
-    assert (
-        client.post(
-            f"/api/v1/kds/tasks/{task_id}/transition",
-            headers=_admin_headers(),
-            json={"status": "IN_PROGRESS"},
-        ).status_code
-        == 200
-    )
-    assert (
-        client.post(
-            f"/api/v1/kds/tasks/{task_id}/transition",
-            headers=_admin_headers(),
-            json={"status": "COMPLETED"},
-        ).status_code
-        == 200
-    )
-    sauce_movements = client.get(
-        f"/api/v1/inventory/kardex?item_id={sauce['id']}", headers=_admin_headers()
-    ).json()
-    assert any(
-        row["movement_type"] == "SALE_CONSUMPTION" and float(row["quantity_delta"]) == -100
-        for row in sauce_movements
-    )
-    beef_movements = client.get(
-        f"/api/v1/inventory/kardex?item_id={beef_id}", headers=_admin_headers()
-    ).json()
-    assert not any(row["movement_type"] == "SALE_CONSUMPTION" for row in beef_movements)
-
-    filling = client.post(
-        "/api/v1/inventory/items",
-        headers=_admin_headers(),
-        json={
-            "name": "Relleno elaborado",
-            "sku": "09104",
-            "base_unit_id": gram_id,
-            "item_type": "elaborated",
-        },
-    ).json()
-    replace_sauce_recipe = client.post(
-        "/api/v1/production-recipes",
-        headers=_admin_headers(),
-        json={
-            "output_item_id": sauce["id"],
-            "yield_quantity": "100",
-            "yield_unit_id": gram_id,
-            "components": [{"item_id": filling["id"], "net_quantity": "50"}],
-        },
-    )
-    assert replace_sauce_recipe.status_code == 200
-    cycle = client.post(
-        "/api/v1/production-recipes",
-        headers=_admin_headers(),
-        json={
-            "output_item_id": filling["id"],
-            "yield_quantity": "100",
-            "yield_unit_id": gram_id,
-            "components": [{"item_id": sauce["id"], "net_quantity": "50"}],
-        },
-    )
-    assert cycle.status_code == 409
-    assert cycle.json()["detail"]["code"] == "recipe_cycle_detected"
+    for response in (recipe_response, batch_response):
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "feature_out_of_saas_scope"
+    with factory() as session:
+        after = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
+    assert after == before
 
 
 def test_modifiers_validate_groups_price_snapshot_kitchen_text_and_inventory() -> None:
@@ -3899,429 +3900,71 @@ def test_real_waste_draft_confirmation_costing_idempotency_and_reversal() -> Non
     assert inactive_reason.json()["detail"]["code"] == "active_waste_reason_not_found"
 
 
-def test_inventory_transfer_partial_receipt_preserves_cost_and_idempotency() -> None:
+def test_inventory_transfer_routes_fail_closed_without_effects() -> None:
     client = _client_with_seeded_database()
-    piece_id = "018f6f73-2d0a-74f0-8f1c-000000000303"
-    destination = client.post(
-        "/api/v1/branches",
-        headers=_admin_headers(),
-        json={"name": "Sucursal Destino", "code": "DESTINO"},
-    ).json()
-    kilogram = client.post(
-        "/api/v1/inventory/units",
-        headers=_admin_headers(),
-        json={
-            "code": "KG-TRANSFER",
-            "name": "Kilogramo traspaso",
-            "precision_scale": 3,
-            "dimension": "mass",
-        },
-    ).json()
-    item = client.post(
-        "/api/v1/inventory/items",
+    factory = _test_session_factory(client)
+    tables = (models.inventory_transfers, models.inventory_movements)
+    with factory() as session:
+        before = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
+
+    response = client.post(
+        "/api/v1/inventory/transfers",
         headers=_admin_headers(),
         json={
-            "name": "Pulpa transferible",
-            "sku": "09106",
-            "base_unit_id": kilogram["id"],
-            "item_type": "ingredient",
-        },
-    ).json()
-    supplier = client.post(
-        "/api/v1/suppliers",
-        headers=_admin_headers(),
-        json={
-            "code": "PROV-TRANSFER",
-            "commercial_name": "Proveedor Traspaso",
-            "delivery_days": [],
-            "payment_methods": ["transfer"],
-        },
-    ).json()
-    assert (
-        client.put(
-            f"/api/v1/suppliers/{supplier['id']}/branches/{BRANCH_ID}",
-            headers=_admin_headers(),
-            json={"is_enabled": True},
-        ).status_code
-        == 200
-    )
-    presentation = client.post(
-        "/api/v1/purchase-presentations",
-        headers=_admin_headers(),
-        json={
-            "supplier_id": supplier["id"],
-            "item_id": item["id"],
-            "code": "TRANSFER-10",
-            "name": "Cubeta transferible 10 kg",
-            "package_type": "bucket",
-            "commercial_quantity": "1",
-            "commercial_unit_id": piece_id,
-            "base_unit_id": kilogram["id"],
-            "base_unit_yield": "10",
-            "usable_content": "10",
-            "yield_percent": "1",
-            "last_net_price": "250",
-            "tax_rate": "0",
-        },
-    ).json()
-    purchase = client.post(
-        "/api/v1/purchases",
-        headers=_admin_headers(),
-        json={
-            "branch_id": BRANCH_ID,
-            "supplier_id": supplier["id"],
-            "document_type": "invoice",
-            "folio": "TRANSFER-COST-001",
-            "payment_method": "transfer",
-            "paid_from_cash": False,
+            "source_branch_id": BRANCH_ID,
+            "destination_branch_id": "018f6f73-2d0a-74f0-8f1c-000000009902",
+            "notes": "Historical transfer outside SaaS scope",
             "lines": [
                 {
-                    "presentation_id": presentation["id"],
-                    "quantity": "1",
-                    "unit_price": "250",
-                    "discount": "0",
-                    "tax": "0",
+                    "item_id": "018f6f73-2d0a-74f0-8f1c-000000000311",
+                    "unit_id": "018f6f73-2d0a-74f0-8f1c-000000000301",
+                    "quantity": "10",
                 }
             ],
         },
-    ).json()
-    assert (
-        client.post(
-            f"/api/v1/purchases/{purchase['id']}/confirm",
-            headers={**_admin_headers(), "Idempotency-Key": "purchase-transfer-cost"},
-            json={},
-        ).status_code
-        == 200
     )
 
-    before_movements = client.get(
-        "/api/v1/platform/bootstrap-status", headers=_admin_headers()
-    ).json()["counts"][
-        "inventory_movements"
-    ]
-    draft_response = client.post(
-        "/api/v1/inventory/transfers",
-        headers=_admin_headers(),
-        json={
-            "source_branch_id": BRANCH_ID,
-            "destination_branch_id": destination["id"],
-            "notes": "Traspaso de prueba",
-            "lines": [{"item_id": item["id"], "unit_id": kilogram["id"], "quantity": "10"}],
-        },
-    )
-    assert draft_response.status_code == 200
-    draft = draft_response.json()
-    assert draft["status"] == "draft"
-    assert draft["movements"] == []
-    assert (
-        client.get("/api/v1/platform/bootstrap-status", headers=_admin_headers()).json()[
-            "counts"
-        ]["inventory_movements"]
-        == before_movements
-    )
-
-    send_headers = {**_admin_headers(), "Idempotency-Key": "transfer-send-001"}
-    sent_response = client.post(
-        f"/api/v1/inventory/transfers/{draft['id']}/send",
-        headers=send_headers,
-        json={},
-    )
-    assert sent_response.status_code == 200
-    sent = sent_response.json()
-    assert sent["status"] == "sent"
-    line = sent["lines"][0]
-    assert float(line["sent_quantity"]) == 10
-    assert float(line["unit_cost"]) == 25
-    assert float(line["sent_total_cost"]) == 250
-    transfer_out = next(row for row in sent["movements"] if row["movement_type"] == "TRANSFER_OUT")
-    assert float(transfer_out["quantity_delta"]) == -10
-    assert float(transfer_out["total_cost"]) == -250
-    sent_replay = client.post(
-        f"/api/v1/inventory/transfers/{draft['id']}/send",
-        headers=send_headers,
-        json={},
-    )
-    assert sent_replay.status_code == 200
-    assert len(sent_replay.json()["movements"]) == 1
-    wrong_send_key = client.post(
-        f"/api/v1/inventory/transfers/{draft['id']}/send",
-        headers={**_admin_headers(), "Idempotency-Key": "transfer-send-other"},
-        json={},
-    )
-    assert wrong_send_key.status_code == 409
-    assert wrong_send_key.json()["detail"]["code"] == "transfer_already_sent"
-
-    receive_headers = {**_admin_headers(), "Idempotency-Key": "transfer-receive-001"}
-    received_response = client.post(
-        f"/api/v1/inventory/transfers/{draft['id']}/receive",
-        headers=receive_headers,
-        json={
-            "lines": [
-                {
-                    "line_id": line["id"],
-                    "received_quantity": "9.5",
-                    "condition": "damaged",
-                    "difference_reason": "Envase dañado durante traslado",
-                }
-            ]
-        },
-    )
-    assert received_response.status_code == 200
-    received = received_response.json()
-    assert received["status"] == "received_with_difference"
-    received_line = received["lines"][0]
-    assert float(received_line["received_quantity"]) == 9.5
-    assert float(received_line["difference_quantity"]) == 0.5
-    assert float(received_line["received_total_cost"]) == 237.5
-    assert float(received_line["difference_cost"]) == 12.5
-    transfer_in = next(
-        row for row in received["movements"] if row["movement_type"] == "TRANSFER_IN"
-    )
-    assert float(transfer_in["quantity_delta"]) == 9.5
-    assert float(transfer_in["total_cost"]) == 237.5
-    assert all(row["movement_type"] != "PURCHASE_RECEIPT" for row in received["movements"])
-
-    received_replay = client.post(
-        f"/api/v1/inventory/transfers/{draft['id']}/receive",
-        headers=receive_headers,
-        json={
-            "lines": [
-                {"line_id": line["id"], "received_quantity": "9.5", "difference_reason": "retry"}
-            ]
-        },
-    )
-    assert received_replay.status_code == 200
-    assert len(received_replay.json()["movements"]) == 2
-    wrong_receive_key = client.post(
-        f"/api/v1/inventory/transfers/{draft['id']}/receive",
-        headers={**_admin_headers(), "Idempotency-Key": "transfer-receive-other"},
-        json={
-            "lines": [
-                {"line_id": line["id"], "received_quantity": "9.5", "difference_reason": "retry"}
-            ]
-        },
-    )
-    assert wrong_receive_key.status_code == 409
-    assert wrong_receive_key.json()["detail"]["code"] == "transfer_already_received"
-
-    source_costs = client.get(
-        f"/api/v1/inventory/costs?branch_id={BRANCH_ID}", headers=_admin_headers()
-    ).json()
-    source_cost = next(row for row in source_costs if row["item_id"] == item["id"])
-    assert float(source_cost["quantity_on_hand"]) == 0
-    assert float(source_cost["average_unit_cost"]) == 25
-    destination_costs = client.get(
-        f"/api/v1/inventory/costs?branch_id={destination['id']}",
-        headers=_admin_headers(),
-    ).json()
-    destination_cost = next(row for row in destination_costs if row["item_id"] == item["id"])
-    assert float(destination_cost["quantity_on_hand"]) == 9.5
-    assert float(destination_cost["average_unit_cost"]) == 25
-    destination_list = client.get(
-        f"/api/v1/inventory/transfers?branch_id={destination['id']}",
-        headers=_admin_headers(),
-    )
-    assert destination_list.status_code == 200
-    assert destination_list.json()[0]["id"] == draft["id"]
-
-    insufficient = client.post(
-        "/api/v1/inventory/transfers",
-        headers=_admin_headers(),
-        json={
-            "source_branch_id": BRANCH_ID,
-            "destination_branch_id": destination["id"],
-            "lines": [{"item_id": item["id"], "quantity": "1"}],
-        },
-    ).json()
-    insufficient_send = client.post(
-        f"/api/v1/inventory/transfers/{insufficient['id']}/send",
-        headers={**_admin_headers(), "Idempotency-Key": "transfer-insufficient"},
-        json={},
-    )
-    assert insufficient_send.status_code == 409
-    assert insufficient_send.json()["detail"]["code"] == "insufficient_transfer_inventory"
-    stored_insufficient = next(
-        row
-        for row in client.get(
-            f"/api/v1/inventory/transfers?branch_id={BRANCH_ID}",
-            headers=_admin_headers(),
-        ).json()
-        if row["id"] == insufficient["id"]
-    )
-    assert stored_insufficient["status"] == "draft"
-    assert stored_insufficient["movements"] == []
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "feature_out_of_saas_scope"
+    with factory() as session:
+        after = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
+    assert after == before
 
 
-def test_physical_count_blind_snapshot_preserves_intermediate_movements() -> None:
+def test_physical_count_routes_fail_closed_without_effects() -> None:
     client = _client_with_seeded_database()
-    beef_id = "018f6f73-2d0a-74f0-8f1c-000000000311"
-    burger_id = "018f6f73-2d0a-74f0-8f1c-000000000111"
-    before_movements = client.get(
-        "/api/v1/platform/bootstrap-status", headers=_admin_headers()
-    ).json()["counts"][
-        "inventory_movements"
-    ]
-    opened_response = client.post(
+    factory = _test_session_factory(client)
+    tables = (models.physical_count_sessions, models.inventory_movements)
+    with factory() as session:
+        before = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
+
+    response = client.post(
         "/api/v1/inventory/physical-counts",
         headers=_admin_headers(),
-        json={"branch_id": BRANCH_ID, "item_ids": [beef_id], "notes": "Conteo selectivo de carne"},
-    )
-    assert opened_response.status_code == 200
-    opened = opened_response.json()
-    assert opened["status"] == "counting"
-    assert opened["blind"] is True
-    assert len(opened["lines"]) == 1
-    line = opened["lines"][0]
-    assert "theoretical_quantity" not in line
-    assert "snapshot_difference" not in line
-    assert opened["movements"] == []
-    assert (
-        client.get("/api/v1/platform/bootstrap-status", headers=_admin_headers()).json()[
-            "counts"
-        ]["inventory_movements"]
-        == before_movements
+        json={
+            "branch_id": BRANCH_ID,
+            "item_ids": ["018f6f73-2d0a-74f0-8f1c-000000000311"],
+            "notes": "Historical physical count outside SaaS scope",
+        },
     )
 
-    duplicate = client.post(
-        "/api/v1/inventory/physical-counts",
-        headers=_admin_headers(),
-        json={"branch_id": BRANCH_ID, "item_ids": [beef_id]},
-    )
-    assert duplicate.status_code == 409
-    assert duplicate.json()["detail"]["code"] == "active_physical_count_exists"
-    incomplete = client.post(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/submit",
-        headers=_admin_headers(),
-        json={},
-    )
-    assert incomplete.status_code == 409
-    assert incomplete.json()["detail"]["code"] == "physical_count_incomplete"
-
-    captured_response = client.put(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/lines/{line['id']}",
-        headers=_admin_headers(),
-        json={"counted_quantity": "24800", "notes": "Dos paquetes faltantes"},
-    )
-    assert captured_response.status_code == 200
-    captured_line = captured_response.json()["lines"][0]
-    assert float(captured_line["counted_quantity"]) == 24800
-    assert "theoretical_quantity" not in captured_line
-    submitted_response = client.post(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/submit",
-        headers=_admin_headers(),
-        json={},
-    )
-    assert submitted_response.status_code == 200
-    submitted = submitted_response.json()
-    assert submitted["status"] == "submitted"
-    assert submitted["blind"] is False
-    submitted_line = submitted["lines"][0]
-    assert float(submitted_line["theoretical_quantity"]) == 25000
-    assert float(submitted_line["snapshot_difference"]) == -200
-    immutable_capture = client.put(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/lines/{line['id']}",
-        headers=_admin_headers(),
-        json={"counted_quantity": "24900"},
-    )
-    assert immutable_capture.status_code == 409
-    assert immutable_capture.json()["detail"]["code"] == "physical_count_not_editable"
-
-    assert (
-        _open_shift(client, 10000).status_code
-        == 200
-    )
-    order = client.post(
-        "/api/v1/orders",
-        headers=_admin_headers(),
-        json={"lines": [{"product_id": burger_id, "quantity": 1}]},
-    ).json()
-    task_id = order["production_tasks"][0]["id"]
-    assert (
-        client.post(
-            f"/api/v1/kds/tasks/{task_id}/transition",
-            headers=_admin_headers(),
-            json={"status": "IN_PROGRESS"},
-        ).status_code
-        == 200
-    )
-    assert (
-        client.post(
-            f"/api/v1/kds/tasks/{task_id}/transition",
-            headers=_admin_headers(),
-            json={"status": "COMPLETED"},
-        ).status_code
-        == 200
-    )
-    stock_before_approval = next(
-        row
-        for row in client.get(
-            "/api/v1/inventory/stock", headers=_admin_headers()
-        ).json()
-        if row["id"] == beef_id
-    )
-    assert float(stock_before_approval["quantity_on_hand"]) == 24880
-
-    approval_headers = {**_admin_headers(), "Idempotency-Key": "physical-count-approve-001"}
-    approved_response = client.post(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/approve",
-        headers=approval_headers,
-        json={},
-    )
-    assert approved_response.status_code == 200
-    approved = approved_response.json()
-    assert approved["status"] == "approved"
-    approved_line = approved["lines"][0]
-    assert float(approved_line["snapshot_difference"]) == -200
-    assert float(approved_line["approval_ledger_quantity"]) == 24880
-    assert float(approved_line["adjustment_quantity"]) == -80
-    assert len(approved["movements"]) == 1
-    adjustment = approved["movements"][0]
-    assert adjustment["movement_type"] == "COUNT_ADJUSTMENT"
-    assert float(adjustment["quantity_delta"]) == -80
-
-    replay = client.post(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/approve",
-        headers=approval_headers,
-        json={},
-    )
-    assert replay.status_code == 200
-    assert len(replay.json()["movements"]) == 1
-    wrong_key = client.post(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/approve",
-        headers={**_admin_headers(), "Idempotency-Key": "physical-count-other"},
-        json={},
-    )
-    assert wrong_key.status_code == 409
-    assert wrong_key.json()["detail"]["code"] == "physical_count_already_approved"
-    closed = client.post(
-        f"/api/v1/inventory/physical-counts/{opened['id']}/close",
-        headers=_admin_headers(),
-        json={},
-    )
-    assert closed.status_code == 200
-    assert closed.json()["status"] == "closed"
-    final_stock = next(
-        row
-        for row in client.get(
-            "/api/v1/inventory/stock", headers=_admin_headers()
-        ).json()
-        if row["id"] == beef_id
-    )
-    assert float(final_stock["quantity_on_hand"]) == 24800
-
-    cancellable = client.post(
-        "/api/v1/inventory/physical-counts",
-        headers=_admin_headers(),
-        json={"branch_id": BRANCH_ID, "item_ids": [beef_id]},
-    ).json()
-    cancelled = client.post(
-        f"/api/v1/inventory/physical-counts/{cancellable['id']}/cancel",
-        headers=_admin_headers(),
-        json={"reason": "Conteo abierto por error"},
-    )
-    assert cancelled.status_code == 200
-    assert cancelled.json()["status"] == "cancelled"
-    assert cancelled.json()["movements"] == []
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "feature_out_of_saas_scope"
+    with factory() as session:
+        after = {
+            table.name: session.scalar(sa.select(sa.func.count()).select_from(table))
+            for table in tables
+        }
+    assert after == before
 
 
 def test_admin_can_create_user_role_and_assignment() -> None:
@@ -5173,12 +4816,22 @@ def test_payment_confirmation_is_idempotent_for_the_complete_intention() -> None
     order = client.post(
         "/api/v1/orders",
         headers=_admin_headers(),
-        json={"lines": [{"product_id": "018f6f73-2d0a-74f0-8f1c-000000000111", "quantity": 1}]},
+        json={
+            "branch_id": BRANCH_ID,
+            "lines": [
+                {"product_id": "018f6f73-2d0a-74f0-8f1c-000000000111", "quantity": 1}
+            ],
+        },
     ).json()
     other_order = client.post(
         "/api/v1/orders",
         headers=_admin_headers(),
-        json={"lines": [{"product_id": "018f6f73-2d0a-74f0-8f1c-000000000111", "quantity": 1}]},
+        json={
+            "branch_id": BRANCH_ID,
+            "lines": [
+                {"product_id": "018f6f73-2d0a-74f0-8f1c-000000000111", "quantity": 1}
+            ],
+        },
     ).json()
     headers = {**_admin_headers(), "Idempotency-Key": "payment-confirmation-001"}
     payload = {"amount_cents": order["total_cents"], "method": "cash", "register_id": "CAJA-01"}
@@ -5251,7 +4904,9 @@ def test_payment_confirmation_is_idempotent_for_the_complete_intention() -> None
             ).all()
         ) == 1
 
-    summary_response = client.get("/api/v1/cash-shifts/summary", headers=_admin_headers())
+    summary_response = client.get(
+        f"/api/v1/cash-shifts/summary?branch_id={BRANCH_ID}", headers=_admin_headers()
+    )
     assert summary_response.status_code == 200
     summary = summary_response.json()["summary"]
     assert summary["sales_total_cents"] == 9500

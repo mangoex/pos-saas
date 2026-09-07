@@ -1,7 +1,9 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-recovery-test-uber-eats-integration-synthetic-v1
 from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -165,6 +167,12 @@ def test_uber_store_routing_and_order_creation(test_db):
     store_uuid = "d0e94168-bf1b-49cb-a49b-02df1ff9b68e"
 
     # Map store UUID to branch
+    channel_service.save_config(
+        test_db,
+        ORGANIZATION_ID,
+        "UBER_EATS",
+        {"is_enabled": True, "webhook_secret": "uber-webhook-secret"},
+    )
     channel_service.save_store_mapping(
         test_db, ORGANIZATION_ID, "UBER_EATS", BRANCH_ID, store_uuid, is_active=True
     )
@@ -227,6 +235,12 @@ def test_uber_store_routing_and_order_creation(test_db):
 
 def test_uber_webhook_idempotency(test_db):
     store_uuid = "d0e94168-bf1b-49cb-a49b-02df1ff9b68e"
+    channel_service.save_config(
+        test_db,
+        ORGANIZATION_ID,
+        "UBER_EATS",
+        {"is_enabled": True, "webhook_secret": "uber-webhook-secret"},
+    )
     channel_service.save_store_mapping(
         test_db, ORGANIZATION_ID, "UBER_EATS", BRANCH_ID, store_uuid, is_active=True
     )
@@ -285,7 +299,8 @@ def test_uber_admin_configuration_api(test_db):
     # Get config
     get_res = client.get("/api/v1/integrations/uber-eats/config", headers=headers)
     assert get_res.status_code == 200
-    assert get_res.json()["client_secret"] == "uber_secret_xyz"
+    assert "client_secret" not in get_res.json()
+    assert get_res.json()["has_client_secret"] is True
 
     # Add store mapping
     store_payload = {
@@ -306,6 +321,63 @@ def test_uber_admin_configuration_api(test_db):
     app.dependency_overrides.clear()
 
 
+def test_non_order_webhooks_are_processed_before_ack_and_replay_cleanly(test_db):
+    def override_session():
+        yield test_db
+
+    app.dependency_overrides[get_session] = override_session
+    client = TestClient(app)
+    cases = [
+        (
+            "UBER_EATS",
+            "/api/v1/integrations/uber-eats/webhook",
+            "X-Uber-Signature",
+            {"store": {"id": "u"}},
+        ),
+        (
+            "DIDI_FOOD",
+            "/api/v1/integrations/didi-food/webhook",
+            "X-DiDi-Signature",
+            {"shop_id": "d"},
+        ),
+        ("RAPPI", "/api/v1/integrations/rappi/webhook", "X-Rappi-Signature", {"store_id": "r"}),
+    ]
+    for provider, url, header, store in cases:
+        secret = f"secret-{provider}"
+        store_id = next(iter(store.values()))
+        if isinstance(store_id, dict):
+            store_id = store_id["id"]
+        channel_service.save_config(
+            test_db, ORGANIZATION_ID, provider, {"is_enabled": True, "webhook_secret": secret}
+        )
+        channel_service.save_store_mapping(
+            test_db, ORGANIZATION_ID, provider, BRANCH_ID, str(store_id)
+        )
+        payload = {"id": f"ignored-{provider}", "event_type": "store.status", **store}
+        body = json.dumps(payload).encode()
+        signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        first = client.post(
+            url, content=body, headers={"Content-Type": "application/json", header: signature}
+        )
+        replay = client.post(
+            url, content=body, headers={"Content-Type": "application/json", header: signature}
+        )
+        assert first.status_code == replay.status_code == 200
+        row = (
+            test_db.execute(
+                models.integration_webhook_inbox.select().where(
+                    models.integration_webhook_inbox.c.provider == provider,
+                    models.integration_webhook_inbox.c.event_id == payload["id"],
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert row["status"] == "processed"
+        assert row["lease_token"] is None
+    app.dependency_overrides.clear()
+
+
 def test_uber_pos_orders_lifecycle(test_db):
     def override_session():
         yield test_db
@@ -315,9 +387,22 @@ def test_uber_pos_orders_lifecycle(test_db):
     token = create_session_token({"sub": USER_ID}, get_settings().secret_key)
     headers = {"Authorization": f"Bearer {token}"}
 
+    store_id = "test-store-uber"
+    channel_service.save_config(
+        test_db,
+        ORGANIZATION_ID,
+        "UBER_EATS",
+        {"is_enabled": True, "webhook_secret": "uber-webhook-secret"},
+    )
+    channel_service.save_store_mapping(
+        test_db, ORGANIZATION_ID, "UBER_EATS", BRANCH_ID, store_id, is_active=True
+    )
+
     # Create a test order via simulation endpoint
     test_order_res = client.post(
-        "/api/v1/integrations/uber-eats/test-order", json={"items_count": 2}, headers=headers
+        "/api/v1/integrations/uber-eats/test-order",
+        json={"items_count": 2, "store_id": store_id},
+        headers=headers,
     )
     assert test_order_res.status_code == 200
     order_id = test_order_res.json()["result"]["order_id"]

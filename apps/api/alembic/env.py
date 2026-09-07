@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from restaurant_os.alembic_config import set_alembic_database_url
 from restaurant_os.config import get_settings
+from restaurant_os.database import normalize_database_url
 from restaurant_os.models import metadata
 from sqlalchemy import engine_from_config, pool
 
@@ -14,7 +15,6 @@ if config.config_file_name is not None:
 target_metadata = metadata
 
 
-from restaurant_os.database import normalize_database_url
 
 
 def _database_url() -> str:

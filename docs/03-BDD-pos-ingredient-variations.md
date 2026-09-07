@@ -10,7 +10,7 @@
 ## BDD-FEAT-058 Catálogo reutilizable de ingredientes adicionales
 
 ```gherkin
-@PRD-FR-200 @pos @modifiers @inventory @catalog
+@PRD-FR-700 @pos @modifiers @inventory @catalog
 Feature: Ingredientes adicionales relacionados con productos
 
   @BDD-SC-175

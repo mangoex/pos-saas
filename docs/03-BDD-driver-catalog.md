@@ -3,7 +3,7 @@
 ## BDD-FEAT-070 Repartidores propios por sucursal
 
 ```gherkin
-@PRD-FR-210 @drivers @admin @delivery
+@PRD-FR-710 @drivers @admin @delivery
 Feature: Administrador mantiene el catálogo de repartidores propios
 
   @BDD-SC-239

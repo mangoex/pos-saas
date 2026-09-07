@@ -3,7 +3,7 @@
 ## BDD-FEAT-107 Sugerencias complementarias antes del checkout
 
 ```gherkin
-@PRD-FR-236 @mobile-web @catalog
+@PRD-FR-736 @mobile-web @catalog
 Feature: Sugerencias seguras para el carrito móvil
 
   @BDD-SC-484
@@ -37,4 +37,13 @@ Feature: Sugerencias seguras para el carrito móvil
     Then mobile-web elimina las sugerencias anteriores
     And no fabrica recomendaciones genéricas
     And el comensal puede continuar el checkout sin cambios en carrito ni total
+
+  @BDD-SC-488
+  Scenario: Aislar recomendaciones administrativas por tenant y sucursal
+    Given un actor tiene customers.read en una sucursal de su organización
+    And existe otra organización con clientes, productos, pedidos y una sucursal distinta
+    When el actor solicita recomendaciones o segmentos CRM
+    Then las consultas usan únicamente la organización del actor
+    And una sucursal de la otra organización se rechaza antes de consultar datos
+    And una recomendación sin precio vigente no se devuelve
 ```

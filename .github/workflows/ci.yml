@@ -83,6 +83,7 @@ jobs:
         run: RESTAURANTOS_DATABASE_URL="$MOBORD001_TEST_POSTGRES_URL" python -m alembic -c alembic.ini upgrade 0050_promote_recipes_to_global_scope
       - name: Run tests
         env:
+          SAAS_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco005b_ci
           PCO005B_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco005b_ci
           PCO006_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco006_ci
           PCO007_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco007_ci

@@ -3,7 +3,7 @@
 ## BDD-FEAT-071 Repartidor de la sucursal para pedidos a domicilio
 
 ```gherkin
-@PRD-FR-211 @pos @delivery @drivers
+@PRD-FR-711 @pos @delivery @drivers
 Feature: Cajero asigna un repartidor al pedido a domicilio
 
   @BDD-SC-243

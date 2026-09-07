@@ -35,6 +35,11 @@ def _alembic(database_url: str, *arguments: str) -> None:
     )
 
 
+def _historical_table(connection: sa.Connection, name: str) -> sa.Table:
+    """Reflect the table at the migration revision under test."""
+    return sa.Table(name, sa.MetaData(), autoload_with=connection)
+
+
 def test_catalog_policy_is_deterministic() -> None:
     assert normalize_product_sku("  '´‘’01001 ") == "01001"
     assert is_numeric_sku("01001") is True
@@ -207,10 +212,16 @@ def test_catalog_cleanup_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> 
 
     _alembic(database_url, "upgrade", "0027_catalog_cleanup")
     with engine.connect() as connection:
+        products_table = _historical_table(connection, "products")
+        categories_table = _historical_table(connection, "product_categories")
+        items_table = _historical_table(connection, "inventory_items")
+        availability_table = _historical_table(connection, "branch_product_availability")
+        cleanup_runs_table = _historical_table(connection, "catalog_cleanup_runs")
+        audit_events_table = _historical_table(connection, "audit_events")
         products = {
             row["id"]: row
             for row in connection.execute(
-                sa.select(models.products).where(models.products.c.id.like("cleanup-product-%"))
+                sa.select(products_table).where(products_table.c.id.like("cleanup-product-%"))
             ).mappings()
         }
         assert products["cleanup-product-drink"]["sku"] == "01001"
@@ -228,16 +239,16 @@ def test_catalog_cleanup_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> 
         assert products["cleanup-product-invalid-sku"]["status"] == "archived"
         assert products["cleanup-product-invalid-name"]["status"] == "archived"
         assert connection.scalar(
-            sa.select(models.product_categories.c.status).where(
-                models.product_categories.c.id == "cleanup-category-food"
+            sa.select(categories_table.c.status).where(
+                categories_table.c.id == "cleanup-category-food"
             )
         ) == "active"
 
         item_rows_after = {
             row["id"]: row
             for row in connection.execute(
-                sa.select(models.inventory_items).where(
-                    models.inventory_items.c.id.like("cleanup-item-%")
+                sa.select(items_table).where(
+                    items_table.c.id.like("cleanup-item-%")
                 )
             ).mappings()
         }
@@ -247,16 +258,16 @@ def test_catalog_cleanup_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> 
         assert item_rows_after["cleanup-item-invalid"]["status"] == "archived"
         assert (
             connection.scalar(
-                sa.select(sa.func.count(models.branch_product_availability.c.product_id)).where(
-                    models.branch_product_availability.c.product_id == "cleanup-product-drink"
+                sa.select(sa.func.count(availability_table.c.product_id)).where(
+                    availability_table.c.product_id == "cleanup-product-drink"
                 )
             )
             == 0
         )
         run = (
             connection.execute(
-                sa.select(models.catalog_cleanup_runs).where(
-                    models.catalog_cleanup_runs.c.revision == "0027_catalog_cleanup"
+                sa.select(cleanup_runs_table).where(
+                    cleanup_runs_table.c.revision == "0027_catalog_cleanup"
                 )
             )
             .mappings()
@@ -266,8 +277,8 @@ def test_catalog_cleanup_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> 
         assert run["summary"]["products_archived"] >= 2
         assert (
             connection.scalar(
-                sa.select(sa.func.count(models.audit_events.c.id)).where(
-                    models.audit_events.c.action == "catalog.cleanup.applied"
+                sa.select(sa.func.count(audit_events_table.c.id)).where(
+                    audit_events_table.c.action == "catalog.cleanup.applied"
                 )
             )
             == 1
@@ -282,9 +293,11 @@ def test_catalog_cleanup_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> 
 
     _alembic(database_url, "downgrade", "0026_ingredient_variations")
     with engine.connect() as connection:
+        products_table = _historical_table(connection, "products")
+        availability_table = _historical_table(connection, "branch_product_availability")
         restored = (
             connection.execute(
-                sa.select(models.products).where(models.products.c.id == "cleanup-product-drink")
+                sa.select(products_table).where(products_table.c.id == "cleanup-product-drink")
             )
             .mappings()
             .one()
@@ -296,9 +309,9 @@ def test_catalog_cleanup_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> 
         assert restored["source_branch_id"] == BRANCH_ID
         assert (
             connection.scalar(
-                sa.select(sa.func.count(models.branch_product_availability.c.product_id)).where(
-                    models.branch_product_availability.c.product_id == "cleanup-product-drink",
-                    models.branch_product_availability.c.is_available.is_(False),
+                sa.select(sa.func.count(availability_table.c.product_id)).where(
+                    availability_table.c.product_id == "cleanup-product-drink",
+                    availability_table.c.is_available.is_(False),
                 )
             )
             == 1
@@ -306,10 +319,11 @@ def test_catalog_cleanup_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> 
 
     _alembic(database_url, "upgrade", "0027_catalog_cleanup")
     with engine.connect() as connection:
+        products_table = _historical_table(connection, "products")
         assert (
             connection.scalar(
-                sa.select(models.products.c.sku).where(
-                    models.products.c.id == "cleanup-product-drink"
+                sa.select(products_table.c.sku).where(
+                    products_table.c.id == "cleanup-product-drink"
                 )
             )
             == "01001"

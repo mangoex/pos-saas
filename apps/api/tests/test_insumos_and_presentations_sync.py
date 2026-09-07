@@ -21,9 +21,17 @@ def test_insumos_and_presentations_migration_and_determinism(tmp_path: Path) -> 
 
     api_dir = str(Path(__file__).resolve().parents[1])
 
-    # Run alembic upgrade head
+    # Exercise the historical data migration before later cleanup revisions.
     result = subprocess.run(
-        [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
+        [
+            sys.executable,
+            "-m",
+            "alembic",
+            "-c",
+            "alembic.ini",
+            "upgrade",
+            "0048_sync_insumos_and_presentations",
+        ],
         cwd=api_dir,
         env=env,
         capture_output=True,

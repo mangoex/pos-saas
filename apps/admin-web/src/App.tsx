@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Overview from './features/dashboard/Overview';
 import Login from './features/auth/Login';
 import Register from './features/auth/Register';
+import SubscriptionStatus from './features/auth/SubscriptionStatus';
 import AdminLayout from './components/AdminLayout';
 import ProductsList from './features/catalog/ProductsList';
 import CategoriesList from './features/catalog/CategoriesList';
@@ -126,6 +127,13 @@ const CatalogManageRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const ExcludedCommercialModule = ({ module }: { module: string }) => (
+  <section data-testid="module-out-of-scope" style={{ maxWidth: 640, margin: '48px auto', padding: 32, textAlign: 'center' }}>
+    <h1 style={{ margin: '0 0 12px' }}>{module} no está incluido en este plan</h1>
+    <p style={{ color: '#475569', lineHeight: 1.5 }}>El SaaS permite operar catálogo, caja, ventas y mermas sin configurar este módulo ERP.</p>
+  </section>
+);
+
 const RecipesManageRoute = ({ children }: { children: React.ReactNode }) => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const permissions: string[] = user.permissions || [];
@@ -149,6 +157,7 @@ export const App = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/signup" element={<Register />} />
+        <Route path="/subscription" element={<ProtectedRoute><SubscriptionStatus /></ProtectedRoute>} />
         
         <Route path="/" element={
           <ProtectedRoute>
@@ -168,7 +177,7 @@ export const App = () => {
 
           {/* Subroutes: Catálogo y Menú */}
           <Route path="products" element={<ProductsList />} />
-          <Route path="recipes" element={<RecipesManageRoute><RecipesWorkspace /></RecipesManageRoute>} />
+          <Route path="recipes" element={<ExcludedCommercialModule module="Recetas y subrecetas" />} />
           <Route path="categories" element={<CategoriesList />} />
           <Route path="variations" element={<VariationNotes />} />
           <Route path="ingredient-extras" element={<IngredientExtras />} />
@@ -176,10 +185,10 @@ export const App = () => {
 
           {/* Subroutes: Inventario y Almacén */}
           <Route path="inventory/items" element={<ItemsList />} />
-          <Route path="warehouses" element={<CatalogManageRoute><WarehousesList /></CatalogManageRoute>} />
-          <Route path="production" element={<ProductionList />} />
+          <Route path="warehouses" element={<ExcludedCommercialModule module="Múltiples almacenes" />} />
+          <Route path="production" element={<ExcludedCommercialModule module="Producción por lotes" />} />
           <Route path="inventory/waste" element={<WasteList />} />
-          <Route path="inventory/transfers" element={<TransferList />} />
+          <Route path="inventory/transfers" element={<ExcludedCommercialModule module="Traspasos entre almacenes" />} />
           <Route path="inventory/counts" element={<PhysicalCountList />} />
           <Route path="inventory/units" element={<UnitsList />} />
 

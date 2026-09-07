@@ -3,7 +3,7 @@
 ## BDD-FEAT-027 Confirmacion idempotente de comando local
 
 ```gherkin
-@PRD-FR-180 @PRD-FR-184 @PRD-FR-185 @PRD-FR-186 @PRD-FR-187 @sync @phase1
+@PRD-FR-680 @PRD-FR-684 @PRD-FR-685 @PRD-FR-686 @PRD-FR-687 @sync @phase1
 Feature: Sincronizar comando local con nube
 
   @BDD-SC-037

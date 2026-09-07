@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier } from './types';
-import { fetchMobileMenu, submitMobileOrder, fetchPublicBranches } from './api';
+import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier, StorefrontOrganization } from './types';
+import { fetchMobileMenu, submitMobileOrder, fetchStorefront } from './api';
 import { HeroHeader } from './components/HeroHeader';
 import { CategoryCircles } from './components/CategoryCircles';
 import { SizeSelectorFilter } from './components/SizeSelectorFilter';
@@ -27,6 +27,7 @@ const EXCLUDED_CATEGORY_KEYWORDS = [
   'modificador',
   'modificadores',
 ];
+const API_BASE_URL = '/api/v1';
 
 export const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,31 +46,21 @@ export const App: React.FC = () => {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [customerCoords, setCustomerCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [returnToCartAfterBranch, setReturnToCartAfterBranch] = useState(false);
+  const [organization, setOrganization] = useState<StorefrontOrganization | null>(null);
+  const [isResolvingStorefront, setIsResolvingStorefront] = useState(true);
+  const [storefrontError, setStorefrontError] = useState<string | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogRetry, setCatalogRetry] = useState(0);
+  const [storageReadyKey, setStorageReadyKey] = useState<string | null>(null);
 
   // Visual Theme (Light vs Warm Dark)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'foodie');
   }, []);
 
-  // Favorites state with localStorage
-  const [likedProductIds, setLikedProductIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('restaurantos_liked_products') || localStorage.getItem('kiwi_liked_products');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const [likedProductIds, setLikedProductIds] = useState<Set<string>>(new Set());
 
-  // Cart state with localStorage
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('restaurantos_mobile_cart') || localStorage.getItem('kiwi_mobile_cart');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [cart, setCart] = useState<CartItem[]>([]);
 
   // Modals & Navigation state
   const [currentTab, setCurrentTab] = useState<NavTab>('explore');
@@ -80,65 +71,54 @@ export const App: React.FC = () => {
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
 
   // Restaurant Context (SaaS Multi-tenant)
-  const [restaurantSlug] = useState<string | null>(() => {
+  const storefrontIdentifier = useMemo(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const pathSegments = window.location.pathname.split('/').filter(Boolean);
       let slug = urlParams.get('restaurant') || urlParams.get('r') || urlParams.get('org');
-      if (!slug && ['r', 'restaurant', 'org'].includes(pathSegments[0]) && pathSegments[1]) {
+      if (!slug && ['r', 'restaurant', 'org', 'menu', 'order', 'mobile'].includes(pathSegments[0]) && pathSegments[1]) {
         slug = pathSegments[1];
       }
       if (slug) {
-        localStorage.setItem('restaurantos_restaurant_slug', slug);
         return slug;
       }
-      return localStorage.getItem('restaurantos_restaurant_slug');
+      return null;
     } catch {
       return null;
     }
-  });
+  }, []);
+
+  const resolveStorefront = useCallback(async () => {
+    if (!storefrontIdentifier) {
+      setStorefrontError('Falta la dirección del restaurante. Abre el enlace de su menú.');
+      setIsResolvingStorefront(false);
+      return;
+    }
+    setIsResolvingStorefront(true);
+    setStorefrontError(null);
+    try {
+      const storefront = await fetchStorefront(storefrontIdentifier);
+      setOrganization(storefront.organization);
+      setBranches(storefront.branches);
+      let savedId: string | null = null;
+      try { savedId = localStorage.getItem(`restaurantos_storefront:${storefront.organization.id}:selected_branch`); } catch { /* Storage may be unavailable. */ }
+      const selected = storefront.branches.find((branch) => branch.id === storefront.selected_branch_id)
+        ?? storefront.branches.find((branch) => branch.id === savedId) ?? storefront.branches[0] ?? null;
+      setSelectedBranch(selected);
+      if (!selected) setStorefrontError('Este restaurante no tiene una sucursal disponible para pedidos.');
+    } catch {
+      setOrganization(null);
+      setBranches([]);
+      setSelectedBranch(null);
+      setStorefrontError('No pudimos encontrar este restaurante. Verifica el enlace e inténtalo de nuevo.');
+    } finally {
+      setIsResolvingStorefront(false);
+    }
+  }, [storefrontIdentifier]);
 
   // Geolocation detector
-  const detectLocationAndFetchBranches = useCallback((forceNearest = false) => {
+  const detectLocationAndFetchBranches = useCallback(() => {
     setIsLoadingLocation(true);
-
-    const applyBranchSelection = (branchList: BranchInfo[], isGps: boolean) => {
-      setBranches(branchList);
-      setIsLoadingLocation(false);
-      if (branchList.length > 0) {
-        // Direct link or QR code resolution via URL query or pathname (/menu/piloto, /m/piloto, ?branch=PILOTO, ?slug=PILOTO)
-        const urlParams = new URLSearchParams(window.location.search);
-        const pathSegments = window.location.pathname.split('/').filter(Boolean);
-        const pathSlug = (['menu', 'm', 'order', 'mobile'].includes(pathSegments[0]) && pathSegments[1])
-          ? pathSegments[1]
-          : undefined;
-        const slugParam = urlParams.get('branch') || urlParams.get('slug') || urlParams.get('b') || pathSlug;
-
-        if (slugParam) {
-          const cleanParam = slugParam.trim().toLowerCase();
-          const match = branchList.find((b) =>
-            b.code?.toLowerCase() === cleanParam
-            || b.id.toLowerCase() === cleanParam
-            || b.name?.toLowerCase().includes(cleanParam)
-          );
-          if (match) {
-            setSelectedBranch(match);
-            localStorage.setItem('restaurantos_selected_branch_id', match.id);
-            return;
-          }
-        }
-
-        if (forceNearest && isGps) {
-          // When user explicitly clicks GPS button, choose the nearest branch
-          setSelectedBranch(branchList[0]);
-          localStorage.setItem('restaurantos_selected_branch_id', branchList[0].id);
-        } else {
-          const savedId = localStorage.getItem('restaurantos_selected_branch_id') || localStorage.getItem('kiwi_selected_branch_id');
-          const match = branchList.find((b) => b.id === savedId);
-          setSelectedBranch(match || branchList[0]);
-        }
-      }
-    };
 
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -146,8 +126,7 @@ export const App: React.FC = () => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           setCustomerCoords({ lat, lng });
-          const branchList = await fetchPublicBranches(lat, lng, restaurantSlug);
-          applyBranchSelection(branchList, true);
+          setIsLoadingLocation(false);
         },
         async (err) => {
           console.warn('High accuracy geolocation failed or denied, retrying fallback...', err);
@@ -156,13 +135,11 @@ export const App: React.FC = () => {
               const lat = fallbackPos.coords.latitude;
               const lng = fallbackPos.coords.longitude;
               setCustomerCoords({ lat, lng });
-              const branchList = await fetchPublicBranches(lat, lng, restaurantSlug);
-              applyBranchSelection(branchList, true);
+              setIsLoadingLocation(false);
             },
             async (fallbackErr) => {
               console.warn('Geolocation unavailable, loading default branches:', fallbackErr);
-              const branchList = await fetchPublicBranches(undefined, undefined, restaurantSlug);
-              applyBranchSelection(branchList, false);
+              setIsLoadingLocation(false);
             },
             { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
           );
@@ -170,49 +147,91 @@ export const App: React.FC = () => {
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
       );
     } else {
-      fetchPublicBranches(undefined, undefined, restaurantSlug).then((branchList) => {
-        applyBranchSelection(branchList, false);
-      });
+      setIsLoadingLocation(false);
     }
-  }, [restaurantSlug]);
+  }, []);
 
   // Load branches on mount; the catalog follows the selected branch key exactly.
   useEffect(() => {
-    detectLocationAndFetchBranches(false);
-  }, [detectLocationAndFetchBranches]);
+    void resolveStorefront();
+  }, [resolveStorefront]);
 
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    fetchMobileMenu(selectedBranch?.public_key, restaurantSlug).then(({ products: prods, categories: cats }) => {
+    setCatalogError(null);
+    setProducts([]);
+    setCategories([]);
+    if (!selectedBranch?.public_key) {
+      setProducts([]);
+      setCategories([]);
+      setLoading(false);
+      return () => { isMounted = false; };
+    }
+    fetchMobileMenu(selectedBranch.public_key).then(({ products: prods, categories: cats }) => {
       if (isMounted) {
         setProducts(prods);
         setCategories(cats);
         setLoading(false);
       }
+    }).catch(() => {
+      if (isMounted) {
+        setLoading(false);
+        setCatalogError('No pudimos cargar el catálogo. Inténtalo de nuevo.');
+      }
     });
     return () => {
       isMounted = false;
     };
-  }, [selectedBranch?.public_key, restaurantSlug]);
+  }, [selectedBranch?.public_key, catalogRetry]);
 
   const handleSelectBranch = (branch: BranchInfo) => {
+    if (!branches.some((candidate) => candidate.id === branch.id)) return;
     setSelectedBranch(branch);
-    localStorage.setItem('restaurantos_selected_branch_id', branch.id);
+    if (organization) {
+      try { localStorage.setItem(`restaurantos_storefront:${organization.id}:selected_branch`, branch.id); } catch { /* Selection still works without storage. */ }
+    }
     if (returnToCartAfterBranch) {
       setReturnToCartAfterBranch(false);
       setIsCartOpen(true);
     }
   };
 
-  // Save favorites & cart to localStorage
-  useEffect(() => {
-    localStorage.setItem('restaurantos_liked_products', JSON.stringify(Array.from(likedProductIds)));
-  }, [likedProductIds]);
+  const storageNamespace = organization && selectedBranch
+    ? `restaurantos_storefront:${organization.id}:${selectedBranch.id}` : null;
 
   useEffect(() => {
-    localStorage.setItem('restaurantos_mobile_cart', JSON.stringify(cart));
-  }, [cart]);
+    setStorageReadyKey(null);
+    if (!storageNamespace) { setLikedProductIds(new Set()); setCart([]); return; }
+    try {
+      const favorites = localStorage.getItem(`${storageNamespace}:favorites`);
+      const savedCart = localStorage.getItem(`${storageNamespace}:cart`);
+      setLikedProductIds(favorites ? new Set(JSON.parse(favorites)) : new Set());
+      setCart(savedCart ? JSON.parse(savedCart) : []);
+    } catch { setLikedProductIds(new Set()); setCart([]); }
+    setStorageReadyKey(storageNamespace);
+  }, [storageNamespace]);
+
+  useEffect(() => {
+    if (!organization) return;
+    document.documentElement.setAttribute('data-theme', organization.mobile_theme === 'dark' ? 'dark' : 'foodie');
+    document.title = `${organization.name} | Menú Digital`;
+    let manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!manifest) {
+      manifest = document.createElement('link');
+      manifest.rel = 'manifest';
+      document.head.appendChild(manifest);
+    }
+    manifest.href = `${API_BASE_URL}/public/storefronts/${encodeURIComponent(organization.public_slug)}/manifest.webmanifest`;
+  }, [organization]);
+
+  useEffect(() => {
+    if (storageNamespace && storageReadyKey === storageNamespace) localStorage.setItem(`${storageNamespace}:favorites`, JSON.stringify(Array.from(likedProductIds)));
+  }, [likedProductIds, storageNamespace, storageReadyKey]);
+
+  useEffect(() => {
+    if (storageNamespace && storageReadyKey === storageNamespace) localStorage.setItem(`${storageNamespace}:cart`, JSON.stringify(cart));
+  }, [cart, storageNamespace, storageReadyKey]);
 
   // Reset size filter when category changes
   useEffect(() => {
@@ -422,6 +441,22 @@ export const App: React.FC = () => {
   const totalCartCents = cart.reduce((sum, item) => sum + item.line_total_cents, 0);
   const currentCategory = visibleCategories.find((c) => c.id === activeCategoryId);
 
+  if (catalogError && !storefrontError) {
+    return <main className="mobile-app-shell feed-empty-state" role="alert">
+      <p className="empty-title">{catalogError}</p>
+      <button type="button" className="btn-reset-filters" onClick={() => setCatalogRetry((attempt) => attempt + 1)}>Reintentar</button>
+    </main>;
+  }
+
+  if (isResolvingStorefront || storefrontError) {
+    return (
+      <main className="mobile-app-shell feed-empty-state" role={storefrontError ? 'alert' : 'status'}>
+        <p className="empty-title">{isResolvingStorefront ? 'Abriendo menú…' : storefrontError}</p>
+        {storefrontError && <button type="button" className="btn-reset-filters" onClick={() => void resolveStorefront()}>Reintentar</button>}
+      </main>
+    );
+  }
+
   return (
     <div className="mobile-app-shell">
       {currentTab === 'explore' && (
@@ -435,7 +470,7 @@ export const App: React.FC = () => {
           onSearchChange={setSearchQuery}
           selectedBranch={selectedBranch}
           onOpenBranchSelector={() => setIsBranchModalOpen(true)}
-          onRefreshLocation={() => detectLocationAndFetchBranches(true)}
+          onRefreshLocation={() => detectLocationAndFetchBranches()}
           isLoadingLocation={isLoadingLocation}
         />
       )}
@@ -569,7 +604,7 @@ export const App: React.FC = () => {
         branches={branches}
         selectedBranchId={selectedBranch?.id || null}
         onSelectBranch={handleSelectBranch}
-        onRefreshLocation={() => detectLocationAndFetchBranches(true)}
+        onRefreshLocation={() => detectLocationAndFetchBranches()}
         isLoadingLocation={isLoadingLocation}
       />
 

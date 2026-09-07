@@ -13,12 +13,26 @@ from restaurant_os import api as api_module
 from restaurant_os import models, operations
 from restaurant_os.auth import create_session_token
 from restaurant_os.config import get_settings
-from restaurant_os.operations import BusinessError, receive_sync_command
+from restaurant_os.operations import AuthorizationError, BusinessError, receive_sync_command
 from test_cash_concepts import BRANCH_A, CASHIER_ID, ORG_ID, _cash_concept_client
 from test_cash_ledger import _movement_payload, _new_session, _withdrawal_concept
 
 DEVICE_ID = "018f6f73-2d0a-74f0-8f1c-000000000401"
 UTC = timezone.utc
+
+
+def test_offline_grant_rejects_organization_different_from_persisted_actor() -> None:
+    client = _cash_concept_client()
+    session_factory = client.app.state.test_session_factory
+    with session_factory() as session, pytest.raises(AuthorizationError) as rejected:
+        operations.issue_offline_cash_grant(
+            session,
+            actor_user_id=CASHIER_ID,
+            organization_id="018f6f73-2d0a-74f0-8f1c-999999999999",
+            branch_id=BRANCH_A,
+            source_device_id=DEVICE_ID,
+        )
+    assert rejected.value.code == "permission_denied"
 
 
 def _envelope(concept_id: str, **overrides: Any) -> dict[str, Any]:

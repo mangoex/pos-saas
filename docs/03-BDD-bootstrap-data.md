@@ -3,7 +3,7 @@
 ## BDD-FEAT-018 Datos operativos iniciales
 
 ```gherkin
-@PRD-FR-001 @PRD-FR-002 @PRD-FR-003 @PRD-FR-005 @PRD-FR-007 @platform @phase0
+@PRD-FR-501 @PRD-FR-502 @PRD-FR-503 @PRD-FR-505 @PRD-FR-507 @platform @phase0
 Feature: Bootstrap de organizacion y sucursal
 
   @BDD-SC-025

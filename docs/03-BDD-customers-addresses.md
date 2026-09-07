@@ -3,7 +3,7 @@
 ## BDD-FEAT-035 Directorio de clientes del POS
 
 ```gherkin
-@PRD-FR-024 @PRD-FR-031 @PRD-FR-032 @PRD-FR-033 @PRD-FR-034 @customers
+@PRD-FR-524 @PRD-FR-531 @PRD-FR-532 @PRD-FR-533 @PRD-FR-534 @customers
 Feature: Identificar clientes y conservar su domicilio histórico
 
   @BDD-SC-069

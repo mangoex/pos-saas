@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     public_order_global_rate_limit_per_minute: int = Field(default=20, ge=1, le=1000)
     public_order_client_rate_limit_per_minute: int = Field(default=5, ge=1, le=1000)
     public_order_rate_limit_hmac_secret: str | None = Field(default=None, min_length=32)
+    supervisor_authorization_global_rate_limit_per_minute: int = Field(
+        default=30, ge=1, le=1000
+    )
+    supervisor_authorization_actor_rate_limit_per_minute: int = Field(default=5, ge=1, le=1000)
     assisted_order_enabled: bool = Field(default=False)
     admin_ai_assistant_enabled: bool = Field(default=False)
     admin_ai_openrouter_model: str = Field(default="google/gemini-3.1-flash-lite")
@@ -92,6 +96,14 @@ class Settings(BaseSettings):
             raise ValueError(
                 "RESTAURANTOS_PUBLIC_ORDER_CLIENT_RATE_LIMIT_PER_MINUTE must not exceed "
                 "RESTAURANTOS_PUBLIC_ORDER_GLOBAL_RATE_LIMIT_PER_MINUTE"
+            )
+        if (
+            self.supervisor_authorization_actor_rate_limit_per_minute
+            > self.supervisor_authorization_global_rate_limit_per_minute
+        ):
+            raise ValueError(
+                "RESTAURANTOS_SUPERVISOR_AUTHORIZATION_ACTOR_RATE_LIMIT_PER_MINUTE must not "
+                "exceed RESTAURANTOS_SUPERVISOR_AUTHORIZATION_GLOBAL_RATE_LIMIT_PER_MINUTE"
             )
         if (
             self.environment == "production"

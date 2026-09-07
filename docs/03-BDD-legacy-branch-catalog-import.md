@@ -3,7 +3,7 @@
 ## BDD-FEAT-053 Migración trazable de Constitución
 
 ```gherkin
-@PRD-FR-190 @PRD-FR-191 @PRD-FR-192 @PRD-FR-196 @PRD-FR-197 @PRD-FR-202 @import @branch
+@PRD-FR-690 @PRD-FR-691 @PRD-FR-692 @PRD-FR-696 @PRD-FR-697 @PRD-FR-702 @import @branch
 Feature: Importar datos heredados sin mezclar sucursales ni duplicar reintentos
 
   @BDD-SC-144

@@ -3,7 +3,7 @@
 ## BDD-FEAT-102 Configuración y Captura de Reseñas de Google por Sucursal
 
 ```gherkin
-@PRD-FR-234 @branches @admin @google_reviews
+@PRD-FR-734 @branches @admin @google_reviews
 Feature: Configuración de enlace de Google Reviews por sucursal en Backoffice
 
   @BDD-SC-473

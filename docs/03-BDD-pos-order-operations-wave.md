@@ -2,7 +2,7 @@
 
 ## BDD-FEAT-062 Comentarios corporativos por producto
 
-@PRD-FR-199 @PRD-FR-201 @comments @catalog
+@PRD-FR-699 @PRD-FR-701 @comments @catalog
 Feature: Administrar comentarios corporativos relacionados con productos
 
   @BDD-SC-203
@@ -56,7 +56,7 @@ Feature: Administrar comentarios corporativos relacionados con productos
 
 ## BDD-FEAT-063 Ingredientes adicionales universales
 
-@PRD-FR-200 @PRD-FR-201 @ingredient-extras @inventory
+@PRD-FR-700 @PRD-FR-701 @ingredient-extras @inventory
 Feature: Agregar porciones de insumos a cualquier línea durante la venta
 
   @BDD-SC-208
@@ -107,7 +107,7 @@ Feature: Agregar porciones de insumos a cualquier línea durante la venta
 
 ## BDD-FEAT-064 Carrito y pedidos no pagados editables
 
-@PRD-FR-203 @PRD-FR-204 @orders @pos
+@PRD-FR-703 @PRD-FR-704 @orders @pos
 Feature: Retirar líneas del carrito y enmendar pedidos antes de producción
 
   @BDD-SC-232
@@ -174,7 +174,7 @@ Feature: Retirar líneas del carrito y enmendar pedidos antes de producción
 
 ## BDD-FEAT-068 Cobro diferido para llevar y domicilio
 
-@PRD-FR-208 @payments @orders @pos
+@PRD-FR-708 @payments @orders @pos
 Feature: Confirmar pago cuando el pedido se entrega
 
   @BDD-SC-233
@@ -212,7 +212,7 @@ Feature: Confirmar pago cuando el pedido se entrega
 
 ## BDD-FEAT-065 Ajustes de cortesía autorizados
 
-@PRD-FR-205 @PRD-NFR-019 @orders @security @audit
+@PRD-FR-705 @PRD-NFR-519 @orders @security @audit
 Feature: Reducir el total antes del pago con autorización de Supervisor
 
   @BDD-SC-218
@@ -253,7 +253,7 @@ Feature: Reducir el total antes del pago con autorización de Supervisor
 
 ## BDD-FEAT-066 Proveedores y compras de sucursal
 
-@PRD-FR-091 @PRD-FR-108 @PRD-FR-206 @PRD-FR-207 @suppliers @purchases @cash
+@PRD-FR-591 @PRD-FR-608 @PRD-FR-706 @PRD-FR-707 @suppliers @purchases @cash
 Feature: Supervisor registra proveedores y compras desde el POS
 
   @BDD-SC-223
@@ -300,6 +300,13 @@ Feature: Supervisor registra proveedores y compras desde el POS
     When intenta crear proveedor, presentación, compra o confirmación fuera de alcance
     Then el backend rechaza por permiso o alcance
     And no confía en branch_id enviado por el navegador
+
+  @BDD-SC-814
+  Scenario: Dos restaurantes reutilizan códigos, folios y claves sin cruzar compras
+    Given dos organizaciones y sus sucursales, proveedores, insumos y presentaciones propios
+    When ambas usan el mismo código de proveedor, folio e idempotency key de confirmación
+    Then cada listado y detalle devuelve sólo recursos de su organización
+    And una mutación o cancelación con el ID ajeno falla sin movimientos ni caja ajenos
 
   @BDD-SC-229
   Scenario: Cancelación confirmada usa compensaciones

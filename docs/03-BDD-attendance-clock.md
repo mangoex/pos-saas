@@ -3,7 +3,7 @@
 ## BDD-FEAT-073 Entradas y salidas por código
 
 ```gherkin
-@PRD-FR-212 @attendance @pos @staff
+@PRD-FR-712 @attendance @pos @staff
 Feature: Personal registra entrada y salida desde el POS
 
   @BDD-SC-249

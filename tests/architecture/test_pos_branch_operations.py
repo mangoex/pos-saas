@@ -27,9 +27,10 @@ def test_hub_has_local_operational_routes_including_variations() -> None:
         "/administration/attendance",
         "/sales-monitor",
         "/administration/products",
-        "/administration/suppliers",
         "/administration/purchases",
         "/administration/waste",
+        "/administration/variations",
+        "/administration/ingredient-extras",
     ]
     assert "window.location" not in hub
     assert 'href="/admin' not in hub

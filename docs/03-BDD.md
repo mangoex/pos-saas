@@ -1,5 +1,11 @@
 # BDD — Behavior-Driven Development
 
+> Registro histórico RestaurantOS: referencias PRD renumeradas +500 para evitar colisiones
+> semánticas con SaaS. Los suplementos anteriores al paquete SaaS conservan evidencia del
+> producto previo; no certifican comportamiento SaaS vigente. El contrato nuevo está en
+> `03-BDD-saas-remediation.md` y `04-TDD-saas-remediation.md`.
+
+
 ## Convenciones
 
 - Lenguaje Gherkin.
@@ -11,7 +17,7 @@
 ## BDD-FEAT-001 Operación offline de pedidos
 
 ```gherkin
-@PRD-FR-180 @PRD-FR-182 @critical @offline
+@PRD-FR-680 @PRD-FR-682 @critical @offline
 Feature: Operación de pedidos sin internet
 
   Background:
@@ -41,7 +47,7 @@ Feature: Operación de pedidos sin internet
 ## BDD-FEAT-002 Idempotencia
 
 ```gherkin
-@PRD-FR-022 @PRD-FR-187 @critical
+@PRD-FR-522 @PRD-FR-687 @critical
 Feature: Evitar pedidos duplicados
 
   @BDD-SC-003
@@ -57,7 +63,7 @@ Feature: Evitar pedidos duplicados
 ## BDD-FEAT-003 Producción por estaciones
 
 ```gherkin
-@PRD-FR-011 @PRD-FR-040 @PRD-FR-043 @production
+@PRD-FR-511 @PRD-FR-540 @PRD-FR-543 @production
 Feature: Separación de componentes por estación
 
   @BDD-SC-004
@@ -73,7 +79,7 @@ Feature: Separación de componentes por estación
 ## BDD-FEAT-004 Inventario reservado y consumido
 
 ```gherkin
-@PRD-FR-063 @PRD-FR-064 @inventory @critical
+@PRD-FR-563 @PRD-FR-564 @inventory @critical
 Feature: Reserva y consumo de inventario
 
   @BDD-SC-005
@@ -90,7 +96,7 @@ Feature: Reserva y consumo de inventario
 ## BDD-FEAT-005 Cancelación
 
 ```gherkin
-@PRD-FR-028 @PRD-FR-065 @PRD-FR-066 @critical
+@PRD-FR-528 @PRD-FR-565 @PRD-FR-566 @critical
 Feature: Cancelación de pedido
 
   @BDD-SC-006
@@ -113,7 +119,7 @@ Feature: Cancelación de pedido
 ## BDD-FEAT-006 Recetas multinivel
 
 ```gherkin
-@PRD-FR-080 @PRD-FR-081 @costing
+@PRD-FR-580 @PRD-FR-581 @costing
 Feature: Recetas y subrecetas
 
   @BDD-SC-008
@@ -135,7 +141,7 @@ Feature: Recetas y subrecetas
 ## BDD-FEAT-007 Producción por lote
 
 ```gherkin
-@PRD-FR-083 @PRD-FR-085 @PRD-FR-087
+@PRD-FR-583 @PRD-FR-585 @PRD-FR-587
 Feature: Producción de aderezos por lote
 
   @BDD-SC-010
@@ -151,7 +157,7 @@ Feature: Producción de aderezos por lote
 ## BDD-FEAT-008 Caja
 
 ```gherkin
-@PRD-FR-050 @PRD-FR-056 @PRD-FR-057 @cash @critical
+@PRD-FR-550 @PRD-FR-556 @PRD-FR-557 @cash @critical
 Feature: Turno y corte de caja
 
   @BDD-SC-011
@@ -167,7 +173,7 @@ Feature: Turno y corte de caja
 ## BDD-FEAT-009 Pagos inmutables
 
 ```gherkin
-@PRD-FR-054 @cash
+@PRD-FR-554 @cash
 Feature: Corrección de pagos
 
   @BDD-SC-012
@@ -182,7 +188,7 @@ Feature: Corrección de pagos
 ## BDD-FEAT-010 Compras XML
 
 ```gherkin
-@PRD-FR-102 @PRD-FR-103 @purchasing
+@PRD-FR-602 @PRD-FR-603 @purchasing
 Feature: Importación de XML de proveedor
 
   @BDD-SC-013
@@ -204,7 +210,7 @@ Feature: Importación de XML de proveedor
 ## BDD-FEAT-011 Traspasos
 
 ```gherkin
-@PRD-FR-069 @inventory
+@PRD-FR-569 @inventory
 Feature: Traspaso entre sucursales
 
   @BDD-SC-015
@@ -219,7 +225,7 @@ Feature: Traspaso entre sucursales
 ## BDD-FEAT-012 Optimización de reparto
 
 ```gherkin
-@PRD-FR-123 @PRD-FR-124 @delivery
+@PRD-FR-623 @PRD-FR-624 @delivery
 Feature: Optimización simultánea
 
   @BDD-SC-016
@@ -243,7 +249,7 @@ Feature: Optimización simultánea
 ## BDD-FEAT-013 Impresión
 
 ```gherkin
-@PRD-FR-046 @PRD-FR-048 @printing
+@PRD-FR-546 @PRD-FR-548 @printing
 Feature: Impresión automática
 
   @BDD-SC-018
@@ -260,7 +266,7 @@ Feature: Impresión automática
 ## BDD-FEAT-014 Facturación y exportación
 
 ```gherkin
-@PRD-FR-160 @PRD-FR-164 @exports
+@PRD-FR-660 @PRD-FR-664 @exports
 Feature: Exportación de tickets
 
   @BDD-SC-019
@@ -283,7 +289,7 @@ Feature: Exportación de tickets
 ## BDD-FEAT-015 Permisos
 
 ```gherkin
-@PRD-FR-005 @security
+@PRD-FR-505 @security
 Feature: Permisos por sucursal
 
   @BDD-SC-021
@@ -297,7 +303,7 @@ Feature: Permisos por sucursal
 ## BDD-FEAT-016 Conectividad externa
 
 ```gherkin
-@PRD-FR-189 @offline
+@PRD-FR-689 @offline
 Feature: Continuidad de canales externos
 
   @BDD-SC-022
@@ -320,7 +326,7 @@ Feature: Continuidad de canales externos
 ## BDD-FEAT-060 Integridad de especificaciones y trazabilidad
 
 ```gherkin
-@PRD-NFR-010 @architecture @documentation
+@PRD-NFR-510 @architecture @documentation
 Feature: Rechazar ambigüedades estructurales del harness
 
   @BDD-SC-195
@@ -358,3 +364,9 @@ Cada historia nueva deberá incluir:
 - auditoría,
 - reversión o compensación,
 - concurrencia cuando aplique.
+
+## Recuperación SaaS
+
+- BDD-REC-001: Dado dos restaurantes, al navegar entre URLs y reintentar un pedido, catálogo/carrito/POS/KDS permanecen en su organización; slug inexistente falla sin productos ficticios.
+- BDD-REC-002: Dado un alta por plan o prueba, al terminar/reanudar onboarding desde otro navegador se conserva el avance; al vencer 14 días el servidor rechaza nueva operación incluso con sesión vigente.
+- BDD-REC-003: Dado un actor normal, revocado o de otro tenant, no obtiene privilegios por correo ni modifica recursos ajenos; eventos externos necesitan autenticidad y destino inequívoco.

@@ -3,7 +3,7 @@
 ## BDD-FEAT-054 Conciliación guiada de datos heredados
 
 ```gherkin
-@PRD-FR-192 @PRD-FR-193 @PRD-FR-196 @import @admin
+@PRD-FR-692 @PRD-FR-693 @PRD-FR-696 @import @admin
 Feature: Comprender y resolver los pendientes de una importación
 
   @BDD-SC-152
