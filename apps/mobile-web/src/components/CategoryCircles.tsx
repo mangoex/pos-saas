@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Category } from '../types';
-import { getCategoryIcon } from '../imageMap';
+import { CategoryArtwork } from './CategoryArtwork';
 
 interface CategoryCirclesProps {
   categories: Category[];
@@ -40,9 +40,8 @@ export const CategoryCircles: React.FC<CategoryCirclesProps> = ({
         aria-label="Categorías circulares"
       >
         {categories.map((cat) => {
-          const isAll = cat.id === 'all' || cat.name === 'Todos';
+          const isAll = cat.id === 'all';
           const isActive = activeCategoryId === cat.id || (activeCategoryId === '' && isAll);
-          const icon = getCategoryIcon(cat.name);
 
           return (
             <button
@@ -55,9 +54,7 @@ export const CategoryCircles: React.FC<CategoryCirclesProps> = ({
               aria-label={`Filtrar por ${cat.name}`}
             >
               <div className="category-circle-avatar">
-                <span className="category-circle-emoji" role="img" aria-hidden="true">
-                  {icon}
-                </span>
+                <CategoryArtwork category={cat} circle />
               </div>
               <span className="category-circle-label">{cat.name}</span>
             </button>

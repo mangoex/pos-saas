@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Category, BranchInfo } from '../types';
-import { getCategoryCover, getCategoryIcon } from '../imageMap';
+import { getCategoryIcon } from '../imageMap';
+import { CategoryArtwork } from './CategoryArtwork';
 import { Search, X, MapPin, ChevronDown, ChevronLeft, ChevronRight, Navigation } from 'lucide-react';
 
 interface HeroHeaderProps {
@@ -38,6 +39,8 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
     const idx = categories.findIndex((c) => c.id === activeCategoryId);
     if (idx !== -1) {
       setActiveIndex(idx);
+      const carousel = carouselRef.current;
+      carousel?.scrollTo({ left: idx * carousel.clientWidth, behavior: 'smooth' });
     }
   }, [activeCategoryId, categories]);
 
@@ -150,9 +153,8 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
         onScroll={handleScroll}
       >
         {categories.map((cat, idx) => {
-          const isAll = cat.id === 'all' || cat.name === 'Todos';
+          const isAll = cat.id === 'all';
           const isActive = activeCategoryId === cat.id || (activeCategoryId === '' && isAll);
-          const cover = getCategoryCover(cat.name);
           const icon = getCategoryIcon(cat.name);
           const count = productsCountByCategory[cat.id] || (isAll ? 'Todo el menú' : '');
 
@@ -165,9 +167,8 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
             >
               {/* Background Food Image & Dual Scrims */}
               <div className="hero-card-media">
-                <img
-                  src={cover}
-                  alt={cat.name}
+                <CategoryArtwork
+                  category={cat}
                   className="hero-card-img"
                   loading={idx === 0 ? 'eager' : 'lazy'}
                 />

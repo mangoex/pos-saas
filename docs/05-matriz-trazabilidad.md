@@ -6,6 +6,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 
 | Requisito | Diseno | Escenario BDD | Suite TDD | Estado |
 |---|---|---|---|---|
+| PRD-FR-086 | SDD Imágenes de categoría y portada | BDD-MEDIA-001, BDD-MEDIA-002 | test_category_presentation.py, test_category_presentation_migration.py, test_category_presentation.mjs | Disenado |
 | PRD-FR-084 | SDD Enlaces y dominios | BDD-DOM-001 | test_restaurant_domains.py, test_restaurant_links.mjs | Disenado |
 | PRD-FR-085 | SDD Enlaces y dominios | BDD-DOM-002, BDD-DOM-003 | test_restaurant_domains.py, test_restaurant_domains_postgres.py | Disenado |
 | PRD-FR-001 | SDD SaaS y suplemento de cierre | BDD-SC-700 | TDD-TS-200 | Disenado |

@@ -1,6 +1,26 @@
 # SDD — Software Design Document: POS-SaaS
 
-## Enlaces y dominios (FR-084/085)
+## Imágenes de categoría y portada (FR-086)
+
+Migración aditiva 0082: `product_categories.image_url` (512, nullable),
+`organizations.menu_home_name` (120, default Todos) y `menu_home_image_url` (512, nullable).
+GET/PUT `/api/v1/catalog/menu-home` usa actor vigente con catalog.manage y su organización;
+no acepta un tenant destino del cliente. Las categorías mantienen sus guardas existentes.
+En PUT de categoría, omitir image_url conserva la imagen; null/vacío la retira.
+Portada PUT reemplaza nombre e imagen. Nombres se recortan (1..120), ligas HTTP/HTTPS
+absolutas sin credenciales ni controles (máx.512), rechazando IP locales/privadas y
+nombres localhost/local/internal evidentes; el servidor no descarga ni resuelve DNS.
+Un hostname externo puede resolver distinto según la red; no se certifica el alojamiento.
+El catálogo público resuelto por sucursal incluye `menu_home: {name, image_url}` y la
+imagen de cada categoría. El móvil reserva id `all` para la portada: jamás decide
+«todos los productos» por el nombre visible. Hero y círculos usan la liga; ausencia
+o fallo de carga usa ilustración genérica. Seleccionar círculo sincroniza el hero.
+No cambia precios, pedidos ni asignaciones.
+Auditoría transaccional conserva actor, organización y cambio de presentación.
+Reversión de código conserva columnas aditivas; downgrade físico bloquea si existen
+personalizaciones, para no perderlas sin exportación/plan explícito.
+
+## Enlaces y dominios: diseño
 
 `storefront_aliases` reserva alias globales append-only; `organizations.preferred_public_slug`
 elige la presentación sin alterar `slug`. La resolución incluye alias y detecta

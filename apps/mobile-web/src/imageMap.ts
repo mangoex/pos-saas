@@ -4,6 +4,14 @@ export function getProductImage(product: { sku?: string; name?: string; category
 }
 
 /** Generic category artwork has no restaurant-specific photographs or claims. */
+export function getCategoryImageUrl(value: string | null | undefined): string {
+  if (!value) return '';
+  try {
+    const url = new URL(value.trim());
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? value.trim() : '';
+  } catch { return ''; }
+}
+
 export function getCategoryCover(categoryName: string): string {
   const icon = getCategoryIcon(categoryName);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#164e63"/><stop offset="1" stop-color="#0f172a"/></linearGradient></defs><rect width="900" height="500" fill="url(#bg)"/><circle cx="760" cy="70" r="240" fill="#ffffff" opacity=".05"/><text x="450" y="275" text-anchor="middle" font-size="150">${icon}</text></svg>`;

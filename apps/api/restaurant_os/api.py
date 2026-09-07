@@ -4472,7 +4472,9 @@ def post_category(
     name = str(payload.get("name", ""))
     display_order = int(payload.get("display_order", 0))
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    return _business_response(lambda: create_category(session, name, display_order, actor_id))
+    return _business_response(lambda: create_category(
+        session, name, display_order, actor_id, image_url=payload.get("image_url")
+    ))
 
 
 @router.put("/categories/{category_id}")
@@ -4490,8 +4492,30 @@ def put_category(
     status = payload.get("status")
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     return _business_response(
-        lambda: update_category(session, category_id, name, display_order, status, actor_id)
+        lambda: update_category(session, category_id, name, display_order, status, actor_id,
+                                image_url=(payload["image_url"] if payload["image_url"] is not None
+                                           else "") if "image_url" in payload else None)
     )
+
+
+@router.get("/catalog/menu-home")
+def get_menu_home(session: SessionDep, actor_user_id: ActorUserDep = None,
+                  authorization: AuthorizationDep = None) -> dict[str, Any]:
+    from restaurant_os.catalog_presentation import read_menu_home
+
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return _business_response(lambda: read_menu_home(session, actor_id))
+
+
+@router.put("/catalog/menu-home")
+def put_menu_home(payload: dict[str, Any], session: SessionDep,
+                  actor_user_id: ActorUserDep = None,
+                  authorization: AuthorizationDep = None) -> dict[str, Any]:
+    from restaurant_os.catalog_presentation import update_menu_home
+
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return _business_response(lambda: update_menu_home(
+        session, actor_id, payload.get("name"), payload.get("image_url")))
 
 
 @router.get("/categories/{category_id}/selection-group")

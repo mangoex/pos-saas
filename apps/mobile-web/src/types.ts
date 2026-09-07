@@ -44,6 +44,7 @@ export interface Category {
   name: string;
   icon?: string;
   display_order?: number;
+  image_url?: string | null;
 }
 
 export interface BranchInfo {
