@@ -39,6 +39,7 @@ import { AdminAccessHub } from './features/hubs/AdminAccessHub';
 import { canManageCashConcepts } from './features/cash/cashConceptState';
 import { redirectToPos } from './lib/posHandoff';
 import { SaaSConsoleView } from './features/superadmin/SaaSConsoleView';
+import RestaurantLinks from './features/domains/RestaurantLinks';
 
 const SuperadminRoute = ({ children }: { children: React.ReactNode }) => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -166,6 +167,8 @@ export const App = () => {
         }>
           <Route index element={<Overview />} />
           <Route path="superadmin" element={<SuperadminRoute><SaaSConsoleView /></SuperadminRoute>} />
+          <Route path="restaurant-links" element={<RestaurantLinks />} />
+          <Route path="superadmin/domains" element={<SuperadminRoute><RestaurantLinks supervision /></SuperadminRoute>} />
 
           {/* Category Hubs (POS Style Grid Views) */}
           <Route path="catalog" element={<CatalogHub />} />

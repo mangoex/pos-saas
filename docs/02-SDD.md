@@ -1,4 +1,28 @@
 # SDD — Software Design Document: POS-SaaS
+
+## Enlaces y dominios (FR-084/085)
+
+`storefront_aliases` reserva alias globales append-only; `organizations.preferred_public_slug`
+elige la presentación sin alterar `slug`. La resolución incluye alias y detecta
+colisiones con códigos de sucursales existentes. `restaurant_domains` reserva hostname
+normalizado único y registra pending_dns → pending_tls → active, o disabled. Una baja
+retiene el registro; no hay reciclaje automático. Las mutaciones se serializan por
+organización/registro y restricciones únicas; auditoría transaccional sin token TXT.
+
+Configuración explícita: `RESTAURANTOS_PUBLIC_BASE_URL` para enlaces/CNAME;
+`RESTAURANTOS_PLATFORM_HOSTS` (CSV) habilita resolución estricta de hosts, incluidos
+todos los dominios compartidos existentes. Vacío conserva el despliegue previo y bloquea
+activación. Host real, no X-Forwarded-Host; desconocidos/pending/disabled fallan cerrado.
+El backend compara sesión, slug y claves públicas con la organización del dominio.
+La raíz custom redirige al menú canónico del mismo origen; manifiesto/almacenamiento
+mantienen scope `/menu/{slug}/`. API y frontends se sirven en el mismo origen.
+
+Adaptador DNS: consulta TXT por HTTPS a endpoint fijo Google Public DNS, usando httpx
+existente, timeout y sin redirects/proxy de entorno; nunca conecta al host proporcionado.
+Contrato: https://developers.google.com/speed/public-dns/docs/doh/json . Token aleatorio
+visible sólo al propietario/superadmin para publicarlo en DNS, no en auditoría. Se exige
+coincidencia exacta; cada activación revalida. TLS/ruta es confirmación humana explícita,
+no certificación automatizada. Ver runbook y señales en `plan-enlaces-dominios.md`.
 ## Arquitectura Multi-Tenant para Micro-POS Gastronómico en la Nube
 
 ---

@@ -365,6 +365,17 @@ Cada historia nueva deberá incluir:
 - reversión o compensación,
 - concurrencia cuando aplique.
 
+## Enlaces personalizados
+
+- BDD-DOM-001: Dos administradores consultan sólo sus enlaces; un alias nuevo conserva
+  el canónico y alias anteriores; un nombre ocupado no se asigna al otro restaurante.
+- BDD-DOM-002: Solicitar dominio produce instrucciones DNS. TXT incorrecto no activa;
+  TXT correcto espera HTTPS. Administrador común no activa; superadmin confirma ruta/TLS
+  y revalida TXT. Baja conserva historial y bloquea tráfico.
+- BDD-DOM-003: Dominio de tacos con sesión/slug/clave de sushi rechaza acceso; host
+  desconocido no sirve el SaaS. X-Forwarded-Host no altera resolución. Raíz de tacos
+  abre menú propio y manifiesto conserva origen/scope. Plataforma compartida sigue operando.
+
 ## Recuperación SaaS
 
 - BDD-REC-001: Dado dos restaurantes, al navegar entre URLs y reintentar un pedido, catálogo/carrito/POS/KDS permanecen en su organización; slug inexistente falla sin productos ficticios.

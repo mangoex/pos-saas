@@ -1,0 +1,27 @@
+.restaurant-links { max-width: 1060px; margin: 0 auto; padding: 28px; color: #17322c; font-family: system-ui, sans-serif; }
+.restaurant-links h1 { font-size: 30px; margin: 8px 0; }
+.restaurant-links h2 { font-size: 20px; margin: 0 0 12px; }
+.restaurant-links p { line-height: 1.6; color: #52645f; }
+.restaurant-links a { color: #086e51; overflow-wrap: anywhere; }
+.links-eyebrow { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; }
+.links-panel { border: 1px solid #dae5df; border-radius: 14px; background: white; padding: 24px; margin: 24px 0; }
+.links-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.link-card { border: 1px solid #e1e8e4; background: #f7faf8; padding: 18px; border-radius: 10px; display: flex; flex-direction: column; gap: 14px; }
+.link-card h3 { font-size: 16px; margin: 0; }
+.restaurant-links button { border: 0; border-radius: 7px; padding: 11px 16px; background: #087953; color: white; cursor: pointer; font-weight: 600; }
+.restaurant-links button:disabled { opacity: .5; cursor: default; }
+.restaurant-links .links-secondary { background: #e8eeeb; color: #263e34; }
+.links-form-row { display: flex; gap: 12px; margin-top: 8px; }
+.links-form-row input { flex: 1; min-width: 0; border: 1px solid #acbdb3; border-radius: 7px; padding: 11px; font: inherit; }
+.links-domain-heading { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; overflow-wrap: anywhere; }
+.domain-state { background: #fff0ca; color: #725211; border-radius: 20px; padding: 5px 10px; font-size: 13px; }
+.domain-state.active { background: #d4f2e2; color: #145a39; }
+.domain-state.disabled { background: #eaeaea; color: #555; }
+.links-table-scroll { overflow-x: auto; }
+.restaurant-links table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.restaurant-links td, .restaurant-links th { text-align: left; padding: 12px; border-bottom: 1px solid #dee6e1; overflow-wrap: anywhere; }
+.links-supervision { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.links-supervision label { width: 100%; line-height: 1.6; }
+.links-error { color: #8b2828; background: #fdf0ee; padding: 16px; border-radius: 8px; }
+.links-notice { background: #e3f5e9; padding: 14px; border-radius: 8px; }
+@media (max-width: 650px) { .restaurant-links { padding: 16px; } .links-grid { grid-template-columns: 1fr; } .links-form-row { flex-direction: column; } .links-panel { padding: 18px; } }

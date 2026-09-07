@@ -44,11 +44,22 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         .all()
     )
     org_ids = {str(org["id"]) for org in orgs}
+    org_ids.update(
+        str(value)
+        for value in session.scalars(
+            sa.select(models.storefront_aliases.c.organization_id).where(
+                models.storefront_aliases.c.alias == identifier
+            )
+        )
+    )
     org_ids.update(str(branch["organization_id"]) for branch in aliases)
     if not org_ids:
         raise HTTPException(404, detail={"code": "storefront_not_found"})
     if len(org_ids) != 1 or len(aliases) > 1:
         raise HTTPException(409, detail={"code": "storefront_ambiguous"})
+    host_org = session.info.get("host_organization_id")
+    if host_org and host_org not in org_ids:
+        raise HTTPException(404, detail={"code": "storefront_not_found"})
     org = (
         session.execute(
             sa.select(models.organizations).where(

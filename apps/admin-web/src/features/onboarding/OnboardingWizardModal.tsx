@@ -599,7 +599,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                   <Check size={18} color="#10b981" /> Cuenta de Administrador y Empresa Creada
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Check size={18} color="#10b981" /> Menú Digital QR activo en: <strong>/r/{currentSlug}</strong>
+                  <Check size={18} color="#10b981" /> Menú Digital QR activo en: <strong>/menu/{currentSlug}/</strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Check size={18} color="#10b981" /> Pedidos directos a WhatsApp conectados

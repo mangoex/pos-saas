@@ -64,6 +64,13 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  useEffect(() => {
+    if (!['/restaurant-links', '/superadmin/domains'].includes(location.pathname)) return;
+    const media = window.matchMedia('(max-width: 700px)');
+    const adapt = () => setIsCollapsed(media.matches);
+    adapt(); media.addEventListener('change', adapt);
+    return () => media.removeEventListener('change', adapt);
+  }, [location.pathname]);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileData, setProfileData] = useState({ display_name: '', email: '', password: '' });
   const [profileAvatar, setProfileAvatar] = useState('');
@@ -276,6 +283,12 @@ const AdminLayout = () => {
     ...(currentUser.is_superadmin && !localStorage.getItem('impersonation_info')
       ? [
           {
+            path: '/superadmin/domains',
+            label: 'Activación de dominios',
+            icon: <Crown size={20} />,
+            matchingPrefixes: ['/superadmin/domains'],
+          },
+          {
             path: '/superadmin',
             label: 'Consola SaaS Master',
             icon: <Crown size={20} color="#f59e0b" />,
@@ -284,6 +297,10 @@ const AdminLayout = () => {
           },
         ]
       : []),
+    ...((currentUser.permissions || []).includes('admin.manage') ? [{
+      path: '/restaurant-links', label: 'Enlaces y dominio', icon: <Users size={20} />,
+      matchingPrefixes: ['/restaurant-links'],
+    }] : []),
   ];
 
   return (

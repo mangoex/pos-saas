@@ -63,8 +63,8 @@ const qrCard = readFileSync(
 );
 assert.match(
   qrCard,
-  /\/r\/\$\{restaurantSlug\}/,
-  'QRCodeCard must construct URL targeting /r/:slug'
+  /\/menu\/\$\{restaurantSlug\}\//,
+  'QRCodeCard must construct URL targeting /menu/:slug/'
 );
 assert.match(
   qrCard,

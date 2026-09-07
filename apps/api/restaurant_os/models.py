@@ -11,6 +11,7 @@ organizations = sa.Table(
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.String(160), nullable=False),
     sa.Column("slug", sa.String(80), nullable=True, unique=True),
+    sa.Column("preferred_public_slug", sa.String(80), nullable=True),
     sa.Column("onboarding_step", sa.String(16), nullable=False, server_default="business"),
     sa.Column("onboarding_register_name", sa.String(80), nullable=True),
     sa.Column("status", sa.String(32), nullable=False, server_default="active"),
@@ -26,6 +27,28 @@ organizations = sa.Table(
     sa.Column("mobile_theme", sa.String(16), nullable=False, server_default="light"),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+storefront_aliases = sa.Table(
+    "storefront_aliases", metadata,
+    sa.Column("alias", sa.String(80), primary_key=True),
+    sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+restaurant_domains = sa.Table(
+    "restaurant_domains", metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
+    sa.Column("hostname", sa.String(253), nullable=False, unique=True),
+    sa.Column("status", sa.String(20), nullable=False),
+    sa.Column("verification_token", sa.String(100), nullable=False),
+    sa.Column("last_result", sa.String(40), nullable=True),
+    sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint("status IN ('pending_dns','pending_tls','active','disabled')",
+                       name="ck_restaurant_domain_status"),
 )
 
 legal_entities = sa.Table(

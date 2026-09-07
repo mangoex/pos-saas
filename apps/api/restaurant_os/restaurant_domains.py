@@ -1,0 +1,413 @@
+"""Tenant-owned public names and supervised domain lifecycle."""
+
+from __future__ import annotations
+
+import ipaddress
+import re
+import secrets
+from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
+from uuid import uuid4
+
+import sqlalchemy as sa
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from restaurant_os import models
+from restaurant_os.auth import bearer_token, verify_session_token
+from restaurant_os.config import get_settings
+from restaurant_os.database import get_session
+from restaurant_os.domain_dns import DnsUnavailable, lookup_txt
+from restaurant_os.operations import _audit, _now
+from restaurant_os.public_names import lock_public_name
+from restaurant_os.saas_setup import _actor
+from restaurant_os.superadmin.service import require_superadmin
+
+router = APIRouter(prefix="/api/v1/saas", tags=["restaurant-links"])
+SessionDep = Annotated[Session, Depends(get_session)]
+AuthDep = Annotated[str | None, Header()]
+
+
+def error(status: int, code: str) -> HTTPException:
+    messages = {
+        "alias_reserved": "Este nombre está reservado. Elige otro.",
+        "alias_unavailable": "El nombre ya está ocupado. Elige otro.",
+        "domain_invalid": "Escribe un dominio válido, sin https://, rutas ni puertos.",
+        "domain_reserved": "Este dominio está reservado para la plataforma.",
+        "domain_unavailable": "El dominio no está disponible.",
+        "domain_tenant_mismatch": "Esta cuenta pertenece a otro restaurante. Usa su enlace.",
+        "domain_tls_confirmation_required": "Falta configurar el enrutamiento y confirmar HTTPS.",
+        "domain_active_exists": "Desactiva el dominio anterior antes de activar este.",
+        "dns_mismatch": "El TXT no coincide. Revisa DNS y vuelve a verificar.",
+        "dns_unavailable": "No se pudo consultar DNS. Intenta nuevamente.",
+    }
+    return HTTPException(
+        status,
+        detail={
+            "code": code,
+            "message": messages.get(
+                code, "No se pudo completar la operación. Revisa el acceso y la configuración."
+            ),
+        },
+    )
+
+
+def platform_hosts() -> set[str]:
+    return {h.strip().lower() for h in get_settings().platform_hosts.split(",") if h.strip()}
+
+
+def base_url() -> str:
+    value = get_settings().public_base_url.rstrip("/")
+    url = urlsplit(value)
+    if (
+        url.scheme != "https"
+        or not url.hostname
+        or url.path
+        or url.query
+        or url.fragment
+        or url.username
+        or url.password
+        or url.port
+    ):
+        raise error(503, "public_base_url_invalid")
+    return value
+
+
+def normalize_hostname(value: str) -> str:
+    host = value.strip().lower().rstrip(".")
+    if (
+        not host.isascii()
+        or len(host) > 240
+        or not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
+            host,
+        )
+    ):
+        raise error(422, "domain_invalid")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise error(422, "domain_invalid")
+    reserved = platform_hosts() | {str(urlsplit(base_url()).hostname)}
+    if host.endswith((".local", ".localhost", ".internal", ".test", ".invalid")) or any(
+        host == name or host.endswith("." + name) for name in reserved
+    ):
+        raise error(422, "domain_reserved")
+    return host
+
+
+def domain_view(row: Any) -> dict[str, Any]:
+    return {
+        key: row[key]
+        for key in (
+            "id",
+            "organization_id",
+            "hostname",
+            "status",
+            "last_result",
+            "verified_at",
+            "created_at",
+            "updated_at",
+        )
+    } | {
+        "txt_name": "_humanio-verification." + row["hostname"],
+        "txt_value": "humanio-domain=" + row["verification_token"],
+        "cname_target": urlsplit(base_url()).hostname,
+    }
+
+
+def audit(session: Session, actor_id: str, row: Any, action: str) -> None:
+    _audit(
+        session,
+        action="domain." + action,
+        entity_type="restaurant_domain",
+        entity_id=row["id"],
+        organization_id=row["organization_id"],
+        actor_user_id=actor_id,
+        payload={
+            "hostname": row["hostname"],
+            "status": row["status"],
+            "result": row["last_result"],
+        },
+    )
+
+
+def links(session: Session, org_id: str) -> dict[str, Any]:
+    org = (
+        session.execute(sa.select(models.organizations).where(models.organizations.c.id == org_id))
+        .mappings()
+        .one()
+    )
+    domains = (
+        session.execute(
+            sa.select(models.restaurant_domains)
+            .where(models.restaurant_domains.c.organization_id == org_id)
+            .order_by(models.restaurant_domains.c.created_at)
+        )
+        .mappings()
+        .all()
+    )
+    active = (
+        next((row for row in domains if row["status"] == "active"), None)
+        if platform_hosts()
+        else None
+    )
+    origin = "https://" + active["hostname"] if active else base_url()
+    alias = org["preferred_public_slug"] or org["slug"]
+    return {
+        "name": org["name"],
+        "canonical_slug": org["slug"],
+        "preferred_slug": alias,
+        "links": {
+            "admin": origin + "/admin/",
+            "pos": origin + "/pos/",
+            "kds": origin + "/kds/",
+            "menu": origin + f"/menu/{alias}/",
+        },
+        "canonical_menu_url": base_url() + f"/menu/{org['slug']}/",
+        "domains": [domain_view(row) for row in domains],
+        "domain_routing_enabled": bool(platform_hosts()),
+    }
+
+
+class AliasRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    alias: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+class DomainRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hostname: str = Field(min_length=3, max_length=253)
+
+
+class SuperviseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["activate", "disable"]
+    tls_confirmed: bool = False
+
+
+@router.get("/links")
+def get_links(session: SessionDep, authorization: AuthDep = None) -> dict[str, Any]:
+    return links(session, str(_actor(session, authorization)["organization_id"]))
+
+
+@router.put("/links/alias")
+def set_alias(
+    payload: AliasRequest, session: SessionDep, authorization: AuthDep = None
+) -> dict[str, Any]:
+    actor = _actor(session, authorization)
+    org_id = str(actor["organization_id"])
+    session.execute(
+        sa.select(models.organizations.c.id)
+        .where(models.organizations.c.id == org_id)
+        .with_for_update()
+    ).one()
+    alias = payload.alias
+    lock_public_name(session, alias)
+    if alias in {"admin", "pos", "kds", "api", "menu", "register", "login", "matriz"}:
+        raise error(409, "alias_reserved")
+    existing = (
+        session.execute(
+            sa.select(models.storefront_aliases).where(models.storefront_aliases.c.alias == alias)
+        )
+        .mappings()
+        .first()
+    )
+    conflict = session.scalar(
+        sa.select(models.organizations.c.id).where(
+            models.organizations.c.slug == alias, models.organizations.c.id != org_id
+        )
+    )
+    branch_conflict = session.scalar(
+        sa.select(models.branches.c.id).where(
+            sa.or_(sa.func.lower(models.branches.c.code) == alias, models.branches.c.id == alias)
+        )
+    )
+    if conflict or branch_conflict or (existing and existing["organization_id"] != org_id):
+        raise error(409, "alias_unavailable")
+    now = _now()
+    try:
+        if not existing:
+            session.execute(
+                models.storefront_aliases.insert().values(
+                    alias=alias, organization_id=org_id, created_at=now
+                )
+            )
+        session.execute(
+            models.organizations.update()
+            .where(models.organizations.c.id == org_id)
+            .values(preferred_public_slug=alias, updated_at=now)
+        )
+        _audit(
+            session,
+            action="storefront.alias_selected",
+            entity_type="organization",
+            entity_id=org_id,
+            organization_id=org_id,
+            actor_user_id=actor["id"],
+            payload={"alias": alias},
+        )
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise error(409, "alias_unavailable") from exc
+    return links(session, org_id)
+
+
+@router.post("/domains")
+def request_domain(
+    payload: DomainRequest, session: SessionDep, authorization: AuthDep = None
+) -> dict[str, Any]:
+    actor = _actor(session, authorization)
+    hostname = normalize_hostname(payload.hostname)
+    row = (
+        session.execute(
+            sa.select(models.restaurant_domains).where(
+                models.restaurant_domains.c.hostname == hostname
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row:
+        if row["organization_id"] != actor["organization_id"]:
+            raise error(409, "domain_unavailable")
+        return domain_view(row)
+    now = _now()
+    values = {
+        "id": str(uuid4()),
+        "organization_id": actor["organization_id"],
+        "hostname": hostname,
+        "status": "pending_dns",
+        "verification_token": secrets.token_urlsafe(32),
+        "last_result": None,
+        "verified_at": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        session.execute(models.restaurant_domains.insert().values(**values))
+        audit(session, actor["id"], values, "requested")
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise error(409, "domain_unavailable") from exc
+    return domain_view(values)
+
+
+def locked_domain(session: Session, domain_id: str, org_id: str | None = None) -> dict[str, Any]:
+    stmt = sa.select(models.restaurant_domains).where(models.restaurant_domains.c.id == domain_id)
+    if org_id:
+        stmt = stmt.where(models.restaurant_domains.c.organization_id == org_id)
+    row = session.execute(stmt.with_for_update()).mappings().first()
+    if not row:
+        raise error(404, "domain_not_found")
+    return dict(row)
+
+
+def verify_domain(session: Session, row: dict[str, Any], actor_id: str) -> bool:
+    view = domain_view(row)
+    try:
+        matched = view["txt_value"] in lookup_txt(view["txt_name"])
+        result = "dns_verified" if matched else "dns_mismatch"
+    except DnsUnavailable:
+        matched, result = False, "dns_unavailable"
+    # A failed recheck must not silently turn off a live customer domain.
+    status = (
+        row["status"]
+        if row["status"] in {"active", "disabled"}
+        else ("pending_tls" if matched else "pending_dns")
+    )
+    row.update(
+        status=status,
+        last_result=result,
+        verified_at=_now() if matched else None,
+        updated_at=_now(),
+    )
+    session.execute(
+        models.restaurant_domains.update()
+        .where(models.restaurant_domains.c.id == row["id"])
+        .values(
+            status=status,
+            last_result=result,
+            verified_at=row["verified_at"],
+            updated_at=row["updated_at"],
+        )
+    )
+    audit(session, actor_id, row, "dns_checked")
+    return matched
+
+
+@router.post("/domains/{domain_id}/verify")
+def verify_endpoint(
+    domain_id: str, session: SessionDep, authorization: AuthDep = None
+) -> dict[str, Any]:
+    actor = _actor(session, authorization)
+    row = locked_domain(session, domain_id, str(actor["organization_id"]))
+    verify_domain(session, row, actor["id"])
+    session.commit()
+    return domain_view(row)
+
+
+def platform_actor(session: Session, authorization: str | None) -> dict[str, Any]:
+    token = bearer_token(authorization)
+    claims = verify_session_token(token, get_settings().secret_key) if token else None
+    return require_superadmin(session, str(claims.get("sub", "")) if claims else None)
+
+
+@router.get("/domains/supervision")
+def supervision_list(session: SessionDep, authorization: AuthDep = None) -> list[dict[str, Any]]:
+    platform_actor(session, authorization)
+    return [
+        domain_view(row)
+        for row in session.execute(
+            sa.select(models.restaurant_domains)
+            .order_by(models.restaurant_domains.c.created_at.desc())
+            .limit(200)
+        ).mappings()
+    ]
+
+
+@router.post("/domains/{domain_id}/supervise")
+def supervise(
+    domain_id: str, payload: SuperviseRequest, session: SessionDep, authorization: AuthDep = None
+) -> dict[str, Any]:
+    actor = platform_actor(session, authorization)
+    row = locked_domain(session, domain_id)
+    if payload.action == "activate":
+        if not payload.tls_confirmed or not platform_hosts():
+            raise error(409, "domain_tls_confirmation_required")
+        normalize_hostname(row["hostname"])
+        if urlsplit(base_url()).hostname not in platform_hosts():
+            raise error(409, "domain_tls_confirmation_required")
+        # Serialize activation of different domains for the same organization.
+        session.execute(
+            sa.select(models.organizations.c.id)
+            .where(models.organizations.c.id == row["organization_id"])
+            .with_for_update()
+        ).one()
+        other = session.scalar(
+            sa.select(models.restaurant_domains.c.id).where(
+                models.restaurant_domains.c.organization_id == row["organization_id"],
+                models.restaurant_domains.c.status == "active",
+                models.restaurant_domains.c.id != domain_id,
+            )
+        )
+        if other:
+            raise error(409, "domain_active_exists")
+        if not verify_domain(session, row, actor["id"]):
+            session.commit()
+            raise error(409, row["last_result"])
+    row.update(status="active" if payload.action == "activate" else "disabled", updated_at=_now())
+    session.execute(
+        models.restaurant_domains.update()
+        .where(models.restaurant_domains.c.id == domain_id)
+        .values(status=row["status"], updated_at=row["updated_at"])
+    )
+    audit(session, actor["id"], row, payload.action)
+    session.commit()
+    return domain_view(row)

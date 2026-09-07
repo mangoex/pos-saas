@@ -946,6 +946,9 @@ def create_branch(
     require_permission(session, actor_id, "catalog.manage")
     normalized_name = name.strip()
     normalized_code = code.strip().upper()
+    from restaurant_os.public_names import guard_branch_code
+
+    guard_branch_code(session, normalized_code)
     if not normalized_name:
         raise BusinessError("invalid_branch_name", "Branch name is required")
     if not normalized_code:
@@ -11319,6 +11322,9 @@ def update_branch(
     if name is not None:
         update_data["name"] = name.strip()
     if code is not None:
+        from restaurant_os.public_names import guard_branch_code
+
+        guard_branch_code(session, code)
         update_data["code"] = code.strip()
     if street is not None:
         update_data["street"] = str(street).strip() or None
@@ -26337,13 +26343,16 @@ def get_organization_qr_info(session: Session, organization_id: str) -> dict[str
         )
         session.commit()
 
-    menu_url = f"/r/{slug}"
+    from restaurant_os.restaurant_domains import links
+
+    public_links = links(session, organization_id)
+    menu_url = f"/menu/{slug}/"
 
     return {
         "restaurant_name": profile["name"],
         "restaurant_slug": slug,
         "menu_url": menu_url,
-        "full_url": f"https://restaurantos.app{menu_url}",
+        "full_url": public_links["links"]["menu"],
         "whatsapp_phone": whatsapp,
         "branch_name": main_branch["name"] if main_branch else "Matriz",
         "public_key": public_key,
