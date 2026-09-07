@@ -43,12 +43,18 @@ def test_contract_schemas_exist() -> None:
     assert missing == []
 
 
-def test_dockerfiles_start_web_process_without_blocking_migrations() -> None:
-    for path in ["Dockerfile", "infra/docker/api.Dockerfile"]:
-        content = (ROOT / path).read_text(encoding="utf-8")
+def test_docker_entrypoints_have_explicit_startup_contracts() -> None:
+    root_dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    api_dockerfile = (ROOT / "infra/docker/api.Dockerfile").read_text(encoding="utf-8")
+    entrypoint = (ROOT / "infra/docker/entrypoint.sh").read_text(encoding="utf-8")
 
-        assert '"uvicorn", "restaurant_os.main:app"' in content
-        assert "alembic upgrade head && uvicorn" not in content
+    assert '"uvicorn", "restaurant_os.main:app"' in root_dockerfile
+    assert "alembic upgrade head" not in root_dockerfile
+    assert "COPY infra/docker/entrypoint.sh /app/entrypoint.sh" in api_dockerfile
+    assert 'CMD ["/app/entrypoint.sh"]' in api_dockerfile
+    assert "alembic upgrade head" in entrypoint
+    assert "exec uvicorn restaurant_os.main:app" in entrypoint
+    assert "alembic upgrade head && uvicorn" not in entrypoint
 
 
 def test_web_process_has_no_runtime_migration_path() -> None:

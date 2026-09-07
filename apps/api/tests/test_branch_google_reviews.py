@@ -36,6 +36,7 @@ def test_db():
     session.execute(
         models.organizations.insert().values(
             id=ORGANIZATION_ID,
+            slug="test-restaurant",
             name="Kiwi Corporativo",
             status="active",
             created_at=now,
@@ -140,7 +141,7 @@ def test_branch_google_review_url_crud(client, test_db, auth_headers):
     assert res["google_review_url"] == "https://g.page/r/AbCdEfGhIjK/review"
 
     # 2. Consultar list_branches
-    branches = platform_data.list_branches(test_db)
+    branches = platform_data.list_branches(test_db, organization_id=ORGANIZATION_ID)
     branch_item = next(b for b in branches if b["id"] == branch_id)
     assert branch_item["google_review_url"] == "https://g.page/r/AbCdEfGhIjK/review"
 
@@ -154,7 +155,7 @@ def test_branch_google_review_url_crud(client, test_db, auth_headers):
     assert updated["google_review_url"] == "https://g.page/r/UpdatedURL/review"
 
     # 4. Verificar endpoint público
-    pub_resp = client.get("/api/v1/public/branches")
+    pub_resp = client.get("/api/v1/public/branches?identifier=test-restaurant")
     assert pub_resp.status_code == 200
     pub_data = pub_resp.json()
     pub_branch = next(b for b in pub_data if b["id"] == branch_id)

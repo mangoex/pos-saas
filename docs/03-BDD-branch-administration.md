@@ -3,7 +3,7 @@
 ## BDD-FEAT-050 Centro administrativo operativo de sucursal
 
 ```gherkin
-@PRD-FR-005 @PRD-FR-008 @PRD-FR-009 @PRD-FR-017 @PRD-FR-018 @PRD-FR-019 @PRD-ROLE-002 @admin @branch
+@PRD-FR-505 @PRD-FR-508 @PRD-FR-509 @PRD-FR-517 @PRD-FR-518 @PRD-FR-519 @PRD-ROLE-002 @admin @branch
 Feature: Un Supervisor de sucursal administra su sucursal sin ser administrador corporativo
 
   @BDD-SC-118

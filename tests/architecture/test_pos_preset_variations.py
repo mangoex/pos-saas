@@ -16,7 +16,8 @@ def test_preset_variation_documents_and_traceability_are_complete() -> None:
     bdd = _read("docs/03-BDD-pos-preset-variations.md")
     tdd = _read("docs/04-TDD-pos-preset-variations.md")
     matrix = _read("docs/05-matriz-trazabilidad.md")
-    assert "PRD-FR-199" in prd and "POS-VAR-001" in _read("docs/02-SDD.md")
+    assert "PRD-FR-699" in prd and "PRD-FR-699" in matrix
+    assert "BDD-FEAT-057" in bdd
     for scenario in range(168, 175):
         assert f"BDD-SC-{scenario}" in bdd and f"BDD-SC-{scenario}" in matrix
     assert "TDD-TS-057" in tdd and "TDD-TC-050" in tdd

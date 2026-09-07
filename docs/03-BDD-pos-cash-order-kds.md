@@ -3,7 +3,7 @@
 ## BDD-FEAT-021 Caja minima
 
 ```gherkin
-@PRD-FR-050 @PRD-FR-051 @PRD-FR-057 @cash @phase1
+@PRD-FR-550 @PRD-FR-551 @PRD-FR-557 @cash @phase1
 Feature: Turno de caja minimo
 
   @BDD-SC-028
@@ -49,7 +49,7 @@ Feature: Turno de caja minimo
 ## BDD-FEAT-022 Pedido local minimo
 
 ```gherkin
-@PRD-FR-020 @PRD-FR-025 @PRD-FR-027 @PRD-FR-030 @orders @phase1
+@PRD-FR-520 @PRD-FR-525 @PRD-FR-527 @PRD-FR-530 @orders @phase1
 Feature: Pedido local desde POS
 
   @BDD-SC-030
@@ -102,7 +102,7 @@ Feature: Pedido local desde POS
 ## BDD-FEAT-023 KDS inicial
 
 ```gherkin
-@PRD-FR-040 @PRD-FR-041 @PRD-FR-043 @production @phase1
+@PRD-FR-540 @PRD-FR-541 @PRD-FR-543 @production @phase1
 Feature: Tareas KDS desde pedido local
 
   @BDD-SC-031

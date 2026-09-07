@@ -3,7 +3,7 @@
 ## BDD-FEAT-044 Envío e inventario en tránsito
 
 ```gherkin
-@PRD-FR-076 @PRD-FR-077 @inventory @transfers
+@PRD-FR-576 @PRD-FR-577 @inventory @transfers
 Feature: Enviar inventario entre sucursales
 
   @BDD-SC-100
@@ -28,7 +28,7 @@ Feature: Enviar inventario entre sucursales
     When se intenta enviar
     Then se rechaza todo el documento sin efectos parciales
 
-@PRD-FR-078 @PRD-FR-079 @inventory @transfers
+@PRD-FR-578 @PRD-FR-579 @inventory @transfers
 Feature: Recibir inventario en destino
 
   @BDD-SC-103

@@ -21,3 +21,11 @@
 - Propósito: comprobar que la petición incluye `branch_id`, que una respuesta vacía o fallida se
   conserva vacía y que `CartDrawer` limpia resultados anteriores sin reclasificar nombres ni tomar
   los primeros productos del catálogo.
+
+### TDD-TC-241 Aislamiento de recomendaciones y CRM administrativos
+
+- Archivo: `apps/api/tests/test_customer_ai.py::test_crm_ignores_customers_and_orders_from_another_organization`
+- Archivo: `apps/api/tests/test_customer_ai.py::test_customer_recommendations_rejects_another_tenant_branch`
+- Propósito: comprobar que los datos de otro tenant no entran al segmento CRM y que la autorización
+  de una sucursal ajena falla antes de ejecutar el recomendador. Los precios sin versión vigente no
+  se sustituyen por un valor fabricado.

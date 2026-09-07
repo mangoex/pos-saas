@@ -229,7 +229,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
           <input
             type="search"
             className="hero-search-input"
-            placeholder="Buscar platillos, jugos, smoothies, bowls..."
+            placeholder="Buscar en el menú..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />

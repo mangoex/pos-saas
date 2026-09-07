@@ -3,7 +3,7 @@
 ## BDD-FEAT-036 Proveedores centrales y conversiones por presentación
 
 ```gherkin
-@PRD-FR-091 @PRD-FR-092 @suppliers
+@PRD-FR-591 @PRD-FR-592 @suppliers
 Feature: Administrar proveedores y contactos operativos
 
   @BDD-SC-075
@@ -24,7 +24,7 @@ Feature: Administrar proveedores y contactos operativos
 ## BDD-FEAT-037 Presentaciones y precio informativo
 
 ```gherkin
-@PRD-FR-061 @PRD-FR-062 @PRD-FR-093 @PRD-FR-094 @purchasing
+@PRD-FR-561 @PRD-FR-562 @PRD-FR-593 @PRD-FR-594 @purchasing
 Feature: Convertir presentaciones de compra a unidad base
 
   @BDD-SC-077

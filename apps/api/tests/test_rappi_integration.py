@@ -1,3 +1,4 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-recovery-test-rappi-integration-synthetic-v1
 from __future__ import annotations
 
 import hashlib
@@ -205,6 +206,9 @@ def test_rappi_signature_validation(client, test_db):
         ],
         "total_cents": 13500,
     }
+    channel_service.save_store_mapping(
+        test_db, ORGANIZATION_ID, "RAPPI", BRANCH_ID, "rappi_store_01"
+    )
     body_bytes = json.dumps(payload).encode("utf-8")
     valid_sig = generate_rappi_signature(secret, body_bytes)
 
@@ -433,6 +437,12 @@ def test_rappi_simulate_order_sandbox(client, test_db, auth_headers):
     """
     TDD-TC-237: Simulación de pedido de Rappi para pruebas en Sandbox.
     """
+    channel_service.save_config(
+        test_db,
+        ORGANIZATION_ID,
+        "RAPPI",
+        {"is_enabled": True, "webhook_secret": "rappi-webhook-secret"},
+    )
     channel_service.save_store_mapping(
         test_db,
         ORGANIZATION_ID,
@@ -473,6 +483,12 @@ def test_rappi_pos_orders_lifecycle(client, test_db, auth_headers):
     """
     Listar y actualizar estados de pedidos Rappi en el endpoint POS.
     """
+    channel_service.save_config(
+        test_db,
+        ORGANIZATION_ID,
+        "RAPPI",
+        {"is_enabled": True, "webhook_secret": "rappi-webhook-secret"},
+    )
     channel_service.save_store_mapping(
         test_db,
         ORGANIZATION_ID,

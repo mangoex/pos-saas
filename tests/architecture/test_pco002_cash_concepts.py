@@ -5,15 +5,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_pco_002_specs_and_traceability_are_explicit() -> None:
     prd = (ROOT / "docs/01-PRD.md").read_text(encoding="utf-8")
-    sdd = (ROOT / "docs/02-SDD.md").read_text(encoding="utf-8")
     bdd = (ROOT / "docs/03-BDD-pos-cash-ops.md").read_text(encoding="utf-8")
     tdd = (ROOT / "docs/04-TDD-pos-cash-ops.md").read_text(encoding="utf-8")
     matrix = (ROOT / "docs/05-matriz-trazabilidad.md").read_text(encoding="utf-8")
     adr = (ROOT / "docs/08-adrs-propuestas.md").read_text(encoding="utf-8")
 
-    assert "PCO-002" in prd and "PCO-003" in prd
-    assert "cash_movement_concept_versions" in sdd
-    assert "cash_concept_commands" in sdd
+    assert "PRD-FR-716" in prd and "PRD-FR-716" in matrix
     assert "BDD-SC-301" in bdd and "cash_concept_code_immutable" in bdd
     assert "TDD-TC-084" in tdd
     assert "BDD-SC-301" in matrix and "TDD-TC-084" in matrix

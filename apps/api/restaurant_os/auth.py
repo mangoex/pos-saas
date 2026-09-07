@@ -82,3 +82,11 @@ def _b64encode(value: bytes) -> str:
 def _b64decode(value: str) -> bytes:
     padding = "=" * (-len(value) % 4)
     return base64.urlsafe_b64decode(value + padding)
+
+
+def bearer_token(authorization: str | None) -> str | None:
+    """Parse the case-insensitive HTTP authentication scheme consistently."""
+    scheme, separator, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not separator or not token.strip():
+        return None
+    return token.strip()

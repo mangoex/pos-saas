@@ -3,7 +3,7 @@
 ## BDD-FEAT-099 Hub de Integraciones y Configuración de DiDi Food en Backoffice
 
 ```gherkin
-@PRD-FR-140 @PRD-FR-232 @integrations @admin @didi_food
+@PRD-FR-640 @PRD-FR-732 @integrations @admin @didi_food
 Feature: Administración centralizada de credenciales y mapeo de DiDi Food
 
   @BDD-SC-466
@@ -31,7 +31,7 @@ Feature: Administración centralizada de credenciales y mapeo de DiDi Food
 ## BDD-FEAT-100 Ingestión Segura e Idempotente de Órdenes DiDi Food
 
 ```gherkin
-@PRD-FR-141 @PRD-FR-147 @PRD-FR-232 @webhooks @security @didi_food
+@PRD-FR-641 @PRD-FR-647 @PRD-FR-732 @webhooks @security @didi_food
 Feature: Recepción y normalización de pedidos de DiDi Food
 
   @BDD-SC-469
@@ -59,7 +59,7 @@ Feature: Recepción y normalización de pedidos de DiDi Food
 ## BDD-FEAT-101 Gestión Operativa de Pedidos DiDi Food en POS
 
 ```gherkin
-@PRD-FR-233 @pos @orders @didi_food
+@PRD-FR-733 @pos @orders @didi_food
 Feature: Visualización y control de pedidos DiDi Food en Punto de Venta
 
   @BDD-SC-472

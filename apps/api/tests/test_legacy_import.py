@@ -1,3 +1,4 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-recovery-test-legacy-import-synthetic-v1
 from __future__ import annotations
 
 import os
@@ -27,6 +28,7 @@ from restaurant_os.platform_data import (
     list_inventory_items,
     list_inventory_stock,
 )
+from restaurant_os.saas_onboarding import signup_tenant
 from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -72,6 +74,19 @@ def test_constitucion_import_is_idempotent_scoped_and_non_operational(tmp_path: 
             )
         )
         session.commit()
+        # This scenario needs an active canonical item; SaaS migrations archive demo SKUs.
+        # Seed a distinct synthetic item instead of depending on or reviving archived history.
+        canonical_item = dict(
+            session.execute(
+                sa.select(models.inventory_items).where(models.inventory_items.c.sku == "1001")
+            )
+            .mappings()
+            .one()
+        )
+        canonical_item.update(
+            id="018f6f73-2d0a-74f0-8f1c-000000009998", sku="99001", status="active"
+        )
+        session.execute(models.inventory_items.insert().values(**canonical_item))
         movements_before = session.execute(
             sa.select(sa.func.count(models.inventory_movements.c.id))
         ).scalar_one()
@@ -112,7 +127,7 @@ def test_constitucion_import_is_idempotent_scoped_and_non_operational(tmp_path: 
                 "source_row": 6,
                 "raw_payload": {"CLAVE": "I-1", "COSTOPROMEDIO": "123.45"},
                 "normalized_payload": {
-                    "sku": "1001",
+                    "sku": "99001",
                     "name": "INSUMO DE PRUEBA",
                     "category_name": "ABARROTE",
                     "unit_code": "KILO",
@@ -136,7 +151,7 @@ def test_constitucion_import_is_idempotent_scoped_and_non_operational(tmp_path: 
                 "source_key": "PP-1",
                 "source_row": 6,
                 "raw_payload": {"CLAVE": "PP-1"},
-                "normalized_payload": {"sku": "1001", "supplier_code": ""},
+                "normalized_payload": {"sku": "99001", "supplier_code": ""},
             },
             {
                 "entity_type": "recipe",
@@ -170,9 +185,7 @@ def test_constitucion_import_is_idempotent_scoped_and_non_operational(tmp_path: 
             entity_type="product",
         )
         assert product_records["total"] == 1
-        assert product_records["items"][0]["normalized_payload"]["name"] == (
-            "PRODUCTO DE PRUEBA"
-        )
+        assert product_records["items"][0]["normalized_payload"]["name"] == ("PRODUCTO DE PRUEBA")
         with pytest.raises(BusinessError, match="Unsupported import entity type"):
             list_legacy_import_records(
                 session,
@@ -191,18 +204,14 @@ def test_constitucion_import_is_idempotent_scoped_and_non_operational(tmp_path: 
         assert product["station"] == "drinks"
         assert product["status"] == "active"
         branch_products = list_catalog_products(session, BRANCH_ID)
-        assert any(
-            row["sku"] == "01001" and row["status"] == "active" for row in branch_products
-        )
-        assert any(
-            row["sku"] == "01001" for row in list_catalog_products(session, OTHER_BRANCH_ID)
-        )
+        assert any(row["sku"] == "01001" and row["status"] == "active" for row in branch_products)
+        assert any(row["sku"] == "01001" for row in list_catalog_products(session, OTHER_BRANCH_ID))
 
         branch_items = list_inventory_items(session, BRANCH_ID)
         other_items = list_inventory_items(session, OTHER_BRANCH_ID)
-        assert any(row["sku"] == "1001" for row in branch_items)
-        assert any(row["sku"] == "1001" for row in other_items)
-        assert any(row["sku"] == "1001" for row in list_inventory_stock(session, BRANCH_ID))
+        assert any(row["sku"] == "99001" for row in branch_items)
+        assert any(row["sku"] == "99001" for row in other_items)
+        assert any(row["sku"] == "99001" for row in list_inventory_stock(session, BRANCH_ID))
         movements_after = session.execute(
             sa.select(sa.func.count(models.inventory_movements.c.id))
         ).scalar_one()
@@ -233,6 +242,135 @@ def test_constitucion_import_is_idempotent_scoped_and_non_operational(tmp_path: 
                 OTHER_BRANCH_ID,
                 ADMIN_USER_ID,
             )
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_legacy_import_uses_actor_tenant_for_batches_and_same_catalog_codes(
+    tmp_path: Path,
+) -> None:
+    engine, session = migrated_session(tmp_path)
+    try:
+        tenant_a = signup_tenant(
+            session,
+            {
+                "business_name": "Import A",
+                "owner_name": "Owner A",
+                "email": "legacy-import-a@example.test",
+                "password": "synthetic-password-a",
+                "business_type": "blank",
+            },
+        )
+        tenant_b = signup_tenant(
+            session,
+            {
+                "business_name": "Import B",
+                "owner_name": "Owner B",
+                "email": "legacy-import-b@example.test",
+                "password": "synthetic-password-b",
+                "business_type": "blank",
+            },
+        )
+        actor_a, branch_a, org_a = (
+            str(tenant_a["user"]["id"]),
+            str(tenant_a["branch"]["id"]),
+            str(tenant_a["organization"]["id"]),
+        )
+        actor_b, branch_b, org_b = (
+            str(tenant_b["user"]["id"]),
+            str(tenant_b["branch"]["id"]),
+            str(tenant_b["organization"]["id"]),
+        )
+        checksum = "c" * 64
+        batch_a = create_legacy_import_batch(
+            session, actor_a, branch_a, "legacy", checksum, {"tenant": "A"}
+        )
+        batch_b = create_legacy_import_batch(
+            session, actor_b, branch_b, "legacy", checksum, {"tenant": "B"}
+        )
+        assert batch_a["id"] != batch_b["id"]
+        assert batch_a["organization_id"] == org_a
+        assert batch_b["organization_id"] == org_b
+
+        records = [
+            {
+                "entity_type": "inventory_item",
+                "source_key": "item-1",
+                "normalized_payload": {
+                    "sku": "1001",
+                    "name": "INSUMO COMPARTIDO",
+                    "category_name": "ABARROTE",
+                    "unit_code": "PZA",
+                },
+            },
+            {
+                "entity_type": "product",
+                "source_key": "product-1",
+                "normalized_payload": {
+                    "sku": "1002",
+                    "name": "PRODUCTO COMPARTIDO",
+                    "category_name": "BEBIDAS",
+                    "price_cents": 1500,
+                },
+            },
+        ]
+        assert ingest_legacy_import_records(session, actor_a, str(batch_a["id"]), records)[
+            "counts"
+        ] == {"imported": 2}
+        assert ingest_legacy_import_records(session, actor_b, str(batch_b["id"]), records)[
+            "counts"
+        ] == {"imported": 2}
+        assert session.scalar(
+            sa.select(sa.func.count())
+            .select_from(models.inventory_items)
+            .where(models.inventory_items.c.organization_id.in_((org_a, org_b)))
+        ) == 2
+        assert session.scalar(
+            sa.select(sa.func.count())
+            .select_from(models.products)
+            .where(models.products.c.organization_id.in_((org_a, org_b)))
+        ) == 2
+        assert session.scalar(
+            sa.select(sa.func.count())
+            .select_from(models.inventory_units)
+            .where(
+                models.inventory_units.c.organization_id.in_((org_a, org_b)),
+                models.inventory_units.c.code == "PIEZA",
+            )
+        ) == 2
+        assert session.scalar(
+            sa.select(sa.func.count())
+            .select_from(models.product_categories)
+            .where(
+                models.product_categories.c.organization_id.in_((org_a, org_b)),
+                models.product_categories.c.name == "BEBIDAS",
+            )
+        ) == 2
+        assert session.scalar(
+            sa.select(sa.func.count())
+            .select_from(models.price_versions)
+            .where(models.price_versions.c.organization_id.in_((org_a, org_b)))
+        ) == 2
+
+        records_before = session.scalar(
+            sa.select(sa.func.count()).select_from(models.legacy_import_records)
+        )
+        with pytest.raises(BusinessError, match="Import batch was not found"):
+            ingest_legacy_import_records(session, actor_b, str(batch_a["id"]), records)
+        with pytest.raises(BusinessError, match="Import batch was not found"):
+            list_legacy_import_records(session, actor_b, str(batch_a["id"]))
+        with pytest.raises(BusinessError, match="branch"):
+            list_legacy_import_batches(session, actor_b, branch_a)
+        assert session.scalar(
+            sa.select(sa.func.count()).select_from(models.legacy_import_records)
+        ) == records_before
+        assert [row["id"] for row in list_legacy_import_batches(session, actor_a, branch_a)] == [
+            batch_a["id"]
+        ]
+        assert [row["id"] for row in list_legacy_import_batches(session, actor_b, branch_b)] == [
+            batch_b["id"]
+        ]
     finally:
         session.close()
         engine.dispose()

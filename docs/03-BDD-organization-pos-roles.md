@@ -3,7 +3,7 @@
 ## BDD-FEAT-034 Unidad de negocio y perfiles operativos
 
 ```gherkin
-@PRD-FR-005 @PRD-FR-009 @organization @security
+@PRD-FR-505 @PRD-FR-509 @organization @security
 Feature: Organizar sucursales y separar capacidades del POS
 
   @BDD-SC-193

@@ -33,13 +33,18 @@ assert.equal(
 );
 assert.equal(
   adminHubContent.includes("to: '/administration/variations'"),
-  false,
-  'AdminHub in POS Lite must NOT include fragmented /administration/variations card'
+  true,
+  'AdminHub must retain the branch-scoped /administration/variations card for order comments'
 );
 assert.equal(
   adminHubContent.includes("to: '/administration/ingredient-extras'"),
-  false,
-  'AdminHub in POS Lite must NOT include fragmented /administration/ingredient-extras card'
+  true,
+  'AdminHub must retain the branch-scoped /administration/ingredient-extras card'
+);
+assert.match(
+  adminHubContent,
+  /if \(!canManageVariations\) return enabledCards/,
+  'Variation cards must remain limited to catalog managers'
 );
 assert.equal(
   adminHubContent.includes("to: '/administration/inventory'"),

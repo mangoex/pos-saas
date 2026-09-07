@@ -578,16 +578,16 @@ logs omiten credenciales, grants, referencias completas y PII.
 
 | Suite/caso | PRD/NFR | BDD principal |
 |---|---|---|
-| TDD-TS-077, TDD-TC-073, TDD-TC-081, TDD-TS-088, TDD-TC-082, TDD-TC-083 | PRD-FR-215, NFR-020, NFR-024 | BDD-SC-270/271/277/298/299/300 ejecutados parcialmente por autorización/transición; 272..276/293 proyectados o negativos de ruta existente |
-| TDD-TS-078, TDD-TC-074, TDD-TC-079, TDD-TC-084..088 | PRD-FR-216, NFR-020, NFR-021, NFR-024 | BDD-SC-278..280, 294, 296, 301..305; PCO-002 ejecuta catálogo y PCO-003 ejecuta ledger/compensación/esperado |
-| TDD-TS-079, TDD-TC-075, TDD-TC-096..100 | PRD-FR-217 | BDD-SC-281..283, BDD-SC-312..316 |
-| TDD-TS-080, TDD-TC-076, TDD-TC-090..095 | PRD-FR-208, PRD-FR-218 | BDD-SC-284, 285, 292, 307..311 |
-| TDD-TS-081, TDD-TC-077, TDD-TC-080, TDD-TC-113..120 | PRD-FR-219, NFR-020, NFR-021, NFR-024 | BDD-SC-286, 287, 295, 327..334 |
-| TDD-TS-082, TDD-TC-078, TDD-TC-121..128 | PRD-FR-220, NFR-002/016/018/020/021/023 | BDD-SC-275/276/288/297/335..342 |
-| TDD-TS-083 | PRD-FR-216, NFR-022 | BDD-SC-289 |
-| TDD-TC-168 | PRD-FR-216, NFR-021 | BDD-SC-280 |
-| TDD-TS-084 | PRD-FR-215, NFR-024 | BDD-SC-290 |
-| TDD-TS-085 | PRD-FR-215..220 | BDD-SC-270..297 definido; no ejecutado en PCO-001 |
+| TDD-TS-077, TDD-TC-073, TDD-TC-081, TDD-TS-088, TDD-TC-082, TDD-TC-083 | PRD-FR-715, NFR-020, NFR-024 | BDD-SC-270/271/277/298/299/300 ejecutados parcialmente por autorización/transición; 272..276/293 proyectados o negativos de ruta existente |
+| TDD-TS-078, TDD-TC-074, TDD-TC-079, TDD-TC-084..088 | PRD-FR-716, NFR-020, NFR-021, NFR-024 | BDD-SC-278..280, 294, 296, 301..305; PCO-002 ejecuta catálogo y PCO-003 ejecuta ledger/compensación/esperado |
+| TDD-TS-079, TDD-TC-075, TDD-TC-096..100 | PRD-FR-717 | BDD-SC-281..283, BDD-SC-312..316 |
+| TDD-TS-080, TDD-TC-076, TDD-TC-090..095 | PRD-FR-708, PRD-FR-718 | BDD-SC-284, 285, 292, 307..311 |
+| TDD-TS-081, TDD-TC-077, TDD-TC-080, TDD-TC-113..120 | PRD-FR-719, NFR-020, NFR-021, NFR-024 | BDD-SC-286, 287, 295, 327..334 |
+| TDD-TS-082, TDD-TC-078, TDD-TC-121..128 | PRD-FR-720, NFR-002/016/018/020/021/023 | BDD-SC-275/276/288/297/335..342 |
+| TDD-TS-083 | PRD-FR-716, NFR-022 | BDD-SC-289 |
+| TDD-TC-168 | PRD-FR-716, NFR-021 | BDD-SC-280 |
+| TDD-TS-084 | PRD-FR-715, NFR-024 | BDD-SC-290 |
+| TDD-TS-085 | PRD-FR-715..220 | BDD-SC-270..297 definido; no ejecutado en PCO-001 |
 | TDD-TS-086, TDD-TS-087 | NFR-020..024 | BDD-SC-271, 289..297 |
 
 ## Comandos previstos — estado `defined`, no ejecutados

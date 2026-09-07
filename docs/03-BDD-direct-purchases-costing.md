@@ -3,7 +3,7 @@
 ## BDD-FEAT-038 Recepción directa conciliada
 
 ```gherkin
-@PRD-FR-052 @PRD-FR-100 @PRD-FR-108 @PRD-FR-110 @purchases @cash
+@PRD-FR-552 @PRD-FR-600 @PRD-FR-608 @PRD-FR-610 @purchases @cash
 Feature: Confirmar compra directa desde sucursal
 
   @BDD-SC-079
@@ -34,7 +34,7 @@ Feature: Confirmar compra directa desde sucursal
 ## BDD-FEAT-039 Costo promedio por recepción
 
 ```gherkin
-@PRD-FR-089 @PRD-FR-109 @PRD-FR-111 @costing
+@PRD-FR-589 @PRD-FR-609 @PRD-FR-611 @costing
 Feature: Actualizar costo al recibir, no al cotizar
 
   @BDD-SC-082

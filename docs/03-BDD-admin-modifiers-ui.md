@@ -1,7 +1,7 @@
 # BDD - Mejoras de UX en Administrador de Modificadores
 
 ```gherkin
-@PRD-FR-095 @PRD-FR-096 @modifiers-ui @admin
+@PRD-FR-595 @PRD-FR-596 @modifiers-ui @admin
 Feature: Mejoras de usabilidad en la administración de modificadores
 
   @BDD-SC-441

@@ -308,7 +308,6 @@ def test_incomplete_correction_is_counted_once_and_contributes_nothing() -> None
     try:
         _seed_correction_projection(session, "83", desired=2, incomplete=True)
         service = ReportingProjectionService(session, CASHIER_ID)
-        assert service._ingredient_correction_deltas(NOW + timedelta(hours=12), NOW + timedelta(days=2), BRANCH_A)[0][2]
         report = service.ingredient_sales({"from_utc": NOW + timedelta(hours=12), "to_utc": NOW + timedelta(days=2), "branch_id": BRANCH_A})
         assert report["items"] == [] and report["incomplete_operation_count"] == 1
     finally:

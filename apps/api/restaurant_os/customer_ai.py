@@ -13,7 +13,6 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
-from restaurant_os.operations import ORGANIZATION_ID
 
 UTC = timezone.utc
 MIN_PAIR_ORDERS = 2
@@ -107,7 +106,9 @@ def _catalog_product_kind(product: dict[str, Any]) -> str:
         return "food"
 
     category = _normalize_catalog_label(product.get("category_name"))
-    if category in BEVERAGE_CATEGORIES or any(kw in category for kw in ("bebida", "cafe", "jugo", "drink", "bar", "smoothie", "refresco")):
+    if category in BEVERAGE_CATEGORIES or any(
+        kw in category for kw in ("bebida", "cafe", "jugo", "drink", "bar", "smoothie", "refresco")
+    ):
         return "beverage"
     if category in FOOD_CATEGORIES:
         return "food"
@@ -179,7 +180,9 @@ def _branch_upsell_recommendations(
             models.branches.c.status == "active",
         )
     )
-    org_id = str(branch_org or ORGANIZATION_ID)
+    if not branch_org:
+        return []
+    org_id = str(branch_org)
 
     l1 = models.order_lines.alias("upsell_cart_line")
     l2 = models.order_lines.alias("upsell_candidate_line")
@@ -220,7 +223,6 @@ def _branch_upsell_recommendations(
                 "reason": (
                     f"Frecuentemente pedido con tu selección ({int(row['pair_count'])} pedidos)"
                 ),
-                "confidence_score": 0.92,
                 "source": "co_occurrence",
             }
         )
@@ -268,7 +270,6 @@ def _branch_upsell_recommendations(
                 "product_name": str(product["name"]),
                 "price_cents": int(product["price_cents"]),
                 "reason": f"Popular en esta sucursal ({int(row['popularity_count'])} pedidos)",
-                "confidence_score": 0.80,
                 "source": "branch_popularity",
             }
         )
@@ -295,7 +296,6 @@ def _branch_upsell_recommendations(
                         "product_name": str(prod["name"]),
                         "price_cents": int(prod["price_cents"]),
                         "reason": reason,
-                        "confidence_score": 0.85,
                         "source": "catalog_cross_sell",
                     }
                 )
@@ -336,15 +336,17 @@ def _is_beverage(name: str) -> bool:
 
 def get_customer_upsell_recommendations(
     session: Session,
+    organization_id: str | None = None,
     customer_id: str | None = None,
     current_product_ids: list[str] | None = None,
     branch_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Dispatch branch-scoped mobile requests without changing the legacy admin recommender."""
+    """Return recommendations constrained to an authenticated organization or public branch."""
     if branch_id:
         return _branch_upsell_recommendations(session, branch_id, current_product_ids)
     return _get_legacy_customer_upsell_recommendations(
         session,
+        organization_id=organization_id,
         customer_id=customer_id,
         current_product_ids=current_product_ids,
     )
@@ -352,32 +354,36 @@ def get_customer_upsell_recommendations(
 
 def _get_legacy_customer_upsell_recommendations(
     session: Session,
+    organization_id: str | None,
     customer_id: str | None = None,
     current_product_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Compute legacy suggestions from cart co-occurrences and cross-category pairing."""
+    if not organization_id:
+        return []
     current_ids = set(current_product_ids or [])
     recommendations: list[dict[str, Any]] = []
     seen_ids = set(current_ids)
 
     # Helper to get price for a product
-    def _get_price(product_id: str) -> int:
+    def _get_price(product_id: str) -> int | None:
         price_row = session.execute(
             sa.select(models.price_versions.c.price_cents)
             .where(
                 models.price_versions.c.product_id == product_id,
+                models.price_versions.c.organization_id == organization_id,
                 models.price_versions.c.valid_to.is_(None),
             )
             .order_by(models.price_versions.c.created_at.desc())
             .limit(1)
         ).scalar()
-        return int(price_row or 8500)
+        return int(price_row) if price_row is not None else None
 
     # Fetch all active catalog products
     all_active_products = list(
         session.execute(
             sa.select(models.products).where(
-                models.products.c.organization_id == ORGANIZATION_ID,
+                models.products.c.organization_id == organization_id,
                 models.products.c.status == "active",
             )
         ).mappings()
@@ -416,7 +422,7 @@ def _get_legacy_customer_upsell_recommendations(
                         ).join(o, l1.c.order_id == o.c.id)
                     )
                     .where(
-                        o.c.organization_id == ORGANIZATION_ID,
+                        o.c.organization_id == organization_id,
                         o.c.status != "cancelled",
                         l1.c.product_id.in_(list(current_ids)),
                     )
@@ -443,23 +449,23 @@ def _get_legacy_customer_upsell_recommendations(
                         session.execute(
                             sa.select(models.products).where(
                                 models.products.c.id == pid,
+                                models.products.c.organization_id == organization_id,
                                 models.products.c.status == "active",
                             )
                         )
                         .mappings()
                         .one_or_none()
                     )
-                    if prod:
+                    price_cents = _get_price(pid)
+                    if prod and price_cents is not None:
                         recommendations.append(
                             {
                                 "product_id": pid,
                                 "product_name": str(prod["name"]),
-                                "price_cents": _get_price(pid),
+                                "price_cents": price_cents,
                                 "reason": (
-                                    "Frecuentemente pedido junto "
-                                    f"({row['pair_count']} clientes)"
+                                    f"Frecuentemente pedido junto ({row['pair_count']} clientes)"
                                 ),
-                                "confidence_score": 0.92,
                             }
                         )
                         seen_ids.add(pid)
@@ -484,7 +490,7 @@ def _get_legacy_customer_upsell_recommendations(
                     )
                 )
                 .where(
-                    models.orders.c.organization_id == ORGANIZATION_ID,
+                    models.orders.c.organization_id == organization_id,
                     models.orders.c.customer_id == customer_id,
                     models.orders.c.status != "cancelled",
                 )
@@ -498,25 +504,26 @@ def _get_legacy_customer_upsell_recommendations(
             if pid not in seen_ids:
                 prod = (
                     session.execute(
-                        sa.select(models.products).where(
-                            models.products.c.id == pid,
+                            sa.select(models.products).where(
+                                models.products.c.id == pid,
+                                models.products.c.organization_id == organization_id,
                             models.products.c.status == "active",
                         )
                     )
                     .mappings()
                     .one_or_none()
                 )
-                if prod:
+                price_cents = _get_price(pid)
+                if prod and price_cents is not None:
                     recommendations.append(
                         {
                             "product_id": pid,
                             "product_name": str(prod["name"]),
-                            "price_cents": _get_price(pid),
+                            "price_cents": price_cents,
                             "reason": (
                                 "Favorito habitual del cliente "
                                 f"(pedido {pp['times_ordered']} veces)"
                             ),
-                            "confidence_score": 0.95,
                         }
                     )
                     seen_ids.add(pid)
@@ -534,13 +541,15 @@ def _get_legacy_customer_upsell_recommendations(
             ]
             for prod in food_candidates:
                 pid = str(prod["id"])
+                price_cents = _get_price(pid)
+                if price_cents is None:
+                    continue
                 recommendations.append(
                     {
                         "product_id": pid,
                         "product_name": str(prod["name"]),
-                        "price_cents": _get_price(pid),
+                        "price_cents": price_cents,
                         "reason": "Combina perfecto con tu bebida ⭐",
-                        "confidence_score": 0.90,
                     }
                 )
                 seen_ids.add(pid)
@@ -556,13 +565,15 @@ def _get_legacy_customer_upsell_recommendations(
             ]
             for prod in drink_candidates:
                 pid = str(prod["id"])
+                price_cents = _get_price(pid)
+                if price_cents is None:
+                    continue
                 recommendations.append(
                     {
                         "product_id": pid,
                         "product_name": str(prod["name"]),
-                        "price_cents": _get_price(pid),
+                        "price_cents": price_cents,
                         "reason": "¿Acompañas con una bebida fresca? 🥤",
-                        "confidence_score": 0.90,
                     }
                 )
                 seen_ids.add(pid)
@@ -573,6 +584,9 @@ def _get_legacy_customer_upsell_recommendations(
         for prod in all_active_products:
             pid = str(prod["id"])
             if pid not in seen_ids:
+                price_cents = _get_price(pid)
+                if price_cents is None:
+                    continue
                 is_bev = _is_beverage(str(prod["name"]))
                 reason = "Favorito de nuestros clientes ⭐"
                 if is_bev and not has_beverage:
@@ -584,9 +598,8 @@ def _get_legacy_customer_upsell_recommendations(
                     {
                         "product_id": pid,
                         "product_name": str(prod["name"]),
-                        "price_cents": _get_price(pid),
+                        "price_cents": price_cents,
                         "reason": reason,
-                        "confidence_score": 0.85,
                     }
                 )
                 seen_ids.add(pid)
@@ -598,10 +611,11 @@ def _get_legacy_customer_upsell_recommendations(
 
 def get_crm_segments_and_churn_risk(
     session: Session,
+    organization_id: str,
     branch_id: str | None = None,
 ) -> dict[str, Any]:
     """Segment customers into VIPs, churn risk, and new customers with metrics."""
-    criteria = [models.customers.c.organization_id == ORGANIZATION_ID]
+    criteria = [models.customers.c.organization_id == organization_id]
     if branch_id:
         criteria.append(models.customers.c.origin_branch_id == branch_id)
 
@@ -616,16 +630,20 @@ def get_crm_segments_and_churn_risk(
         cid = str(cust["id"])
 
         # Aggregate total orders and total spend in exact cents
+        order_criteria = [
+            models.orders.c.customer_id == cid,
+            models.orders.c.organization_id == organization_id,
+            models.orders.c.status != "cancelled",
+        ]
+        if branch_id:
+            order_criteria.append(models.orders.c.branch_id == branch_id)
         orders = list(
             session.execute(
                 sa.select(
                     models.orders.c.id,
                     models.orders.c.total_cents,
                     models.orders.c.created_at,
-                ).where(
-                    models.orders.c.customer_id == cid,
-                    models.orders.c.status != "cancelled",
-                )
+                ).where(*order_criteria)
             ).mappings()
         )
 

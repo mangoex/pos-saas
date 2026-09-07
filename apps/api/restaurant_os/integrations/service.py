@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, cast
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -11,9 +12,18 @@ from .. import models
 from .base import NormalizedOrder
 from .didi_food import DiDiFoodAdapter
 from .rappi import RappiAdapter
-from .uber_eats import UberEatsAdapter
+from .uber_eats import UberAvailabilityPermanentError, UberEatsAdapter
 
-ORGANIZATION_ID = "018f6f73-2d0a-74f0-8f1c-000000000001"
+
+@dataclass(frozen=True)
+class WebhookTarget:
+    """The one configured tenant target allowed for an inbound event."""
+
+    organization_id: str
+    branch_id: str
+    provider: str
+    external_store_id: str
+    webhook_secret: str
 
 
 class ChannelIntegrationService:
@@ -22,7 +32,7 @@ class ChannelIntegrationService:
         self.didi_adapter = DiDiFoodAdapter()
         self.rappi_adapter = RappiAdapter()
 
-    def get_adapter(self, provider: str):
+    def get_adapter(self, provider: str) -> UberEatsAdapter | DiDiFoodAdapter | RappiAdapter:
         if provider == "UBER_EATS":
             return self.uber_adapter
         if provider == "DIDI_FOOD":
@@ -30,6 +40,58 @@ class ChannelIntegrationService:
         if provider == "RAPPI":
             return self.rappi_adapter
         raise ValueError(f"Proveedor no soportado: {provider}")
+
+    def resolve_webhook_target(
+        self, session: Session, provider: str, payload: dict[str, Any]
+    ) -> WebhookTarget:
+        """Resolve exactly one enabled mapping before verifying a webhook.
+
+        A provider store id is untrusted input.  It never selects a default
+        organization or branch, and ambiguous mappings fail closed.
+        """
+        adapter = self.get_adapter(provider)
+        external_store_id = adapter.normalize_order(payload, {}, None).external_store_id.strip()
+        if not external_store_id:
+            raise ValueError("webhook_store_required")
+        rows = (
+            session.execute(
+                sa.select(
+                    models.channel_store_mappings.c.organization_id,
+                    models.channel_store_mappings.c.branch_id,
+                    models.channel_integrations.c.webhook_secret,
+                )
+                .join(
+                    models.channel_integrations,
+                    sa.and_(
+                        models.channel_integrations.c.organization_id
+                        == models.channel_store_mappings.c.organization_id,
+                        models.channel_integrations.c.provider
+                        == models.channel_store_mappings.c.provider,
+                    ),
+                )
+                .where(
+                    models.channel_store_mappings.c.provider == provider,
+                    models.channel_store_mappings.c.external_store_id == external_store_id,
+                    models.channel_store_mappings.c.is_active.is_(True),
+                    models.channel_integrations.c.is_enabled.is_(True),
+                )
+            )
+            .mappings()
+            .all()
+        )
+        if len(rows) != 1:
+            raise ValueError("webhook_store_not_configured")
+        row = rows[0]
+        secret = str(row["webhook_secret"] or "").strip()
+        if not secret:
+            raise ValueError("webhook_secret_required")
+        return WebhookTarget(
+            organization_id=str(row["organization_id"]),
+            branch_id=str(row["branch_id"]),
+            provider=provider,
+            external_store_id=external_store_id,
+            webhook_secret=secret,
+        )
 
     def get_config(
         self, session: Session, organization_id: str, provider: str
@@ -180,6 +242,256 @@ class ChannelIntegrationService:
         session.commit()
         return True
 
+    def enqueue_uber_availability_sync(
+        self,
+        session: Session,
+        organization_id: str,
+        product_id: str,
+        is_available: bool,
+        branch_id: str | None = None,
+    ) -> int:
+        """Store the latest desired Uber state; delivery remains unconfirmed."""
+        now = datetime.now(timezone.utc)
+        rows = session.execute(
+            sa.select(
+                models.channel_store_mappings.c.branch_id,
+                models.channel_store_mappings.c.external_store_id,
+                models.channel_product_mappings.c.external_item_id,
+            )
+            .join(
+                models.channel_product_mappings,
+                sa.and_(
+                    models.channel_product_mappings.c.organization_id
+                    == models.channel_store_mappings.c.organization_id,
+                    models.channel_product_mappings.c.provider == "UBER_EATS",
+                    models.channel_product_mappings.c.product_id == product_id,
+                    models.channel_product_mappings.c.is_active.is_(True),
+                ),
+            )
+            .where(
+                models.channel_store_mappings.c.organization_id == organization_id,
+                models.channel_store_mappings.c.provider == "UBER_EATS",
+                models.channel_store_mappings.c.is_active.is_(True),
+                *([models.channel_store_mappings.c.branch_id == branch_id] if branch_id else []),
+            )
+        ).all()
+        jobs = models.channel_availability_sync_jobs
+        for mapped_branch_id, store_id, item_id in rows:
+            target = sa.and_(
+                jobs.c.organization_id == organization_id,
+                jobs.c.provider == "UBER_EATS",
+                jobs.c.external_store_id == store_id,
+                jobs.c.external_item_id == item_id,
+            )
+            existing = session.scalar(sa.select(jobs.c.id).where(target))
+            values: dict[str, Any] = dict(
+                is_available=is_available,
+                status="PENDING",
+                attempts=0,
+                next_attempt_at=now,
+                last_error=None,
+                confirmed_at=None,
+                lease_token=None,
+                lease_expires_at=None,
+                updated_at=now,
+            )
+            if existing:
+                session.execute(
+                    jobs.update()
+                    .where(jobs.c.id == existing)
+                    .values(desired_version=jobs.c.desired_version + 1, **values)
+                )
+            else:
+                session.execute(
+                    jobs.insert().values(
+                        id=str(uuid.uuid4()),
+                        organization_id=organization_id,
+                        branch_id=mapped_branch_id,
+                        provider="UBER_EATS",
+                        external_store_id=store_id,
+                        external_item_id=item_id,
+                        product_id=product_id,
+                        desired_version=1,
+                        created_at=now,
+                        **values,
+                    )
+                )
+        return len(rows)
+
+    def claim_due_uber_availability_sync(self, session: Session) -> dict[str, Any] | None:
+        """CAS-claim one job and commit before network I/O."""
+        now = datetime.now(timezone.utc)
+        jobs = models.channel_availability_sync_jobs
+        due = sa.or_(
+            sa.and_(jobs.c.status.in_(("PENDING", "RETRY")), jobs.c.next_attempt_at <= now),
+            sa.and_(jobs.c.status == "CLAIMED", jobs.c.lease_expires_at <= now),
+        )
+        candidate = (
+            session.execute(
+                sa.select(jobs)
+                .where(jobs.c.provider == "UBER_EATS", due)
+                .order_by(jobs.c.next_attempt_at, jobs.c.created_at)
+                .limit(1)
+            )
+            .mappings()
+            .first()
+        )
+        if not candidate:
+            return None
+        token = str(uuid.uuid4())
+        claimed = session.execute(
+            jobs.update()
+            .where(
+                jobs.c.id == candidate["id"],
+                jobs.c.desired_version == candidate["desired_version"],
+                due,
+            )
+            .values(
+                status="CLAIMED",
+                lease_token=token,
+                lease_expires_at=now + timedelta(minutes=2),
+                updated_at=now,
+            )
+        )
+        if cast(sa.engine.CursorResult[Any], claimed).rowcount != 1:
+            session.rollback()
+            return None
+        config = self.get_config(session, str(candidate["organization_id"]), "UBER_EATS")
+        organization = (
+            session.execute(
+                sa.select(
+                    models.organizations.c.status,
+                    models.organizations.c.subscription_status,
+                    models.organizations.c.trial_ends_at,
+                ).where(models.organizations.c.id == candidate["organization_id"])
+            )
+            .mappings()
+            .first()
+        )
+        session.commit()
+        job = dict(candidate)
+        job.update(
+            lease_token=token,
+            config=config,
+            organization=dict(organization) if organization else None,
+        )
+        return job
+
+    @staticmethod
+    def _outbound_permitted(organization: dict[str, Any] | None, now: datetime) -> bool:
+        if not organization or organization.get("status") != "active":
+            return False
+        if organization.get("subscription_status") == "active":
+            return True
+        trial_end = organization.get("trial_ends_at")
+        return bool(
+            organization.get("subscription_status") == "trialing"
+            and isinstance(trial_end, datetime)
+            and now
+            < (trial_end.replace(tzinfo=timezone.utc) if trial_end.tzinfo is None else trial_end)
+        )
+
+    def finish_uber_availability_sync(
+        self, session: Session, job: dict[str, Any], error: Exception | None
+    ) -> str:
+        """Only the current lease/version can report provider confirmation."""
+        now = datetime.now(timezone.utc)
+        attempts = int(job["attempts"]) + 1
+        if not bool((job.get("config") or {}).get("is_enabled")) or not self._outbound_permitted(
+            job.get("organization"), now
+        ):
+            status, message, due = "FAILED", "uber_outbound_disabled", now
+        elif error is None:
+            status, message, due = "CONFIRMED", None, now
+        elif isinstance(error, UberAvailabilityPermanentError):
+            status, message, due = "FAILED", str(error)[:500], now
+        else:
+            status, message, due = (
+                "RETRY",
+                str(error)[:500],
+                now + timedelta(seconds=min(300, 2 ** min(attempts, 8))),
+            )
+        jobs = models.channel_availability_sync_jobs
+        values: dict[str, Any] = dict(
+            status=status,
+            attempts=attempts,
+            last_error=message,
+            next_attempt_at=due,
+            lease_token=None,
+            lease_expires_at=None,
+            updated_at=now,
+        )
+        if status == "CONFIRMED":
+            values["confirmed_at"] = now
+        result = session.execute(
+            jobs.update()
+            .where(
+                jobs.c.id == job["id"],
+                jobs.c.status == "CLAIMED",
+                jobs.c.lease_token == job["lease_token"],
+                jobs.c.desired_version == job["desired_version"],
+            )
+            .values(**values)
+        )
+        if cast(sa.engine.CursorResult[Any], result).rowcount == 1:
+            session.commit()
+            return status
+        # A stale HTTP request may reach Uber after a newer command.  Force a
+        # later dispatch of the current desired state even if it was already
+        # confirmed by another lease.
+        reconciled = session.execute(
+            jobs.update()
+            .where(jobs.c.id == job["id"], jobs.c.desired_version > job["desired_version"])
+            .values(
+                desired_version=jobs.c.desired_version + 1,
+                status="PENDING",
+                attempts=0,
+                next_attempt_at=now,
+                last_error="uber_availability_superseded_reconcile",
+                confirmed_at=None,
+                lease_token=None,
+                lease_expires_at=None,
+                updated_at=now,
+            )
+        )
+        session.commit()
+        return (
+            "RECONCILE"
+            if cast(sa.engine.CursorResult[Any], reconciled).rowcount == 1
+            else "SUPERSEDED"
+        )
+
+    def dispatch_due_uber_availability_syncs(
+        self, session_factory: Callable[[], Session], limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Perform bounded network dispatch outside the database claim transaction."""
+        results: list[dict[str, Any]] = []
+        for _ in range(limit):
+            with session_factory() as claim_session:
+                job = self.claim_due_uber_availability_sync(claim_session)
+            if not job:
+                break
+            config = job.get("config") or {}
+            organization = job.get("organization")
+            error: Exception | None = None
+            if bool(config.get("is_enabled")) and self._outbound_permitted(
+                organization, datetime.now(timezone.utc)
+            ):
+                try:
+                    self.uber_adapter.update_item_availability(
+                        client_id=str(config.get("client_id") or ""),
+                        client_secret=str(config.get("client_secret") or ""),
+                        store_id=str(job["external_store_id"]),
+                        item_id=str(job["external_item_id"]),
+                        is_available=bool(job["is_available"]),
+                    )
+                except Exception as exc:
+                    error = exc
+            with session_factory() as finish_session:
+                status = self.finish_uber_availability_sync(finish_session, job, error)
+            results.append({"id": job["id"], "status": status})
+        return results
+
     def list_webhook_logs(
         self, session: Session, organization_id: str, provider: str, limit: int = 50
     ) -> list[dict[str, Any]]:
@@ -226,6 +538,137 @@ class ChannelIntegrationService:
         session.commit()
         return log_id
 
+    @staticmethod
+    def _webhook_payload_hash(payload_raw: dict[str, Any]) -> str:
+        import hashlib
+        import json
+
+        canonical = json.dumps(
+            payload_raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest()
+
+    def claim_webhook(
+        self,
+        session: Session,
+        organization_id: str,
+        provider: str,
+        event_id: str | None,
+        payload_raw: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically lease a webhook delivery without treating a duplicate as success.
+
+        The API must only process a result with ``claimed`` true. A processed
+        duplicate is safe to acknowledge, while a live processing lease asks
+        the provider to retry after its expiry.
+        """
+        payload_hash = self._webhook_payload_hash(payload_raw)
+        durable_event_id = str(event_id or f"sha256:{payload_hash}")
+        now = datetime.now(timezone.utc)
+        lease_token = str(uuid.uuid4())
+        lease_until = now + timedelta(minutes=2)
+        inbox = models.integration_webhook_inbox
+        inbox_id = str(uuid.uuid4())
+        try:
+            session.execute(
+                inbox.insert().values(
+                    id=inbox_id,
+                    organization_id=organization_id,
+                    provider=provider,
+                    event_id=durable_event_id,
+                    payload_hash=payload_hash,
+                    status="processing",
+                    attempts=1,
+                    lease_token=lease_token,
+                    lease_expires_at=lease_until,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.commit()
+            return {
+                "claimed": True,
+                "id": inbox_id,
+                "event_id": durable_event_id,
+                "lease_token": lease_token,
+            }
+        except sa.exc.IntegrityError:
+            session.rollback()
+        existing = (
+            session.execute(
+                sa.select(inbox).where(
+                    inbox.c.organization_id == organization_id,
+                    inbox.c.provider == provider,
+                    inbox.c.event_id == durable_event_id,
+                )
+            )
+            .mappings()
+            .one()
+        )
+        if existing["payload_hash"] != payload_hash:
+            raise ValueError("webhook_event_payload_conflict")
+        if existing["status"] == "processed":
+            return {"claimed": False, "replay": True, "id": existing["id"]}
+        reclaimable = sa.or_(
+            inbox.c.status == "error",
+            sa.and_(inbox.c.status == "processing", inbox.c.lease_expires_at <= now),
+        )
+        claimed = session.execute(
+            inbox.update()
+            .where(
+                inbox.c.id == existing["id"],
+                reclaimable,
+            )
+            .values(
+                status="processing",
+                attempts=inbox.c.attempts + 1,
+                last_error=None,
+                lease_token=lease_token,
+                lease_expires_at=lease_until,
+                updated_at=now,
+            )
+        )
+        if cast(sa.engine.CursorResult[Any], claimed).rowcount != 1:
+            session.rollback()
+            return {"claimed": False, "in_progress": True, "id": existing["id"]}
+        session.commit()
+        return {
+            "claimed": True,
+            "id": existing["id"],
+            "event_id": durable_event_id,
+            "lease_token": lease_token,
+        }
+
+    def finish_webhook(
+        self,
+        session: Session,
+        inbox_id: str,
+        lease_token: str,
+        status: str,
+        error_message: str | None = None,
+    ) -> bool:
+        if status not in {"processed", "error"}:
+            raise ValueError("webhook_inbox_status_invalid")
+        now = datetime.now(timezone.utc)
+        result = session.execute(
+            models.integration_webhook_inbox.update()
+            .where(
+                models.integration_webhook_inbox.c.id == inbox_id,
+                models.integration_webhook_inbox.c.status == "processing",
+                models.integration_webhook_inbox.c.lease_token == lease_token,
+            )
+            .values(
+                status=status,
+                last_error=error_message,
+                processed_at=now if status == "processed" else None,
+                lease_token=None,
+                lease_expires_at=None,
+                updated_at=now,
+            )
+        )
+        session.commit()
+        return cast(sa.engine.CursorResult[Any], result).rowcount == 1
+
     def process_webhook_order(
         self,
         session: Session,
@@ -233,6 +676,9 @@ class ChannelIntegrationService:
         provider: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        target = self.resolve_webhook_target(session, provider, payload)
+        if target.organization_id != organization_id:
+            raise ValueError("webhook_tenant_mismatch")
         adapter = self.get_adapter(provider)
         config = self.get_config(session, organization_id, provider)
 
@@ -249,7 +695,9 @@ class ChannelIntegrationService:
         ).all()
         product_mappings = {r[0]: r[1] for r in product_mappings_rows}
 
-        # Default products in catalog for fallback
+        # Only products in the resolved tenant's catalog may be used.  A
+        # missing mapping is a recoverable webhook error, never a cross-tenant
+        # fallback to an arbitrary product.
         products_query = (
             sa.select(
                 models.products.c.id,
@@ -265,19 +713,7 @@ class ChannelIntegrationService:
         )
         default_products = [dict(r) for r in session.execute(products_query).mappings().all()]
         if not default_products:
-            any_prods = (
-                session.execute(
-                    sa.select(
-                        models.products.c.id,
-                        models.products.c.name,
-                        models.products.c.category_id,
-                        models.products.c.station,
-                    ).limit(10)
-                )
-                .mappings()
-                .all()
-            )
-            default_products = [dict(r) for r in any_prods]
+            raise ValueError("webhook_catalog_not_configured")
 
         # Normalize order
         normalized: NormalizedOrder = adapter.normalize_order(
@@ -288,6 +724,7 @@ class ChannelIntegrationService:
         existing_meta = (
             session.execute(
                 sa.select(models.channel_orders_meta).where(
+                    models.channel_orders_meta.c.organization_id == organization_id,
                     models.channel_orders_meta.c.provider == provider,
                     models.channel_orders_meta.c.external_order_id == normalized.external_order_id,
                 )
@@ -303,44 +740,7 @@ class ChannelIntegrationService:
                 "external_order_id": normalized.external_order_id,
             }
 
-        # Resolve target branch from external_store_id
-        target_branch_id = None
-        if normalized.external_store_id:
-            store_mapping = session.execute(
-                sa.select(models.channel_store_mappings.c.branch_id).where(
-                    models.channel_store_mappings.c.organization_id == organization_id,
-                    models.channel_store_mappings.c.provider == provider,
-                    models.channel_store_mappings.c.external_store_id
-                    == normalized.external_store_id,
-                    models.channel_store_mappings.c.is_active.is_(True),
-                )
-            ).scalar_one_or_none()
-            if store_mapping:
-                target_branch_id = str(store_mapping)
-
-        if not target_branch_id:
-            # Fallback to first active branch in organization or any branch
-            first_branch = session.execute(
-                sa.select(models.branches.c.id)
-                .where(
-                    models.branches.c.organization_id == organization_id,
-                    models.branches.c.status == "active",
-                )
-                .order_by(models.branches.c.created_at.asc())
-            ).scalar_one_or_none()
-            if not first_branch:
-                first_branch = session.execute(
-                    sa.select(models.branches.c.id)
-                    .where(models.branches.c.status == "active")
-                    .order_by(models.branches.c.created_at.asc())
-                ).scalar_one_or_none()
-            if not first_branch:
-                first_branch = session.execute(
-                    sa.select(models.branches.c.id).order_by(models.branches.c.created_at.asc())
-                ).scalar_one_or_none()
-            if not first_branch:
-                raise ValueError("No hay sucursales registradas para enrutar el pedido.")
-            target_branch_id = str(first_branch)
+        target_branch_id = target.branch_id
 
         # Create order record in orders table
         now = datetime.now(timezone.utc)
@@ -361,7 +761,9 @@ class ChannelIntegrationService:
                 cat_name = str(cat_row)
         if not cat_id:
             any_cat = session.execute(
-                sa.select(models.product_categories.c.id, models.product_categories.c.name).limit(1)
+                sa.select(models.product_categories.c.id, models.product_categories.c.name)
+                .where(models.product_categories.c.organization_id == organization_id)
+                .limit(1)
             ).first()
             if any_cat:
                 cat_id = str(any_cat[0])
@@ -403,16 +805,12 @@ class ChannelIntegrationService:
             )
         )
 
-        # Fallback product ID from existing catalog if line.product_id is missing
-        fallback_prod_id = default_products[0]["id"] if default_products else None
-        if not fallback_prod_id:
-            any_p = session.execute(sa.select(models.products.c.id).limit(1)).scalar_one_or_none()
-            fallback_prod_id = str(any_p) if any_p else str(uuid.uuid4())
-
         # Insert lines
         for line in normalized.items:
             line_id = str(uuid.uuid4())
-            prod_id = line.product_id or fallback_prod_id
+            if not line.product_id:
+                raise ValueError("webhook_product_not_mapped")
+            prod_id = line.product_id
             session.execute(
                 models.order_lines.insert().values(
                     id=line_id,
@@ -439,6 +837,7 @@ class ChannelIntegrationService:
         session.execute(
             models.channel_orders_meta.insert().values(
                 id=str(uuid.uuid4()),
+                organization_id=organization_id,
                 order_id=order_id,
                 provider=provider,
                 external_order_id=normalized.external_order_id,
@@ -538,10 +937,21 @@ class ChannelIntegrationService:
         order_id: str,
         new_status: str,
         actor_id: str | None = None,
+        *,
+        organization_id: str,
+        branch_id: str,
+        provider: str,
     ) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
         order = (
-            session.execute(sa.select(models.orders).where(models.orders.c.id == order_id))
+            session.execute(
+                sa.select(models.orders).where(
+                    models.orders.c.id == order_id,
+                    models.orders.c.organization_id == organization_id,
+                    models.orders.c.branch_id == branch_id,
+                    models.orders.c.channel == provider,
+                )
+            )
             .mappings()
             .first()
         )
@@ -551,7 +961,12 @@ class ChannelIntegrationService:
 
         session.execute(
             sa.update(models.orders)
-            .where(models.orders.c.id == order_id)
+            .where(
+                models.orders.c.id == order_id,
+                models.orders.c.organization_id == organization_id,
+                models.orders.c.branch_id == branch_id,
+                models.orders.c.channel == provider,
+            )
             .values(
                 status=new_status,
                 accepted_at=now if new_status == "ACCEPTED" else order["accepted_at"],
@@ -560,7 +975,11 @@ class ChannelIntegrationService:
 
         session.execute(
             sa.update(models.channel_orders_meta)
-            .where(models.channel_orders_meta.c.order_id == order_id)
+            .where(
+                models.channel_orders_meta.c.order_id == order_id,
+                models.channel_orders_meta.c.organization_id == organization_id,
+                models.channel_orders_meta.c.provider == provider,
+            )
             .values(external_status=new_status, updated_at=now)
         )
 

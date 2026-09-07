@@ -3,7 +3,7 @@
 ## BDD-FEAT-017 Consola inicial de plataforma
 
 ```gherkin
-@PRD-NFR-009 @PRD-NFR-010 @PRD-NFR-011 @platform @phase0
+@PRD-NFR-509 @PRD-NFR-510 @PRD-NFR-511 @platform @phase0
 Feature: Shell operativo inicial
 
   @BDD-SC-024

@@ -101,7 +101,7 @@ def test_get_and_update_organization_profile() -> None:
     assert profile["owner_email"] == "mariana@cafebonito.com"
     assert profile["owner_phone"] == "+525512349999"
     assert profile["plan"] == "trial"
-    assert profile["subscription_status"] == "active"
+    assert profile["subscription_status"] == "trialing"
     assert profile["trial_days_remaining"] == 14
     assert profile["products_count"] >= 0
     assert len(profile["branches"]) >= 1

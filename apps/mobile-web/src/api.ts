@@ -1,7 +1,20 @@
-import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo } from './types';
-import { getProductImage, getProductNutritionMeta } from './imageMap';
+import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront } from './types';
+import { getProductImage } from './imageMap';
 
 const API_BASE_URL = '/api/v1';
+
+/** Resolves a public menu to one tenant before any catalog request is made. */
+export async function fetchStorefront(identifier: string): Promise<Storefront> {
+  const res = await fetch(`${API_BASE_URL}/public/storefronts/${encodeURIComponent(identifier)}`, {
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  if (!res.ok) throw new Error(`storefront_resolution_${res.status}`);
+  const data = await res.json() as Storefront;
+  if (!data?.organization?.id || !data.organization.public_slug || !Array.isArray(data.branches)) {
+    throw new Error('storefront_invalid_response');
+  }
+  return data;
+}
 
 export async function fetchPublicBranches(lat?: number, lng?: number, restaurant?: string | null): Promise<BranchInfo[]> {
   try {
@@ -66,105 +79,10 @@ export async function fetchPublicRestaurantInfo(slug: string): Promise<PublicRes
   }
 }
 
-// Seed catalog fallback to guarantee 100% fail-safe display if API server is not running
-const BACKUP_CATALOG: Product[] = [
-  {
-    id: 'prod-jug-ver',
-    name: 'Jugo Verde',
-    sku: 'JUG-VER',
-    category_name: 'Jugos y Extractos',
-    price_cents: 6500,
-    description: 'Naranja, piña, pepino, apio y nopal recién extraídos.',
-    station: 'barra',
-  },
-  {
-    id: 'prod-ext-roj',
-    name: 'Extracto Rojo',
-    sku: 'EXT-ROJ',
-    category_name: 'Jugos y Extractos',
-    price_cents: 6300,
-    description: 'Fresco sabor de pepino con apio, betabel, limón y dulce de manzana roja.',
-    station: 'barra',
-  },
-  {
-    id: 'prod-smo-ros',
-    name: 'Smoothie Rosa',
-    sku: 'SMO-ROS',
-    category_name: 'Smoothies y Licuados',
-    price_cents: 9000,
-    description: 'Fresa con leche de almendra, miel de abeja, dátil, chía y espinaca.',
-    station: 'barra',
-  },
-  {
-    id: 'prod-mat-pin',
-    name: 'Maccha Pinku (con fresa)',
-    sku: 'MAT-PIN',
-    category_name: 'Café y Matcha',
-    price_cents: 13000,
-    description: 'Matcha ceremonial japonés en capas sobre leche de avena y puré natural de fresa.',
-    station: 'barra',
-  },
-  {
-    id: 'prod-ens-fru',
-    name: 'Ensalada Frutos Rojos',
-    sku: 'ENS-FRU',
-    category_name: 'Ensaladas',
-    price_cents: 12500,
-    description: 'Lechuga orgánica, fresa, arándanos, queso panela, cacahuates garapiñados y aderezo balsámico.',
-    station: 'cocina',
-  },
-  {
-    id: 'prod-san-kyo',
-    name: 'Sando Kyoto Pollo BBQ',
-    sku: 'SAN-KYO-BBQ',
-    category_name: 'Emparedados y Sandos',
-    price_cents: 12000,
-    description: 'Sándwich estilo japonés en pan brioche grueso, pollo crujiente con glaseado BBQ y col fresca.',
-    station: 'cocina',
-  },
-  {
-    id: 'prod-pan-cue',
-    name: 'Cuernito Jamón/Phila',
-    sku: 'PAN-CUE',
-    category_name: 'Panadería',
-    price_cents: 3800,
-    description: 'Croissant artesanal dorado horneado relleno de jamón ahumado y queso Philadelphia.',
-    station: 'barra',
-  },
-  {
-    id: 'prod-com-lig',
-    name: 'Combo Ligero',
-    sku: 'COM-LIG',
-    category_name: 'Combos',
-    price_cents: 10500,
-    description: 'Sándwich básico artesanal + fresco jugo de naranja del día + dulce galleta con chispas.',
-    station: 'barra',
-  }
-];
-
-const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'all', name: 'Todos' },
-  { id: 'c1', name: 'Jugos y Extractos' },
-  { id: 'c2', name: 'Smoothies y Licuados' },
-  { id: 'c3', name: 'Café y Matcha' },
-  { id: 'c4', name: 'Ensaladas' },
-  { id: 'c5', name: 'Emparedados y Sandos' },
-  { id: 'c6', name: 'Panadería' },
-  { id: 'c7', name: 'Combos' },
-];
-
-let activeBranchId: string | undefined = undefined;
-
-export async function fetchMobileMenu(publicKey?: string | null, restaurant?: string | null): Promise<{ products: Product[]; categories: Category[] }> {
+export async function fetchMobileMenu(publicKey?: string | null): Promise<{ products: Product[]; categories: Category[] }> {
   try {
-    let catalogUrl: string;
-    if (publicKey) {
-      catalogUrl = `${API_BASE_URL}/public/branches/${publicKey}/catalog`;
-    } else if (restaurant) {
-      catalogUrl = `${API_BASE_URL}/public/restaurants/${encodeURIComponent(restaurant)}/catalog`;
-    } else {
-      catalogUrl = `${API_BASE_URL}/public/catalog`;
-    }
+    if (!publicKey) throw new Error('storefront_branch_key_required');
+    const catalogUrl = `${API_BASE_URL}/public/branches/${encodeURIComponent(publicKey)}/catalog`;
     const res = await fetch(catalogUrl, {
       headers: { 'Cache-Control': 'no-cache' },
     });
@@ -174,17 +92,13 @@ export async function fetchMobileMenu(publicKey?: string | null, restaurant?: st
     }
 
     const data = await res.json();
-    if (data.branch_id) {
-      activeBranchId = data.branch_id;
-    }
-
     // A successful API response is authoritative: never invent a price for its rows.
     const rawProducts = Array.isArray(data.items)
       ? data.items.filter((item: unknown) => (
         typeof (item as { price_cents?: unknown }).price_cents === 'number'
         && Number.isInteger((item as { price_cents: number }).price_cents)
       ))
-      : BACKUP_CATALOG;
+      : [];
     const categories: Category[] = [{ id: 'all', name: 'Todos' }];
     const seenCatNames = new Set<string>(['Todos']);
 
@@ -204,7 +118,6 @@ export async function fetchMobileMenu(publicKey?: string | null, restaurant?: st
         categories.push({ id: `cat-${catName.toLowerCase().replace(/\s+/g, '-')}`, name: catName });
       }
 
-      const meta = getProductNutritionMeta(p.name || '');
       return {
         id: p.id,
         name: p.name,
@@ -215,9 +128,6 @@ export async function fetchMobileMenu(publicKey?: string | null, restaurant?: st
         description: p.description || '',
         station: p.station || 'barra',
         image_url: getProductImage(p),
-        calories: meta.calories,
-        prep_time: meta.prep_time,
-        tags: [meta.tag],
         is_available: p.is_available !== false,
         modifier_groups: Array.isArray(p.modifier_groups)
           ? p.modifier_groups
@@ -245,19 +155,7 @@ export async function fetchMobileMenu(publicKey?: string | null, restaurant?: st
 
     return { products, categories };
   } catch (err) {
-    console.warn('Loading fallback catalog:', err);
-    const products: Product[] = BACKUP_CATALOG.map(p => {
-      const meta = getProductNutritionMeta(p.name);
-      return {
-        ...p,
-        image_url: getProductImage(p),
-        calories: meta.calories,
-        prep_time: meta.prep_time,
-        tags: [meta.tag],
-        is_available: true,
-      };
-    });
-    return { products, categories: DEFAULT_CATEGORIES };
+    throw err;
   }
 }
 
@@ -378,7 +276,7 @@ export async function submitMobileOrder(
       owner_name: info.name.trim(),
       customer_phone: cleanPhone,
       order_type: apiOrderType,
-      branch_id: branchId || activeBranchId,
+      branch_id: branchId,
       customer_lat: customerCoords?.lat,
       customer_lng: customerCoords?.lng,
       delivery_address: deliveryAddressText,

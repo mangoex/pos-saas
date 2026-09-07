@@ -378,10 +378,14 @@ def test_runtime_sqlite_engine_enforces_foreign_keys(monkeypatch: pytest.MonkeyP
 def test_catalog_key_and_limiter_fail_closed() -> None:
     client = _client_with_seeded_database()
     legacy_branches = client.get("/api/v1/public/branches")
-    assert legacy_branches.status_code == 200
-    assert "public_key" not in legacy_branches.json()[0]
+    assert legacy_branches.status_code == 422
     _enable_public_order_capture(client)
-    intent_branches = client.get("/api/v1/public/branches")
+    with _test_session_factory(client)() as session:
+        session.execute(models.organizations.update().where(
+            models.organizations.c.id == "018f6f73-2d0a-74f0-8f1c-000000000001"
+        ).values(slug="public-test-restaurant"))
+        session.commit()
+    intent_branches = client.get("/api/v1/public/branches", params={"identifier": "public-test-restaurant"})
     assert intent_branches.status_code == 200
     assert intent_branches.json()[0]["public_key"] == PUBLIC_KEY
     catalog = client.get(f"/api/v1/public/branches/{PUBLIC_KEY}/catalog")

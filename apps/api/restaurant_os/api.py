@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Annotated, Any, Literal, Optional, TypeVar
+from typing import Annotated, Any, Literal, NoReturn, Optional, TypeVar
 import uuid
 from uuid import UUID
 
@@ -59,19 +59,15 @@ from restaurant_os.legacy_import import (
     list_legacy_import_batches,
     list_legacy_import_records,
 )
-from restaurant_os.recipe_ai import (
-    calculate_theoretical_recipe_cost,
-    match_ingredient_to_catalog,
-    normalize_culinary_quantity,
-    parse_recipe_text,
-)
 from restaurant_os.integrations import channel_service
 from restaurant_os.invoicing.service import InvoicingService
 from restaurant_os.operational_guard import OperationalRouteGuard
 
 invoicing_service = InvoicingService()
 from restaurant_os.operations import (
-    ORGANIZATION_ID,
+    get_organization_profile,
+    update_organization_profile,
+    get_organization_qr_info,
     AuthorizationError,
     BusinessError,
     NotFoundError,
@@ -159,9 +155,6 @@ from restaurant_os.operations import (
     get_ingredient_variation,
     get_open_cash_shift,
     get_order_detail,
-    get_organization_profile,
-    update_organization_profile,
-    get_organization_qr_info,
     get_public_catalog,
     get_public_order_intent,
     reject_public_order_intent,
@@ -195,7 +188,6 @@ from restaurant_os.operations import (
     list_queued_print_attempts,
     list_product_modifiers,
     list_production_batches,
-    list_public_branches,
     list_purchase_documents,
     list_purchase_presentations,
     list_recent_orders,
@@ -412,9 +404,37 @@ def _required_actor_from_request(actor_user_id: str | None, authorization: str |
 
 
 def _actor_org_from_request(session: Session, actor_id: str) -> str:
-    actor = session.execute(sa.select(models.users).where(models.users.c.id == actor_id)).mappings().first()
-    return str(actor["organization_id"]) if actor and actor.get("organization_id") else ORGANIZATION_ID
+    actor = (
+        session.execute(sa.select(models.users).where(models.users.c.id == actor_id))
+        .mappings()
+        .first()
+    )
+    if not actor or not actor.get("organization_id"):
+        raise HTTPException(status_code=403, detail={"code": "actor_not_authorized"})
+    return str(actor["organization_id"])
 
+
+def _authorize_required_branch(
+    session: Session, actor_id: str, permission_code: str, branch_id: str | None
+) -> str:
+    """Resolve a branch-bound command without ever falling back to the pilot tenant."""
+    scoped_branch = authorize_branch_scope(session, actor_id, permission_code, branch_id)
+    if scoped_branch:
+        return scoped_branch
+    organization_id = _actor_org_from_request(session, actor_id)
+    own_branch = session.scalar(
+        sa.select(models.branches.c.id)
+        .where(
+            models.branches.c.organization_id == organization_id,
+            models.branches.c.status == "active",
+        )
+        .order_by(models.branches.c.code, models.branches.c.id)
+        .limit(1)
+    )
+    if not own_branch:
+        raise BusinessError("branch_required", "An active branch is required")
+    require_permission(session, actor_id, permission_code, str(own_branch))
+    return str(own_branch)
 
 
 @router.get("/platform/bootstrap-status")
@@ -426,7 +446,7 @@ def get_bootstrap_status(
     def operation() -> dict[str, Any]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "admin.manage")
-        return bootstrap_status(session)
+        return bootstrap_status(session, _actor_org_from_request(session, actor_id))
 
     return _business_response(operation)
 
@@ -444,9 +464,15 @@ def get_dashboard_overview_endpoint(
         authorized_branch_id = authorize_branch_scope(
             session, actor_id, "dashboard.read", branch_id
         )
-        return get_dashboard_overview(session, authorized_branch_id, month)
+        organization_id = session.execute(
+            sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)
+        ).scalar_one()
+        return get_dashboard_overview(
+            session, authorized_branch_id, month, organization_id=str(organization_id)
+        )
 
     return _business_response(operation)
+
 
 @router.post("/auth/signup", status_code=status.HTTP_201_CREATED)
 def signup_endpoint(payload: SignUpRequest, session: SessionDep) -> dict[str, Any]:
@@ -474,6 +500,7 @@ def login(payload: dict[str, Any], session: SessionDep) -> dict[str, Any]:
 
 @router.post("/auth/supervisor-authorize")
 def supervisor_authorize_endpoint(
+    request: Request,
     payload: dict[str, Any],
     session: SessionDep,
     actor_user_id: ActorUserDep = None,
@@ -486,6 +513,53 @@ def supervisor_authorize_endpoint(
     permission_code = str(payload.get("permission_code") or "orders.discount.authorize").strip()
 
     def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        actor_organization_id = _actor_org_from_request(session, actor_id)
+        branch_organization_id = session.scalar(
+            sa.select(models.branches.c.organization_id).where(
+                models.branches.c.id == branch_id,
+                models.branches.c.status == "active",
+            )
+        )
+        if not branch_organization_id or str(branch_organization_id) != actor_organization_id:
+            raise AuthorizationError(
+                "supervisor_auth_failed", "Supervisor credentials or PIN invalid"
+            )
+        limiter = getattr(request.app.state, "supervisor_authorization_rate_limiter", None)
+        if limiter is None:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "supervisor_authorization_unavailable",
+                    "message": "Supervisor authorization is unavailable",
+                },
+            )
+        try:
+            allowed = bool(limiter.allow(f"supervisor:{branch_id}", actor_id))
+        except Exception as exc:
+            logger.info(
+                "supervisor_authorization_rate_limit",
+                extra={"metric": "supervisor_authorization_rate_limit", "result": "unavailable"},
+            )
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "supervisor_authorization_unavailable",
+                    "message": "Supervisor authorization is unavailable",
+                },
+            ) from exc
+        if not allowed:
+            logger.info(
+                "supervisor_authorization_rate_limit",
+                extra={"metric": "supervisor_authorization_rate_limit", "result": "limited"},
+            )
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "supervisor_authorization_rate_limited",
+                    "message": "Supervisor authorization is rate limited",
+                },
+            )
         return authorize_supervisor_step_up(
             session=session,
             supervisor_code_or_password=pin_or_code,
@@ -533,6 +607,53 @@ def get_authenticated_session_endpoint(
         ) from exc
 
 
+@router.get("/subscription/status")
+def get_subscription_status_endpoint(
+    session: SessionDep, authorization: AuthorizationDep = None
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(None, authorization)
+    user = (
+        session.execute(sa.select(models.users).where(models.users.c.id == actor_id))
+        .mappings()
+        .first()
+    )
+    if not user or user["status"] != "active":
+        raise HTTPException(status_code=403, detail={"code": "actor_not_authorized"})
+    org = (
+        session.execute(
+            sa.select(models.organizations).where(
+                models.organizations.c.id == user["organization_id"]
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if not org:
+        raise HTTPException(status_code=403, detail={"code": "actor_not_authorized"})
+    trial_end = org.get("trial_ends_at")
+    end = (
+        trial_end.replace(tzinfo=timezone.utc)
+        if trial_end and trial_end.tzinfo is None
+        else trial_end
+    )
+    expired = org["subscription_status"] == "trialing" and (
+        not end or end <= datetime.now(timezone.utc)
+    )
+    blocked = (
+        "tenant_suspended"
+        if org["subscription_status"] == "suspended" or org["status"] == "suspended"
+        else ("tenant_trial_expired" if expired else None)
+    )
+    return {
+        "organization_id": str(org["id"]),
+        "plan": org["plan"],
+        "subscription_status": org["subscription_status"],
+        "trial_ends_at": trial_end,
+        "access_block_reason": blocked,
+        "renewal_managed_by": "platform_superadmin",
+    }
+
+
 @router.post("/auth/pos-handoffs")
 def issue_pos_session_handoff_endpoint(
     session: SessionDep,
@@ -558,8 +679,17 @@ def exchange_pos_session_handoff_endpoint(
 
     def operation() -> dict[str, Any]:
         consumed = consume_pos_session_handoff(session, str(payload["handoff_code"]))
+        token_claims: dict[str, Any] = {"sub": consumed["user_id"], "email": consumed["email"]}
+        if consumed.get("impersonated_by"):
+            token_claims.update(
+                {
+                    "impersonated_by": consumed["impersonated_by"],
+                    "target_organization_id": consumed["target_organization_id"],
+                    "support_correlation_id": consumed["support_correlation_id"],
+                }
+            )
         token = create_session_token(
-            {"sub": consumed["user_id"], "email": consumed["email"]},
+            token_claims,
             get_settings().secret_key,
         )
         return {"token": token}
@@ -576,59 +706,7 @@ def get_organizations(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "admin.manage")
-        return list_organizations(session)
-
-    return _business_response(operation)
-
-
-@router.get("/organization/profile")
-def get_organization_profile_endpoint(
-    session: SessionDep,
-    actor_user_id: ActorUserDep = None,
-    authorization: AuthorizationDep = None,
-) -> dict[str, Any]:
-    def operation() -> dict[str, Any]:
-        actor_id = _required_actor_from_request(actor_user_id, authorization)
-        org_id = _actor_org_from_request(session, actor_id)
-        return get_organization_profile(session, org_id)
-
-    return _business_response(operation)
-
-
-@router.patch("/organization/profile")
-def update_organization_profile_endpoint(
-    payload: dict[str, Any],
-    session: SessionDep,
-    actor_user_id: ActorUserDep = None,
-    authorization: AuthorizationDep = None,
-) -> dict[str, Any]:
-    def operation() -> dict[str, Any]:
-        actor_id = _required_actor_from_request(actor_user_id, authorization)
-        org_id = _actor_org_from_request(session, actor_id)
-        return update_organization_profile(
-            session,
-            org_id,
-            name=payload.get("name"),
-            owner_name=payload.get("owner_name"),
-            owner_phone=payload.get("owner_phone"),
-            business_type=payload.get("business_type"),
-            mobile_theme=payload.get("mobile_theme"),
-            actor_id=actor_id,
-        )
-
-    return _business_response(operation)
-
-
-@router.get("/organization/qr-info")
-def get_organization_qr_info_endpoint(
-    session: SessionDep,
-    actor_user_id: ActorUserDep = None,
-    authorization: AuthorizationDep = None,
-) -> dict[str, Any]:
-    def operation() -> dict[str, Any]:
-        actor_id = _required_actor_from_request(actor_user_id, authorization)
-        org_id = _actor_org_from_request(session, actor_id)
-        return get_organization_qr_info(session, org_id)
+        return list_organizations(session, _actor_org_from_request(session, actor_id))
 
     return _business_response(operation)
 
@@ -899,10 +977,9 @@ def get_catalog_products(
             sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)
         ).scalar()
         org_id = str(user_org) if user_org else None
-        if branch_id:
-            authorized_branch = authorize_branch_scope(session, actor_id, "pos.operate", branch_id)
-            return list_catalog_products(session, authorized_branch, organization_id=org_id)
-        return list_catalog_products(session, organization_id=org_id)
+        permission = "pos.operate" if branch_id else "catalog.manage"
+        authorized_branch = authorize_branch_scope(session, actor_id, permission, branch_id)
+        return list_catalog_products(session, authorized_branch, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -1099,6 +1176,13 @@ def post_executive_ai_insights(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
 
     def operation() -> dict[str, Any]:
+        require_permission(session, actor_id, "analytics.read")
+        if not payload.branch_id:
+            raise BusinessError("branch_id_required", "Selecciona una sucursal autorizada.")
+        organization_id = _actor_org_from_request(session, actor_id)
+        branch_id = authorize_branch_scope(
+            session, actor_id, "analytics.read", str(payload.branch_id)
+        )
         settings = get_settings()
         provider_options = None
         if settings.admin_ai_assistant_enabled and settings.openrouter_api_key:
@@ -1108,10 +1192,13 @@ def post_executive_ai_insights(
                 base_url=settings.openrouter_base_url,
                 timeout_seconds=settings.admin_ai_openrouter_timeout_seconds,
             )
+        if branch_id is None:
+            raise BusinessError("branch_id_required", "Selecciona una sucursal autorizada.")
         result = generate_executive_insights(
             session,
+            organization_id=organization_id,
             prompt=payload.prompt,
-            branch_id=str(payload.branch_id) if payload.branch_id else None,
+            branch_id=branch_id,
             provider_options=provider_options,
         )
         logger.info(
@@ -1136,9 +1223,16 @@ def post_suggested_purchases(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
 
     def operation() -> dict[str, Any]:
-        branch_id_str = str(payload.branch_id) if payload.branch_id else None
+        require_permission(session, actor_id, "inventory.read")
+        if not payload.branch_id:
+            raise BusinessError("branch_id_required", "Selecciona una sucursal autorizada.")
+        branch_id_str = authorize_branch_scope(
+            session, actor_id, "inventory.read", str(payload.branch_id)
+        )
+        if branch_id_str is None:
+            raise BusinessError("branch_id_required", "Selecciona una sucursal autorizada.")
         proposals = calculate_suggested_purchases(
-            session, branch_id=branch_id_str, days_ahead=payload.days_ahead
+            session, _actor_org_from_request(session, actor_id), branch_id_str, payload.days_ahead
         )
         total_suppliers = len(proposals)
         total_items = sum(len(p.get("lines", [])) for p in proposals)
@@ -1176,8 +1270,15 @@ def get_inventory_yield_audit(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
 
     def operation() -> dict[str, Any]:
-        branch_id_str = str(branch_id) if branch_id else None
-        results = audit_inventory_yield_and_waste(session, branch_id=branch_id_str, days=days)
+        require_permission(session, actor_id, "inventory.read")
+        if not branch_id:
+            raise BusinessError("branch_id_required", "Selecciona una sucursal autorizada.")
+        branch_id_str = authorize_branch_scope(session, actor_id, "inventory.read", str(branch_id))
+        if branch_id_str is None:
+            raise BusinessError("branch_id_required", "Selecciona una sucursal autorizada.")
+        results = audit_inventory_yield_and_waste(
+            session, _actor_org_from_request(session, actor_id), branch_id_str, days
+        )
         logger.info(
             "inventory_yield_audit result=success actor_id=%s branch_id=%s count=%d",
             actor_id,
@@ -1200,6 +1301,7 @@ def post_parse_invoice_ocr(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
 
     def operation() -> dict[str, Any]:
+        require_permission(session, actor_id, "inventory.read")
         parsed = parse_supplier_invoice_data(payload.invoice_text)
         logger.info(
             "parse_invoice_ocr result=success actor_id=%s lines=%d",
@@ -1217,6 +1319,7 @@ def post_public_order_upsell_recommendations(
     session: SessionDep,
 ) -> dict[str, Any]:
     """Generate dynamic cross-sell recommendations for online orders based on cart co-occurrences."""
+
     def operation() -> dict[str, Any]:
         if payload.branch_id is None:
             return {"recommendations": []}
@@ -1244,13 +1347,21 @@ def post_customer_recommendations(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
 
     def operation() -> dict[str, Any]:
+        require_permission(session, actor_id, "customers.read")
+        organization_id = _actor_org_from_request(session, actor_id)
+        branch_id = (
+            authorize_branch_scope(session, actor_id, "customers.read", str(payload.branch_id))
+            if payload.branch_id
+            else None
+        )
         curr_ids = [str(pid) for pid in payload.current_product_ids]
         cust_id = str(payload.customer_id) if payload.customer_id else None
         recs = get_customer_upsell_recommendations(
             session,
+            organization_id=organization_id,
             customer_id=cust_id,
             current_product_ids=curr_ids,
-            branch_id=str(payload.branch_id) if payload.branch_id else None,
+            branch_id=branch_id,
         )
         logger.info(
             "customer_recommendations result=success actor_id=%s customer_id=%s count=%d",
@@ -1274,8 +1385,16 @@ def get_customer_crm_segments(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
 
     def operation() -> dict[str, Any]:
-        branch_id_str = str(branch_id) if branch_id else None
-        segments = get_crm_segments_and_churn_risk(session, branch_id=branch_id_str)
+        require_permission(session, actor_id, "customers.read")
+        organization_id = _actor_org_from_request(session, actor_id)
+        branch_id_str = (
+            authorize_branch_scope(session, actor_id, "customers.read", str(branch_id))
+            if branch_id
+            else None
+        )
+        segments = get_crm_segments_and_churn_risk(
+            session, organization_id=organization_id, branch_id=branch_id_str
+        )
         logger.info(
             "customer_crm_segments result=success actor_id=%s branch_id=%s total=%d",
             actor_id,
@@ -1367,12 +1486,24 @@ def post_catalog_product(
     category_name = str(payload.get("category_name", ""))
     station = str(payload.get("station", "kitchen"))
     price_cents = int(payload.get("price_cents", 0))
-    delivery_price_cents = int(payload["delivery_price_cents"]) if payload.get("delivery_price_cents") is not None else None
+    delivery_price_cents = (
+        int(payload["delivery_price_cents"])
+        if payload.get("delivery_price_cents") is not None
+        else None
+    )
     image_url = payload.get("image_url") if "image_url" in payload else None
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: create_product(
-            session, name, sku, category_name, station, price_cents, image_url, actor_id, delivery_price_cents=delivery_price_cents
+            session,
+            name,
+            sku,
+            category_name,
+            station,
+            price_cents,
+            image_url,
+            actor_id,
+            delivery_price_cents=delivery_price_cents,
         )
     )
 
@@ -1387,7 +1518,9 @@ def get_inventory_stock(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorized_branch = authorize_branch_scope(session, actor_id, "inventory.read", branch_id)
-        return list_inventory_stock(session, authorized_branch)
+        return list_inventory_stock(
+            session, authorized_branch, organization_id=_actor_org_from_request(session, actor_id)
+        )
 
     return _business_response(operation)
 
@@ -1403,7 +1536,12 @@ def get_inventory_kardex(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorized_branch = authorize_branch_scope(session, actor_id, "inventory.read", branch_id)
-        return list_inventory_kardex(session, item_id, authorized_branch)
+        return list_inventory_kardex(
+            session,
+            item_id,
+            authorized_branch,
+            organization_id=_actor_org_from_request(session, actor_id),
+        )
 
     return _business_response(operation)
 
@@ -1416,6 +1554,7 @@ def post_inventory_opening_balance(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     item_id = str(payload.get("item_id", ""))
+    branch_id = str(payload.get("branch_id", ""))
     quantity_base_units = int(payload.get("quantity_base_units", 0))
     reason = str(payload.get("reason", "Saldo inicial"))
     actor_id = _actor_from_request(actor_user_id, authorization)
@@ -1423,6 +1562,7 @@ def post_inventory_opening_balance(
         lambda: record_inventory_opening_balance(
             session,
             item_id,
+            branch_id,
             quantity_base_units,
             reason,
             actor_id,
@@ -1436,11 +1576,13 @@ def get_recipes(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> list[dict[str, Any]]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
+
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
 
         require_permission(session, actor_id, "production.manage")
-        return list_active_recipes(session)
+        return list_active_recipes(session, _actor_org_from_request(session, actor_id))
 
     return _business_response(operation)
 
@@ -1634,6 +1776,8 @@ def get_current_cash_shift_summary(
         authorized_branch_id = authorize_branch_scope(
             session, actor_id, "cash.shift.read", branch_id
         )
+        if not authorized_branch_id:
+            raise BusinessError("branch_required", "An explicit branch is required")
         return get_cash_shift_summary(
             session,
             register_code=register_id or "CAJA-01",
@@ -1773,10 +1917,16 @@ def list_cash_shifts_endpoint(
         if not 1 <= limit <= 100:
             raise BusinessError("cash_shift_list_invalid", "limit must be between 1 and 100")
         actor_id = _required_actor_from_request(actor_user_id, authorization)
-        org_id = _actor_org_from_request(session, actor_id)
         scoped_branch = authorize_branch_scope(session, actor_id, "cash.shift.read", branch_id)
+        organization_id = session.scalar(
+            sa.select(models.branches.c.organization_id).where(
+                models.branches.c.id == scoped_branch
+            )
+        )
+        if not organization_id:
+            raise BusinessError("cash_shift_list_invalid", "The branch does not exist")
         query = sa.select(models.cash_shifts).where(
-            models.cash_shifts.c.organization_id == org_id,
+            models.cash_shifts.c.organization_id == organization_id,
             models.cash_shifts.c.branch_id == scoped_branch,
         )
         if register_id:
@@ -1818,20 +1968,25 @@ def get_cash_shift_endpoint(
 ) -> dict[str, Any]:
     def operation() -> dict[str, Any]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
-        org_id = _actor_org_from_request(session, actor_id)
         shift = (
             session.execute(
-                sa.select(models.cash_shifts).where(
-                    models.cash_shifts.c.id == cash_shift_id,
-                    models.cash_shifts.c.organization_id == org_id,
-                )
+                sa.select(models.cash_shifts).where(models.cash_shifts.c.id == cash_shift_id)
             )
             .mappings()
             .first()
         )
         if not shift:
             raise NotFoundError("cash_shift_not_found", "Cash shift was not found")
-        authorize_branch_scope(session, actor_id, "cash.shift.read", str(shift["branch_id"]))
+        scoped_branch = authorize_branch_scope(
+            session, actor_id, "cash.shift.read", str(shift["branch_id"])
+        )
+        organization_id = session.scalar(
+            sa.select(models.branches.c.organization_id).where(
+                models.branches.c.id == scoped_branch
+            )
+        )
+        if not organization_id or str(shift["organization_id"]) != str(organization_id):
+            raise NotFoundError("cash_shift_not_found", "Cash shift was not found")
         closure = (
             session.execute(
                 sa.select(models.cash_shift_closures).where(
@@ -2268,7 +2423,9 @@ def get_recent_orders(
 ) -> list[dict[str, Any]]:
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
-        authorized_branch_id = authorize_branch_scope(session, actor_id, "orders.read", branch_id)
+        authorized_branch_id = _authorize_required_branch(
+            session, actor_id, "orders.read", branch_id
+        )
         return list_recent_orders(session, authorized_branch_id)
 
     return _business_response(operation)
@@ -2530,7 +2687,9 @@ def create_order(
         )
         if not idempotency_key and not is_test_actor_header:
             raise BusinessError("idempotency_key_required", "Idempotency-Key is required")
-        authorized_branch_id = authorize_branch_scope(session, actor_id, "orders.create", branch_id)
+        authorized_branch_id = _authorize_required_branch(
+            session, actor_id, "orders.create", branch_id
+        )
         return create_local_order(
             session,
             lines,
@@ -2585,63 +2744,58 @@ def recover_order_creation(
 
 @router.get("/public/branches")
 def public_branches_endpoint(
-    request: Request,
     session: SessionDep,
+    identifier: str,
     lat: float | None = None,
     lng: float | None = None,
-    restaurant: str | None = None,
-    organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    return _business_response(
-        lambda: list_public_branches(
-            session,
-            customer_lat=lat,
-            customer_lng=lng,
-            include_public_key=bool(
-                getattr(request.app.state, "public_order_intents_enabled", False)
-            ),
-            restaurant_slug=restaurant,
-            organization_id=organization_id,
+    from restaurant_os.public_storefront import resolve_storefront
+    from restaurant_os.operations import _haversine_distance_km
+
+    branches = list(resolve_storefront(session, identifier)["branches"])
+    for branch in branches:
+        branch["distance_km"] = None
+        if (
+            lat is not None
+            and lng is not None
+            and branch["latitude"] is not None
+            and branch["longitude"] is not None
+        ):
+            branch["distance_km"] = round(
+                _haversine_distance_km(
+                    lat, lng, float(branch["latitude"]), float(branch["longitude"])
+                ),
+                2,
+            )
+    if lat is not None and lng is not None:
+        branches.sort(
+            key=lambda branch: (branch["distance_km"] is None, branch["distance_km"] or 0)
         )
-    )
+    return branches
 
 
 @router.get("/catalog/mobile-theme")
-@router.get("/public/mobile-theme")
 def get_mobile_theme_endpoint(
     session: SessionDep,
-    restaurant: str | None = None,
-    organization_id: str | None = None,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
-    theme_val = "light"
-    try:
-        if restaurant:
-            val = session.execute(
-                sa.select(models.organizations.c.mobile_theme).where(
-                    sa.func.lower(models.organizations.c.slug) == restaurant.strip().lower()
-                )
-            ).scalar_one_or_none()
-            if val:
-                theme_val = str(val)
-        elif organization_id:
-            val = session.execute(
-                sa.select(models.organizations.c.mobile_theme).where(
-                    models.organizations.c.id == organization_id
-                )
-            ).scalar_one_or_none()
-            if val:
-                theme_val = str(val)
-        else:
-            val = session.execute(
-                sa.select(models.organizations.c.mobile_theme).where(
-                    models.organizations.c.id == ORGANIZATION_ID
-                )
-            ).scalar_one_or_none()
-            if val:
-                theme_val = str(val)
-    except Exception:
-        pass
-    return {"mobile_theme": theme_val}
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_permission(session, actor_id, "admin.manage")
+    theme = session.execute(
+        sa.select(models.organizations.c.mobile_theme).where(
+            models.organizations.c.id == _actor_org_from_request(session, actor_id)
+        )
+    ).scalar_one()
+    return {"mobile_theme": theme or "light"}
+
+
+@router.get("/public/mobile-theme")
+def get_public_mobile_theme_endpoint(session: SessionDep, identifier: str) -> dict[str, Any]:
+    from restaurant_os.public_storefront import resolve_storefront
+
+    storefront = resolve_storefront(session, identifier)
+    return {"mobile_theme": storefront["organization"]["mobile_theme"]}
 
 
 @router.put("/catalog/mobile-theme")
@@ -2656,51 +2810,25 @@ def set_mobile_theme_endpoint(
     theme = str(payload.get("mobile_theme") or payload.get("theme") or "light").lower().strip()
     if theme not in ("light", "dark"):
         theme = "light"
-    org_id = _actor_org_from_request(session, actor_id)
     session.execute(
         models.organizations.update()
-        .where(models.organizations.c.id == org_id)
+        .where(models.organizations.c.id == _actor_org_from_request(session, actor_id))
         .values(mobile_theme=theme, updated_at=datetime.now(timezone.utc))
     )
     session.commit()
     return {"status": "ok", "mobile_theme": theme}
 
 
-from restaurant_os.whatsapp_menu import get_public_menu_for_branch, submit_whatsapp_order
+from restaurant_os.whatsapp_menu import (
+    WhatsAppOrderRequest,
+    get_public_menu_for_branch,
+    whatsapp_draft_for_intent,
+)
 
 
 @router.get("/public/catalog")
-def public_catalog_endpoint(
-    session: SessionDep,
-    branch_id: str | None = None,
-    restaurant: str | None = None,
-    organization_id: str | None = None,
-) -> dict[str, Any]:
-    return _business_response(
-        lambda: get_public_catalog(
-            session,
-            branch_id=branch_id,
-            restaurant_slug=restaurant,
-            organization_id=organization_id,
-        )
-    )
-
-
-@router.get("/public/restaurants/{slug}/catalog")
-@router.get("/public/{slug}/catalog")
-def public_restaurant_catalog_endpoint(slug: str, session: SessionDep) -> dict[str, Any]:
-    return _business_response(
-        lambda: get_public_catalog(session, restaurant_slug=slug)
-    )
-
-
-@router.get("/public/restaurants/{slug}")
-def public_restaurant_info_endpoint(slug: str, session: SessionDep) -> dict[str, Any]:
-    from restaurant_os.operations import get_public_restaurant_info
-
-    return _business_response(
-        lambda: get_public_restaurant_info(session, slug=slug)
-    )
+def public_catalog_endpoint(session: SessionDep, public_key: str) -> dict[str, Any]:
+    return public_catalog_by_key_endpoint(public_key, session)
 
 
 @router.get("/public/menu")
@@ -2716,9 +2844,32 @@ def public_menu_endpoint(
 @router.post("/v1/public/whatsapp-orders")
 def public_whatsapp_orders_endpoint(
     payload: dict[str, Any],
+    request: Request,
+    response: Response,
     session: SessionDep,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, Any]:
-    return submit_whatsapp_order(session, payload)
+    try:
+        parsed = WhatsAppOrderRequest.model_validate(payload)
+        canonical = PublicOrderIntentPayload.model_validate(parsed.canonical_payload())
+    except ValidationError as exc:
+        raise _public_order_error("public_order_schema_invalid", 422) from exc
+
+    def operation() -> dict[str, Any]:
+        key = _resolve_active_public_order_key(session, parsed.public_key)
+        if not key or (parsed.branch_id and parsed.branch_id != key["branch_id"]):
+            raise _public_order_error("public_branch_not_found", 404)
+        result = _create_public_order_intent_with_runtime(
+            session,
+            parsed.public_key,
+            canonical.model_dump(),
+            idempotency_key or "",
+            response,
+            request,
+        )
+        return whatsapp_draft_for_intent(session, parsed.public_key, result)
+
+    return _business_response(operation)
 
 
 from restaurant_os.superadmin import (
@@ -2727,6 +2878,7 @@ from restaurant_os.superadmin import (
     list_tenants,
     create_tenant_by_admin,
     update_tenant_status,
+    grant_tenant_administrative_activation,
     update_tenant_plan,
     update_tenant_details,
     impersonate_tenant,
@@ -2791,7 +2943,28 @@ def patch_superadmin_tenant_status_endpoint(
     require_superadmin(session, actor_id)
     status = str(payload.get("status", "active"))
     reason = payload.get("reason")
-    return update_tenant_status(session, tenant_id, status=status, reason=reason)
+    return update_tenant_status(
+        session, tenant_id, status=status, reason=reason, actor_superadmin_id=actor_id
+    )
+
+
+@router.post("/superadmin/tenants/{tenant_id}/administrative-activation")
+def post_superadmin_tenant_administrative_activation(
+    tenant_id: str,
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return grant_tenant_administrative_activation(
+        session,
+        tenant_id,
+        str(payload.get("plan") or ""),
+        str(payload.get("administrative_concession_reason") or ""),
+        actor_id,
+    )
 
 
 @router.patch("/superadmin/tenants/{tenant_id}/plan")
@@ -2807,7 +2980,13 @@ def patch_superadmin_tenant_plan_endpoint(
     require_superadmin(session, actor_id)
     plan = str(payload.get("plan", "starter_349"))
     monthly_fee = payload.get("monthly_fee_cents")
-    return update_tenant_plan(session, tenant_id, plan=plan, monthly_fee_cents=monthly_fee)
+    return update_tenant_plan(
+        session,
+        tenant_id,
+        plan=plan,
+        monthly_fee_cents=monthly_fee,
+        actor_superadmin_id=actor_id,
+    )
 
 
 @router.put("/superadmin/tenants/{tenant_id}")
@@ -2821,7 +3000,7 @@ def put_superadmin_tenant_update_endpoint(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_superadmin(session, actor_id)
-    return update_tenant_details(session, tenant_id, payload)
+    return update_tenant_details(session, tenant_id, payload, actor_superadmin_id=actor_id)
 
 
 @router.post("/superadmin/tenants/{tenant_id}/impersonate")
@@ -2988,57 +3167,32 @@ def _resolve_active_public_order_key(session: Session, public_key: str) -> dict[
         .mappings()
         .first()
     )
-    if row:
-        return dict(row)
-
-    # Fallback: if public_key matches a branch code or branch ID, find or provision an active key
-    branch = (
+    if not row:
+        return None
+    org = (
         session.execute(
-            sa.select(models.branches).where(
-                sa.or_(
-                    models.branches.c.id == public_key,
-                    sa.func.upper(models.branches.c.code) == public_key.upper(),
-                ),
-                models.branches.c.status == "active",
+            sa.select(models.organizations).where(
+                models.organizations.c.id == row["organization_id"],
             )
         )
         .mappings()
-        .first()
+        .one_or_none()
     )
-    if branch:
-        existing = (
-            session.execute(
-                sa.select(models.public_order_keys).where(
-                    models.public_order_keys.c.branch_id == branch["id"],
-                    models.public_order_keys.c.status == "active",
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if existing:
-            return dict(existing)
-        gen_pk = f"pk_{str(branch['id']).replace('-', '')[:24]}"
-        now = datetime.now(timezone.utc)
-        session.execute(
-            models.public_order_keys.insert().values(
-                public_key=gen_pk,
-                organization_id=branch["organization_id"],
-                branch_id=branch["id"],
-                status="active",
-                created_at=now,
-            )
-        )
-        session.flush()
-        return {
-            "public_key": gen_pk,
-            "organization_id": branch["organization_id"],
-            "branch_id": branch["id"],
-            "status": "active",
-            "created_at": now,
-        }
-
-    return None
+    if (
+        not org
+        or org["status"] != "active"
+        or org["subscription_status"] not in {"active", "trialing"}
+    ):
+        return None
+    if org["subscription_status"] == "trialing":
+        trial_end = org["trial_ends_at"]
+        if trial_end is None:
+            return None
+        if trial_end.tzinfo is None:
+            trial_end = trial_end.replace(tzinfo=timezone.utc)
+        if trial_end <= datetime.now(timezone.utc):
+            return None
+    return dict(row)
 
 
 @router.get("/public/branches/{public_key}/catalog")
@@ -3219,8 +3373,8 @@ def list_admin_feedbacks_endpoint(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    require_permission(session, actor_id, "orders.read")
-    org_id = _actor_org_from_request(session, actor_id)
+    authorized_branch = authorize_branch_scope(session, actor_id, "orders.read", branch_id)
+    organization_id = _actor_org_from_request(session, actor_id)
 
     query = (
         sa.select(
@@ -3240,10 +3394,10 @@ def list_admin_feedbacks_endpoint(
                 models.customer_feedbacks.c.branch_id == models.branches.c.id,
             )
         )
-        .where(models.customer_feedbacks.c.organization_id == org_id)
+        .where(models.customer_feedbacks.c.organization_id == organization_id)
     )
-    if branch_id:
-        query = query.where(models.customer_feedbacks.c.branch_id == branch_id)
+    if authorized_branch:
+        query = query.where(models.customer_feedbacks.c.branch_id == authorized_branch)
 
     rows = session.execute(
         query.order_by(models.customer_feedbacks.c.created_at.desc()).limit(limit)
@@ -3698,14 +3852,14 @@ def offline_cash_grant(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    org_id = _actor_org_from_request(session, actor_id)
     if set(payload) != {"branch_id", "source_device_id"}:
         raise HTTPException(status_code=422, detail={"code": "offline_grant_payload_invalid"})
+    organization_id = _actor_org_from_request(session, actor_id)
     return _business_response(
         lambda: issue_offline_cash_grant(
             session,
             actor_user_id=actor_id,
-            organization_id=org_id,
+            organization_id=organization_id,
             branch_id=str(payload["branch_id"]),
             source_device_id=str(payload["source_device_id"]),
         )
@@ -3883,7 +4037,11 @@ def put_catalog_product(
     category_name = payload.get("category_name")
     station = payload.get("station")
     status = payload.get("status")
-    delivery_price_cents = int(payload["delivery_price_cents"]) if payload.get("delivery_price_cents") is not None else None
+    delivery_price_cents = (
+        int(payload["delivery_price_cents"])
+        if payload.get("delivery_price_cents") is not None
+        else None
+    )
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: update_product(
@@ -3917,12 +4075,18 @@ def _database_response(operation: Callable[[], ResponseT]) -> ResponseT:
     try:
         return operation()
     except SQLAlchemyError as exc:
-        import logging
-        import traceback
+        from uuid import uuid4
 
-        logger = logging.getLogger(__name__)
-        logger.error(f"Database error: {traceback.format_exc()}")
-        raise HTTPException(status_code=503, detail=f"database_unavailable: {repr(exc)}") from exc
+        correlation_id = uuid4().hex
+        logger.error(
+            "database_unavailable correlation_id=%s error_type=%s",
+            correlation_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "database_unavailable", "correlation_id": correlation_id},
+        ) from exc
 
 
 def _serialize_api_value(value: Any) -> Any:
@@ -3973,6 +4137,14 @@ def _decode_cash_shift_cursor(cursor: str) -> tuple[datetime, str]:
     return timestamp.astimezone(timezone.utc), cash_shift_id
 
 
+def _lean_erp_out_of_scope(actor_user_id: str | None, authorization: str | None) -> NoReturn:
+    _required_actor_from_request(actor_user_id, authorization)
+    raise BusinessError(
+        "feature_out_of_saas_scope",
+        "This historical ERP capability is outside the POS-SaaS product scope",
+    )
+
+
 def _business_response(operation: Callable[[], ResponseT]) -> ResponseT:
     try:
         return _database_response(operation)
@@ -3991,8 +4163,6 @@ def _business_response(operation: Callable[[], ResponseT]) -> ResponseT:
             "public_order_unavailable": 503,
             "public_order_rate_limited": 429,
             "public_order_schema_invalid": 422,
-            "restaurant_not_found": 404,
-            "restaurant_context_required": 400,
         }.get(exc.code, 409)
         raise HTTPException(
             status_code=status_code,
@@ -4063,7 +4233,7 @@ def get_role_permissions(
     def operation() -> list[str]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "admin.manage")
-        return list_role_permissions(session, role_id)
+        return list_role_permissions(session, role_id, _actor_org_from_request(session, actor_id))
 
     return _business_response(operation)
 
@@ -4093,7 +4263,9 @@ def get_warehouses(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorized_branch = authorize_branch_scope(session, actor_id, "catalog.manage", branch_id)
-        return list_warehouses(session, authorized_branch)
+        return list_warehouses(
+            session, authorized_branch, organization_id=_actor_org_from_request(session, actor_id)
+        )
 
     return _business_response(operation)
 
@@ -4149,7 +4321,9 @@ def get_inventory_units(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorize_branch_scope(session, actor_id, "inventory.read", branch_id)
-        return list_inventory_units(session)
+        return list_inventory_units(
+            session, organization_id=_actor_org_from_request(session, actor_id)
+        )
 
     return _business_response(operation)
 
@@ -4200,7 +4374,9 @@ def get_inventory_items(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorized_branch = authorize_branch_scope(session, actor_id, "inventory.read", branch_id)
-        return list_inventory_items(session, authorized_branch)
+        return list_inventory_items(
+            session, authorized_branch, organization_id=_actor_org_from_request(session, actor_id)
+        )
 
     return _business_response(operation)
 
@@ -4276,10 +4452,9 @@ def get_categories(
             sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)
         ).scalar()
         org_id = str(user_org) if user_org else None
-        if branch_id:
-            authorized_branch = authorize_branch_scope(session, actor_id, "pos.operate", branch_id)
-            return list_categories(session, authorized_branch, organization_id=org_id)
-        return list_categories(session, organization_id=org_id)
+        permission = "pos.operate" if branch_id else "catalog.manage"
+        authorized_branch = authorize_branch_scope(session, actor_id, permission, branch_id)
+        return list_categories(session, authorized_branch, organization_id=org_id)
 
     return _business_response(operation)
 
@@ -4408,6 +4583,7 @@ def get_recipe(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     recipe = _business_response(
         lambda: get_effective_product_recipe(session, product_id, branch_id, actor_id)
@@ -4422,6 +4598,7 @@ def get_recipes_workspace_route(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: get_recipes_workspace(session, actor_id, branch_id))
 
@@ -4441,138 +4618,15 @@ def post_recipe_ai_parse(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
+
     def operation() -> dict[str, Any]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         require_permission(session, actor_id, "catalog.manage")
-        org_id = _actor_org_from_request(session, actor_id)
-
-        # 1. Fetch available supplies with base units and costs
-        items_query = (
-            sa.select(
-                models.inventory_items.c.id,
-                models.inventory_items.c.name,
-                models.inventory_items.c.sku,
-                models.inventory_units.c.code.label("unit"),
-                sa.func.coalesce(models.purchase_presentations.c.cost_per_base_unit, 0).label(
-                    "cost"
-                ),
-            )
-            .select_from(
-                models.inventory_items.join(
-                    models.inventory_units,
-                    models.inventory_items.c.base_unit_id == models.inventory_units.c.id,
-                ).outerjoin(
-                    models.purchase_presentations,
-                    sa.and_(
-                        models.purchase_presentations.c.item_id == models.inventory_items.c.id,
-                        models.purchase_presentations.c.is_preferred.is_(True),
-                    ),
-                )
-            )
-            .where(
-                models.inventory_items.c.organization_id == org_id,
-                models.inventory_items.c.status == "active",
-            )
+        raise BusinessError(
+            "feature_out_of_saas_scope",
+            "Recipe costing is outside the POS-SaaS product scope",
         )
-        catalog_supplies = [dict(row) for row in session.execute(items_query).mappings().all()]
-
-        # 2. If product_id given, lookup product sale price if not explicitly provided
-        sale_price = payload.sale_price or Decimal("0")
-        product_name = ""
-        if payload.product_id:
-            prod_row = (
-                session.execute(
-                    sa.select(
-                        models.products.c.name,
-                        models.price_versions.c.price_cents,
-                    )
-                    .select_from(
-                        models.products.outerjoin(
-                            models.price_versions,
-                            sa.and_(
-                                models.price_versions.c.product_id == models.products.c.id,
-                                models.price_versions.c.valid_to.is_(None),
-                            ),
-                        )
-                    )
-                    .where(
-                        models.products.c.id == payload.product_id,
-                        models.products.c.organization_id == org_id,
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if prod_row:
-                product_name = prod_row["name"]
-                if sale_price == 0 and prod_row["price_cents"]:
-                    sale_price = Decimal(prod_row["price_cents"]) / Decimal("100")
-
-        # 3. Parse free-form recipe text
-        parsed = parse_recipe_text(payload.raw_text)
-
-        # 4. Semantic match and unit normalization for each ingredient
-        matched_ingredients = []
-        for ing in parsed["ingredients"]:
-            match = match_ingredient_to_catalog(ing["raw_name"], catalog_supplies)
-            if match:
-                target_base_unit = match["base_unit"]
-                normalized_qty = normalize_culinary_quantity(
-                    quantity=ing["quantity"],
-                    unit=ing["unit"],
-                    target_base_unit=target_base_unit,
-                    density_hint=ing["raw_name"],
-                )
-                unit_cost = match["unit_cost"]
-                matched_ingredients.append(
-                    {
-                        "raw_name": ing["raw_name"],
-                        "quantity": ing["quantity"],
-                        "unit": ing["unit"],
-                        "matched_item_id": match["matched_item_id"],
-                        "matched_item_name": match["matched_item_name"],
-                        "base_unit": target_base_unit,
-                        "normalized_quantity": normalized_qty,
-                        "unit_cost": unit_cost,
-                        "confidence_score": match["confidence_score"],
-                        "status": "matched",
-                    }
-                )
-            else:
-                matched_ingredients.append(
-                    {
-                        "raw_name": ing["raw_name"],
-                        "quantity": ing["quantity"],
-                        "unit": ing["unit"],
-                        "matched_item_id": None,
-                        "matched_item_name": None,
-                        "base_unit": "KILO"
-                        if "g" in ing["unit"] or "kg" in ing["unit"]
-                        else (
-                            "LITRO"
-                            if "l" in ing["unit"] or "taza" in ing["unit"] or "cda" in ing["unit"]
-                            else "PIEZA"
-                        ),
-                        "normalized_quantity": ing["quantity"],
-                        "unit_cost": Decimal("0.00"),
-                        "confidence_score": 0.0,
-                        "status": "unmatched",
-                    }
-                )
-
-        # 5. Calculate theoretical cost and margins
-        cost_analysis = calculate_theoretical_recipe_cost(
-            ingredients=matched_ingredients,
-            yield_portions=payload.yield_portions or Decimal("1"),
-            sale_price=sale_price,
-        )
-
-        return {
-            "title": product_name or parsed["title"],
-            "product_id": payload.product_id,
-            "steps": parsed["steps"],
-            **cost_analysis,
-        }
 
     return _business_response(operation)
 
@@ -4586,6 +4640,7 @@ def put_recipe(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     if not idempotency_key:
         raise HTTPException(
@@ -4622,7 +4677,12 @@ def get_product_modifiers(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorized_branch = authorize_branch_scope(session, actor_id, "pos.operate", branch_id)
-        return list_product_modifiers(session, product_id, authorized_branch)
+        return list_product_modifiers(
+            session,
+            product_id,
+            authorized_branch,
+            organization_id=_actor_org_from_request(session, actor_id),
+        )
 
     return _business_response(operation)
 
@@ -4650,7 +4710,12 @@ def get_modifier_catalog_groups(
 
     def operation() -> list[dict[str, Any]]:
         require_permission(session, actor_id, "catalog.manage")
-        return list_product_modifiers(session, product_id, catalog_view=True)
+        return list_product_modifiers(
+            session,
+            product_id,
+            catalog_view=True,
+            organization_id=_actor_org_from_request(session, actor_id),
+        )
 
     return _business_response(operation)
 
@@ -4816,19 +4881,20 @@ def post_seed_starter_template(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    require_permission(session, actor_id, "catalog.manage")
-    org_id = _actor_org_from_request(session, actor_id)
     template_type = str(payload.get("template_type") or "general").strip()
     branch_id = payload.get("branch_id")
     from restaurant_os.saas_onboarding import seed_starter_catalog_for_org
-    return _business_response(
-        lambda: seed_starter_catalog_for_org(
+
+    def operation() -> dict[str, Any]:
+        scoped_branch = authorize_branch_scope(session, actor_id, "catalog.manage", branch_id)
+        return seed_starter_catalog_for_org(
             session=session,
-            organization_id=org_id,
-            branch_id=branch_id,
+            organization_id=_actor_org_from_request(session, actor_id),
+            branch_id=scoped_branch,
             business_type=template_type,
         )
-    )
+
+    return _business_response(operation)
 
 
 @router.post("/catalog/parse-menu-file")
@@ -4879,22 +4945,24 @@ def post_import_custom_catalog(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    require_permission(session, actor_id, "catalog.manage")
-    org_id = _actor_org_from_request(session, actor_id)
     categories = payload.get("categories") or []
     branch_id = payload.get("branch_id")
     mobile_theme = payload.get("mobile_theme")
     from restaurant_os.saas_onboarding import import_custom_catalog_for_org
 
-    res = import_custom_catalog_for_org(
-        session=session,
-        organization_id=org_id,
-        branch_id=branch_id,
-        catalog_data=categories,
-        mobile_theme=mobile_theme,
-    )
-    session.commit()
-    return res
+    def operation() -> dict[str, Any]:
+        scoped_branch = authorize_branch_scope(session, actor_id, "catalog.manage", branch_id)
+        result = import_custom_catalog_for_org(
+            session=session,
+            organization_id=_actor_org_from_request(session, actor_id),
+            branch_id=scoped_branch,
+            catalog_data=categories,
+            mobile_theme=mobile_theme,
+        )
+        session.commit()
+        return result
+
+    return _business_response(operation)
 
 
 @router.get("/catalog/ingredient-variations/{variation_id}")
@@ -5157,6 +5225,7 @@ def post_production_recipe(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: create_production_recipe(
@@ -5178,6 +5247,8 @@ def get_production_batches(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> list[dict[str, Any]]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
+
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorized_branch = authorize_branch_scope(
@@ -5195,6 +5266,7 @@ def post_production_batch(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: create_production_batch(session, payload, actor_id))
 
@@ -5207,6 +5279,7 @@ def post_confirm_production_batch(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: confirm_production_batch(session, batch_id, idempotency_key or "", actor_id)
@@ -5228,8 +5301,21 @@ def get_customers(
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorized_branch = authorize_branch_scope(session, actor_id, "orders.read", branch_id)
         if limit is not None or q is not None:
-            return list_customers_page(session, authorized_branch, q, phone, limit or 50, offset)
-        return list_customers(session, phone, authorized_branch)
+            return list_customers_page(
+                session,
+                authorized_branch,
+                q,
+                phone,
+                limit or 50,
+                offset,
+                organization_id=_actor_org_from_request(session, actor_id),
+            )
+        return list_customers(
+            session,
+            phone,
+            authorized_branch,
+            organization_id=_actor_org_from_request(session, actor_id),
+        )
 
     return _business_response(operation)
 
@@ -5344,7 +5430,7 @@ def get_suppliers(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     authorize_branch_scope(session, actor_id, "purchases.read", branch_id)
-    return _database_response(lambda: list_suppliers(session))
+    return _database_response(lambda: list_suppliers(session, actor_id))
 
 
 @router.post("/suppliers")
@@ -5418,7 +5504,7 @@ def get_purchase_presentations(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorize_branch_scope(session, actor_id, "purchases.read", branch_id)
-        return list_purchase_presentations(session)
+        return list_purchase_presentations(session, actor_id)
 
     return _business_response(operation)
 
@@ -5473,7 +5559,7 @@ def get_purchases(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     authorized_branch = authorize_branch_scope(session, actor_id, "purchases.read", branch_id)
-    return _database_response(lambda: list_purchase_documents(session, authorized_branch))
+    return _database_response(lambda: list_purchase_documents(session, authorized_branch, actor_id))
 
 
 @router.post("/purchases")
@@ -5693,7 +5779,7 @@ def get_waste_reasons(
     def operation() -> list[dict[str, Any]]:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         authorize_branch_scope(session, actor_id, "inventory.read", branch_id)
-        return list_waste_reasons(session)
+        return list_waste_reasons(session, actor_user_id=actor_id, branch_id=branch_id)
 
     return _business_response(operation)
 
@@ -5730,7 +5816,11 @@ def get_waste_records_endpoint(
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     authorized_branch = authorize_branch_scope(session, actor_id, "inventory.read", branch_id)
-    return _database_response(lambda: list_waste_records(session, authorized_branch))
+    return _database_response(
+        lambda: list_waste_records(
+            session, authorized_branch, _actor_org_from_request(session, actor_id)
+        )
+    )
 
 
 @router.post("/inventory/wastes")
@@ -5783,6 +5873,7 @@ def get_inventory_transfers_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> list[dict[str, Any]]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     authorized_branch = authorize_branch_scope(session, actor_id, "inventory.read", branch_id)
     return _database_response(lambda: list_inventory_transfers(session, authorized_branch))
@@ -5795,6 +5886,7 @@ def post_inventory_transfer_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: create_inventory_transfer(session, payload, actor_id))
 
@@ -5807,6 +5899,7 @@ def send_inventory_transfer_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: send_inventory_transfer(session, transfer_id, idempotency_key or "", actor_id)
@@ -5822,6 +5915,7 @@ def receive_inventory_transfer_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: receive_inventory_transfer(
@@ -5838,6 +5932,7 @@ def cancel_inventory_transfer_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: cancel_inventory_transfer(
@@ -5853,6 +5948,7 @@ def get_physical_counts_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> list[dict[str, Any]]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     authorized_branch = authorize_branch_scope(session, actor_id, "inventory.count", branch_id)
     return _database_response(lambda: list_physical_count_sessions(session, authorized_branch))
@@ -5865,6 +5961,7 @@ def post_physical_count_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: create_physical_count_session(session, payload, actor_id))
 
@@ -5878,6 +5975,7 @@ def put_physical_count_line_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: capture_physical_count_line(
@@ -5898,6 +5996,7 @@ def submit_physical_count_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: submit_physical_count_session(session, count_id, actor_id))
 
@@ -5910,6 +6009,7 @@ def approve_physical_count_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: approve_physical_count_session(session, count_id, idempotency_key or "", actor_id)
@@ -5923,6 +6023,7 @@ def close_physical_count_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: close_physical_count_session(session, count_id, actor_id))
 
@@ -5935,6 +6036,7 @@ def cancel_physical_count_endpoint(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
+    return _business_response(lambda: _lean_erp_out_of_scope(actor_user_id, authorization))
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: cancel_physical_count_session(
@@ -6159,6 +6261,70 @@ def post_complete_legacy_import(
 from restaurant_os.integrations.kill_switch import get_channels_status, toggle_kill_switch
 
 
+def _authenticate_delivery_webhook(
+    session: Session,
+    provider: str,
+    payload: dict[str, Any],
+    body_bytes: bytes,
+    signature: str | None,
+) -> tuple[Any, tuple[str, str | None]]:
+    """Resolve an exact store mapping before accepting a marketplace event."""
+    try:
+        target = channel_service.resolve_webhook_target(session, provider, payload)
+    except ValueError:
+        # Do not disclose whether a store is mapped to an unauthenticated caller.
+        raise HTTPException(status_code=401, detail="Webhook no autorizado.") from None
+
+    adapter = channel_service.get_adapter(provider)
+    if not adapter.verify_webhook_signature(body_bytes, signature, target.webhook_secret):
+        event_type, event_id = adapter.parse_webhook_event(payload)
+        channel_service.log_webhook(
+            session,
+            target.organization_id,
+            provider,
+            event_type,
+            event_id,
+            signature,
+            payload,
+            "rejected",
+            "Firma HMAC inválida o ausente.",
+        )
+        raise HTTPException(status_code=401, detail="Firma de webhook inválida.")
+    return target, adapter.parse_webhook_event(payload)
+
+
+def _redacted_channel_config_view(config: dict[str, Any] | None) -> dict[str, Any]:
+    """Return provider configuration metadata without credential material."""
+    values = dict(config or {})
+    has_client_secret = bool(values.pop("client_secret", None))
+    has_webhook_secret = bool(values.pop("webhook_secret", None))
+    values["has_client_secret"] = has_client_secret
+    values["has_webhook_secret"] = has_webhook_secret
+    return values
+
+
+def _pending_channel_config_view(config: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a saved partner draft without disclosing credentials or activation."""
+    values = _redacted_channel_config_view(config)
+    values["is_enabled"] = False
+    values["integration_status"] = "PENDING_VALIDATION"
+    return values
+
+
+def _save_pending_channel_config(
+    session: Session, organization_id: str, provider: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Persist a tenant draft while preventing a save from enabling an unvalidated partner."""
+    existing = channel_service.get_config(session, organization_id, provider) or {}
+    values = dict(payload)
+    values["is_enabled"] = False
+    for secret_key in ("client_secret", "webhook_secret"):
+        if not str(values.get(secret_key) or "").strip():
+            values[secret_key] = existing.get(secret_key)
+    saved = channel_service.save_config(session, organization_id, provider, values)
+    return _pending_channel_config_view(saved)
+
+
 @router.post("/integrations/kill-switch")
 @router.post("/v1/integrations/kill-switch")
 def post_kill_switch(
@@ -6188,107 +6354,41 @@ def get_integrations_channels_status(
     return _business_response(operation)
 
 
-
-def _resolve_webhook_organization_id(
-    session: Session,
-    restaurant: str | None = None,
-    organization_id: str | None = None,
-    store_id: str | None = None,
-    provider: str | None = None,
-) -> str:
-    if organization_id:
-        return organization_id
-    if restaurant:
-        row = session.execute(
-            sa.select(models.organizations.c.id).where(
-                sa.or_(
-                    models.organizations.c.slug == restaurant,
-                    models.organizations.c.id == restaurant,
-                )
-            )
-        ).scalar_one_or_none()
-        if row:
-            return str(row)
-    if store_id and provider:
-        mapping = session.execute(
-            sa.select(models.channel_store_mappings.c.organization_id).where(
-                models.channel_store_mappings.c.provider == provider,
-                models.channel_store_mappings.c.external_store_id == store_id,
-                models.channel_store_mappings.c.is_active.is_(True),
-            )
-        ).scalar_one_or_none()
-        if mapping:
-            return str(mapping)
-    return ORGANIZATION_ID
-
-
 @router.post("/integrations/uber-eats/webhook")
 @router.post("/v1/integrations/uber-eats/webhook")
 async def post_uber_eats_webhook(
     request: Request,
     session: SessionDep,
-    restaurant: str | None = None,
-    organization_id: str | None = None,
 ) -> dict[str, Any]:
     body_bytes = await request.body()
     signature = request.headers.get("x-uber-signature") or request.headers.get("X-Uber-Signature")
 
-    raw_payload: dict[str, Any] = {}
-    if body_bytes:
-        try:
-            raw_payload = json.loads(body_bytes.decode("utf-8"))
-        except Exception:
-            pass
+    try:
+        payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
 
-    store_id = None
-    if isinstance(raw_payload, dict):
-        store_obj = raw_payload.get("store")
-        if isinstance(store_obj, dict):
-            store_id = store_obj.get("id") or store_obj.get("store_id")
-
-    target_org_id = _resolve_webhook_organization_id(
-        session,
-        restaurant=restaurant,
-        organization_id=organization_id,
-        store_id=str(store_id) if store_id else None,
-        provider="UBER_EATS",
+    target, (event_type, event_id) = _authenticate_delivery_webhook(
+        session, "UBER_EATS", payload, body_bytes, signature
     )
-
-    config = channel_service.get_config(session, target_org_id, "UBER_EATS")
-    webhook_secret = config.get("webhook_secret") if config else None
-
-    # Validate HMAC signature if secret is configured
-    if webhook_secret:
-        is_valid = channel_service.uber_adapter.verify_webhook_signature(
-            body_bytes, signature, webhook_secret
+    try:
+        inbox = channel_service.claim_webhook(
+            session, target.organization_id, "UBER_EATS", event_id, payload
         )
-        if not is_valid:
-            channel_service.log_webhook(
-                session,
-                target_org_id,
-                "UBER_EATS",
-                "unauthorized_webhook",
-                None,
-                signature,
-                {"error": "Firma HMAC inválida", "headers": dict(request.headers)},
-                "rejected",
-                "Firma HMAC inválida o ausente.",
-            )
-            raise HTTPException(status_code=401, detail="Firma de webhook inválida.")
-
-    payload = raw_payload
-    if not payload and body_bytes:
-        try:
-            payload = json.loads(body_bytes.decode("utf-8"))
-        except Exception:
-            raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
-
-    event_type, event_id = channel_service.uber_adapter.parse_webhook_event(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": str(exc)}) from exc
+    if inbox.get("replay"):
+        return {"status": "ok", "result": {"status": "already_processed"}}
+    if not inbox.get("claimed"):
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "delivery_webhook_in_progress", "message": "Provider retry required"},
+        )
 
     # Log webhook
     channel_service.log_webhook(
         session,
-        target_org_id,
+        target.organization_id,
         "UBER_EATS",
         event_type,
         event_id,
@@ -6305,14 +6405,31 @@ async def post_uber_eats_webhook(
     ):
         try:
             result = channel_service.process_webhook_order(
-                session, target_org_id, "UBER_EATS", payload
+                session, target.organization_id, "UBER_EATS", payload
+            )
+            channel_service.log_webhook(
+                session,
+                target.organization_id,
+                "UBER_EATS",
+                event_type,
+                event_id,
+                signature,
+                payload,
+                "processed",
+            )
+            channel_service.finish_webhook(
+                session, str(inbox["id"]), str(inbox["lease_token"]), "processed"
             )
             return {"status": "ok", "result": result}
         except Exception as e:
             logger.exception("Error procesando orden de Uber Eats")
+            session.rollback()
+            channel_service.finish_webhook(
+                session, str(inbox["id"]), str(inbox["lease_token"]), "error", str(e)
+            )
             channel_service.log_webhook(
                 session,
-                target_org_id,
+                target.organization_id,
                 "UBER_EATS",
                 event_type,
                 event_id,
@@ -6321,9 +6438,28 @@ async def post_uber_eats_webhook(
                 "error",
                 str(e),
             )
-            # Return 200 to acknowledge webhook receipt even on domain processing issues
-            return {"status": "error_logged", "detail": str(e)}
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "delivery_webhook_processing_failed",
+                    "message": "Webhook persisted for retry",
+                },
+            ) from e
 
+    channel_service.finish_webhook(
+        session, str(inbox["id"]), str(inbox["lease_token"]), "processed"
+    )
+    channel_service.log_webhook(
+        session,
+        target.organization_id,
+        "UBER_EATS",
+        event_type,
+        event_id,
+        signature,
+        payload,
+        "processed",
+        "event_ignored_no_order_payload",
+    )
     return {"status": "acknowledged", "event_type": event_type}
 
 
@@ -6337,15 +6473,16 @@ def get_uber_eats_config(
     require_permission(session, actor_id, "admin.manage")
     org_id = _actor_org_from_request(session, actor_id)
     config = channel_service.get_config(session, org_id, "UBER_EATS")
-    return config or {
-        "is_enabled": False,
-        "environment": "sandbox",
-        "client_id": "",
-        "client_secret": "",
-        "webhook_secret": "",
-        "auto_accept": True,
-        "default_prep_time_minutes": 20,
-    }
+    return _redacted_channel_config_view(
+        config
+        or {
+            "is_enabled": False,
+            "environment": "sandbox",
+            "client_id": "",
+            "auto_accept": True,
+            "default_prep_time_minutes": 20,
+        }
+    )
 
 
 @router.put("/integrations/uber-eats/config")
@@ -6358,7 +6495,13 @@ def put_uber_eats_config(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
     org_id = _actor_org_from_request(session, actor_id)
-    return channel_service.save_config(session, org_id, "UBER_EATS", payload)
+    existing = channel_service.get_config(session, org_id, "UBER_EATS") or {}
+    values = dict(payload)
+    for secret_key in ("client_secret", "webhook_secret"):
+        if not str(values.get(secret_key) or "").strip() and existing.get(secret_key):
+            values[secret_key] = existing[secret_key]
+    saved = channel_service.save_config(session, org_id, "UBER_EATS", values)
+    return _redacted_channel_config_view(saved)
 
 
 @router.get("/integrations/uber-eats/stores")
@@ -6431,7 +6574,10 @@ def post_uber_eats_test_order(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    org_id = _actor_org_from_request(session, actor_id)
+    organization_id = _actor_org_from_request(session, actor_id)
+
+    if payload.get("branch_id"):
+        authorize_branch_scope(session, actor_id, "admin.manage", str(payload["branch_id"]))
 
     customer_name = payload.get("customer_name") or "Carlos M. (Prueba)"
     items_count = int(payload.get("items_count") or 1)
@@ -6460,13 +6606,23 @@ def post_uber_eats_test_order(
         "currency": "MXN",
     }
 
+    try:
+        target = channel_service.resolve_webhook_target(session, "UBER_EATS", simulated_order)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if target.organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="simulation_store_scope_invalid")
+    if payload.get("branch_id") and str(payload["branch_id"]) != target.branch_id:
+        raise HTTPException(status_code=403, detail="simulation_store_scope_invalid")
+    authorize_branch_scope(session, actor_id, "admin.manage", target.branch_id)
+
     result = channel_service.process_webhook_order(
-        session, org_id, "UBER_EATS", simulated_order
+        session, organization_id, "UBER_EATS", simulated_order
     )
 
     channel_service.log_webhook(
         session,
-        org_id,
+        organization_id,
         "UBER_EATS",
         "orders.notification",
         simulated_order["id"],
@@ -6488,8 +6644,6 @@ def post_uber_eats_test_order(
 async def post_didi_food_webhook(
     request: Request,
     session: SessionDep,
-    restaurant: str | None = None,
-    organization_id: str | None = None,
 ) -> dict[str, Any]:
     body_bytes = await request.body()
     signature = (
@@ -6499,64 +6653,32 @@ async def post_didi_food_webhook(
         or request.headers.get("Sign")
     )
 
-    raw_payload: dict[str, Any] = {}
-    if body_bytes:
-        try:
-            raw_payload = json.loads(body_bytes.decode("utf-8"))
-        except Exception:
-            pass
+    try:
+        payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
 
-    store_id = None
-    if isinstance(raw_payload, dict):
-        store_id = (
-            raw_payload.get("shop_id")
-            or raw_payload.get("store_id")
-            or raw_payload.get("external_store_id")
-        )
-
-    target_org_id = _resolve_webhook_organization_id(
-        session,
-        restaurant=restaurant,
-        organization_id=organization_id,
-        store_id=str(store_id) if store_id else None,
-        provider="DIDI_FOOD",
+    target, (event_type, event_id) = _authenticate_delivery_webhook(
+        session, "DIDI_FOOD", payload, body_bytes, signature
     )
-
-    config = channel_service.get_config(session, target_org_id, "DIDI_FOOD")
-    webhook_secret = config.get("webhook_secret") if config else None
-
-    # Validate HMAC signature if secret is configured
-    if webhook_secret:
-        is_valid = channel_service.didi_adapter.verify_webhook_signature(
-            body_bytes, signature, webhook_secret
+    try:
+        inbox = channel_service.claim_webhook(
+            session, target.organization_id, "DIDI_FOOD", event_id, payload
         )
-        if not is_valid:
-            channel_service.log_webhook(
-                session,
-                target_org_id,
-                "DIDI_FOOD",
-                "unauthorized_webhook",
-                None,
-                signature,
-                {"error": "Firma HMAC inválida", "headers": dict(request.headers)},
-                "rejected",
-                "Firma HMAC inválida o ausente.",
-            )
-            raise HTTPException(status_code=401, detail="Firma de webhook inválida.")
-
-    payload = raw_payload
-    if not payload and body_bytes:
-        try:
-            payload = json.loads(body_bytes.decode("utf-8"))
-        except Exception:
-            raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
-
-    event_type, event_id = channel_service.didi_adapter.parse_webhook_event(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": str(exc)}) from exc
+    if inbox.get("replay"):
+        return {"status": "ok", "result": {"status": "already_processed"}}
+    if not inbox.get("claimed"):
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "delivery_webhook_in_progress", "message": "Provider retry required"},
+        )
 
     # Log webhook
     channel_service.log_webhook(
         session,
-        target_org_id,
+        target.organization_id,
         "DIDI_FOOD",
         event_type,
         event_id,
@@ -6574,14 +6696,31 @@ async def post_didi_food_webhook(
     ):
         try:
             result = channel_service.process_webhook_order(
-                session, target_org_id, "DIDI_FOOD", payload
+                session, target.organization_id, "DIDI_FOOD", payload
+            )
+            channel_service.log_webhook(
+                session,
+                target.organization_id,
+                "DIDI_FOOD",
+                event_type,
+                event_id,
+                signature,
+                payload,
+                "processed",
+            )
+            channel_service.finish_webhook(
+                session, str(inbox["id"]), str(inbox["lease_token"]), "processed"
             )
             return {"status": "ok", "result": result}
         except Exception as e:
             logger.exception("Error procesando orden de DiDi Food")
+            session.rollback()
+            channel_service.finish_webhook(
+                session, str(inbox["id"]), str(inbox["lease_token"]), "error", str(e)
+            )
             channel_service.log_webhook(
                 session,
-                target_org_id,
+                target.organization_id,
                 "DIDI_FOOD",
                 event_type,
                 event_id,
@@ -6590,8 +6729,28 @@ async def post_didi_food_webhook(
                 "error",
                 str(e),
             )
-            return {"status": "error_logged", "detail": str(e)}
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "delivery_webhook_processing_failed",
+                    "message": "Webhook persisted for retry",
+                },
+            ) from e
 
+    channel_service.finish_webhook(
+        session, str(inbox["id"]), str(inbox["lease_token"]), "processed"
+    )
+    channel_service.log_webhook(
+        session,
+        target.organization_id,
+        "DIDI_FOOD",
+        event_type,
+        event_id,
+        signature,
+        payload,
+        "processed",
+        "event_ignored_no_order_payload",
+    )
     return {"status": "acknowledged", "event_type": event_type}
 
 
@@ -6605,15 +6764,18 @@ def get_didi_food_config(
     require_permission(session, actor_id, "admin.manage")
     org_id = _actor_org_from_request(session, actor_id)
     config = channel_service.get_config(session, org_id, "DIDI_FOOD")
-    return config or {
-        "is_enabled": False,
-        "environment": "sandbox",
-        "client_id": "",
-        "client_secret": "",
-        "webhook_secret": "",
-        "auto_accept": True,
-        "default_prep_time_minutes": 20,
-    }
+    return _pending_channel_config_view(
+        config
+        or {
+            "is_enabled": False,
+            "environment": "sandbox",
+            "client_id": "",
+            "client_secret": "",
+            "webhook_secret": "",
+            "auto_accept": True,
+            "default_prep_time_minutes": 20,
+        }
+    )
 
 
 @router.put("/integrations/didi-food/config")
@@ -6626,7 +6788,7 @@ def put_didi_food_config(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
     org_id = _actor_org_from_request(session, actor_id)
-    return channel_service.save_config(session, org_id, "DIDI_FOOD", payload)
+    return _save_pending_channel_config(session, org_id, "DIDI_FOOD", payload)
 
 
 @router.get("/integrations/didi-food/stores")
@@ -6700,7 +6862,13 @@ def post_didi_food_test_order(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    org_id = _actor_org_from_request(session, actor_id)
+    organization_id = _actor_org_from_request(session, actor_id)
+    config = channel_service.get_config(session, organization_id, "DIDI_FOOD") or {}
+    if not config.get("is_enabled"):
+        raise HTTPException(status_code=409, detail="integration_pending_validation")
+
+    if payload.get("branch_id"):
+        authorize_branch_scope(session, actor_id, "admin.manage", str(payload["branch_id"]))
 
     customer_name = payload.get("customer_name") or "Carlos D. (Prueba)"
     customer_phone = payload.get("customer_phone") or "+526671234567"
@@ -6713,18 +6881,15 @@ def post_didi_food_test_order(
     branch_id = payload.get("branch_id")
     raw_items = payload.get("items") or []
 
-    if branch_id and not payload.get("shop_id"):
-        mappings = channel_service.list_store_mappings(session, org_id, "DIDI_FOOD")
+    if branch_id and not any(payload.get(k) for k in ("shop_id", "store_id", "external_store_id")):
+        mappings = channel_service.list_store_mappings(session, organization_id, "DIDI_FOOD")
         matched = next(
             (m for m in mappings if m["branch_id"] == branch_id and m.get("is_active")), None
         )
         if matched:
             store_id = matched["external_store_id"]
         else:
-            store_id = f"didi_shop_{branch_id[:8]}"
-            channel_service.save_store_mapping(
-                session, org_id, "DIDI_FOOD", branch_id, store_id, True
-            )
+            raise HTTPException(status_code=409, detail="simulation_store_not_configured")
 
     sim_id = f"didi-test-{uuid.uuid4().hex[:8]}"
     display_id = f"D{uuid.uuid4().hex[:4].upper()}"
@@ -6778,13 +6943,23 @@ def post_didi_food_test_order(
         "currency": "MXN",
     }
 
+    try:
+        target = channel_service.resolve_webhook_target(session, "DIDI_FOOD", simulated_order)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if target.organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="simulation_store_scope_invalid")
+    if payload.get("branch_id") and str(payload["branch_id"]) != target.branch_id:
+        raise HTTPException(status_code=403, detail="simulation_store_scope_invalid")
+    authorize_branch_scope(session, actor_id, "admin.manage", target.branch_id)
+
     result = channel_service.process_webhook_order(
-        session, org_id, "DIDI_FOOD", simulated_order
+        session, organization_id, "DIDI_FOOD", simulated_order
     )
 
     channel_service.log_webhook(
         session,
-        org_id,
+        organization_id,
         "DIDI_FOOD",
         "order.created",
         sim_id,
@@ -6815,8 +6990,6 @@ def post_didi_food_test_order(
 async def post_rappi_webhook(
     request: Request,
     session: SessionDep,
-    restaurant: str | None = None,
-    organization_id: str | None = None,
 ) -> dict[str, Any]:
     body_bytes = await request.body()
     signature = (
@@ -6828,64 +7001,32 @@ async def post_rappi_webhook(
         or request.headers.get("Sign")
     )
 
-    raw_payload: dict[str, Any] = {}
-    if body_bytes:
-        try:
-            raw_payload = json.loads(body_bytes.decode("utf-8"))
-        except Exception:
-            pass
+    try:
+        payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
 
-    store_id = None
-    if isinstance(raw_payload, dict):
-        store_id = (
-            raw_payload.get("store_id")
-            or raw_payload.get("shop_id")
-            or raw_payload.get("external_store_id")
-        )
-
-    target_org_id = _resolve_webhook_organization_id(
-        session,
-        restaurant=restaurant,
-        organization_id=organization_id,
-        store_id=str(store_id) if store_id else None,
-        provider="RAPPI",
+    target, (event_type, event_id) = _authenticate_delivery_webhook(
+        session, "RAPPI", payload, body_bytes, signature
     )
-
-    config = channel_service.get_config(session, target_org_id, "RAPPI")
-    webhook_secret = config.get("webhook_secret") if config else None
-
-    # Validate HMAC signature if secret is configured
-    if webhook_secret:
-        is_valid = channel_service.rappi_adapter.verify_webhook_signature(
-            body_bytes, signature, webhook_secret
+    try:
+        inbox = channel_service.claim_webhook(
+            session, target.organization_id, "RAPPI", event_id, payload
         )
-        if not is_valid:
-            channel_service.log_webhook(
-                session,
-                target_org_id,
-                "RAPPI",
-                "unauthorized_webhook",
-                None,
-                signature,
-                {"error": "Firma HMAC inválida", "headers": dict(request.headers)},
-                "rejected",
-                "Firma HMAC inválida o ausente.",
-            )
-            raise HTTPException(status_code=401, detail="Firma de webhook inválida.")
-
-    payload = raw_payload
-    if not payload and body_bytes:
-        try:
-            payload = json.loads(body_bytes.decode("utf-8"))
-        except Exception:
-            raise HTTPException(status_code=400, detail="Cuerpo JSON inválido.") from None
-
-    event_type, event_id = channel_service.rappi_adapter.parse_webhook_event(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": str(exc)}) from exc
+    if inbox.get("replay"):
+        return {"status": "ok", "result": {"status": "already_processed"}}
+    if not inbox.get("claimed"):
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "delivery_webhook_in_progress", "message": "Provider retry required"},
+        )
 
     # Log webhook
     channel_service.log_webhook(
         session,
-        target_org_id,
+        target.organization_id,
         "RAPPI",
         event_type,
         event_id,
@@ -6906,14 +7047,31 @@ async def post_rappi_webhook(
     ):
         try:
             result = channel_service.process_webhook_order(
-                session, target_org_id, "RAPPI", payload
+                session, target.organization_id, "RAPPI", payload
+            )
+            channel_service.log_webhook(
+                session,
+                target.organization_id,
+                "RAPPI",
+                event_type,
+                event_id,
+                signature,
+                payload,
+                "processed",
+            )
+            channel_service.finish_webhook(
+                session, str(inbox["id"]), str(inbox["lease_token"]), "processed"
             )
             return {"status": "ok", "result": result}
         except Exception as e:
             logger.exception("Error procesando orden de Rappi")
+            session.rollback()
+            channel_service.finish_webhook(
+                session, str(inbox["id"]), str(inbox["lease_token"]), "error", str(e)
+            )
             channel_service.log_webhook(
                 session,
-                target_org_id,
+                target.organization_id,
                 "RAPPI",
                 event_type,
                 event_id,
@@ -6922,8 +7080,28 @@ async def post_rappi_webhook(
                 "error",
                 str(e),
             )
-            return {"status": "error_logged", "detail": str(e)}
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "delivery_webhook_processing_failed",
+                    "message": "Webhook persisted for retry",
+                },
+            ) from e
 
+    channel_service.finish_webhook(
+        session, str(inbox["id"]), str(inbox["lease_token"]), "processed"
+    )
+    channel_service.log_webhook(
+        session,
+        target.organization_id,
+        "RAPPI",
+        event_type,
+        event_id,
+        signature,
+        payload,
+        "processed",
+        "event_ignored_no_order_payload",
+    )
     return {"status": "acknowledged", "event_type": event_type}
 
 
@@ -6937,15 +7115,18 @@ def get_rappi_config(
     require_permission(session, actor_id, "admin.manage")
     org_id = _actor_org_from_request(session, actor_id)
     config = channel_service.get_config(session, org_id, "RAPPI")
-    return config or {
-        "is_enabled": False,
-        "environment": "sandbox",
-        "client_id": "",
-        "client_secret": "",
-        "webhook_secret": "",
-        "auto_accept": True,
-        "default_prep_time_minutes": 20,
-    }
+    return _pending_channel_config_view(
+        config
+        or {
+            "is_enabled": False,
+            "environment": "sandbox",
+            "client_id": "",
+            "client_secret": "",
+            "webhook_secret": "",
+            "auto_accept": True,
+            "default_prep_time_minutes": 20,
+        }
+    )
 
 
 @router.put("/integrations/rappi/config")
@@ -6958,7 +7139,7 @@ def put_rappi_config(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
     org_id = _actor_org_from_request(session, actor_id)
-    return channel_service.save_config(session, org_id, "RAPPI", payload)
+    return _save_pending_channel_config(session, org_id, "RAPPI", payload)
 
 
 @router.get("/integrations/rappi/stores")
@@ -7032,7 +7213,13 @@ def post_rappi_test_order(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    org_id = _actor_org_from_request(session, actor_id)
+    organization_id = _actor_org_from_request(session, actor_id)
+    config = channel_service.get_config(session, organization_id, "RAPPI") or {}
+    if not config.get("is_enabled"):
+        raise HTTPException(status_code=409, detail="integration_pending_validation")
+
+    if payload.get("branch_id"):
+        authorize_branch_scope(session, actor_id, "admin.manage", str(payload["branch_id"]))
 
     customer_name = payload.get("customer_name") or "Sofia R. (Prueba Rappi)"
     customer_phone = payload.get("customer_phone") or "+525598765432"
@@ -7045,18 +7232,15 @@ def post_rappi_test_order(
     branch_id = payload.get("branch_id")
     raw_items = payload.get("items") or []
 
-    if branch_id and not payload.get("store_id"):
-        mappings = channel_service.list_store_mappings(session, org_id, "RAPPI")
+    if branch_id and not any(payload.get(k) for k in ("shop_id", "store_id", "external_store_id")):
+        mappings = channel_service.list_store_mappings(session, organization_id, "RAPPI")
         matched = next(
             (m for m in mappings if m["branch_id"] == branch_id and m.get("is_active")), None
         )
         if matched:
             store_id = matched["external_store_id"]
         else:
-            store_id = f"rappi_store_{branch_id[:8]}"
-            channel_service.save_store_mapping(
-                session, org_id, "RAPPI", branch_id, store_id, True
-            )
+            raise HTTPException(status_code=409, detail="simulation_store_not_configured")
 
     sim_id = f"rappi-test-{uuid.uuid4().hex[:8]}"
     display_id = f"R{uuid.uuid4().hex[:4].upper()}"
@@ -7111,13 +7295,23 @@ def post_rappi_test_order(
         "currency": "MXN",
     }
 
+    try:
+        target = channel_service.resolve_webhook_target(session, "RAPPI", simulated_order)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if target.organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="simulation_store_scope_invalid")
+    if payload.get("branch_id") and str(payload["branch_id"]) != target.branch_id:
+        raise HTTPException(status_code=403, detail="simulation_store_scope_invalid")
+    authorize_branch_scope(session, actor_id, "admin.manage", target.branch_id)
+
     result = channel_service.process_webhook_order(
-        session, org_id, "RAPPI", simulated_order
+        session, organization_id, "RAPPI", simulated_order
     )
 
     channel_service.log_webhook(
         session,
-        org_id,
+        organization_id,
         "RAPPI",
         "NEW_ORDER",
         sim_id,
@@ -7141,6 +7335,41 @@ def post_rappi_test_order(
 # ---------------------------------------------------------------------------
 # POS Endpoints: Uber Eats / DiDi Food / Rappi Orders Monitor
 # ---------------------------------------------------------------------------
+
+
+def _update_pos_channel_order_status(
+    session: Session,
+    *,
+    actor_id: str,
+    order_id: str,
+    provider: str,
+    new_status: str,
+) -> dict[str, Any]:
+    organization_id = _actor_org_from_request(session, actor_id)
+    order = (
+        session.execute(
+            sa.select(models.orders.c.branch_id).where(
+                models.orders.c.id == order_id,
+                models.orders.c.organization_id == organization_id,
+                models.orders.c.channel == provider,
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="order_not_found")
+    branch_id = str(order["branch_id"])
+    authorize_branch_scope(session, actor_id, "orders.read", branch_id)
+    return channel_service.update_order_status(
+        session,
+        order_id,
+        new_status,
+        actor_id,
+        organization_id=organization_id,
+        branch_id=branch_id,
+        provider=provider,
+    )
 
 
 @router.get("/pos/uber-eats/orders")
@@ -7168,7 +7397,13 @@ def post_pos_uber_eats_order_status(
     new_status = str(payload.get("status", "")).strip().upper()
     if not new_status:
         raise HTTPException(status_code=400, detail="status es requerido.")
-    return channel_service.update_order_status(session, order_id, new_status, actor_id)
+    return _update_pos_channel_order_status(
+        session,
+        actor_id=actor_id,
+        order_id=order_id,
+        provider="UBER_EATS",
+        new_status=new_status,
+    )
 
 
 @router.get("/pos/didi-food/orders")
@@ -7196,7 +7431,13 @@ def post_pos_didi_food_order_status(
     new_status = str(payload.get("status", "")).strip().upper()
     if not new_status:
         raise HTTPException(status_code=400, detail="status es requerido.")
-    return channel_service.update_order_status(session, order_id, new_status, actor_id)
+    return _update_pos_channel_order_status(
+        session,
+        actor_id=actor_id,
+        order_id=order_id,
+        provider="DIDI_FOOD",
+        new_status=new_status,
+    )
 
 
 @router.get("/pos/rappi/orders")
@@ -7224,7 +7465,13 @@ def post_pos_rappi_order_status(
     new_status = str(payload.get("status", "")).strip().upper()
     if not new_status:
         raise HTTPException(status_code=400, detail="status es requerido.")
-    return channel_service.update_order_status(session, order_id, new_status, actor_id)
+    return _update_pos_channel_order_status(
+        session,
+        actor_id=actor_id,
+        order_id=order_id,
+        provider="RAPPI",
+        new_status=new_status,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -7242,9 +7489,10 @@ from restaurant_os.invoicing.self_invoicing import (
 @router.get("/v1/self-invoice/lookup")
 def get_self_invoice_lookup(
     folio: str,
+    public_key: str,
     session: SessionDep,
 ) -> dict[str, Any]:
-    return lookup_ticket_for_self_invoicing(session, folio)
+    return lookup_ticket_for_self_invoicing(session, folio, public_key)
 
 
 @router.post("/self-invoice/emit")
@@ -7319,10 +7567,10 @@ def list_cfdi_invoices(
     authorization: AuthorizationDep = None,
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    require_permission(session, actor_id, "orders.read")
     org_id = _actor_org_from_request(session, actor_id)
+    effective_branch_id = authorize_branch_scope(session, actor_id, "orders.read", branch_id)
     return invoicing_service.list_invoices(
-        session, org_id, branch_id, status, limit, offset
+        session, org_id, effective_branch_id, status, limit, offset
     )
 
 
@@ -7334,12 +7582,43 @@ def get_cfdi_invoice_detail(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    require_permission(session, actor_id, "orders.read")
     org_id = _actor_org_from_request(session, actor_id)
     inv = invoicing_service.get_invoice_detail(session, org_id, invoice_id)
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada.")
+    authorize_branch_scope(session, actor_id, "orders.read", str(inv["branch_id"]))
     return inv
+
+
+@router.post("/invoicing/commands/{command_id}/reconcile")
+def reconcile_cfdi_command(
+    command_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    org_id = _actor_org_from_request(session, actor_id)
+    command = (
+        session.execute(
+            sa.select(models.fiscal_commands.c.branch_id, models.fiscal_commands.c.operation).where(
+                models.fiscal_commands.c.id == command_id,
+                models.fiscal_commands.c.organization_id == org_id,
+                models.fiscal_commands.c.operation.in_(("issue", "receipt", "cancel")),
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if not command:
+        raise HTTPException(status_code=404, detail="Comando fiscal no encontrado.")
+    authorize_branch_scope(session, actor_id, "admin.manage", str(command["branch_id"]))
+    try:
+        if command["operation"] == "issue":
+            return invoicing_service.reconcile_issue_command(session, org_id, command_id, actor_id)
+        return invoicing_service.reconcile_resource_command(session, org_id, command_id, actor_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/invoicing/invoices/issue")
@@ -7350,7 +7629,6 @@ def issue_cfdi_invoice(
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
-    require_permission(session, actor_id, "orders.read")
     org_id = _actor_org_from_request(session, actor_id)
 
     order_ids = payload.get("order_ids") or []
@@ -7361,18 +7639,39 @@ def issue_cfdi_invoice(
             status_code=400, detail="Debe seleccionar al menos un pedido para facturar."
         )
 
-    branch_id = payload.get("branch_id")
+    order_ids = [str(order_id) for order_id in order_ids]
+    if len(set(order_ids)) != len(order_ids):
+        raise HTTPException(status_code=400, detail="Los pedidos a facturar no pueden repetirse.")
+    orders = (
+        session.execute(
+            sa.select(models.orders.c.id, models.orders.c.branch_id).where(
+                models.orders.c.organization_id == org_id,
+                models.orders.c.id.in_(order_ids),
+            )
+        )
+        .mappings()
+        .all()
+    )
+    if len(orders) != len(order_ids):
+        raise HTTPException(
+            status_code=404, detail="Uno o más pedidos no pertenecen a la organización."
+        )
+    order_branches = {str(order["branch_id"]) for order in orders}
+    if len(order_branches) != 1:
+        raise HTTPException(
+            status_code=400, detail="Los pedidos deben pertenecer a una sola sucursal."
+        )
+    selected_branch_id = str(payload.get("branch_id") or next(iter(order_branches)))
+    if selected_branch_id not in order_branches:
+        raise HTTPException(status_code=400, detail="La sucursal no corresponde a los pedidos.")
+    branch_id = authorize_branch_scope(session, actor_id, "orders.read", selected_branch_id)
     if not branch_id:
-        # Resolve branch from first order
-        first_order = session.execute(
-            sa.select(models.orders.c.branch_id).where(models.orders.c.id == order_ids[0])
-        ).scalar_one_or_none()
-        branch_id = str(first_order) if first_order else "00000000-0000-0000-0000-000000000002"
+        raise HTTPException(status_code=403, detail="Se requiere sucursal para facturar.")
 
     receptor = payload.get("receptor") or {}
     try:
         return invoicing_service.issue_invoice(
-            session, org_id, branch_id, order_ids, receptor
+            session, org_id, branch_id, order_ids, receptor, actor_user_id=actor_id
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -7389,11 +7688,15 @@ def cancel_cfdi_invoice(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
     org_id = _actor_org_from_request(session, actor_id)
+    invoice = invoicing_service.get_invoice_detail(session, org_id, invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura no encontrada.")
+    authorize_branch_scope(session, actor_id, "admin.manage", str(invoice["branch_id"]))
     motive = str(payload.get("motive") or "02")
     substitution_uuid = payload.get("substitution_uuid")
     try:
         return invoicing_service.cancel_invoice(
-            session, org_id, invoice_id, motive, substitution_uuid
+            session, org_id, invoice_id, motive, substitution_uuid, actor_user_id=actor_id
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -7406,20 +7709,104 @@ def generate_order_receipt(
     actor_user_id: ActorUserDep = None,
     authorization: AuthorizationDep = None,
 ) -> dict[str, Any]:
-    _required_actor_from_request(actor_user_id, authorization)
-    order_row = session.execute(
-        sa.select(models.orders.c.branch_id, models.orders.c.organization_id).where(
-            models.orders.c.id == order_id
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    org_id = _actor_org_from_request(session, actor_id)
+    order = (
+        session.execute(
+            sa.select(models.orders.c.branch_id).where(
+                models.orders.c.id == order_id,
+                models.orders.c.organization_id == org_id,
+            )
         )
-    ).mappings().first()
-    if not order_row:
+        .mappings()
+        .first()
+    )
+    if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado.")
-    branch_id = str(order_row["branch_id"])
-    org_id = str(order_row["organization_id"])
+    branch_id = authorize_branch_scope(session, actor_id, "orders.read", str(order["branch_id"]))
+    if not branch_id:
+        raise HTTPException(status_code=403, detail="Se requiere sucursal para generar recibo.")
 
     try:
         return invoicing_service.create_receipt_for_order(
-            session, org_id, branch_id, order_id
+            session, org_id, branch_id, order_id, actor_user_id=actor_id
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/organization/profile")
+def get_organization_profile_endpoint(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        return get_organization_profile(session, org_id)
+
+    return _business_response(operation)
+
+
+@router.patch("/organization/profile")
+def update_organization_profile_endpoint(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        return update_organization_profile(
+            session,
+            org_id,
+            name=payload.get("name"),
+            owner_name=payload.get("owner_name"),
+            owner_phone=payload.get("owner_phone"),
+            business_type=payload.get("business_type"),
+            mobile_theme=payload.get("mobile_theme"),
+            actor_id=actor_id,
+        )
+
+    return _business_response(operation)
+
+
+@router.get("/organization/qr-info")
+def get_organization_qr_info_endpoint(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        return get_organization_qr_info(session, org_id)
+
+    return _business_response(operation)
+
+
+@router.get("/public/restaurants/{slug}")
+def public_restaurant_info_endpoint(slug: str, session: SessionDep) -> dict[str, Any]:
+    from restaurant_os.public_storefront import resolve_storefront
+
+    result = resolve_storefront(session, slug)
+    return {**result["organization"], "branches": result["branches"]}
+
+
+@router.get("/public/restaurants/{slug}/catalog")
+@router.get("/public/{slug}/catalog")
+def public_restaurant_catalog_endpoint(slug: str, session: SessionDep) -> dict[str, Any]:
+    from restaurant_os.public_storefront import resolve_storefront
+
+    result = resolve_storefront(session, slug)
+    branches = result["branches"]
+    selected = result["selected_branch_id"]
+    if selected:
+        branch = next(b for b in branches if b["id"] == selected)
+    elif len(branches) == 1:
+        branch = branches[0]
+    else:
+        raise HTTPException(422, detail={"code": "branch_context_required"})
+    return public_catalog_by_key_endpoint(branch["public_key"], session)

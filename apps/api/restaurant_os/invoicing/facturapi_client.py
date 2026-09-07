@@ -18,7 +18,9 @@ class FacturapiClient:
 
     def __init__(self, api_key: str | None = None, is_mock: bool = False):
         self.api_key = api_key
-        self.is_mock = is_mock or not api_key or api_key.startswith("sk_test_mock")
+        # The service decides whether a configured sandbox is an explicit simulation.
+        # An absent credential must never turn a fiscal operation into a fake success.
+        self.is_mock = is_mock
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -124,6 +126,12 @@ class FacturapiClient:
 
     def create_invoice(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/invoices", payload)
+
+    def get_invoice(self, invoice_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/invoices/{invoice_id}")
+
+    def get_receipt(self, receipt_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/receipts/{receipt_id}")
 
     def cancel_invoice(
         self, invoice_id: str, motive: str = "02", substitution_id: str | None = None

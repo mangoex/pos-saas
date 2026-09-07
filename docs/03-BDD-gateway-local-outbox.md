@@ -3,7 +3,7 @@
 ## BDD-FEAT-028 Outbox local del gateway
 
 ```gherkin
-@PRD-FR-180 @PRD-FR-182 @PRD-FR-184 @PRD-FR-187 @offline @phase1
+@PRD-FR-680 @PRD-FR-682 @PRD-FR-684 @PRD-FR-687 @offline @phase1
 Feature: Persistencia local de comandos offline
 
   @BDD-SC-041

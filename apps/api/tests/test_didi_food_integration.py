@@ -1,3 +1,4 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-recovery-test-didi-food-integration-synthetic-v1
 from __future__ import annotations
 
 import hashlib
@@ -205,6 +206,9 @@ def test_didi_signature_validation(client, test_db):
         ],
         "total_cents": 12000,
     }
+    channel_service.save_store_mapping(
+        test_db, ORGANIZATION_ID, "DIDI_FOOD", BRANCH_ID, "didi_shop_01"
+    )
     body_bytes = json.dumps(payload).encode("utf-8")
     valid_sig = generate_didi_signature(secret, body_bytes)
 
@@ -313,6 +317,7 @@ def test_didi_webhook_idempotency(client, test_db):
         "DIDI_FOOD",
         {"is_enabled": True, "webhook_secret": secret},
     )
+    channel_service.save_store_mapping(test_db, ORGANIZATION_ID, "DIDI_FOOD", BRANCH_ID, "any_shop")
 
     payload = {
         "event_type": "order.created",
@@ -370,7 +375,10 @@ def test_didi_admin_configuration_api(client, auth_headers):
     # 2. Consultar Configuración
     get_resp = client.get("/api/v1/integrations/didi-food/config", headers=auth_headers)
     assert get_resp.status_code == 200
-    assert get_resp.json()["is_enabled"] is True
+    assert get_resp.json()["is_enabled"] is False
+    assert get_resp.json()["integration_status"] == "PENDING_VALIDATION"
+    assert "client_secret" not in get_resp.json()
+    assert "webhook_secret" not in get_resp.json()
 
     # 3. Vincular Tienda DiDi
     store_resp = client.post(
@@ -403,14 +411,13 @@ def test_didi_admin_configuration_api(client, auth_headers):
         },
         headers=auth_headers,
     )
-    assert sim_resp.status_code == 200
-    assert sim_resp.json()["status"] == "ok"
-    assert "DIDI-" in sim_resp.json()["result"]["folio"]
+    assert sim_resp.status_code == 409
+    assert sim_resp.json()["detail"] == "integration_pending_validation"
 
     # 6. Consultar Logs de Webhooks
     logs_resp = client.get("/api/v1/integrations/didi-food/logs", headers=auth_headers)
     assert logs_resp.status_code == 200
-    assert len(logs_resp.json()) >= 1
+    assert logs_resp.json() == []
 
     # 7. Eliminar Mapeo de Tienda
     del_resp = client.delete(
@@ -420,6 +427,15 @@ def test_didi_admin_configuration_api(client, auth_headers):
 
 
 def test_didi_pos_orders_lifecycle(client, auth_headers, test_db):
+    channel_service.save_config(
+        test_db,
+        ORGANIZATION_ID,
+        "DIDI_FOOD",
+        {"is_enabled": True, "webhook_secret": "didi-webhook-secret"},
+    )
+    channel_service.save_store_mapping(
+        test_db, ORGANIZATION_ID, "DIDI_FOOD", BRANCH_ID, "didi_shop_gdl_center"
+    )
     """
     TDD-TC-230: Consulta de pedidos DiDi Food y actualización de ciclo de vida.
     """

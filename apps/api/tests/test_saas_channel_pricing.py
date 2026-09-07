@@ -1,16 +1,15 @@
-"""TDD Test Suite for POS-SaaS Sprint 2: Differentiated Pricing (Dine-in vs Delivery Apps)."""
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-saas-test-saas-channel-pricing-synthetic-v1
+"TDD Test Suite for POS-SaaS Sprint 2: Differentiated Pricing (Dine-in vs Delivery Apps)."
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
 import sqlalchemy as sa
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from restaurant_os.main import app
-from restaurant_os.database import get_session
+from fastapi.testclient import TestClient
 from restaurant_os import models
+from restaurant_os.database import get_session
+from restaurant_os.main import app
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def _client_with_db() -> TestClient:
@@ -51,7 +50,8 @@ def test_create_and_update_product_with_delivery_price() -> None:
     token = signup_resp.json()["token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 2. Create a new product with salon price ($150 = 15000 cents) and delivery price ($185 = 18500 cents)
+    # 2. Create a product with salon price ($150 = 15000 cents)
+    # and delivery price ($185 = 18500 cents).
     create_resp = client.post(
         "/api/v1/catalog/products",
         headers=headers,

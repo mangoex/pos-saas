@@ -191,9 +191,7 @@ const Overview = () => {
     products_count: number;
   } | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [onboardingDismissed, setOnboardingDismissed] = useState(
-    () => localStorage.getItem('restaurantos_onboarding_dismissed') === 'true'
-  );
+  const [onboardingStep, setOnboardingStep] = useState<'business' | 'menu' | 'register' | 'complete' | null>(null);
 
   useEffect(() => {
     fetchApi<{
@@ -210,6 +208,12 @@ const Overview = () => {
       .catch((err) => {
         console.warn('Error al cargar perfil de organización en panel:', err);
       });
+  }, []);
+
+  useEffect(() => {
+    fetchApi<{ step: 'business' | 'menu' | 'register' | 'complete' }>('/saas/onboarding')
+      .then((setup) => setOnboardingStep(setup.step))
+      .catch(() => setOnboardingStep(null));
   }, []);
 
   useEffect(() => {
@@ -285,7 +289,7 @@ const Overview = () => {
         </div>
       </div>
 
-      {!onboardingDismissed && (products.length === 0 || (orgProfile && orgProfile.products_count === 0) || !localStorage.getItem('restaurantos_onboarding_completed')) && (
+      {onboardingStep !== 'complete' && (
         <section
           style={{
             background: 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%)',
@@ -348,25 +352,6 @@ const Overview = () => {
             >
               <Sparkles size={16} style={{ color: '#10b981' }} />
               Iniciar Asistente (3 min)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.setItem('restaurantos_onboarding_dismissed', 'true');
-                setOnboardingDismissed(true);
-              }}
-              style={{
-                background: 'transparent',
-                color: '#a7f3d0',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                borderRadius: 12,
-                padding: '12px 16px',
-                fontWeight: 600,
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-              }}
-            >
-              Ocultar
             </button>
           </div>
         </section>
@@ -831,8 +816,8 @@ const Overview = () => {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         onCompleted={() => {
+          setOnboardingStep('complete');
           setIsWizardOpen(false);
-          window.location.reload();
         }}
       />
     </main>

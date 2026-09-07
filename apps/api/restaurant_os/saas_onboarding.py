@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from decimal import Decimal, InvalidOperation
+from typing import Any, Literal
 
 import sqlalchemy as sa
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -31,9 +32,9 @@ UTC = timezone.utc
 
 
 class SignUpRequest(BaseModel):
-    business_name: str = Field(default="", max_length=160)
+    business_name: str = Field(..., min_length=1, max_length=160)
     owner_name: str = Field(..., min_length=1, max_length=160)
-    email: str = Field(default="", max_length=180)
+    email: str = Field(..., min_length=5, max_length=180)
     password: str = Field(..., min_length=8, max_length=128)
     phone: str | None = Field(default=None, max_length=32)
     business_type: str | None = Field(default="general", max_length=32)
@@ -43,13 +44,23 @@ class SignUpRequest(BaseModel):
     @classmethod
     def reconcile_aliases(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            if not data.get("business_name") and data.get("restaurant_name"):
-                data["business_name"] = data["restaurant_name"]
-            if not data.get("email") and data.get("owner_email"):
-                data["email"] = data["owner_email"]
-            if not data.get("phone") and data.get("owner_phone"):
-                data["phone"] = data["owner_phone"]
+            data = dict(data)
+            submitted_plan = data.get("plan", "trial")
+            if isinstance(submitted_plan, str):
+                data["plan"] = {"starter": "starter_349", "professional": "pro_599"}.get(
+                    submitted_plan, submitted_plan
+                )
+            for canonical, alias in (
+                ("business_name", "restaurant_name"),
+                ("email", "owner_email"),
+                ("phone", "owner_phone"),
+            ):
+                if not data.get(canonical) and data.get(alias):
+                    data[canonical] = data[alias]
         return data
+
+    plan: Literal["trial", "starter_349", "pro_599"] = "trial"
+    defer_catalog_setup: bool = False
 
     @field_validator("business_name", "owner_name")
     @classmethod
@@ -98,6 +109,7 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
 
     now = _now()
     org_id = _id()
+    slug = _generate_slug(req.business_name)
     legal_entity_id = _id()
     business_unit_id = _id()
     branch_id = _id()
@@ -109,23 +121,21 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     cashier_role_id = _id()
     user_id = _id()
 
-    slug = _generate_slug(req.business_name)
-    trial_ends = now + timedelta(days=14)
-
     # 1. Organizations
     session.execute(
         models.organizations.insert().values(
             id=org_id,
             name=req.business_name,
             slug=slug,
-            status="active",
-            plan="trial",
-            subscription_status="active",
-            trial_ends_at=trial_ends,
+            plan=req.plan,
+            subscription_status="trialing",
+            trial_ends_at=now + timedelta(days=14),
             owner_name=req.owner_name,
             owner_email=normalized_email,
             owner_phone=req.phone,
-            business_type=req.business_type or "general",
+            business_type=req.business_type,
+            onboarding_step="business",
+            status="active",
             created_at=now,
             updated_at=now,
         )
@@ -160,25 +170,17 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     # 4. Branch
-    branch_name = (
-        req.branch_name.strip()
-        if req.branch_name and req.branch_name.strip()
-        else "Sucursal Matriz"
-    )
-    branch_slug = (
-        "matriz"
-        if not req.branch_name or req.branch_name.strip().lower() in ("matriz", "sucursal matriz")
-        else re.sub(r"[^a-z0-9]+", "-", branch_name.lower()).strip("-")
-    )
     session.execute(
         models.branches.insert().values(
             id=branch_id,
             organization_id=org_id,
             legal_entity_id=legal_entity_id,
             business_unit_id=business_unit_id,
-            name=branch_name,
+            name=req.branch_name.strip()
+            if req.branch_name and req.branch_name.strip()
+            else "Sucursal Matriz",
+            slug="matriz",
             code="MATRIZ",
-            slug=branch_slug,
             timezone="America/Mexico_City",
             status="active",
             phone=req.phone or "",
@@ -186,18 +188,6 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             state="CDMX",
             created_at=now,
             updated_at=now,
-        )
-    )
-
-    # Auto-generate public_order_key for the initial branch so QR ordering is immediately ready
-    initial_public_key = f"pk_{slug[:20]}_{branch_slug[:10]}_{uuid.uuid4().hex[:8]}"
-    session.execute(
-        models.public_order_keys.insert().values(
-            public_key=initial_public_key,
-            organization_id=org_id,
-            branch_id=branch_id,
-            status="active",
-            created_at=now,
         )
     )
 
@@ -234,7 +224,7 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         )
         _assign_default_role_permissions(session, r_id, r_name)
 
-    # 7. Role Grants for Administrator
+    # 7. Role Grants & Permissions for Administrator
     session.execute(
         models.role_authority_grants.insert().values(
             role_id=admin_role_id,
@@ -242,6 +232,26 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             created_at=now,
         )
     )
+
+    assigned_permissions = sa.select(models.role_permissions.c.permission_id).where(
+        models.role_permissions.c.role_id == admin_role_id
+    )
+    all_permissions = (
+        session.execute(
+            sa.select(models.permissions.c.id).where(
+                models.permissions.c.id.not_in(assigned_permissions)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for perm_id in all_permissions:
+        session.execute(
+            models.role_permissions.insert().values(
+                role_id=admin_role_id,
+                permission_id=perm_id,
+            )
+        )
 
     # 8. User (Administrator / Owner)
     session.execute(
@@ -280,6 +290,7 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     # 11. FacturAPI Default Config
+    # Public menu and invoice entry share the stable issued restaurant identity.
     session.execute(
         models.facturapi_config.insert().values(
             id=_id(),
@@ -303,13 +314,24 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         )
     )
 
-    # 12. Seed Starter Catalog
-    _seed_starter_catalog(
-        session=session,
-        organization_id=org_id,
-        branch_id=branch_id,
-        business_type=req.business_type or "general",
-        now=now,
+    # Guided signup chooses a template later; existing API consumers retain explicit seeding.
+    if not req.defer_catalog_setup:
+        _seed_starter_catalog(
+            session=session,
+            organization_id=org_id,
+            branch_id=branch_id,
+            business_type=req.business_type or "general",
+            now=now,
+        )
+
+    session.execute(
+        models.public_order_keys.insert().values(
+            public_key=f"pk_{uuid.uuid4().hex}",
+            organization_id=org_id,
+            branch_id=branch_id,
+            status="active",
+            created_at=now,
+        )
     )
 
     # 13. Audit Event
@@ -339,29 +361,39 @@ def signup_tenant(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             "display_name": req.owner_name,
             "status": "active",
             "organization_id": org_id,
+            "roles": ["Owner"],
+            "permissions": session.execute(
+                sa.select(models.permissions.c.code)
+                .join(
+                    models.role_permissions,
+                    models.role_permissions.c.permission_id == models.permissions.c.id,
+                )
+                .where(models.role_permissions.c.role_id == admin_role_id)
+            )
+            .scalars()
+            .all(),
         },
         "organization": {
             "id": org_id,
             "name": req.business_name,
             "slug": slug,
+            "public_slug": slug,
+            "plan": req.plan,
+            "subscription_status": "trialing",
+            "trial_ends_at": (now + timedelta(days=14)).isoformat(),
+            "menu_url": f"/menu/{slug}",
             "status": "active",
-            "plan": "trial",
-            "subscription_status": "active",
-            "trial_ends_at": trial_ends.isoformat(),
-            "owner_name": req.owner_name,
-            "owner_email": normalized_email,
-            "owner_phone": req.phone,
-            "business_type": req.business_type or "general",
         },
         "branch": {
             "id": branch_id,
-            "name": branch_name,
-            "slug": branch_slug,
-            "public_key": initial_public_key,
+            "name": req.branch_name.strip()
+            if req.branch_name and req.branch_name.strip()
+            else "Sucursal Matriz",
+            "slug": "matriz",
             "status": "active",
             "timezone": "America/Mexico_City",
         },
-        "roles": ["Administrador de Restaurante"],
+        "roles": ["Owner"],
     }
 
 
@@ -493,14 +525,22 @@ def import_custom_catalog_for_org(
     if now is None:
         now = _now()
 
-    active_branches = session.execute(
-        sa.select(models.branches.c.id).where(
-            models.branches.c.organization_id == organization_id,
-            models.branches.c.status == "active",
+    active_branches = (
+        session.execute(
+            sa.select(models.branches.c.id).where(
+                models.branches.c.organization_id == organization_id,
+                models.branches.c.status == "active",
+            )
         )
-    ).scalars().all()
-    if not active_branches and branch_id:
+        .scalars()
+        .all()
+    )
+    if branch_id:
+        if branch_id not in active_branches:
+            raise BusinessError("invalid_branch_scope", "Branch does not belong to this restaurant")
         active_branches = [branch_id]
+    if not active_branches:
+        raise BusinessError("active_branch_required", "An active restaurant branch is required")
 
     created_products = 0
 
@@ -509,12 +549,16 @@ def import_custom_catalog_for_org(
         display_order = int(cat_data.get("display_order") or (idx + 1))
 
         # Reuse existing category if present
-        cat = session.execute(
-            sa.select(models.product_categories.c.id).where(
-                models.product_categories.c.organization_id == organization_id,
-                models.product_categories.c.name == cat_name,
+        cat = (
+            session.execute(
+                sa.select(models.product_categories.c.id).where(
+                    models.product_categories.c.organization_id == organization_id,
+                    models.product_categories.c.name == cat_name,
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
 
         if cat:
             cat_id = cat
@@ -537,19 +581,23 @@ def import_custom_catalog_for_org(
             prod_name = str(prod_data.get("name") or f"Producto {p_idx + 1}").strip()
             raw_sku = str(prod_data.get("sku") or "").strip()
             if not raw_sku:
-                clean_prefix = re.sub(r'[^A-Z0-9]+', '', prod_name.upper())[:4] or "PRD"
+                clean_prefix = re.sub(r"[^A-Z0-9]+", "", prod_name.upper())[:4] or "PRD"
                 raw_sku = f"{clean_prefix}-{uuid.uuid4().hex[:4].upper()}"
 
             # Check if product with this SKU or name already exists in org
-            existing_prod = session.execute(
-                sa.select(models.products.c.id).where(
-                    models.products.c.organization_id == organization_id,
-                    sa.or_(
-                        models.products.c.sku == raw_sku,
-                        models.products.c.name == prod_name,
-                    ),
+            existing_prod = (
+                session.execute(
+                    sa.select(models.products.c.id).where(
+                        models.products.c.organization_id == organization_id,
+                        sa.or_(
+                            models.products.c.sku == raw_sku,
+                            models.products.c.name == prod_name,
+                        ),
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
 
             if existing_prod:
                 continue
@@ -559,8 +607,8 @@ def import_custom_catalog_for_org(
             price_cents = int(prod_data.get("price_cents") or 0)
             if price_cents <= 0 and prod_data.get("price") is not None:
                 try:
-                    price_cents = int(float(prod_data["price"]) * 100)
-                except (ValueError, TypeError):
+                    price_cents = int(Decimal(str(prod_data["price"])) * 100)
+                except (InvalidOperation, ValueError, TypeError, OverflowError):
                     price_cents = 0
 
             desc = str(prod_data.get("description") or f"{prod_name} preparado al momento").strip()
@@ -608,6 +656,8 @@ def import_custom_catalog_for_org(
                     )
                 )
 
+            created_products += 1
+
     return {
         "status": "ok",
         "created_products": created_products,
@@ -625,11 +675,15 @@ def seed_starter_catalog_for_org(
     now = _now()
     resolved_branch_id = branch_id
     if not resolved_branch_id:
-        branch = session.execute(
-            sa.select(models.branches.c.id)
-            .where(models.branches.c.organization_id == organization_id)
-            .order_by(models.branches.c.created_at)
-        ).scalars().first()
+        branch = (
+            session.execute(
+                sa.select(models.branches.c.id)
+                .where(models.branches.c.organization_id == organization_id)
+                .order_by(models.branches.c.created_at)
+            )
+            .scalars()
+            .first()
+        )
         resolved_branch_id = branch
 
     _seed_starter_catalog(

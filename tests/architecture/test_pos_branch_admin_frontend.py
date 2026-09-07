@@ -146,9 +146,10 @@ def test_admin_hub_contains_operational_cards_including_variations() -> None:
         "/administration/attendance",
         "/sales-monitor",
         "/administration/products",
-        "/administration/suppliers",
         "/administration/purchases",
         "/administration/waste",
+        "/administration/variations",
+        "/administration/ingredient-extras",
     ]
     for forbidden in ("Sucursales", "Usuarios", "Roles", "Personal de sucursal"):
         assert forbidden not in source

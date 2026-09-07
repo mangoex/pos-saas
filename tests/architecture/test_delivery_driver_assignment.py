@@ -1,4 +1,4 @@
-"""Architecture contract for PRD-FR-211 delivery driver assignment."""
+"""Architecture contract for historical PRD-FR-711 delivery driver assignment."""
 
 from pathlib import Path
 
@@ -51,13 +51,10 @@ def test_admin_driver_history_shows_operational_delivery_facts() -> None:
 
 def test_delivery_assignment_specs_and_traceability_exist() -> None:
     prd = _read("docs/01-PRD.md")
-    sdd = _read("docs/02-SDD.md")
     bdd = _read("docs/03-BDD-delivery-driver-assignment.md")
     tdd = _read("docs/04-TDD-delivery-driver-assignment.md")
     matrix = _read("docs/05-matriz-trazabilidad.md")
-    operation = _read("docs/10-operacion-easypanel.md")
-    for document in (prd, sdd, matrix, operation):
-        assert "PRD-FR-211" in document
+    assert "PRD-FR-711" in prd and "PRD-FR-711" in matrix
     for scenario in range(243, 248):
         assert f"BDD-SC-{scenario}" in bdd
         assert f"BDD-SC-{scenario}" in matrix

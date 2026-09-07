@@ -1472,6 +1472,13 @@ def test_tdd_tc_207_external_context_excludes_purchase_and_cost_projections() ->
     factory = _factory()
     with factory() as session:
         _seed_purchase_price(session)
+        session.info["admin_ai_organization_id"] = str(
+            session.scalar(
+                sa.select(models.branches.c.organization_id).where(
+                    models.branches.c.id == BRANCH_ID
+                )
+            )
+        )
         context = build_context(session, BRANCH_ID)
 
     assert not {

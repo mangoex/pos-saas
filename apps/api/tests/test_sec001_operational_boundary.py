@@ -1198,6 +1198,8 @@ def test_tc144_new_print_jobs_have_initial_pullable_attempts() -> None:
         session,
         {
             "id": "order-initial-print",
+            "organization_id": "org-a",
+            "branch_id": "branch-a",
             "folio": "SEC001-INITIAL",
             "total_cents": 1250,
         },

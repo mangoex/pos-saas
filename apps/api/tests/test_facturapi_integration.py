@@ -1,3 +1,4 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-saas-test-facturapi-integration-synthetic-v1
 """Tests for Facturapi and CFDI 4.0 Invoicing Integration (PRD-FR-234)."""
 
 import uuid
@@ -9,6 +10,7 @@ from restaurant_os import models
 from restaurant_os.auth import create_session_token
 from restaurant_os.config import get_settings
 from restaurant_os.database import get_session
+from restaurant_os.invoicing.facturapi_client import FacturapiClient
 from restaurant_os.invoicing.service import InvoicingService
 from restaurant_os.main import create_app
 from sqlalchemy import create_engine
@@ -223,14 +225,12 @@ def test_create_receipt_for_order(test_db, invoicing_svc):
     # Generate receipt for order
     receipt = invoicing_svc.create_receipt_for_order(session, ORGANIZATION_ID, BRANCH_ID, order_id)
     assert receipt is not None
-    assert "self_invoice_url" in receipt
     assert "receipt_id" in receipt
-    assert (
-        "factura.space" in receipt["self_invoice_url"] or "kiwirest" in receipt["self_invoice_url"]
-    )
+    assert receipt["status"] == "simulated"
+    assert receipt["provider_confirmed"] is False
 
 
-def test_issue_invoice_for_orders(test_db, invoicing_svc):
+def test_issue_invoice_for_orders(test_db, invoicing_svc, monkeypatch):
     _, session = test_db
     order_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -250,6 +250,23 @@ def test_issue_invoice_for_orders(test_db, invoicing_svc):
         )
     )
     session.commit()
+
+    invoicing_svc.save_config(
+        session,
+        ORGANIZATION_ID,
+        {"is_enabled": True, "environment": "sandbox", "api_key": "sandbox_real_test_key"},
+    )
+    monkeypatch.setattr(
+        FacturapiClient,
+        "create_invoice",
+        lambda *_args: {
+            "id": "confirmed-invoice-101",
+            "status": "valid",
+            "uuid": "CONFIRMED-UUID-101",
+            "folio_number": "101",
+        },
+    )
+    monkeypatch.setattr(FacturapiClient, "send_email", lambda *_args: {"status": "queued"})
 
     receptor_data = {
         "rfc": "XAXX010101000",
@@ -283,7 +300,7 @@ def test_issue_invoice_for_orders(test_db, invoicing_svc):
     assert any(i["id"] == invoice["id"] for i in invoices)
 
 
-def test_cancel_invoice(test_db, invoicing_svc):
+def test_cancel_invoice(test_db, invoicing_svc, monkeypatch):
     _, session = test_db
     order_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -302,6 +319,23 @@ def test_cancel_invoice(test_db, invoicing_svc):
         )
     )
     session.commit()
+
+    invoicing_svc.save_config(
+        session,
+        ORGANIZATION_ID,
+        {"is_enabled": True, "environment": "sandbox", "api_key": "sandbox_real_test_key"},
+    )
+    monkeypatch.setattr(
+        FacturapiClient,
+        "create_invoice",
+        lambda *_args: {
+            "id": "confirmed-invoice-102",
+            "status": "valid",
+            "uuid": "CONFIRMED-UUID-102",
+            "folio_number": "102",
+        },
+    )
+    monkeypatch.setattr(FacturapiClient, "cancel_invoice", lambda *_args: {"status": "canceled"})
 
     invoice = invoicing_svc.issue_invoice(
         session,
@@ -358,4 +392,5 @@ def test_api_facturapi_endpoints(client, auth_headers):
         headers=auth_headers,
     )
     assert resp_test.status_code == 200
-    assert resp_test.json()["status"] == "ok"
+    assert resp_test.json()["status"] == "simulated"
+    assert resp_test.json()["provider_confirmed"] is False

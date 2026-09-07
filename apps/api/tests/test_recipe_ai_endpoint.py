@@ -116,20 +116,7 @@ def test_post_recipe_ai_parse_endpoint(tmp_path: Path):
         },
     )
 
-    assert response.status_code == 200, response.text
-    data = response.json()
-
-    assert "baguette" in data["title"].lower()
-    assert float(data["total_cost"]) > 0
-    assert float(data["cost_per_portion"]) > 0
-    assert data["food_cost_status"] in ["optimal", "warning", "alert"]
-    assert len(data["ingredients"]) >= 6
-
-    # Verify that Pollo was matched against real catalog item
-    pollo_ing = next((i for i in data["ingredients"] if "pollo" in i["raw_name"].lower()), None)
-    assert pollo_ing is not None
-    assert pollo_ing["status"] == "matched"
-    assert "POLLO" in pollo_ing["matched_item_name"]
-    assert float(pollo_ing["normalized_quantity"]) == 0.250
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "feature_out_of_saas_scope"
 
     app.dependency_overrides.clear()

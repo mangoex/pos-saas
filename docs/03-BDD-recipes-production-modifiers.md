@@ -3,7 +3,7 @@
 ## BDD-FEAT-040 Receta con merma y costo por sucursal
 
 ```gherkin
-@PRD-FR-082 @PRD-FR-084 @PRD-FR-088 @recipes
+@PRD-FR-582 @PRD-FR-584 @PRD-FR-588 @recipes
 Feature: Versionar receta y calcular cantidad bruta
 
   @BDD-SC-084
@@ -27,7 +27,7 @@ Feature: Versionar receta y calcular cantidad bruta
 ## BDD-FEAT-041 Producción de elaborado sin doble consumo
 
 ```gherkin
-@PRD-FR-080 @PRD-FR-081 @PRD-FR-085 @PRD-FR-087 @production
+@PRD-FR-580 @PRD-FR-581 @PRD-FR-585 @PRD-FR-587 @production
 Feature: Producir y vender elaborados
 
   @BDD-SC-086
@@ -57,7 +57,7 @@ Feature: Producir y vender elaborados
 ## BDD-FEAT-042 Modificadores con precio, cocina e inventario
 
 ```gherkin
-@PRD-FR-095 @PRD-FR-097 @modifiers
+@PRD-FR-595 @PRD-FR-597 @modifiers
 Feature: Validar grupos de modificadores
 
   @BDD-SC-089
@@ -72,7 +72,7 @@ Feature: Validar grupos de modificadores
     When el cajero selecciona tres opciones
     Then el sistema rechaza la línea sin crear reservas
 
-@PRD-FR-096 @PRD-FR-098 @modifiers @inventory
+@PRD-FR-596 @PRD-FR-598 @modifiers @inventory
 Feature: Aplicar efecto de inventario
 
   @BDD-SC-091
@@ -96,7 +96,7 @@ Feature: Aplicar efecto de inventario
     Then cocina recibe la instrucción
     And los componentes finales son iguales a la receta base
 
-@PRD-FR-097 @PRD-FR-099 @modifiers @orders
+@PRD-FR-597 @PRD-FR-599 @modifiers @orders
 Feature: Congelar precio y catálogo efectivo
 
   @BDD-SC-094

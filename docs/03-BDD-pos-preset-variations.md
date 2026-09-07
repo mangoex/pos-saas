@@ -2,12 +2,12 @@
 
 > Especificación histórica hasta `0027_catalog_cleanup`. Conserva los escenarios que protegen
 > lectura y compatibilidad de datos anteriores. Para escrituras nuevas y aceptación vigente de
-> `PRD-FR-199`, gobierna `BDD-FEAT-062` en `03-BDD-pos-order-operations-wave.md`.
+> `PRD-FR-699`, gobierna `BDD-FEAT-062` en `03-BDD-pos-order-operations-wave.md`.
 
 ## BDD-FEAT-057 Variaciones y cambios por producto
 
 ```gherkin
-@PRD-FR-199 @pos @modifiers @catalog
+@PRD-FR-699 @pos @modifiers @catalog
 Feature: Notas preestablecidas de variación o cambio
 
   @BDD-SC-168

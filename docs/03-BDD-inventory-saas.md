@@ -3,7 +3,7 @@
 ## BDD-FEAT-032 Inventario por movimientos
 
 ```gherkin
-@PRD-FR-060 @PRD-FR-061 @PRD-FR-062 @PRD-FR-070 @inventory @phase2
+@PRD-FR-560 @PRD-FR-561 @PRD-FR-562 @PRD-FR-570 @inventory @phase2
 Feature: Inventario inicial administrable
 
   @BDD-SC-049
@@ -27,7 +27,7 @@ Feature: Inventario inicial administrable
 ## BDD-FEAT-033 Receta simple para producto vendible
 
 ```gherkin
-@PRD-FR-080 @PRD-FR-082 @PRD-FR-088 @inventory @phase2
+@PRD-FR-580 @PRD-FR-582 @PRD-FR-588 @inventory @phase2
 Feature: Recetas simples versionadas
 
   @BDD-SC-051

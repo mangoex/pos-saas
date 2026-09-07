@@ -35,6 +35,26 @@ assert.match(
   /Cargar Menú de Muestra/i,
   'OnboardingWizardModal must include 1-click starter menu seed button'
 );
+assert.match(
+  wizardModal,
+  /const handleContinueToQr = async \(\)/,
+  'OnboardingWizardModal must persist the menu step before opening QR setup'
+);
+assert.match(
+  wizardModal,
+  /step: 'menu', business_type: 'blank'/,
+  'An existing menu must advance onboarding without reseeding products'
+);
+assert.doesNotMatch(
+  wizardModal,
+  /onClick=\{\(\) => setStep\(3\)\}/,
+  'QR setup must not be reachable through an optimistic local-only step advance'
+);
+assert.match(
+  wizardModal,
+  /const persistRegisterStep = async \(\): Promise<boolean>/,
+  'Register completion must wait for the persisted backend response'
+);
 
 // 2. QRCodeCard verification
 const qrCard = readFileSync(

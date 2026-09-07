@@ -13,7 +13,6 @@ def test_corporate_catalog_keeps_comments_and_universal_extras_separate() -> Non
     comments = _read("apps/admin-web/src/features/catalog/VariationNotes.tsx")
     extras = _read("apps/admin-web/src/features/catalog/IngredientExtras.tsx")
     app = _read("apps/admin-web/src/App.tsx")
-    layout = _read("apps/admin-web/src/components/AdminLayout.tsx")
 
     assert "Comentarios del pedido" in comments
     assert "Configura indicaciones de cocina por subcategoría" in comments
@@ -43,7 +42,7 @@ def test_corporate_catalog_keeps_comments_and_universal_extras_separate() -> Non
         "Guardar y activar",
         "mxnToCentsExact",
         "needs_review",
-        "role=\"alert\"",
+        'role="alert"',
         "Cargando ingredientes adicionales",
         "No hay ingredientes adicionales",
     ):

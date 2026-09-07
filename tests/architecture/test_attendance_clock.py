@@ -1,4 +1,4 @@
-"""Architecture contract for PRD-FR-212 attendance clock."""
+"""Architecture contract for historical PRD-FR-712 attendance clock."""
 
 from pathlib import Path
 
@@ -77,7 +77,7 @@ def test_attendance_specs_and_traceability_exist() -> None:
     bdd = _read("docs/03-BDD-attendance-clock.md")
     tdd = _read("docs/04-TDD-attendance-clock.md")
     matrix = _read("docs/05-matriz-trazabilidad.md")
-    assert "PRD-FR-212" in prd and "PRD-FR-212" in matrix
+    assert "PRD-FR-712" in prd and "PRD-FR-712" in matrix
     for scenario in range(249, 255):
         assert f"BDD-SC-{scenario}" in bdd
         assert f"BDD-SC-{scenario}" in matrix

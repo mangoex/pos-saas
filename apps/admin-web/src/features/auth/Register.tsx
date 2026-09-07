@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Button, Input, Select } from '@restaurantos/ui';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
 import { Lock, Mail, User, Store, Phone, Sparkles, ArrowRight } from 'lucide-react';
@@ -30,12 +30,17 @@ interface SignupResponse {
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [restaurantName, setRestaurantName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
   const [password, setPassword] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
   const [businessType, setBusinessType] = useState('restaurant');
+  const [plan, setPlan] = useState(() => {
+    const requested = searchParams.get('plan');
+    return requested === 'starter' || requested === 'professional' || requested === 'trial' ? requested : 'trial';
+  });
   const [branchName, setBranchName] = useState('Matriz');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,8 +49,8 @@ export const Register: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres');
       return;
     }
 
@@ -61,6 +66,7 @@ export const Register: React.FC = () => {
           password,
           owner_phone: ownerPhone.trim() || undefined,
           business_type: businessType,
+          plan,
           branch_name: branchName.trim() || 'Matriz',
         }),
       });
@@ -156,6 +162,16 @@ export const Register: React.FC = () => {
               />
             </div>
           </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
+              Plan inicial
+            </label>
+            <Select value={plan} onChange={(e) => setPlan(e.target.value)} style={{ width: '100%' }}>
+              <option value="trial">Prueba gratuita de 14 días</option>
+              <option value="starter">Starter</option>
+              <option value="professional">Professional</option>
+            </Select>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
@@ -237,7 +253,7 @@ export const Register: React.FC = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mín. 6 caracteres"
+                  placeholder="Mín. 8 caracteres"
                   style={{ paddingLeft: 40, width: '100%' }}
                   required
                 />

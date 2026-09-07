@@ -3,7 +3,7 @@
 ## BDD-FEAT-061 Depurar catálogos heredados sin romper historia
 
 ```gherkin
-@PRD-FR-191 @PRD-FR-192 @PRD-FR-196 @PRD-FR-202 @catalog @migration
+@PRD-FR-691 @PRD-FR-692 @PRD-FR-696 @PRD-FR-702 @catalog @migration
 Feature: Normalizar productos, categorías e insumos heredados
 
   @BDD-SC-196

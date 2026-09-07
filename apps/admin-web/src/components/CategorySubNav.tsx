@@ -31,15 +31,7 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     categoryTitle: 'Inventario y Almacén',
     items: [
       { path: '/inventory/items', label: 'Insumos' },
-      {
-        path: '/warehouses',
-        label: 'Almacenes',
-        requiredPermission: (user: any) =>
-          Boolean(user.is_superadmin || (user.permissions || []).includes('catalog.manage')),
-      },
-      { path: '/production', label: 'Producción de Lotes' },
       { path: '/inventory/waste', label: 'Mermas' },
-      { path: '/inventory/transfers', label: 'Traspasos' },
       { path: '/inventory/counts', label: 'Conteos Físicos' },
       { path: '/inventory/units', label: 'Unidades' },
     ],

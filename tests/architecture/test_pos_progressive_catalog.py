@@ -12,14 +12,14 @@ def _read(relative: str) -> str:
 
 def test_pos_progressive_catalog_specs_traceability_and_presentation_boundary_exist() -> None:
     prd = _read("docs/01-PRD.md")
-    sdd = _read("docs/02-SDD.md")
     bdd = _read("docs/03-BDD-pos-progressive-catalog.md")
     tdd = _read("docs/04-TDD-pos-progressive-catalog.md")
     matrix = _read("docs/05-matriz-trazabilidad.md")
     pos = _read("apps/pos-web/src/features/pos/PointOfSale.tsx")
     helper = _read("apps/pos-web/src/features/pos/progressiveCatalogFlow.ts")
 
-    assert "PRD-FR-229" in prd and "POS-UX-003" in sdd
+    assert "PRD-FR-729" in prd and "PRD-FR-729" in matrix
+    assert "POS-UX-003" in bdd
     assert "BDD-FEAT-094" in bdd and "TDD-TS-098" in tdd and "TDD-TC-193" in tdd
     for identifier in range(425, 431):
         assert f"BDD-SC-{identifier}" in bdd and f"BDD-SC-{identifier}" in matrix
