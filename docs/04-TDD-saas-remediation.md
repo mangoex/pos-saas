@@ -378,14 +378,14 @@ proveedor falso para ambos, refuta lectura/revisión/continuación cruzadas y ve
 propuesta propia.
 
 
-`test_saas_procurement_scope.py` crea dos tenants con el mismo código de proveedor, presentación, folio e idempotency key. Comprueba listados y detalle propios, rechazo de proveedor, término, insumo, compra y cancelación ajenos sin mutación, y confirma que los movimientos conservan la organización. La prueba usa Alembic hasta 0078 para cubrir la unicidad de confirmación por tenant; `test_cash_ledger_postgres.py` conserva la carrera PostgreSQL entre cierre y confirmación de compra.
+`test_saas_procurement_scope.py` crea dos tenants con el mismo código de proveedor, presentación, folio e idempotency key. Comprueba listados y detalle propios, rechazo de proveedor, término, insumo, compra y cancelación ajenos sin mutación, y confirma que los movimientos conservan la organización. La prueba usa Alembic hasta head (0080; unicidad de compra en 0079) para cubrir la unicidad de confirmación por tenant; `test_cash_ledger_postgres.py` conserva la carrera PostgreSQL entre cierre y confirmación de compra.
 
 
 `test_saas_lean_erp_boundary.py` llama rutas históricas de receta/costeo, lote de producción, transferencia y conteo físico con un tenant válido. Cada familia debe responder `409 feature_out_of_saas_scope` antes de consultar o mutar datos de dominio; merma, almacén único e inventario simple no forman parte de esa prohibición.
 
-## Evidencia integral del candidato local
+## Evidencia histórica del árbol Sol, anterior a esta recuperación
 
-Ejecución final con Python 3.14 y PostgreSQL 16 local en
+Resultados registrados por el trabajo previo y conservados como antecedente. No corresponden al SHA de esta rama ni se usan como aprobación actual; la evidencia de integración está en `plan-recuperacion-2026-09-07.md` y en el CI del PR. Ejecución histórica con Python 3.14 y PostgreSQL 16 local en
 `127.0.0.1:55432/saas_remediation_qa`:
 
 | Gate | Resultado |
@@ -404,5 +404,5 @@ El primer pase completo expuso 26 fallas y 5 errores; el segundo dejó 2 fallas 
 settings y 5 fixtures no registradas. El pase final se ejecutó completo después de corregir ambos
 problemas, sin relajar las guardas de producción ni agregar silenciamientos.
 
-Esta evidencia certifica el working tree local. No certifica la imagen publicada, la configuración
+Esta evidencia histórica no certifica el working tree de recuperación ni la imagen publicada, la configuración
 real de EasyPanel, una migración productiva, restauración de backup, proveedor fiscal real ni canary.

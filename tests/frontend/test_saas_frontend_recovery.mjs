@@ -43,3 +43,5 @@ assert.doesNotMatch(mobileApp, /restaurantos_selected_branch_id|kiwi_selected_br
 assert.match(mobileApp, /catalogError/, 'catalog failures must show a recoverable state');
 
 assert.match(readFileSync(join(root, 'apps/mobile-web/vite.config.ts'), 'utf8'), /base: '\/menu\/'/, 'nested and trailing-slash menu URLs must share the absolute asset root');
+
+assert.match(mobileApp, /manifest\.rel = 'manifest'[\s\S]*document\.head\.appendChild\(manifest\)/, 'the tenant manifest must be created when the base HTML has no manifest link');

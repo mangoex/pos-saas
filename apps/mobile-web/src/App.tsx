@@ -216,7 +216,13 @@ export const App: React.FC = () => {
     if (!organization) return;
     document.documentElement.setAttribute('data-theme', organization.mobile_theme === 'dark' ? 'dark' : 'foodie');
     document.title = `${organization.name} | Menú Digital`;
-    document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.setAttribute('href', `${API_BASE_URL}/public/storefronts/${encodeURIComponent(organization.public_slug)}/manifest.webmanifest`);
+    let manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!manifest) {
+      manifest = document.createElement('link');
+      manifest.rel = 'manifest';
+      document.head.appendChild(manifest);
+    }
+    manifest.href = `${API_BASE_URL}/public/storefronts/${encodeURIComponent(organization.public_slug)}/manifest.webmanifest`;
   }, [organization]);
 
   useEffect(() => {
