@@ -22,9 +22,7 @@ def _client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
         app_root = static_root / app_name
         app_root.mkdir(parents=True)
         (app_root / "index.html").write_text(marker, encoding="utf-8")
-    (static_root / "landing-web" / "styles.css").write_text(
-        "LANDING_STYLES", encoding="utf-8"
-    )
+    (static_root / "landing-web" / "styles.css").write_text("LANDING_STYLES", encoding="utf-8")
     monkeypatch.setenv("STATIC_DIR", str(static_root))
     return TestClient(create_app())
 
@@ -88,14 +86,17 @@ def test_root_selection_does_not_change_operational_routes(
 
 
 def test_landing_is_packaged_with_acquisition_and_operational_links() -> None:
-    landing_html = (REPOSITORY_ROOT / "apps/landing-web/src/index.html").read_text(
-        encoding="utf-8"
-    )
+    landing_html = (REPOSITORY_ROOT / "apps/landing-web/src/index.html").read_text(encoding="utf-8")
 
-    for route in ("/admin/signup", "/admin/login", "/pos/", "/kds/"):
+    for route in (
+        "/admin/register?plan=trial",
+        "/admin/register?plan=starter",
+        "/admin/login",
+        "/pos/",
+        "/kds/",
+    ):
         assert f'href="{route}"' in landing_html
-    assert "Prueba 14 días" in landing_html
-    assert "Comenzar mi prueba" in landing_html
+    assert "Prueba 14 Días Gratis" in landing_html
     assert 'src="/landing-assets/app.js"' in landing_html
 
     for dockerfile in ("Dockerfile", "infra/docker/api.Dockerfile"):
@@ -103,7 +104,5 @@ def test_landing_is_packaged_with_acquisition_and_operational_links() -> None:
         assert '--filter "@restaurantos/landing-web" build' in contents
         assert "/app/apps/landing-web/dist" in contents
 
-    workflow = (REPOSITORY_ROOT / ".github/workflows/ci.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (REPOSITORY_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "pnpm --filter @restaurantos/landing-web build" in workflow
