@@ -459,7 +459,16 @@ When el quality ratchet analiza las adiciones o intenta obtener el diff
 Then bloquea sólo la degradación nueva no justificada, redacta su salida y falla cerrado cuando no
 puede demostrar qué cambió.
 
-## Enlaces personalizados
+## Personalización visual
+
+BDD-MEDIA-001/002: `test_category_presentation.py` verifica API, persistencia, aislamiento,
+permisos, validación y auditoría; `test_category_presentation_migration.py` verifica 0082
+en SQLite y PostgreSQL. `tests/frontend/test_category_presentation.mjs` ejecuta la
+proyección móvil y fallbacks, además del contrato de edición. Typecheck Admin/móvil,
+build y QA visual de diálogo, portada y círculos en escritorio/móvil. R3 por migración:
+revisión Sol independiente. Evidencia y límites en `docs/plan-category-presentation.md`.
+
+## Enlaces personalizados: verificación
 
 BDD-DOM-001/002/003: `apps/api/tests/test_restaurant_domains.py` (API/aislamiento/DNS),
 `apps/api/tests/test_restaurant_domains_postgres.py` (persistencia, concurrencia y migración),

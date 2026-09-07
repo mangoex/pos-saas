@@ -25,6 +25,8 @@ organizations = sa.Table(
     sa.Column("owner_phone", sa.String(32), nullable=True),
     sa.Column("business_type", sa.String(32), nullable=True),
     sa.Column("mobile_theme", sa.String(16), nullable=False, server_default="light"),
+    sa.Column("menu_home_name", sa.String(120), nullable=False, server_default="Todos"),
+    sa.Column("menu_home_image_url", sa.String(512), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
@@ -401,6 +403,7 @@ product_categories = sa.Table(
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
     sa.Column("name", sa.String(120), nullable=False),
+    sa.Column("image_url", sa.String(512), nullable=True),
     sa.Column("display_order", sa.Integer(), nullable=False, server_default="0"),
     sa.Column("status", sa.String(32), nullable=False, server_default="active"),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

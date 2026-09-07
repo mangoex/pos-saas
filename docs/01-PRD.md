@@ -1,6 +1,13 @@
 # PRD — Product Requirements Document: POS-SaaS
 
-## Enlaces personalizados aprobados (septiembre 2026)
+## Personalización visual del menú
+
+- `PRD-FR-086`: El administrador de catálogo puede guardar, reemplazar o retirar una
+  liga de imagen por categoría y editar nombre e imagen de la portada maestra del menú.
+  La portada inicia como «Todos», sigue mostrando todos los productos y no es una
+  categoría asignable a productos. Los cambios pertenecen exclusivamente al restaurante.
+
+## Enlaces personalizados
 
 - `PRD-FR-084`: El administrador consulta/copia accesos Admin, POS, KDS y menú/QR de
   su restaurante; puede reservar un alias público preferido conservando URLs anteriores.

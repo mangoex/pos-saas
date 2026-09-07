@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Category } from '../types';
-import { getCategoryCover, getCategoryIcon } from '../imageMap';
+import { getCategoryIcon } from '../imageMap';
+import { CategoryArtwork } from './CategoryArtwork';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CategoryStoriesProps {
@@ -26,6 +27,8 @@ export const CategoryStories: React.FC<CategoryStoriesProps> = ({
     const idx = categories.findIndex((c) => c.id === activeCategoryId);
     if (idx !== -1) {
       setActiveIndex(idx);
+      const carousel = carouselRef.current;
+      carousel?.scrollTo({ left: idx * carousel.clientWidth, behavior: 'smooth' });
     }
   }, [activeCategoryId, categories]);
 
@@ -82,9 +85,8 @@ export const CategoryStories: React.FC<CategoryStoriesProps> = ({
         onScroll={handleScroll}
       >
         {categories.map((cat, idx) => {
-          const isAll = cat.id === 'all' || cat.name === 'Todos';
+          const isAll = cat.id === 'all';
           const isActive = activeCategoryId === cat.id || (activeCategoryId === '' && isAll);
-          const cover = getCategoryCover(cat.name);
           const icon = getCategoryIcon(cat.name);
           const count = productsCountByCategory[cat.id] || (isAll ? 'Todo el menú' : '');
 
@@ -105,9 +107,8 @@ export const CategoryStories: React.FC<CategoryStoriesProps> = ({
               aria-label={`Categoría ${cat.name}`}
             >
               <div className="category-hero-bg-wrapper">
-                <img
-                  src={cover}
-                  alt={cat.name}
+                <CategoryArtwork
+                  category={cat}
                   className="category-hero-img"
                   loading={idx === 0 ? 'eager' : 'lazy'}
                 />

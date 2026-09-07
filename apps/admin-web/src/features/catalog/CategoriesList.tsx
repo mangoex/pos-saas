@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
 import { Plus, Tags, Edit } from 'lucide-react';
+import { MenuHomeEditor } from './MenuHomeEditor';
+import { CategoryImageField } from './CategoryImageField';
 
 import '../../premium-catalogs.css';
 
@@ -11,13 +13,14 @@ interface Category {
   name: string;
   display_order: number;
   status: string;
+  image_url?: string | null;
 }
 
 const CategoriesList = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [formData, setFormData] = useState({ name: '', display_order: 0, status: 'active' });
+  const [formData, setFormData] = useState({ name: '', display_order: 0, status: 'active', image_url: '' });
   const [formError, setFormError] = useState<string | null>(null);
 
   const { data: categories, isLoading, error } = useQuery<Category[]>({
@@ -30,12 +33,12 @@ const CategoriesList = () => {
       if (editingCategory) {
         return fetchApi(`/categories/${editingCategory.id}`, {
           method: 'PUT',
-          body: JSON.stringify({ name: data.name, display_order: data.display_order, status: data.status }),
+          body: JSON.stringify({ name: data.name, display_order: data.display_order, status: data.status, image_url: data.image_url }),
         });
       }
       return fetchApi('/categories', {
         method: 'POST',
-        body: JSON.stringify({ name: data.name, display_order: data.display_order }),
+        body: JSON.stringify({ name: data.name, display_order: data.display_order, image_url: data.image_url }),
       });
     },
     onSuccess: () => {
@@ -52,10 +55,10 @@ const CategoriesList = () => {
     setFormError(null);
     if (category) {
       setEditingCategory(category);
-      setFormData({ name: category.name, display_order: category.display_order, status: category.status });
+      setFormData({ name: category.name, display_order: category.display_order, status: category.status, image_url: category.image_url || '' });
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', display_order: categories ? categories.length : 0, status: 'active' });
+      setFormData({ name: '', display_order: categories ? categories.length : 0, status: 'active', image_url: '' });
     }
     setIsModalOpen(true);
   };
@@ -72,6 +75,8 @@ const CategoriesList = () => {
           Nueva Categoría
         </button>
       </div>
+
+      <MenuHomeEditor />
 
       <div className="premium-card">
         {isLoading ? (
@@ -144,6 +149,7 @@ const CategoriesList = () => {
               onChange={(e: any) => setFormData({...formData, display_order: parseInt(e.target.value) || 0})} 
             />
           </div>
+          <CategoryImageField value={formData.image_url} onChange={image_url => setFormData({ ...formData, image_url })} />
           {editingCategory && (
             <div>
               <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Estatus</label>

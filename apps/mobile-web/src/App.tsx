@@ -341,7 +341,7 @@ export const App: React.FC = () => {
   // Filter visible categories: exclude empty categories and operational items (delivery fee, extras)
   const visibleCategories = useMemo(() => {
     return categories.filter((cat) => {
-      const isAll = cat.id === 'all' || cat.name === 'Todos';
+      const isAll = cat.id === 'all';
       if (isAll) return products.length > 0;
 
       const nameLower = (cat.name || '').toLowerCase().trim();

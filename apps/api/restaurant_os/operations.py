@@ -12933,7 +12933,10 @@ def create_category(
     display_order: int = 0,
     actor_user_id: str | None = None,
     organization_id: str | None = None,
+    image_url: str | None = None,
 ) -> dict[str, Any]:
+    from restaurant_os.catalog_presentation import normalize_image_url
+
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
     actor = (
@@ -12962,6 +12965,7 @@ def create_category(
     if existing:
         raise BusinessError("category_exists", "Category with this name already exists")
 
+    image = normalize_image_url(image_url)
     cat_id = str(uuid4())
     now = _now()
     session.execute(
@@ -12969,6 +12973,7 @@ def create_category(
             id=cat_id,
             organization_id=org_id,
             name=normalized_name,
+            image_url=image,
             display_order=display_order,
             status="active",
             created_at=now,
@@ -12980,7 +12985,7 @@ def create_category(
         action="category.created",
         entity_type="category",
         entity_id=cat_id,
-        payload={"name": normalized_name},
+        payload={"name": normalized_name, "image_url": image},
         actor_user_id=actor_id,
         organization_id=org_id,
     )
@@ -12988,6 +12993,7 @@ def create_category(
     return {
         "id": cat_id,
         "name": normalized_name,
+        "image_url": image,
         "display_order": display_order,
         "status": "active",
     }
@@ -13000,21 +13006,26 @@ def update_category(
     display_order: int | None = None,
     status: str | None = None,
     actor_user_id: str | None = None,
+    image_url: str | None = None,
 ) -> dict[str, Any]:
+    from restaurant_os.catalog_presentation import normalize_image_url
+
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
     actor = _actor_user_info(session, actor_id)
     if not actor:
         raise AuthorizationError("actor_required", "Actor authentication is required")
     organization_id = str(actor["organization_id"])
-    category = session.scalar(sa.select(models.product_categories.c.id).where(
+    category = session.execute(sa.select(models.product_categories).where(
         models.product_categories.c.id == category_id,
         models.product_categories.c.organization_id == organization_id,
-    ))
+    ).with_for_update()).mappings().first()
     if not category:
         raise BusinessError("category_not_found", "Category was not found")
 
     update_data: dict[str, Any] = {"updated_at": _now()}
+    if image_url is not None:
+        update_data["image_url"] = normalize_image_url(image_url)
     if name is not None:
         normalized_name = name.strip()
         if not normalized_name:
@@ -13031,12 +13042,16 @@ def update_category(
                models.product_categories.c.organization_id == organization_id)
         .values(**update_data)
     )
+    audit_payload = dict(update_data)
+    if image_url is not None:
+        audit_payload["before"] = {"image_url": category["image_url"]}
+        audit_payload["after"] = {"image_url": update_data["image_url"]}
     _audit(
         session,
         action="category.updated",
         entity_type="category",
         entity_id=category_id,
-        payload=update_data,
+        payload=audit_payload,
         actor_user_id=actor_id,
         organization_id=organization_id,
     )
@@ -25293,6 +25308,7 @@ def set_branch_product_availability(
 
 
 def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
+    from restaurant_os.catalog_presentation import menu_home
     from restaurant_os.platform_data import _project_pos_catalog
 
     active_branch_id = branch_id.strip()
@@ -25307,6 +25323,8 @@ def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
     )
 
     categories, products = _project_pos_catalog(session, active_branch_id)
+    organization_id = session.execute(sa.select(models.branches.c.organization_id).where(
+        models.branches.c.id == active_branch_id)).scalar_one()
 
     items = []
     for p in products:
@@ -25355,6 +25373,7 @@ def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
     return {
         "branch_id": active_branch_id,
         "branch_name": branch_name,
+        "menu_home": menu_home(session, organization_id),
         "categories": categories,
         "items": items,
     }

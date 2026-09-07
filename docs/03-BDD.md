@@ -365,7 +365,18 @@ Cada historia nueva deberá incluir:
 - reversión o compensación,
 - concurrencia cuando aplique.
 
-## Enlaces personalizados
+## Personalización visual
+
+- BDD-MEDIA-001: Dado dos restaurantes, al guardar una liga de categoría o renombrar
+  la portada, sólo el catálogo propio cambia; otro actor no puede editar la categoría.
+  GET devuelve lo persistido. Omitir liga conserva, vacío/null elimina, entrada inválida
+  rechaza sin escritura ni evento de éxito. Categorías preexistentes funcionan sin imagen.
+- BDD-MEDIA-002: Al abrir el menú, portada, hero y círculos muestran nombre/imagen
+  configurados. Renombrar Todos conserva el filtro completo; una categoría real llamada
+  igual a la portada sigue siendo seleccionable. Imagen rota vuelve a ilustración genérica.
+  Al seleccionar un círculo, su hero acompaña al filtro de productos.
+
+## Enlaces personalizados: escenarios
 
 - BDD-DOM-001: Dos administradores consultan sólo sus enlaces; un alias nuevo conserva
   el canónico y alias anteriores; un nombre ocupado no se asigna al otro restaurante.

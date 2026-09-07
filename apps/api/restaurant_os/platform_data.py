@@ -455,6 +455,7 @@ def _project_pos_catalog(
             {
                 "id": category["id"],
                 "name": category["name"],
+                "image_url": category["image_url"],
                 "display_order": category["display_order"],
                 "status": category["status"],
                 "created_at": category["created_at"].isoformat()
@@ -978,6 +979,7 @@ def list_categories(
             "id": row.id,
             "name": row.name,
             "display_order": row.display_order,
+            "image_url": row.image_url,
             "status": row.status,
             "created_at": row.created_at.isoformat() if row.created_at else None,
         }

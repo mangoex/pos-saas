@@ -99,14 +99,20 @@ export async function fetchMobileMenu(publicKey?: string | null): Promise<{ prod
         && Number.isInteger((item as { price_cents: number }).price_cents)
       ))
       : [];
-    const categories: Category[] = [{ id: 'all', name: 'Todos' }];
-    const seenCatNames = new Set<string>(['Todos']);
+    const categories: Category[] = [{
+      id: 'all',
+      name: typeof data.menu_home?.name === 'string' && data.menu_home.name.trim() ? data.menu_home.name : 'Todos',
+      image_url: typeof data.menu_home?.image_url === 'string' ? data.menu_home.image_url : null,
+    }];
+    const seenCatNames = new Set<string>();
+    const seenCatIds = new Set<string>(['all']);
 
     if (Array.isArray(data.categories) && data.categories.length > 0) {
       data.categories.forEach((c: any) => {
-        if (c.name && !seenCatNames.has(c.name)) {
+        if (c.name && c.id && !seenCatIds.has(c.id)) {
+          seenCatIds.add(c.id);
           seenCatNames.add(c.name);
-          categories.push({ id: c.id, name: c.name, display_order: c.display_order });
+          categories.push({ id: c.id, name: c.name, display_order: c.display_order, image_url: c.image_url });
         }
       });
     }
