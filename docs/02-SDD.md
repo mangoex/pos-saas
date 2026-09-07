@@ -12,7 +12,10 @@ absolutas sin credenciales ni controles (máx.512), rechazando IP locales/privad
 nombres localhost/local/internal evidentes; el servidor no descarga ni resuelve DNS.
 Un hostname externo puede resolver distinto según la red; no se certifica el alojamiento.
 El catálogo público resuelto por sucursal incluye `menu_home: {name, image_url}` y la
-imagen de cada categoría. El móvil reserva id `all` para la portada: jamás decide
+imagen de cada categoría.
+El contrato compartido `pos-catalog-projection-v1.schema.json` admite image_url
+opcional string/null en categoría, preservando rechazo de propiedades desconocidas.
+El móvil reserva id `all` para la portada: jamás decide
 «todos los productos» por el nombre visible. Hero y círculos usan la liga; ausencia
 o fallo de carga usa ilustración genérica. Seleccionar círculo sincroniza el hero.
 No cambia precios, pedidos ni asignaciones.

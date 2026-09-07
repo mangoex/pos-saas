@@ -35,6 +35,7 @@
       "properties": {
         "id": { "type": "string" }, "name": { "type": "string" },
         "display_order": { "type": "integer" }, "status": { "type": "string" },
+        "image_url": { "type": ["string", "null"], "maxLength": 512 },
         "created_at": { "type": ["string", "null"] },
         "selection_group": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/selectionGroup" }] }
       },
