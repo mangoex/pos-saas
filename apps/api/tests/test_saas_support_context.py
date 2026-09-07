@@ -44,7 +44,7 @@ def test_support_action_records_real_effective_actor_and_tenant():
         },
     )
     assert response.status_code == 200, response.text
-    with client._test_session_factory() as session:
+    with client.app.state._test_session_factory() as session:
         events = (
             session.execute(
                 sa.select(models.audit_events).where(
@@ -69,7 +69,7 @@ def test_support_action_records_real_effective_actor_and_tenant():
 
 def test_revoked_support_issuer_cannot_keep_using_issued_token():
     client, data, headers = _support_session()
-    with client._test_session_factory() as session:
+    with client.app.state._test_session_factory() as session:
         session.execute(
             models.users.update()
             .where(models.users.c.is_superadmin.is_(True))
@@ -100,7 +100,7 @@ def test_owner_permission_cannot_authorize_another_tenants_branch():
         },
     )
     assert other.status_code == 201, other.text
-    with client._test_session_factory() as session:
+    with client.app.state._test_session_factory() as session:
         with pytest.raises(AuthorizationError):
             require_permission(
                 session, data["user"]["id"], "cash.shift.open", other.json()["branch"]["id"]
@@ -112,7 +112,7 @@ def test_owner_permission_cannot_authorize_another_tenants_branch():
 def test_administrative_activation_audit_uses_real_support_actor():
     client, data, _headers = _support_session()
     correlation_id = "support-subscription-correlation"
-    with client._test_session_factory() as session:
+    with client.app.state._test_session_factory() as session:
         real_actor_id = session.scalar(
             sa.select(models.users.c.id).where(models.users.c.is_superadmin.is_(True))
         )
@@ -130,12 +130,15 @@ def test_administrative_activation_audit_uses_real_support_actor():
             "Concesión de soporte sintética",
             real_actor_id,
         )
-        audit = session.execute(
-            sa.select(models.audit_events).where(
-                models.audit_events.c.action
-                == "tenant.subscription.administratively_activated"
+        audit = (
+            session.execute(
+                sa.select(models.audit_events).where(
+                    models.audit_events.c.action == "tenant.subscription.administratively_activated"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         assert audit["actor_user_id"] == real_actor_id
         assert audit["correlation_id"] == correlation_id
         assert audit["payload"]["effective_actor_user_id"] == data["user"]["id"]
@@ -146,18 +149,28 @@ def test_administrative_activation_audit_uses_real_support_actor():
 def test_support_revocation_applies_to_every_valid_bearer_scheme(scheme):
     client, data, headers = _support_session()
     headers["Authorization"] = scheme + " " + headers["Authorization"].split(" ", 1)[1]
-    with client._test_session_factory() as session:
-        session.execute(models.users.update().where(
-            models.users.c.is_superadmin.is_(True)
-        ).values(is_superadmin=False))
+    with client.app.state._test_session_factory() as session:
+        session.execute(
+            models.users.update()
+            .where(models.users.c.is_superadmin.is_(True))
+            .values(is_superadmin=False)
+        )
         session.commit()
-    response = client.put("/api/v1/saas/onboarding", headers=headers, json={
-        "step": "business", "business_name": "Unauthorized rename",
-        "branch_name": "Changed", "timezone": "America/Mexico_City",
-    })
+    response = client.put(
+        "/api/v1/saas/onboarding",
+        headers=headers,
+        json={
+            "step": "business",
+            "business_name": "Unauthorized rename",
+            "branch_name": "Changed",
+            "timezone": "America/Mexico_City",
+        },
+    )
     assert response.status_code == 403, response.text
-    with client._test_session_factory() as session:
-        name = session.scalar(sa.select(models.organizations.c.name).where(
-            models.organizations.c.id == data["organization"]["id"]
-        ))
+    with client.app.state._test_session_factory() as session:
+        name = session.scalar(
+            sa.select(models.organizations.c.name).where(
+                models.organizations.c.id == data["organization"]["id"]
+            )
+        )
         assert name == "Support QA"

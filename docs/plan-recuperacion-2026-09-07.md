@@ -34,3 +34,10 @@ R3 revisión: contraejemplo tenant pre-0066 con trial/active/NULL bloquearía po
 
 - Suite backend local de integración:736passed,50skipped,6failed,1905.25s. Los cuatro casos DiDi cargados antes de finalizar sus fixtures pasan en ejecución final del archivo (5passed). Se corrigen dos contratos obsoletos: probar ambos limitadores independientes (pedidos y supervisor), y CTA actual /admin/register?plan=trial; paquete limitador+landing14passed. No se modifica runtime para satisfacer estas expectativas.
 - Dependency graph se confirmó desactivado en Settings de GitHub; habilitado sólo el análisis de lectura del repositorio público. UI confirmó Repository settings saved y Disable dependency graph. No se activaron actualizaciones automáticas ni se eliminaron gates. El siguiente CI comprobará el análisis.
+
+- CI con PostgreSQL completo habilitado detectó fixtures legacy sin grants explícitos, URLs SQLAlchemy convertidas con str() (ocultan password) y consumidores de fixture support sin actualizar. Se preservan credenciales sólo para la conexión de prueba mediante la serialización explícita de SQLAlchemy, sin imprimirlas; se alinean consumidores al estado de la app. Paquete fiscal/caja/importación/compras/support:22passed en PostgreSQL+SQLite. El gate histórico0058 se prueba desde su propia revisión, no atravesando migraciones posteriores.
+- EasyPanel inspeccionado en sesión autenticada y contenedor con comandos de sólo lectura; evidencia y cambios productivos propuestos en release-saas-recuperacion-2026-09-07.md. Redis genérico no resuelve; el servicio correcto exige contraseña. No se intervino producción.
+
+- Focales PostgreSQL0058/roles/merma:10passed,3skipped; los3skips son variantes SQLite de concurrencia exclusiva PostgreSQL, cuyas variantes PG sí pasaron. Dependency-review ya aprobado en CI b961a2c después de habilitar el grafo.
+
+- PCO008 PostgreSQL: 2 passed; operación concurrente validada sobre head y roundtrip histórico 0052/0053 conservado en su prueba específica. No se retiraron aserciones de concurrencia.

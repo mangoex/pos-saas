@@ -12,16 +12,12 @@ from test_saas_superadmin import _client_with_db, _login_superadmin
 
 
 def _grant_pos_operation(client, user_id: str) -> None:
-    with client._test_session_factory() as session:
+    with client.app.state._test_session_factory() as session:
         role_id = session.scalar(
-            sa.select(models.user_roles.c.role_id).where(
-                models.user_roles.c.user_id == user_id
-            )
+            sa.select(models.user_roles.c.role_id).where(models.user_roles.c.user_id == user_id)
         )
         permission_id = session.scalar(
-            sa.select(models.permissions.c.id).where(
-                models.permissions.c.code == "pos.operate"
-            )
+            sa.select(models.permissions.c.id).where(models.permissions.c.code == "pos.operate")
         )
         assert role_id
         if not permission_id:
@@ -35,9 +31,7 @@ def _grant_pos_operation(client, user_id: str) -> None:
                 )
             )
         session.execute(
-            models.role_permissions.insert().values(
-                role_id=role_id, permission_id=permission_id
-            )
+            models.role_permissions.insert().values(role_id=role_id, permission_id=permission_id)
         )
         session.commit()
 
@@ -68,20 +62,22 @@ def test_revoked_support_issuer_cannot_exchange_pos_handoff() -> None:
     issued = client.post("/api/v1/auth/pos-handoffs", headers=support_headers)
     assert issued.status_code == 200, issued.text
 
-    with client._test_session_factory() as session:
+    with client.app.state._test_session_factory() as session:
         issuer_id = session.scalar(
             sa.select(models.users.c.id).where(models.users.c.is_superadmin.is_(True))
         )
         assert issuer_id
-        issued_audit = session.execute(
-            sa.select(models.audit_events).where(
-                models.audit_events.c.action == "auth.pos_handoff_issued"
+        issued_audit = (
+            session.execute(
+                sa.select(models.audit_events).where(
+                    models.audit_events.c.action == "auth.pos_handoff_issued"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         session.execute(
-            models.users.update()
-            .where(models.users.c.id == issuer_id)
-            .values(is_superadmin=False)
+            models.users.update().where(models.users.c.id == issuer_id).values(is_superadmin=False)
         )
         session.commit()
 
@@ -91,12 +87,16 @@ def test_revoked_support_issuer_cannot_exchange_pos_handoff() -> None:
     )
     assert rejected.status_code == 403, rejected.text
     assert rejected.json()["detail"]["code"] == "superadmin_forbidden"
-    with client._test_session_factory() as session:
-        rejection_audit = session.execute(
-            sa.select(models.audit_events).where(
-                models.audit_events.c.action == "auth.pos_handoff_rejected"
+    with client.app.state._test_session_factory() as session:
+        rejection_audit = (
+            session.execute(
+                sa.select(models.audit_events).where(
+                    models.audit_events.c.action == "auth.pos_handoff_rejected"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         assert issued_audit["actor_user_id"] == issuer_id
         assert rejection_audit["actor_user_id"] == issuer_id
         assert issued_audit["correlation_id"]
@@ -129,12 +129,16 @@ def test_support_handoff_exchange_preserves_support_claims() -> None:
         headers={"Authorization": f"Bearer {impersonation.json()['token']}"},
     )
     assert issued.status_code == 200, issued.text
-    with client._test_session_factory() as session:
-        issued_audit = session.execute(
-            sa.select(models.audit_events).where(
-                models.audit_events.c.action == "auth.pos_handoff_issued"
+    with client.app.state._test_session_factory() as session:
+        issued_audit = (
+            session.execute(
+                sa.select(models.audit_events).where(
+                    models.audit_events.c.action == "auth.pos_handoff_issued"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
 
     exchanged = client.post(
         "/api/v1/auth/pos-handoffs/exchange",
@@ -147,11 +151,15 @@ def test_support_handoff_exchange_preserves_support_claims() -> None:
     assert claims["impersonated_by"]
     assert claims["target_organization_id"] == tenant["organization"]["id"]
     assert claims["support_correlation_id"]
-    with client._test_session_factory() as session:
-        consumed_audit = session.execute(
-            sa.select(models.audit_events).where(
-                models.audit_events.c.action == "auth.pos_handoff_consumed"
+    with client.app.state._test_session_factory() as session:
+        consumed_audit = (
+            session.execute(
+                sa.select(models.audit_events).where(
+                    models.audit_events.c.action == "auth.pos_handoff_consumed"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         assert consumed_audit["actor_user_id"] == issued_audit["actor_user_id"]
         assert consumed_audit["correlation_id"] == issued_audit["correlation_id"]

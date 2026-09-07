@@ -25,7 +25,11 @@ API_DIR = Path(__file__).resolve().parents[1]
 
 def _migrate(schema: str) -> str:
     url = os.environ["SAAS_TEST_POSTGRES_URL"]
-    scoped = str(sa.engine.make_url(url).set(query={"options": f"-csearch_path={schema}"}))
+    scoped = (
+        sa.engine.make_url(url)
+        .set(query={"options": f"-csearch_path={schema}"})
+        .render_as_string(hide_password=False)
+    )
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
         cwd=API_DIR,

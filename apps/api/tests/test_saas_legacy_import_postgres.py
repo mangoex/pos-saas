@@ -18,7 +18,11 @@ API_DIR = Path(__file__).resolve().parents[1]
 
 def _migrate(schema: str) -> str:
     url = os.environ["SAAS_TEST_POSTGRES_URL"]
-    scoped = str(sa.engine.make_url(url).set(query={"options": f"-csearch_path={schema}"}))
+    scoped = (
+        sa.engine.make_url(url)
+        .set(query={"options": f"-csearch_path={schema}"})
+        .render_as_string(hide_password=False)
+    )
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
         cwd=API_DIR,
@@ -99,21 +103,27 @@ def test_postgres_legacy_import_catalog_codes_stay_in_actor_organization() -> No
                 a["organization"]["id"],
                 b["organization"]["id"],
             }
-            assert session.scalar(
-                sa.select(sa.func.count())
-                .select_from(models.products)
-                .where(models.products.c.sku == "1002")
-            ) == 2
-            assert session.scalar(
-                sa.select(sa.func.count())
-                .select_from(models.inventory_units)
-                .where(
-                    models.inventory_units.c.code == "PIEZA",
-                    models.inventory_units.c.organization_id.in_(
-                        (a["organization"]["id"], b["organization"]["id"])
-                    ),
+            assert (
+                session.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(models.products)
+                    .where(models.products.c.sku == "1002")
                 )
-            ) == 2
+                == 2
+            )
+            assert (
+                session.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(models.inventory_units)
+                    .where(
+                        models.inventory_units.c.code == "PIEZA",
+                        models.inventory_units.c.organization_id.in_(
+                            (a["organization"]["id"], b["organization"]["id"])
+                        ),
+                    )
+                )
+                == 2
+            )
     finally:
         engine.dispose()
         with admin.begin() as connection:

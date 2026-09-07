@@ -12,7 +12,7 @@
     },
     {
       "path": "apps/api/tests/test_admin_ai_postgres.py",
-      "sha256": "8be4f89bf23329799ccd1c1c1570498e2e33aaca1de94336809ea5651534fad6",
+      "sha256": "c93ff595f85734156eeac628de54493e748183db6b0e81b980a9d84c8a149f7b",
       "provenance": "restaurantos-admin-ai-postgres-tests-v1"
     },
     {
@@ -37,7 +37,7 @@
     },
     {
       "path": "apps/api/tests/test_fiscal_issue_postgres.py",
-      "sha256": "a7dddf8f141c2e3edd3751ad92040a39dff204524ec25085712bf58ac44db8d2",
+      "sha256": "2909bb511e137b5c7238398b7115e7b5ac6442186e5254e4440751533f3a8c53",
       "provenance": "restaurantos-recovery-test-fiscal-issue-postgres-synthetic-v1"
     },
     {
@@ -82,7 +82,7 @@
     },
     {
       "path": "apps/api/tests/test_saas_cash_scope.py",
-      "sha256": "88fab944e68716f8b610830b5a99f2776675e6141283d9bf4d1809280282ef67",
+      "sha256": "9460a0dda99e552f9b30ed258d2786c0037b6bafe1aeb2ef3ecbf1803338ed9c",
       "provenance": "restaurantos-saas-test-saas-cash-scope-synthetic-v1"
     },
     {
@@ -137,7 +137,7 @@
     },
     {
       "path": "apps/api/tests/test_saas_legacy_import_postgres.py",
-      "sha256": "4ea8540161c96128a685ca391663292bf5329373bdb4e68eab6037559db06584",
+      "sha256": "4c8b9991f1a625f3eeac47e22c58c8588eedd1406487571aca14aa7281f7bcec",
       "provenance": "recovery-c61212672d61"
     },
     {
@@ -167,7 +167,7 @@
     },
     {
       "path": "apps/api/tests/test_saas_procurement_postgres.py",
-      "sha256": "bece213f59e33a08008be91005a84be470013d954c9807fb03893a5781635b6b",
+      "sha256": "ed562d9a1914e56f7dc44ce5ce6acaa0434f5d18ab1115a5baed37361bacc3a5",
       "provenance": "recovery-aed286ad2494"
     },
     {
@@ -202,12 +202,12 @@
     },
     {
       "path": "apps/api/tests/test_saas_support_context.py",
-      "sha256": "0179088a3682a6f2a0545eb02ea421bcd7e81442575b7a6ecf630bd12c74d721",
+      "sha256": "29b436531aeba1a276af4ceed3f127a6926e3bd1a6fd4f29f9ccf40554c08cb9",
       "provenance": "restaurantos-saas-test-saas-support-context-synthetic-v1"
     },
     {
       "path": "apps/api/tests/test_saas_support_handoff.py",
-      "sha256": "67c76e635747fa85bbc8666b583b8411e46713ef820c38770c62d1fc6db8acee",
+      "sha256": "fb85ba6c9182822025c9f05b4a1ba6b10bb4a524b7d1f2f57706da9964ebe8e3",
       "provenance": "restaurantos-saas-test-saas-support-handoff-synthetic-v1"
     },
     {

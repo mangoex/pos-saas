@@ -21,7 +21,11 @@ API_DIR = Path(__file__).resolve().parents[1]
 
 def _migrate(schema: str, command: str) -> str:
     url = os.environ["SAAS_TEST_POSTGRES_URL"]
-    scoped = str(sa.engine.make_url(url).set(query={"options": f"-csearch_path={schema}"}))
+    scoped = (
+        sa.engine.make_url(url)
+        .set(query={"options": f"-csearch_path={schema}"})
+        .render_as_string(hide_password=False)
+    )
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", "alembic.ini", *command.split()],
         cwd=API_DIR,
@@ -165,7 +169,7 @@ def test_postgres_overlapping_fiscal_claims_are_atomic_and_survive_reupgrade() -
                     target_id="order-a",
                     snapshot={},
                     actor_user_id=actor,
-            )
+                )
             assert receipt["status"] == "inflight"
 
         for operation, target_id, snapshot in (
@@ -222,9 +226,7 @@ def test_postgres_overlapping_fiscal_claims_are_atomic_and_survive_reupgrade() -
         with factory() as session:
             assert (
                 session.scalar(
-                    sa.select(sa.func.count()).select_from(
-                        models.fiscal_command_resource_claims
-                    )
+                    sa.select(sa.func.count()).select_from(models.fiscal_command_resource_claims)
                 )
                 == 3
             )
@@ -238,9 +240,7 @@ def test_postgres_overlapping_fiscal_claims_are_atomic_and_survive_reupgrade() -
             )
             assert (
                 session.scalar(
-                    sa.select(sa.func.count()).select_from(
-                        models.fiscal_command_resource_claims
-                    )
+                    sa.select(sa.func.count()).select_from(models.fiscal_command_resource_claims)
                 )
                 == 3
             )

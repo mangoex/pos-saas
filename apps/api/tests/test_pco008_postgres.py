@@ -80,7 +80,9 @@ def _reset_schema(url: str) -> None:
 def _postgres_engine() -> sa.Engine:
     url = _postgres_url()
     _reset_schema(url)
-    _alembic(url, "upgrade", REVISION_0053)
+    # Current runtime guards require the current schema; the dedicated migration
+    # test below still exercises the historical 0052/0053 roundtrip.
+    _alembic(url, "upgrade", "head")
     engine = create_engine(url, future=True)
     with engine.begin() as connection:
         tables = connection.execute(
@@ -244,7 +246,7 @@ def test_tc134_postgres_serializes_branch_checkpoints() -> None:
 
         with ThreadPoolExecutor(max_workers=3) as pool:
             results = list(pool.map(worker, cases))
-        assert {result["status"] for result in results} == {"CONFIRMED"}
+        assert {result["status"] for result in results} == {"CONFIRMED"}, results
         assert {results[index]["checkpoint"] for index in (0, 1)} == {1, 2}
         assert results[2]["checkpoint"] == 1
         with Session(engine) as session:
