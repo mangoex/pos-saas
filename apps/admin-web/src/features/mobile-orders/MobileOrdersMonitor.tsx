@@ -235,7 +235,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       </header>
 
       {/* Main Container */}
-      <main style={{ flex: 1, padding: '12px 14px', maxWidth: 640, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      <main style={{ flex: 1, padding: '12px 14px 84px', maxWidth: 640, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
         {/* Search Bar */}
         <div
           style={{

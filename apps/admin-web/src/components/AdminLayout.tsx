@@ -16,6 +16,7 @@ import { canManageCashConcepts } from '../features/cash/cashConceptState';
 import { ImpersonationBanner } from '../features/superadmin/ImpersonationBanner';
 import { OnboardingWizardModal } from '../features/onboarding/OnboardingWizardModal';
 import { MobileOrdersMonitor } from '../features/mobile-orders/MobileOrdersMonitor';
+import { MobileAdminShell } from '../features/mobile-admin/MobileAdminShell';
 
 const compressImage = (dataUrl: string, maxWidth = 128, maxHeight = 128): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -68,6 +69,13 @@ const AdminLayout = () => {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 768;
+  });
+  const [forceDesktop, setForceDesktop] = useState(() => {
+    try {
+      return localStorage.getItem('restaurantos_force_desktop') === 'true';
+    } catch {
+      return false;
+    }
   });
 
   useEffect(() => {
@@ -328,13 +336,21 @@ const AdminLayout = () => {
     }] : []),
   ];
 
-  if (isMobile && (location.pathname === '/' || location.pathname === '/orders-mobile')) {
+  if (isMobile && !forceDesktop && (location.pathname === '/' || location.pathname === '/orders-mobile')) {
     return (
       <div style={{ minHeight: '100vh', width: '100vw' }}>
         <ImpersonationBanner />
-        <MobileOrdersMonitor
+        <MobileAdminShell
           branchId={branchId}
           branchName={branches.find((b) => b.id === branchId)?.name}
+          onSwitchToDesktop={() => {
+            try {
+              localStorage.setItem('restaurantos_force_desktop', 'true');
+            } catch {
+              // ignore
+            }
+            setForceDesktop(true);
+          }}
         />
       </div>
     );
@@ -497,6 +513,35 @@ const AdminLayout = () => {
               <Sparkles size={14} style={{ color: '#10b981' }} />
               <span>Asistente Inicial</span>
             </button>
+            {forceDesktop && (
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    localStorage.removeItem('restaurantos_force_desktop');
+                  } catch {
+                    // ignore
+                  }
+                  setForceDesktop(false);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 20,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  background: '#0f172a',
+                  color: '#38bdf8',
+                  border: '1px solid #1e293b',
+                  cursor: 'pointer',
+                }}
+                title="Regresar a vista móvil"
+              >
+                📱 Vista Móvil
+              </button>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <button style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><Bell size={18} /></button>

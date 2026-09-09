@@ -320,6 +320,16 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
   - Faltantes o sobrantes de caja reportados.
   - Top 3 platillos más vendidos.
 
+### 5.6 Pilar 6: Suite Móvil de Backoffice y Puesta en Marcha Rápida (Mobile Admin Shell)
+
+#### Arquitectura de Shell Móvil:
+- Detección responsiva en `apps/admin-web`: cuando el viewport es móvil (`width < 768px`) y no se encuentra forzada la vista desktop, se monta `MobileAdminShell` con barra de navegación inferior fija (`BottomNavigationBar`) con 4 pestañas operativas ergonómicas:
+  1. **Pedidos (`orders`)**: Monitor de pedidos en tiempo real (`MobileOrdersMonitor`) con filtrado por estado (Activos, Listos, Todos) y modal interactivo para aceptación y despacho.
+  2. **Caja (`cash`)**: Control de turno de caja (`MobileCashShiftTab`). Si está cerrada: formulario de apertura con fondo inicial en efectivo (`POST /cash/shifts/open`). Si está abierta: resumen en tiempo real de apertura, saldo y ventas, movimientos de caja (`POST /cash/movements`) y cierre operativo (`POST /cash/shifts/{id}/close-operationally`).
+  3. **Menú (`menu`)**: Gestión compacta de catálogo (`MobileMenuManagerTab`), creación y edición ágil de categorías y platillos, conmutador inmediato de disponibilidad activo/agotado (`PUT /catalog/products/{id}`), y asignación de imágenes mediante cámara/galería o presets de alta calidad.
+  4. **Sucursal (`settings`)**: Configuración operativa (`MobileBranchSettingsTab`) de estado de sucursal, recepción de pedidos por WhatsApp, enlace directo y códigos para compartir el menú móvil digital, y enlace para alternar a la versión completa de escritorio.
+- Sin regresión sobre la experiencia de comensal en `mobile-web` ni sobre el backoffice de escritorio.
+
 ---
 
 ## 6. Plan de Podado y Desacople de Módulos ERP Tradicional
