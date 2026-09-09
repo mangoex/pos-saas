@@ -70,6 +70,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   submitError,
 }) => {
   const [orderType, setOrderType] = useState<OrderType>(initialOrderType);
+  const [tableNumber, setTableNumber] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [street, setStreet] = useState('');
@@ -189,6 +190,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       name: name.trim(),
       phone: phone.trim(),
       order_type: orderType,
+      table_number: orderType === 'dine-in' ? tableNumber.trim() || undefined : undefined,
       address_street: street.trim(),
       address_number: number.trim(),
       address_neighborhood: neighborhood.trim(),
@@ -490,6 +492,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Table or Spot if dine-in mode */}
+              {orderType === 'dine-in' && (
+                <div className="cart-form-section">
+                  <label className="cart-form-section-label">Mesa o Ubicación (opcional)</label>
+                  <div className="cart-input-wrapper">
+                    <Utensils size={16} className="cart-input-icon" />
+                    <input
+                      type="text"
+                      className="cart-input-field"
+                      placeholder="Ej. Mesa 4, Barra principal, etc."
+                      value={tableNumber}
+                      onChange={(e) => setTableNumber(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Delivery Address if delivery mode */}
               {orderType === 'delivery' && (

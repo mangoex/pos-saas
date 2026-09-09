@@ -26,6 +26,19 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
+  // Auto-redirect to WhatsApp on mobile devices when URL is present
+  React.useEffect(() => {
+    if (orderResult.whatsapp_url && typeof window !== 'undefined') {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768;
+      if (isMobile) {
+        const timer = setTimeout(() => {
+          window.location.href = orderResult.whatsapp_url!;
+        }, 900);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [orderResult.whatsapp_url]);
+
   const handleSelectRating = (selected: number) => {
     setRating(selected);
     if (selected >= 4 && branch?.id) {
@@ -326,6 +339,29 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
               </div>
             )}
           </div>
+
+          {orderResult.whatsapp_url && (
+            <div style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '16px',
+              padding: '12px 16px',
+              marginBottom: '12px',
+              fontSize: '13px',
+              color: '#15803d',
+              lineHeight: 1.4,
+              textAlign: 'center',
+              boxSizing: 'border-box',
+              width: '100%',
+            }}>
+              <strong style={{ display: 'block', fontSize: '13px', marginBottom: '2px' }}>
+                📲 Envía tu pedido por WhatsApp
+              </strong>
+              <span>
+                Tu pedido quedó registrado en el sistema. Toca el botón verde para enviar los detalles al restaurante.
+              </span>
+            </div>
+          )}
 
           {orderResult.whatsapp_url && (
             <a

@@ -23,6 +23,7 @@ interface Branch {
   longitude?: number | null;
   phone?: string;
   google_review_url?: string;
+  whatsapp_ordering_enabled?: boolean;
   organization_id: string;
   business_unit_id: string;
   business_unit_name: string;
@@ -53,6 +54,7 @@ const emptyForm = {
   longitude: '',
   phone: '',
   google_review_url: '',
+  whatsapp_ordering_enabled: true,
 };
 
 const BranchesList = () => {
@@ -119,6 +121,7 @@ const BranchesList = () => {
         longitude: branch.longitude !== null && branch.longitude !== undefined ? String(branch.longitude) : '',
         phone: branch.phone || '',
         google_review_url: branch.google_review_url || '',
+        whatsapp_ordering_enabled: branch.whatsapp_ordering_enabled !== false,
       });
     } else {
       setEditingBranch(null);
@@ -282,9 +285,24 @@ const BranchesList = () => {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Teléfono de contacto</label>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Teléfono de contacto / WhatsApp</label>
                 <Input value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value})} placeholder="Ej. 6671234567" />
               </div>
+            </div>
+
+            <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--color-surface-subtle, #f8fafc)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.whatsapp_ordering_enabled}
+                  onChange={(e) => setFormData({ ...formData, whatsapp_ordering_enabled: e.target.checked })}
+                  style={{ width: 16, height: 16, accentColor: '#25D366' }}
+                />
+                <span>Habilitar confirmación y envío de pedidos por WhatsApp (para recepción en celular)</span>
+              </label>
+              <p style={{ margin: '4px 0 0 24px', fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
+                Al estar activo, cuando el cliente pida desde la versión móvil del menú, además de guardarse en el sistema, se abrirá WhatsApp con el pedido completo para enviártelo a este teléfono.
+              </p>
             </div>
           </div>
 

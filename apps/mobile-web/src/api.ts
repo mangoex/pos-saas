@@ -191,6 +191,15 @@ export function buildWhatsAppLink(
   branchName?: string
 ): string | undefined {
   if (!restaurantPhone) return undefined;
+
+  let rawPhone = restaurantPhone.trim().replace(/[^\d+]/g, '');
+  if (!rawPhone) return undefined;
+  if (rawPhone.startsWith('+')) {
+    rawPhone = rawPhone.slice(1);
+  } else if (rawPhone.length === 10) {
+    rawPhone = `52${rawPhone}`;
+  }
+
   const methodLabel = {
     cash: `Efectivo ${info.cash_amount ? `(Paga con: $${info.cash_amount})` : ''}`,
     card: 'Tarjeta (Al recibir)',
@@ -199,7 +208,7 @@ export function buildWhatsAppLink(
 
   let typeLabel = '🛍️ Para Recoger en Barra';
   if (info.order_type === 'dine-in') {
-    typeLabel = '🍽️ Para Comer Aquí (en Barra)';
+    typeLabel = `🍽️ Para Comer Aquí${info.table_number ? ` (Mesa: ${info.table_number})` : ' (en Barra / Mesa)'}`;
   } else if (info.order_type === 'delivery') {
     typeLabel = '🛵 Envío a Domicilio';
   }
@@ -225,6 +234,12 @@ export function buildWhatsAppLink(
 
   items.forEach((item) => {
     text += `• ${item.quantity}x ${item.product.name} (${formatMoney(item.product.price_cents)})\n`;
+    if (item.modifiers && item.modifiers.length > 0) {
+      item.modifiers.forEach((mod) => {
+        const delta = mod.price_delta_cents > 0 ? ` (+${formatMoney(mod.price_delta_cents)})` : '';
+        text += `   ↳ _Adicional: ${mod.name}${delta}_\n`;
+      });
+    }
     if (item.notes) {
       text += `   ↳ _Nota: ${item.notes}_\n`;
     }
@@ -234,9 +249,9 @@ export function buildWhatsAppLink(
   if (info.order_notes) {
     text += `📝 *Comentarios Adicionales:* ${info.order_notes}\n`;
   }
-  text += `\n✨ _Pedido generado desde el Menú Digital_`;
+  text += `\n✨ _Pedido registrado en Menú Digital_`;
 
-  return `https://wa.me/${restaurantPhone}?text=${encodeURIComponent(text)}`;
+  return `https://wa.me/${rawPhone}?text=${encodeURIComponent(text)}`;
 }
 
 export async function submitMobileOrder(
@@ -246,6 +261,8 @@ export async function submitMobileOrder(
   branchName?: string,
   customerCoords?: { lat: number; lng: number },
   publicKey?: string | null,
+  branchPhone?: string,
+  whatsappOrderingEnabled?: boolean,
 ): Promise<CreatedOrderResult> {
   const deliveryAddressText = info.order_type === 'delivery'
     ? `${info.address_street} #${info.address_number}, Col. ${info.address_neighborhood}${info.address_notes ? ` (Ref: ${info.address_notes})` : ''}`
@@ -336,7 +353,7 @@ export async function submitMobileOrder(
     throw new Error('public_order_invalid_response');
   }
   if (useIntent) {
-    const intent = data as { public_reference?: unknown; status?: unknown; version?: unknown; total_cents?: unknown };
+    const intent = data as { public_reference?: unknown; status?: unknown; version?: unknown; total_cents?: unknown; whatsapp_phone?: unknown; whatsapp_url?: unknown };
     if (
       typeof intent.public_reference !== 'string'
       || intent.status !== 'PENDING_REVIEW'
@@ -346,6 +363,17 @@ export async function submitMobileOrder(
     const totalCents = intent.total_cents as number;
     localStorage.removeItem(storageKey);
     if (legacyStorageKey) localStorage.removeItem(legacyStorageKey);
+
+    const effectivePhone = typeof intent.whatsapp_phone === 'string' && intent.whatsapp_phone.trim()
+      ? intent.whatsapp_phone
+      : (typeof branchPhone === 'string' && branchPhone.trim() ? branchPhone : undefined);
+
+    const whatsappUrl = (whatsappOrderingEnabled !== false && effectivePhone)
+      ? (typeof intent.whatsapp_url === 'string' && intent.whatsapp_url
+          ? intent.whatsapp_url
+          : buildWhatsAppLink(intent.public_reference, info, items, totalCents, effectivePhone, branchName))
+      : undefined;
+
     return {
       kind: 'public_order_intent',
       public_reference: intent.public_reference,
@@ -354,15 +382,20 @@ export async function submitMobileOrder(
       customer_info: info,
       items,
       total_cents: totalCents,
+      ...(whatsappUrl ? { whatsapp_url: whatsappUrl } : {}),
     };
   }
   if (!data || typeof data !== 'object' || typeof (data as { id?: unknown }).id !== 'string' || typeof (data as { folio?: unknown }).folio !== 'string' || typeof (data as { created_at?: unknown }).created_at !== 'string' || !Number.isInteger((data as { total_cents?: unknown }).total_cents)) throw new Error('public_order_invalid_response');
   const persisted = data as { id: string; folio: string; created_at: string; total_cents: number; whatsapp_phone?: unknown; };
-  const whatsappUrl = buildWhatsAppLink(
-    persisted.folio, info, items, persisted.total_cents,
-    typeof persisted.whatsapp_phone === 'string' ? persisted.whatsapp_phone : undefined,
-    branchName,
-  );
+
+  const effectivePhone = typeof persisted.whatsapp_phone === 'string' && persisted.whatsapp_phone.trim()
+    ? persisted.whatsapp_phone
+    : (typeof branchPhone === 'string' && branchPhone.trim() ? branchPhone : undefined);
+
+  const whatsappUrl = (whatsappOrderingEnabled !== false && effectivePhone)
+    ? buildWhatsAppLink(persisted.folio, info, items, persisted.total_cents, effectivePhone, branchName)
+    : undefined;
+
   return {
     kind: 'operational_order',
     folio: persisted.folio,

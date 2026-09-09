@@ -1,5 +1,7 @@
 """Tenant-owned menu presentation; image URLs are references, never server fetches."""
 
+from __future__ import annotations
+
 import re
 from datetime import datetime, timezone
 from ipaddress import ip_address

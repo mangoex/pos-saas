@@ -44,4 +44,3 @@ Scenario: Modalidades públicas en barra, para llevar y envío
   When selecciona comer en local (en barra), para llevar o a domicilio y envía una intención válida
   Then la intención conserva el tipo de servicio validado por Python
   And la captura no crea pedido operativo, asignación de mesa ni turno de caja
-```

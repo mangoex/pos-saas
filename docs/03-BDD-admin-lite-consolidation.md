@@ -80,3 +80,21 @@ And la vista prioriza el monitoreo de ventas, cortes de caja y conciliación dia
 Given un usuario intenta acceder a `/admin/waste` o `/admin/inventory/waste`
 When el sistema procesa la ruta en la aplicación Admin Web
 Then se muestra el componente de módulo comercial excluido indicando que el control de mermas e inventario detallado pertenece a planes superiores.
+
+---
+
+## BDD-FEAT-LITE-006: Confirmación y Envío de Pedidos por WhatsApp en Menú Móvil
+
+### BDD-SC-LITE-011: Generación y despacho de comanda detallada por WhatsApp al confirmar en móvil
+Given una sucursal con teléfono de contacto y la casilla "Habilitar confirmación y envío de pedidos por WhatsApp" activa
+And un cliente en navegador web móvil que completa un pedido con adicionales, notas y modalidad elegida
+When confirma el pedido desde el carrito de compra
+Then el sistema registra la orden en la base de datos conservando su folio para auditoría
+And genera el enlace de WhatsApp estructurado con folio, modalidad (comer aquí, llevar o a domicilio), cliente, adicionales desglosados con precio y total
+And en navegadores móviles abre automáticamente la aplicación de WhatsApp y muestra el botón de reintento en el modal de éxito.
+
+### BDD-SC-LITE-012: Configuración de envío por WhatsApp en sucursal
+Given el usuario administrador edita o crea una sucursal en el panel de administración
+When consulta los campos de contacto
+Then visualiza la casilla "Habilitar confirmación y envío de pedidos por WhatsApp"
+And al desmarcarla, el menú móvil registra pedidos directamente en el sistema sin forzar la apertura de WhatsApp.

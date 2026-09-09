@@ -794,6 +794,8 @@ def post_branch(
             latitude=payload.get("latitude"),
             longitude=payload.get("longitude"),
             phone=payload.get("phone"),
+            google_review_url=payload.get("google_review_url"),
+            whatsapp_ordering_enabled=payload.get("whatsapp_ordering_enabled"),
         )
     )
 

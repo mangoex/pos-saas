@@ -941,6 +941,7 @@ def create_branch(
     longitude: float | Decimal | str | None = None,
     phone: str | None = None,
     google_review_url: str | None = None,
+    whatsapp_ordering_enabled: bool | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -1007,6 +1008,9 @@ def create_branch(
         "longitude": longitude if longitude is not None else None,
         "phone": str(phone).strip() if phone else None,
         "google_review_url": str(google_review_url).strip() if google_review_url else None,
+        "whatsapp_ordering_enabled": bool(whatsapp_ordering_enabled)
+        if whatsapp_ordering_enabled is not None
+        else True,
         "created_at": now,
         "updated_at": now,
     }
@@ -1044,6 +1048,7 @@ def create_branch(
             "latitude": str(branch["latitude"]) if branch["latitude"] is not None else None,
             "longitude": str(branch["longitude"]) if branch["longitude"] is not None else None,
             "google_review_url": branch["google_review_url"],
+            "whatsapp_ordering_enabled": branch["whatsapp_ordering_enabled"],
         },
         branch_id=branch["id"],
         organization_id=target_org,
@@ -11304,6 +11309,7 @@ def update_branch(
     longitude: float | Decimal | str | None = None,
     phone: str | None = None,
     google_review_url: str | None = None,
+    whatsapp_ordering_enabled: bool | None = None,
     extra_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
@@ -11354,6 +11360,8 @@ def update_branch(
         update_data["phone"] = str(phone).strip() or None
     if google_review_url is not None:
         update_data["google_review_url"] = str(google_review_url).strip() or None
+    if whatsapp_ordering_enabled is not None:
+        update_data["whatsapp_ordering_enabled"] = bool(whatsapp_ordering_enabled)
 
     if extra_payload:
         for k in (
@@ -11377,6 +11385,9 @@ def update_branch(
         if "longitude" in extra_payload and "longitude" not in update_data:
             v_lng = extra_payload["longitude"]
             update_data["longitude"] = float(v_lng) if v_lng != "" and v_lng is not None else None
+        if "whatsapp_ordering_enabled" in extra_payload and "whatsapp_ordering_enabled" not in update_data:
+            update_data["whatsapp_ordering_enabled"] = bool(extra_payload["whatsapp_ordering_enabled"])
+
 
     if update_data:
         update_data["updated_at"] = _now()
@@ -11492,6 +11503,7 @@ def list_public_branches(
             models.branches.c.longitude,
             models.branches.c.phone,
             models.branches.c.google_review_url,
+            models.branches.c.whatsapp_ordering_enabled,
             models.branches.c.status,
             models.public_order_keys.c.public_key,
         )

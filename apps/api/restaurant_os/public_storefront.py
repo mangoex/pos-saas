@@ -111,6 +111,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         "phone",
         "status",
         "google_review_url",
+        "whatsapp_ordering_enabled",
     )
     branches = []
     for branch in branch_rows:

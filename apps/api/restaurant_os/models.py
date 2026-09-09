@@ -106,6 +106,12 @@ branches = sa.Table(
     sa.Column("longitude", sa.Numeric(10, 7), nullable=True),
     sa.Column("phone", sa.String(32), nullable=True),
     sa.Column("google_review_url", sa.String(500), nullable=True),
+    sa.Column(
+        "whatsapp_ordering_enabled",
+        sa.Boolean(),
+        nullable=False,
+        server_default=sa.true(),
+    ),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     sa.UniqueConstraint("organization_id", "code", name="uq_branches_organization_code"),

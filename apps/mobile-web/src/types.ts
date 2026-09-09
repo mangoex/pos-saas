@@ -67,6 +67,7 @@ export interface BranchInfo {
   public_key?: string | null;
   google_review_url?: string | null;
   mobile_theme?: 'light' | 'dark' | string;
+  whatsapp_ordering_enabled?: boolean;
 }
 
 export interface StorefrontOrganization {
@@ -98,6 +99,7 @@ export interface CustomerOrderInfo {
   name: string;
   phone: string;
   order_type: OrderType;
+  table_number?: string;
   address_street: string;
   address_number: string;
   address_neighborhood: string;
