@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Copy, Check, Download, ExternalLink, QrCode } from 'lucide-react';
 import { Card, Button } from '@restaurantos/ui';
+import { fetchApi } from '@restaurantos/api-client';
 
 interface QRCodeCardProps {
   restaurantName: string;
@@ -9,6 +10,10 @@ interface QRCodeCardProps {
   fullUrl?: string;
 }
 
+type RestaurantLinksResponse = {
+  links: { menu: string };
+};
+
 export const QRCodeCard: React.FC<QRCodeCardProps> = ({
   restaurantName,
   restaurantSlug,
@@ -16,19 +21,45 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
   fullUrl,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(fullUrl || null);
+  const [linkError, setLinkError] = useState('');
 
-  const baseUrl = window.location.origin;
-  const menuPath = `/menu/${restaurantSlug}/`;
-  const resolvedUrl = fullUrl || `${baseUrl}${menuPath}`;
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(resolvedUrl)}&margin=10`;
+  useEffect(() => {
+    let active = true;
+    if (fullUrl) {
+      setResolvedUrl(fullUrl);
+      setLinkError('');
+      return () => { active = false; };
+    }
+    setResolvedUrl(null);
+    setLinkError('');
+    void fetchApi<RestaurantLinksResponse>('/saas/links')
+      .then((result) => {
+        if (!active) return;
+        if (typeof result.links?.menu !== 'string' || !result.links.menu.startsWith('https://')) {
+          throw new Error('invalid_restaurant_link');
+        }
+        setResolvedUrl(result.links.menu);
+      })
+      .catch(() => {
+        if (active) setLinkError('No se pudo obtener el enlace público del restaurante.');
+      });
+    return () => { active = false; };
+  }, [fullUrl, restaurantSlug]);
+
+  const qrImageUrl = resolvedUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(resolvedUrl)}&margin=10`
+    : null;
 
   const handleCopy = () => {
+    if (!resolvedUrl) return;
     navigator.clipboard.writeText(resolvedUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
+    if (!qrImageUrl) return;
     const a = document.createElement('a');
     a.href = qrImageUrl;
     a.download = `menu-qr-${restaurantSlug}.png`;
@@ -37,6 +68,7 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
   };
 
   const handleOpenPreview = () => {
+    if (!resolvedUrl) return;
     window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -76,11 +108,17 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
           marginBottom: 16,
           position: 'relative',
         }}>
-          <img
-            src={qrImageUrl}
-            alt={`QR Menú ${restaurantName}`}
-            style={{ width: 200, height: 200, display: 'block', borderRadius: 8 }}
-          />
+          {qrImageUrl ? (
+            <img
+              src={qrImageUrl}
+              alt={`QR Menú ${restaurantName}`}
+              style={{ width: 200, height: 200, display: 'block', borderRadius: 8 }}
+            />
+          ) : (
+            <div style={{ width: 200, height: 200, display: 'grid', placeItems: 'center', color: '#64748b' }}>
+              {linkError || 'Cargando enlace público...'}
+            </div>
+          )}
         </div>
 
         {/* URL Link Box */}
@@ -98,11 +136,12 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
           color: '#334155',
         }}>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>
-            {resolvedUrl}
+            {resolvedUrl || linkError || 'Cargando enlace público...'}
           </span>
           <button
             type="button"
             onClick={handleCopy}
+            disabled={!resolvedUrl}
             title="Copiar enlace"
             style={{
               background: 'none',
@@ -124,6 +163,7 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
             type="button"
             variant="secondary"
             onClick={handleDownload}
+            disabled={!qrImageUrl}
             style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: '0.875rem' }}
           >
             <Download size={16} /> Descargar QR
@@ -133,6 +173,7 @@ export const QRCodeCard: React.FC<QRCodeCardProps> = ({
             type="button"
             variant="primary"
             onClick={handleOpenPreview}
+            disabled={!resolvedUrl}
             style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: '0.875rem' }}
           >
             <ExternalLink size={16} /> Probar Menú

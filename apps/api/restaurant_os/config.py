@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ipaddress
+import re
 from functools import lru_cache
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -17,6 +19,7 @@ class Settings(BaseSettings):
     git_commit: str = Field(default="unknown")
     public_base_url: str = Field(default="https://pos.humanio.digital")
     platform_hosts: str = Field(default="")
+    storefront_wildcard_domain: str = Field(default="")
     database_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("RESTAURANTOS_DATABASE_URL", "DATABASE_URL"),
@@ -81,6 +84,34 @@ class Settings(BaseSettings):
         if normalized not in {"local", "test", "production"}:
             raise ValueError("RESTAURANTOS_ENVIRONMENT must be local, test or production")
         return normalized
+
+    @field_validator("storefront_wildcard_domain", mode="before")
+    @classmethod
+    def normalize_storefront_wildcard_domain(cls, value: object) -> str:
+        """Accept one DNS base only; an empty value deliberately disables wildcard routing."""
+        normalized = str(value or "").strip().lower().rstrip(".")
+        if not normalized:
+            return ""
+        if (
+            not normalized.isascii()
+            or len(normalized) > 240
+            or not re.fullmatch(
+                r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
+                normalized,
+            )
+            or normalized.endswith((".local", ".localhost", ".internal", ".test", ".invalid"))
+        ):
+            raise ValueError(
+                "RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN must be one DNS hostname without "
+                "scheme, port, path, wildcard, IP address, or local suffix"
+            )
+        try:
+            ipaddress.ip_address(normalized)
+        except ValueError:
+            return normalized
+        raise ValueError(
+            "RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN must not be an IP address"
+        )
 
     @model_validator(mode="after")
     def production_settings_are_safe(self) -> Settings:

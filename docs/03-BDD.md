@@ -386,6 +386,15 @@ Cada historia nueva deberá incluir:
 - BDD-DOM-003: Dominio de tacos con sesión/slug/clave de sushi rechaza acceso; host
   desconocido no sirve el SaaS. X-Forwarded-Host no altera resolución. Raíz de tacos
   abre menú propio y manifiesto conserva origen/scope. Plataforma compartida sigue operando.
+- BDD-DOM-004: Con wildcard configurado, la raíz de `{slug}.dominio` abre el menú de ese
+  restaurante y `/admin/`, `/pos/`, `/kds/` sirven sus aplicaciones; enlaces y QR usan el alias
+  preferido y el slug canónico conserva un enlace permanente. No se registra DNS por tenant y
+  las URLs históricas por ruta y dominios propios activos siguen funcionando.
+- BDD-DOM-005: Host wildcard desconocido, ambiguo, reservado, anidado o de restaurante no
+  disponible falla cerrado. Host de tacos con token, login, slug, branch key o cuerpo de sushi
+  se rechaza sin lectura ni efecto en sushi; `X-Forwarded-Host` no cambia la organización. La
+  configuración vacía conserva el comportamiento anterior y una configuración inválida no
+  arranca silenciosamente en producción.
 
 ## Recuperación SaaS
 

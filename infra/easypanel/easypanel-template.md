@@ -12,6 +12,9 @@
 
 - `RESTAURANTOS_ENVIRONMENT`
 - `RESTAURANTOS_SERVICE_NAME`
+- `RESTAURANTOS_PUBLIC_BASE_URL`
+- `RESTAURANTOS_PLATFORM_HOSTS`
+- `RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN` (opcional; sólo el dominio base, sin `*`)
 - `DATABASE_URL`
 - `REDIS_URL`
 - `SECRET_KEY`
@@ -33,4 +36,3 @@ Cada despliegue debe conservar:
 - migracion aplicada,
 - procedimiento de restauracion,
 - evidencia de health check.
-

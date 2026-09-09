@@ -377,3 +377,252 @@ def test_platform_configuration_drift_cannot_unbind_customer(setup, monkeypatch)
         == 404
     )
     assert client.get("/api/v1/saas/links", headers=owner).status_code == 200
+
+
+@pytest.fixture
+def wildcard_setup(monkeypatch, tmp_path):
+    monkeypatch.setenv("RESTAURANTOS_PUBLIC_BASE_URL", "https://platform.example.com")
+    monkeypatch.setenv(
+        "RESTAURANTOS_PLATFORM_HOSTS",
+        "testserver,mimenu.onl,app.mimenu.onl,platform.example.com",
+    )
+    monkeypatch.setenv("RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN", "mimenu.onl")
+    static_root = tmp_path / "static"
+    for app_name, marker in {
+        "landing-web": "KIWI_LANDING_ROOT",
+        "mobile-web": "MOBILE_MENU_ROOT",
+        "admin-web": "ADMIN_ROOT",
+        "pos-web": "POS_ROOT",
+        "kds-web": "KDS_ROOT",
+    }.items():
+        app_root = static_root / app_name
+        app_root.mkdir(parents=True)
+        (app_root / "index.html").write_text(marker, encoding="utf-8")
+    monkeypatch.setenv("STATIC_DIR", str(static_root))
+    get_settings.cache_clear()
+    client = _client_with_db()
+    accounts = []
+    for name in ("Tacos", "Sushi"):
+        password = secrets.token_urlsafe(24)
+        response = client.post(
+            "/api/v1/auth/signup",
+            json={
+                "business_name": name,
+                "owner_name": name,
+                "email": f"{name}@example.com",
+                "password": password,
+                "plan": "trial",
+                "defer_catalog": True,
+            },
+        )
+        assert response.status_code == 201, response.text
+        accounts.append(
+            ({"Authorization": "Bearer " + response.json()["token"]}, response.json(), password)
+        )
+    yield client, accounts
+    get_settings.cache_clear()
+
+
+def test_wildcard_storefront_binds_only_direct_tenant_and_serves_root_apps(wildcard_setup):
+    client, accounts = wildcard_setup
+    tacos, sushi = accounts
+    tacos_headers, tacos_data, _ = tacos
+    sushi_headers, sushi_data, sushi_password = sushi
+    canonical_slug = tacos_data["organization"]["slug"]
+    with client.app.state.test_session_factory() as session:
+        session.execute(
+            models.organizations.update()
+            .where(models.organizations.c.id == tacos_data["organization"]["id"])
+            .values(preferred_public_slug="a" * 64)
+        )
+        session.commit()
+    historical_links = client.get("/api/v1/saas/links", headers=tacos_headers).json()
+    assert historical_links["links"]["menu"] == f"https://{canonical_slug}.mimenu.onl/"
+    too_long = client.put(
+        "/api/v1/saas/links/alias", headers=tacos_headers, json={"alias": "a" * 64}
+    )
+    assert too_long.status_code == 409
+    assert too_long.json()["detail"]["code"] == "alias_invalid"
+    assert (
+        client.put(
+            "/api/v1/saas/links/alias", headers=tacos_headers, json={"alias": "tacos-guero"}
+        ).status_code
+        == 200
+    )
+    links = client.get("/api/v1/saas/links", headers=tacos_headers).json()
+    assert links["links"]["menu"] == "https://tacos-guero.mimenu.onl/"
+    assert links["links"]["admin"] == "https://tacos-guero.mimenu.onl/admin/"
+    assert links["canonical_menu_url"] == f"https://{canonical_slug}.mimenu.onl/"
+
+    host = {"Host": "tacos-guero.mimenu.onl"}
+    root = client.get("/", headers=host)
+    assert root.status_code == 200
+    assert root.text == "MOBILE_MENU_ROOT"
+    for path, marker in (("/admin/", "ADMIN_ROOT"), ("/pos/", "POS_ROOT"), ("/kds/", "KDS_ROOT")):
+        assert client.get(path, headers=host).text == marker
+    context = client.get("/api/v1/public/storefront-context", headers=host)
+    assert context.status_code == 200, context.text
+    assert context.json()["organization"]["slug"] == tacos_data["organization"]["slug"]
+    assert context.json()["host_class"] == "wildcard"
+    manifest = client.get("/api/v1/public/storefront-context/manifest.webmanifest", headers=host)
+    assert manifest.status_code == 200
+    assert manifest.json()["id"] == "/"
+    assert manifest.json()["start_url"] == "/"
+    assert manifest.json()["scope"] == "/"
+
+    sushi_slug = sushi_data["organization"]["slug"]
+    sushi_storefront = client.get(f"/api/v1/public/storefronts/{sushi_slug}").json()
+    sushi_key = sushi_storefront["branches"][0]["public_key"]
+    assert client.get(f"/api/v1/public/storefronts/{sushi_slug}", headers=host).status_code == 404
+    assert (
+        client.get(f"/api/v1/public/branches/{sushi_key}/catalog", headers=host).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            headers=host,
+            json={"email": "Sushi@example.com", "password": sushi_password},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get(
+            "/api/v1/public/storefront-context",
+            headers={**host, "X-Forwarded-Host": "sushi.mimenu.onl"},
+        ).json()["organization"]["slug"]
+        == tacos_data["organization"]["slug"]
+    )
+    assert client.get("/", headers={"Host": "unknown.mimenu.onl"}).status_code == 404
+    assert client.get("/", headers={"Host": "app.mimenu.onl"}).status_code == 200
+    assert client.get("/", headers={"Host": "www.mimenu.onl"}).status_code == 404
+    assert client.get("/", headers={"Host": "nested.tacos.mimenu.onl"}).status_code == 404
+    assert (
+        client.put(
+            "/api/v1/saas/links/alias", headers=tacos_headers, json={"alias": "www"}
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            "/api/v1/public/feedback",
+            headers=host,
+            json={"branch_id": sushi_storefront["branches"][0]["id"]},
+        ).status_code
+        == 404
+    )
+
+    with client.app.state.test_session_factory() as session:
+        session.execute(
+            models.organizations.update()
+            .where(models.organizations.c.id == tacos_data["organization"]["id"])
+            .values(status="suspended")
+        )
+        session.commit()
+    assert client.get("/", headers=host).status_code == 404
+    assert client.get("/api/v1/public/storefront-context", headers=host).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "wildcard",
+    [
+        "https://mimenu.onl",
+        "mimenu.onl:443",
+        "mimenu.onl/menu",
+        "*.mimenu.onl",
+        "127.0.0.1",
+        "mimenu.local",
+    ],
+)
+def test_wildcard_configuration_rejects_non_hostname_values(monkeypatch, wildcard):
+    from pydantic import ValidationError
+    from restaurant_os.config import Settings
+
+    monkeypatch.setenv("RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN", wildcard)
+    with pytest.raises(ValidationError, match="STOREFRONT_WILDCARD_DOMAIN"):
+        Settings()
+
+
+def test_wildcard_configuration_normalizes_dns_case(monkeypatch):
+    from restaurant_os.config import Settings
+
+    monkeypatch.setenv("RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN", "MIMENU.ONL.")
+    assert Settings().storefront_wildcard_domain == "mimenu.onl"
+
+
+def test_wildcard_preserves_active_custom_domain_precedence(wildcard_setup, monkeypatch):
+    from restaurant_os import restaurant_domains as domains
+
+    client, accounts = wildcard_setup
+    owner, owner_data, _ = accounts[0]
+    with client.app.state.test_session_factory() as session:
+        session.execute(
+            models.users.update()
+            .where(models.users.c.id == owner_data["user"]["id"])
+            .values(is_superadmin=True)
+        )
+        session.commit()
+    created = client.post(
+        "/api/v1/saas/domains", headers=owner, json={"hostname": "orders.tacos.example.com"}
+    )
+    assert created.status_code == 200, created.text
+    row = created.json()
+    monkeypatch.setattr(domains, "lookup_txt", lambda name: [row["txt_value"]])
+    assert (
+        client.post(
+            f"/api/v1/saas/domains/{row['id']}/supervise",
+            headers=owner,
+            json={"action": "activate", "tls_confirmed": True},
+        ).status_code
+        == 200
+    )
+    links = client.get("/api/v1/saas/links", headers=owner).json()
+    slug = owner_data["organization"]["slug"]
+    assert links["links"]["menu"] == f"https://orders.tacos.example.com/menu/{slug}/"
+    assert links["canonical_menu_url"] == f"https://{slug}.mimenu.onl/"
+    root = client.get("/", headers={"Host": "orders.tacos.example.com"}, follow_redirects=False)
+    assert root.status_code == 307
+    assert root.headers["location"] == f"/menu/{slug}/"
+    assert (
+        client.post(
+            "/api/v1/saas/domains", headers=owner, json={"hostname": "pizza.mimenu.onl"}
+        ).status_code
+        == 422
+    )
+
+
+def test_empty_wildcard_preserves_landing_and_legacy_links(monkeypatch, tmp_path):
+    monkeypatch.setenv("RESTAURANTOS_PUBLIC_BASE_URL", "https://platform.example.com")
+    monkeypatch.setenv("RESTAURANTOS_PLATFORM_HOSTS", "")
+    monkeypatch.setenv("RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN", "")
+    static_root = tmp_path / "static"
+    for app_name, marker in {
+        "landing-web": "LANDING_ROOT",
+        "mobile-web": "MOBILE_MENU_ROOT",
+    }.items():
+        app_root = static_root / app_name
+        app_root.mkdir(parents=True)
+        (app_root / "index.html").write_text(marker, encoding="utf-8")
+    monkeypatch.setenv("STATIC_DIR", str(static_root))
+    get_settings.cache_clear()
+    client = _client_with_db()
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "business_name": "Tacos",
+            "owner_name": "Tacos",
+            "email": "tacos@example.com",
+            "password": secrets.token_urlsafe(24),
+            "plan": "trial",
+            "defer_catalog": True,
+        },
+    )
+    assert response.status_code == 201
+    links = client.get(
+        "/api/v1/saas/links", headers={"Authorization": "Bearer " + response.json()["token"]}
+    ).json()
+    assert client.get("/").text == "LANDING_ROOT"
+    assert links["links"]["menu"] == (
+        f"https://platform.example.com/menu/{response.json()['organization']['slug']}/"
+    )
+    get_settings.cache_clear()

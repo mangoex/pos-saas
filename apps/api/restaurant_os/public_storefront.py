@@ -15,6 +15,7 @@ from restaurant_os import models
 from restaurant_os.database import get_session
 
 router = APIRouter(prefix="/api/v1/public/storefronts", tags=["storefronts"])
+host_context_router = APIRouter(prefix="/api/v1/public", tags=["storefronts"])
 
 
 def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
@@ -161,6 +162,10 @@ def manifest(
     response.headers["Cache-Control"] = "no-store"
     response.headers["Content-Type"] = "application/manifest+json"
     path = f"/menu/{org['slug']}/"
+    return _manifest(org, path)
+
+
+def _manifest(org: dict[str, Any], path: str) -> dict[str, Any]:
     return {
         "id": path,
         "name": org["name"],
@@ -180,6 +185,27 @@ def manifest(
             }
         ],
     }
+
+
+@host_context_router.get("/storefront-context")
+def host_context(session: Annotated[Session, Depends(get_session)]) -> dict[str, Any]:
+    """Expose a wildcard tenant already bound from Host, never from browser parsing."""
+    if session.info.get("host_class") != "wildcard":
+        raise HTTPException(404, detail={"code": "storefront_not_found"})
+    slug = session.info.get("host_restaurant_slug")
+    if not isinstance(slug, str):
+        raise HTTPException(404, detail={"code": "storefront_not_found"})
+    return {**resolve_storefront(session, slug), "host_class": "wildcard"}
+
+
+@host_context_router.get("/storefront-context/manifest.webmanifest")
+def host_context_manifest(
+    response: Response, session: Annotated[Session, Depends(get_session)]
+) -> dict[str, Any]:
+    result = host_context(session)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Content-Type"] = "application/manifest+json"
+    return _manifest(result["organization"], "/")
 
 
 @router.get("/{identifier}/icon.svg")

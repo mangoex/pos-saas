@@ -46,6 +46,36 @@ Contrato: https://developers.google.com/speed/public-dns/docs/doh/json . Token a
 visible sólo al propietario/superadmin para publicarlo en DNS, no en auditoría. Se exige
 coincidencia exacta; cada activación revalida. TLS/ruta es confirmación humana explícita,
 no certificación automatizada. Ver runbook y señales en `plan-enlaces-dominios.md`.
+
+### Dominio wildcard compartido (FR-087)
+
+`RESTAURANTOS_STOREFRONT_WILDCARD_DOMAIN` es opcional y contiene un único dominio base
+normalizado, sin esquema, puerto, ruta ni `*`. Vacío conserva exactamente el comportamiento
+anterior. Cuando está configurado también activa la guarda estricta de hosts, aun si
+`RESTAURANTOS_PLATFORM_HOSTS` estuviera vacío. El dominio base y los hosts centrales exactos
+permanecen en `PLATFORM_HOSTS`; el wildcard y los hosts de restaurantes no se enumeran allí.
+
+La resolución conserva esta precedencia: reserva contradictoria de dominio propio/plataforma
+falla cerrado; host central exacto conserva contexto de plataforma; dominio propio activo liga
+su organización; por último, sólo un hijo directo `{identificador}.{wildcard}` puede resolver
+mediante el resolvedor público canónico. Hijos anidados, labels inválidos o reservados, slug/alias
+desconocido o ambiguo y organización no disponible responden 404. El backend registra en la
+sesión de request la organización, el slug canónico y el tipo de host; no confía en
+`X-Forwarded-Host`. Token, login, identificador de URL, branch key y cuerpos públicos vuelven a
+comprobar la misma organización antes de cualquier dato o efecto.
+
+En un host wildcard la raíz sirve `mobile-web` sin redirección y el frontend resuelve la tienda
+mediante un endpoint de contexto de host, sin inferir autoridad del primer label en JavaScript.
+El manifiesto usa `start_url` y `scope` `/` únicamente en ese origen; assets y API continúan en
+el mismo origen. `/admin/`, `/pos/` y `/kds/` reutilizan las aplicaciones actuales y la guarda de
+organización. Los enlaces y QR preferidos usan `https://{alias}.{wildcard}/`; el enlace permanente
+usa el slug canónico. Un dominio propio activo conserva precedencia. `/menu/{slug}/` y alias
+históricos siguen resolviendo para compatibilidad.
+
+No hay migración ni escritura de aprovisionamiento: se reutilizan `organizations.slug`,
+`storefront_aliases`, códigos compatibles y claves públicas existentes. La reversión elimina la
+variable y vuelve al enrutamiento previo; DNS, proxy, TLS, despliegue y configuración productiva
+requieren autorización separada.
 ## Arquitectura Multi-Tenant para Micro-POS Gastronómico en la Nube
 
 ---

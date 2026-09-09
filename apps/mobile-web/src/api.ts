@@ -16,6 +16,19 @@ export async function fetchStorefront(identifier: string): Promise<Storefront> {
   return data;
 }
 
+/** Resolves a wildcard storefront from backend-bound Host context. */
+export async function fetchStorefrontContext(): Promise<Storefront> {
+  const res = await fetch(`${API_BASE_URL}/public/storefront-context`, {
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  if (!res.ok) throw new Error(`storefront_context_${res.status}`);
+  const data = await res.json() as Storefront;
+  if (!data?.organization?.id || !data.organization.public_slug || !Array.isArray(data.branches)) {
+    throw new Error('storefront_invalid_response');
+  }
+  return data;
+}
+
 export async function fetchPublicBranches(lat?: number, lng?: number, restaurant?: string | null): Promise<BranchInfo[]> {
   try {
     const params = new URLSearchParams();

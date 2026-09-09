@@ -14,6 +14,12 @@
 - `PRD-FR-085`: El administrador solicita un dominio propio y verifica control mediante
   TXT. Sólo el superadministrador activa tras verificar DNS y confirmar HTTPS/enrutamiento.
   El dominio nunca cambia la autoridad de la sesión ni sirve datos de otro restaurante.
+- `PRD-FR-087`: Cuando la plataforma configura un dominio wildcard compartido, cada
+  restaurante obtiene accesos `https://{slug}.dominio/`, `/admin/`, `/pos/` y `/kds/`
+  sin alta DNS individual. El host resuelve exactamente el slug o alias reservado, nunca
+  concede autoridad por sí mismo y falla cerrado para nombres desconocidos, ambiguos,
+  reservados, restaurantes no disponibles o datos de otra organización. Las URLs
+  históricas por ruta y los dominios propios activos continúan funcionando.
 ## Micro-POS de Alto Impacto para Restaurantes
 
 ---
