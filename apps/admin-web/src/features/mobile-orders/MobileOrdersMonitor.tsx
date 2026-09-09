@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
-  Settings,
   ChefHat
 } from 'lucide-react';
 import { MobileOrderDetailModal } from './MobileOrderDetailModal';
@@ -35,10 +34,21 @@ interface OrderItem {
 interface MobileOrdersMonitorProps {
   branchId: string;
   branchName?: string;
-  onSwitchToDesktopView?: () => void;
 }
 
 type OrderFilter = 'ACTIVE' | 'READY' | 'ALL';
+
+const isToday = (dateStr?: string): boolean => {
+  if (!dateStr) return false;
+  const orderDate = new Date(dateStr);
+  if (isNaN(orderDate.getTime())) return false;
+  const today = new Date();
+  return (
+    orderDate.getFullYear() === today.getFullYear() &&
+    orderDate.getMonth() === today.getMonth() &&
+    orderDate.getDate() === today.getDate()
+  );
+};
 
 const getElapsedMinutes = (dateStr: string) => {
   const ts = Date.parse(dateStr);
@@ -49,7 +59,6 @@ const getElapsedMinutes = (dateStr: string) => {
 export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   branchId,
   branchName,
-  onSwitchToDesktopView,
 }) => {
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -70,7 +79,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       let items: OrderItem[] = [];
       try {
         const res = await fetchApi<{ items: OrderItem[] }>(
-          `/orders/accounts?branch_id=${encodeURIComponent(branchId)}&limit=50`
+          `/orders/accounts?branch_id=${encodeURIComponent(branchId)}&limit=100`
         );
         items = Array.isArray(res?.items) ? res.items : [];
       } catch {
@@ -80,7 +89,9 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         );
         items = Array.isArray(fallback) ? fallback : [];
       }
-      setOrders(items);
+      // ONLY SHOW ORDERS CREATED TODAY (NO HISTORICAL ORDERS)
+      const todayOrders = items.filter((item) => isToday(item.created_at));
+      setOrders(todayOrders);
       setLastUpdated(new Date());
     } catch (err) {
       if (!isSilent) {
@@ -111,14 +122,25 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     setIsDetailOpen(true);
   };
 
-  const filteredOrders = orders.filter((order) => {
+  const isOrderPending = (order: OrderItem) => {
     const status = (order.status || '').toUpperCase();
+    if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
+    return ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(status) || (order.is_public_intent && status !== 'ACCEPTED');
+  };
+
+  const isOrderReady = (order: OrderItem) => {
+    const status = (order.status || '').toUpperCase();
+    if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
+    return ['ACCEPTED', 'READY', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'IN_DELIVERY'].includes(status);
+  };
+
+  const filteredOrders = orders.filter((order) => {
     const matchesFilter =
       filter === 'ALL'
         ? true
         : filter === 'READY'
-          ? status === 'READY'
-          : status === 'PENDING' || status === 'IN_PREPARATION';
+          ? isOrderReady(order)
+          : isOrderPending(order);
 
     if (!matchesFilter) return false;
 
@@ -136,12 +158,8 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     return folio.includes(q) || cust.includes(q);
   });
 
-  const activeCount = orders.filter((o) => {
-    const st = (o.status || '').toUpperCase();
-    return st === 'PENDING' || st === 'IN_PREPARATION';
-  }).length;
-
-  const readyCount = orders.filter((o) => (o.status || '').toUpperCase() === 'READY').length;
+  const activeCount = orders.filter(isOrderPending).length;
+  const readyCount = orders.filter(isOrderReady).length;
 
   return (
     <div
@@ -210,28 +228,6 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
           </button>
-
-          {onSwitchToDesktopView && (
-            <button
-              onClick={onSwitchToDesktopView}
-              style={{
-                border: '1px solid #334155',
-                background: '#1e293b',
-                color: '#cbd5e1',
-                borderRadius: 8,
-                padding: '6px 10px',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                cursor: 'pointer',
-              }}
-            >
-              <Settings size={14} />
-              Panel Completo
-            </button>
-          )}
         </div>
       </header>
 
@@ -397,16 +393,19 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
             </div>
             <p style={{ fontSize: '0.85rem', margin: '6px 0 0', color: '#64748b' }}>
               {filter === 'ACTIVE'
-                ? '¡Cocina al día! Las nuevas comandas aparecerán aquí en tiempo real.'
-                : 'No se encontraron pedidos con los filtros actuales.'}
+                ? 'No hay pedidos pendientes por aceptar hoy.'
+                : filter === 'READY'
+                  ? 'No hay pedidos listos o en preparación hoy.'
+                  : 'No hay pedidos registrados el día de hoy.'}
             </p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {filteredOrders.map((order) => {
               const elapsed = getElapsedMinutes(order.created_at);
-              const isReady = (order.status || '').toUpperCase() === 'READY';
-              const isInPrep = (order.status || '').toUpperCase() === 'IN_PREPARATION';
+              const status = (order.status || '').toUpperCase();
+              const isReady = isOrderReady(order);
+              const isDelivered = ['DELIVERED', 'CLOSED'].includes(status);
 
               const isDineIn =
                 order.service_type?.toLowerCase() === 'dine-in' ||
@@ -436,9 +435,9 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                     boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     border: isReady
                       ? '1.5px solid #86efac'
-                      : isInPrep
-                        ? '1.5px solid #fed7aa'
-                        : '1px solid #e2e8f0',
+                      : isDelivered
+                        ? '1px solid #e2e8f0'
+                        : '1.5px solid #93c5fd',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
@@ -571,19 +570,19 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                           textTransform: 'uppercase',
                           padding: '3px 8px',
                           borderRadius: 6,
-                          backgroundColor: isReady
-                            ? '#dcfce7'
-                            : isInPrep
-                              ? '#fef3c7'
+                          backgroundColor: isDelivered
+                            ? '#f1f5f9'
+                            : isReady
+                              ? '#dcfce7'
                               : '#e0f2fe',
-                          color: isReady
-                            ? '#166534'
-                            : isInPrep
-                              ? '#92400e'
+                          color: isDelivered
+                            ? '#475569'
+                            : isReady
+                              ? '#166534'
                               : '#0369a1',
                         }}
                       >
-                        {isReady ? 'Listo' : isInPrep ? 'Preparando' : 'Pendiente'}
+                        {isDelivered ? 'Entregado' : isReady ? 'Listo' : 'Por Aceptar'}
                       </span>
                       <ChevronRight size={16} color="#94a3b8" />
                     </div>

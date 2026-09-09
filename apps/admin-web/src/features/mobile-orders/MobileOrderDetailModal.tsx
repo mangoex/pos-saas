@@ -121,7 +121,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleAcceptWebIntent = async () => {
+  const handleAcceptOrder = async () => {
     if (!orderId) return;
     setActionLoading(true);
     try {
@@ -137,7 +137,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     }
   };
 
-  const handleFulfillTransition = async (command: string) => {
+  const handleFulfillTransition = async (command: string = 'deliver') => {
     if (!orderId) return;
     setActionLoading(true);
     try {
@@ -203,12 +203,27 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     detail?.delivery_address_snapshot?.notes ||
     '';
 
+  const isUnaccepted = Boolean(
+    detail?.is_public_intent ||
+    ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(detail?.status?.toUpperCase() || '')
+  );
+
+  const isReadyOrInPrep = Boolean(
+    ['ACCEPTED', 'READY', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'IN_DELIVERY'].includes(
+      detail?.status?.toUpperCase() || ''
+    )
+  );
+
+  const isCompleted = Boolean(
+    ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(detail?.status?.toUpperCase() || '')
+  );
+
   // WhatsApp prefilled message
-  const waStatusText = detail?.status === 'READY'
-    ? 'ya está listo para recoger / en camino a tu domicilio.'
-    : detail?.status === 'IN_PREPARATION'
-      ? 'ya está en preparación en cocina.'
-      : 'ha sido recibido y confirmado.';
+  const waStatusText = isCompleted
+    ? 'ha sido entregado con éxito. ¡Buen provecho!'
+    : isReadyOrInPrep
+      ? 'ya está listo para recoger / en camino.'
+      : 'ha sido recibido y está por prepararse.';
 
   const waMessage = encodeURIComponent(
     `¡Hola ${customerName}! Te escribimos de *${branchName || 'nuestro restaurante'}* para avisarte que tu pedido *#${orderFolio}* ${waStatusText} Total: $${orderTotal} MXN. ¡Muchas gracias!`
@@ -274,24 +289,24 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                 padding: '4px 8px',
                 borderRadius: 6,
                 backgroundColor:
-                  detail?.status === 'READY'
-                    ? '#dcfce7'
-                    : detail?.status === 'IN_PREPARATION'
-                      ? '#fef3c7'
+                  isCompleted
+                    ? '#f1f5f9'
+                    : isReadyOrInPrep
+                      ? '#dcfce7'
                       : '#e0f2fe',
                 color:
-                  detail?.status === 'READY'
-                    ? '#166534'
-                    : detail?.status === 'IN_PREPARATION'
-                      ? '#92400e'
+                  isCompleted
+                    ? '#475569'
+                    : isReadyOrInPrep
+                      ? '#166534'
                       : '#0369a1',
               }}
             >
-              {detail?.status === 'READY'
-                ? 'Listo'
-                : detail?.status === 'IN_PREPARATION'
-                  ? 'En Preparación'
-                  : 'Pendiente'}
+              {isCompleted
+                ? 'Entregado'
+                : isReadyOrInPrep
+                  ? 'Listo para Entrega'
+                  : 'Por Aceptar'}
             </span>
           </div>
           <button
@@ -599,9 +614,9 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
             gap: 10,
           }}
         >
-          {detail?.is_public_intent && (
+          {isUnaccepted && (
             <button
-              onClick={handleAcceptWebIntent}
+              onClick={handleAcceptOrder}
               disabled={actionLoading}
               style={{
                 width: '100%',
@@ -620,42 +635,17 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
               }}
             >
               <CheckCircle size={18} />
-              Aceptar Pedido Web
+              {actionLoading ? 'Aceptando...' : 'Aceptar Pedido'}
             </button>
           )}
 
-          {detail?.status === 'PENDING' && !detail?.is_public_intent && (
-            <button
-              onClick={() => handleFulfillTransition('start_delivery')}
-              disabled={actionLoading}
-              style={{
-                width: '100%',
-                backgroundColor: '#0284c7',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 10,
-                padding: '12px',
-                fontWeight: 700,
-                fontSize: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                cursor: 'pointer',
-              }}
-            >
-              <ChefHat size={18} />
-              Iniciar Preparación
-            </button>
-          )}
-
-          {detail?.status === 'IN_PREPARATION' && (
+          {isReadyOrInPrep && (
             <button
               onClick={() => handleFulfillTransition('deliver')}
               disabled={actionLoading}
               style={{
                 width: '100%',
-                backgroundColor: '#10b981',
+                backgroundColor: '#0f172a',
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: 10,
@@ -670,33 +660,29 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
               }}
             >
               <CheckCircle size={18} />
-              Marcar Listo para Entrega
+              {actionLoading ? 'Finalizando...' : 'Finalizar / Entregado'}
             </button>
           )}
 
-          {detail?.status === 'READY' && (
-            <button
-              onClick={() => handleFulfillTransition('close')}
-              disabled={actionLoading}
+          {isCompleted && (
+            <div
               style={{
                 width: '100%',
-                backgroundColor: '#475569',
-                color: '#ffffff',
-                border: 'none',
+                backgroundColor: '#f1f5f9',
+                color: '#166534',
                 borderRadius: 10,
                 padding: '12px',
                 fontWeight: 700,
-                fontSize: '1rem',
+                fontSize: '0.95rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                cursor: 'pointer',
               }}
             >
-              <CheckCircle size={18} />
-              Finalizar / Entregado
-            </button>
+              <CheckCircle size={18} color="#16a34a" />
+              Pedido Entregado y Finalizado
+            </div>
           )}
 
           <button

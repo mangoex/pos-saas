@@ -3891,31 +3891,45 @@ def fulfill_order(
             "deliver": OrderState.DELIVERED,
             "close": OrderState.CLOSED,
         }
-        next_state = targets[normalized_command]
-        valid_command = (
-            (
-                normalized_command == "start_delivery"
-                and order_type == "delivery"
-                and current == OrderState.READY
-            )
-            or (
-                normalized_command == "deliver"
-                and order_type in {"dine-in", "takeout"}
-                and current == OrderState.READY
-            )
-            or (
-                normalized_command == "deliver"
-                and order_type == "delivery"
-                and current == OrderState.IN_DELIVERY
-            )
-            or (
-                normalized_command == "close"
-                and current in {OrderState.DELIVERED, OrderState.RETURNED}
-            )
-        )
-        if not valid_command:
+        if normalized_command not in targets:
             raise StateTransitionError("fulfillment command is not available")
-        OrderStateMachine.transition(current, next_state)
+        next_state = targets[normalized_command]
+
+        if current == next_state:
+            return {"id": order_id, "status": next_state.value, "order_type": order_type}
+
+        state_cursor = current
+        if normalized_command in {"deliver", "close"}:
+            if state_cursor == OrderState.ACCEPTED:
+                state_cursor = OrderStateMachine.transition(state_cursor, OrderState.SENT_TO_PRODUCTION)
+            if state_cursor == OrderState.SENT_TO_PRODUCTION:
+                state_cursor = OrderStateMachine.transition(state_cursor, OrderState.IN_PRODUCTION)
+            if state_cursor == OrderState.IN_PRODUCTION:
+                state_cursor = OrderStateMachine.transition(state_cursor, OrderState.READY)
+            if state_cursor == OrderState.READY:
+                if order_type == "delivery":
+                    state_cursor = OrderStateMachine.transition(state_cursor, OrderState.IN_DELIVERY)
+                state_cursor = OrderStateMachine.transition(state_cursor, OrderState.DELIVERED)
+            elif state_cursor == OrderState.IN_DELIVERY:
+                state_cursor = OrderStateMachine.transition(state_cursor, OrderState.DELIVERED)
+
+            if normalized_command == "close" and state_cursor in {OrderState.DELIVERED, OrderState.RETURNED}:
+                state_cursor = OrderStateMachine.transition(state_cursor, OrderState.CLOSED)
+        elif normalized_command == "start_delivery":
+            if order_type == "delivery":
+                if state_cursor == OrderState.ACCEPTED:
+                    state_cursor = OrderStateMachine.transition(state_cursor, OrderState.SENT_TO_PRODUCTION)
+                if state_cursor == OrderState.SENT_TO_PRODUCTION:
+                    state_cursor = OrderStateMachine.transition(state_cursor, OrderState.IN_PRODUCTION)
+                if state_cursor == OrderState.IN_PRODUCTION:
+                    state_cursor = OrderStateMachine.transition(state_cursor, OrderState.READY)
+                if state_cursor == OrderState.READY:
+                    state_cursor = OrderStateMachine.transition(state_cursor, OrderState.IN_DELIVERY)
+            else:
+                raise StateTransitionError("start_delivery is only valid for delivery orders")
+
+        if state_cursor != next_state:
+            raise StateTransitionError("fulfillment command is not available")
     except (KeyError, ValueError, StateTransitionError) as exc:
         raise BusinessError(
             "order_fulfillment_transition_invalid",
@@ -3931,6 +3945,14 @@ def fulfill_order(
         session.rollback()
         raise BusinessError("order_transition_conflict", "Order state changed concurrently")
     now = _now()
+    session.execute(
+        models.production_tasks.update()
+        .where(
+            models.production_tasks.c.order_id == order_id,
+            models.production_tasks.c.status.in_(["PENDING", "IN_PROGRESS"]),
+        )
+        .values(status="COMPLETED", updated_at=now)
+    )
     response = {"id": order_id, "status": next_state.value, "order_type": order_type}
     session.execute(
         models.order_events.insert().values(

@@ -93,14 +93,36 @@ assert.match(
   'AdminLayout must check for mobile viewport'
 );
 
-// 4. App.tsx route support verification
-const appPath = join(root, 'apps/admin-web/src/App.tsx');
-const appCode = readFileSync(appPath, 'utf8');
+// 5. Verification of today-only orders and no "Panel Completo"
+assert.match(
+  monitorCode,
+  /isToday/,
+  'MobileOrdersMonitor must include isToday filter for orders'
+);
+
+assert.doesNotMatch(
+  monitorCode,
+  /Panel Completo/,
+  'MobileOrdersMonitor must NOT contain Panel Completo button'
+);
+
+assert.doesNotMatch(
+  layoutCode,
+  /Panel completo activo en celular/,
+  'AdminLayout must NOT contain Panel completo banner on mobile'
+);
+
+// 6. Modal button verification
+assert.match(
+  modalCode,
+  /Aceptar Pedido/,
+  'MobileOrderDetailModal must have Aceptar Pedido button for incoming orders'
+);
 
 assert.match(
-  appCode,
-  /orders-mobile|MobileOrdersMonitor/i,
-  'App.tsx must register mobile orders route or integration'
+  modalCode,
+  /Finalizar \/ Entregado/,
+  'MobileOrderDetailModal must have Finalizar / Entregado button for ready orders'
 );
 
 console.log('✓ All Mobile Admin Orders Monitor tests PASSED!');

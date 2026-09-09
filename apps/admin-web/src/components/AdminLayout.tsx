@@ -69,7 +69,6 @@ const AdminLayout = () => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 768;
   });
-  const [forceDesktopView, setForceDesktopView] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 768px)');
@@ -329,14 +328,13 @@ const AdminLayout = () => {
     }] : []),
   ];
 
-  if (isMobile && !forceDesktopView && (location.pathname === '/' || location.pathname === '/orders-mobile')) {
+  if (isMobile && (location.pathname === '/' || location.pathname === '/orders-mobile')) {
     return (
       <div style={{ minHeight: '100vh', width: '100vw' }}>
         <ImpersonationBanner />
         <MobileOrdersMonitor
           branchId={branchId}
           branchName={branches.find((b) => b.id === branchId)?.name}
-          onSwitchToDesktopView={() => setForceDesktopView(true)}
         />
       </div>
     );
@@ -345,39 +343,6 @@ const AdminLayout = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
       <ImpersonationBanner />
-      {isMobile && forceDesktopView && (
-        <div
-          style={{
-            backgroundColor: '#0284c7',
-            color: '#ffffff',
-            padding: '8px 16px',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexShrink: 0,
-            zIndex: 9999,
-          }}
-        >
-          <span style={{ fontWeight: 600 }}>📱 Panel completo activo en celular</span>
-          <button
-            type="button"
-            onClick={() => setForceDesktopView(false)}
-            style={{
-              backgroundColor: '#ffffff',
-              color: '#0284c7',
-              border: 'none',
-              borderRadius: 6,
-              padding: '4px 10px',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-            }}
-          >
-            Volver a Monitor de Pedidos
-          </button>
-        </div>
-      )}
       <div className="admin-layout" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       {/* Dark Admin Sidebar */}
       <div className="admin-sidebar" style={{ width: isCollapsed ? '80px' : '260px', transition: 'width 0.3s', display: 'flex', flexDirection: 'column' }}>
@@ -426,7 +391,6 @@ const AdminLayout = () => {
                   if (item.path === '/pos-app') {
                     void redirectToPos('pos').catch(() => navigate('/login'));
                   } else if (item.path === '/orders-mobile') {
-                    setForceDesktopView(false);
                     navigate('/');
                   } else {
                     navigate(item.path);
