@@ -626,6 +626,10 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onOrderUpdated={() => void loadOrders()}
+        onOrderAccepted={() => {
+          setFilter('READY');
+          void loadOrders();
+        }}
         branchName={branchName}
       />
     </div>

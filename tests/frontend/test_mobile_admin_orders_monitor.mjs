@@ -121,8 +121,20 @@ assert.match(
 
 assert.match(
   modalCode,
-  /Finalizar \/ Entregado/,
-  'MobileOrderDetailModal must have Finalizar / Entregado button for ready orders'
+  /Listo para Entregar/,
+  'MobileOrderDetailModal must have Listo para Entregar button for ready orders'
+);
+
+assert.match(
+  modalCode,
+  /onOrderAccepted/,
+  'MobileOrderDetailModal must accept onOrderAccepted callback'
+);
+
+assert.match(
+  monitorCode,
+  /onOrderAccepted/,
+  'MobileOrdersMonitor must wire onOrderAccepted to switch tab to READY'
 );
 
 console.log('✓ All Mobile Admin Orders Monitor tests PASSED!');
