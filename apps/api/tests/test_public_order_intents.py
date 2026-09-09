@@ -846,3 +846,59 @@ def test_get_order_detail_for_public_order_intent_in_pos() -> None:
     detail_after_data = detail_after.json()
     assert detail_after_data["status"] == "ACCEPTED"
     assert detail_after_data["folio"] == accepted_data["folio"]
+
+
+def test_public_order_intent_persists_and_projects_notes_and_payment_details() -> None:
+    client = _client_with_seeded_database()
+    _enable_public_order_capture(client)
+    payload = _payload(
+        customer_name="Miguel Espino",
+        order_notes="Sin cebolla en nada, voy para allá",
+        table_number="Mesa 5",
+        payment_method="cash",
+        cash_amount="500",
+        lines=[{"product_id": PRODUCT_ID, "quantity": 2, "notes": "Sin lechuga"}],
+    )
+    created = _post_intent(client, payload, key="pos-notes-intent-test-001")
+    assert created.status_code == 201
+    intent_id = _intent_id(client, created.json()["public_reference"])
+
+    # 1. Check intent detail before acceptance
+    detail = client.get(f"/api/v1/orders/{intent_id}", headers=_admin_headers())
+    assert detail.status_code == 200
+    d1 = detail.json()
+    assert d1["order_notes"] == "Sin cebolla en nada, voy para allá"
+    assert d1["table_number"] == "Mesa 5"
+    assert d1["cash_amount"] == "500"
+    assert d1["payment_method_intent"] == "cash"
+    assert d1["lines"][0]["line_notes"] == "Sin lechuga"
+
+    # 2. Check accounts list before acceptance
+    accounts_resp = client.get(f"/api/v1/orders/accounts?branch_id={BRANCH_ID}", headers=_admin_headers())
+    assert accounts_resp.status_code == 200
+    account_item = next(item for item in accounts_resp.json()["items"] if item["id"] == intent_id)
+    assert account_item["order_notes"] == "Sin cebolla en nada, voy para allá"
+    assert account_item["table_number"] == "Mesa 5"
+    assert account_item["cash_amount"] == "500"
+
+    # 3. Accept the order intent
+    accepted = client.post(f"/api/v1/orders/{intent_id}/accept", headers=_admin_headers())
+    assert accepted.status_code == 200
+
+    # 4. Check order detail after acceptance
+    detail_after = client.get(f"/api/v1/orders/{intent_id}", headers=_admin_headers())
+    assert detail_after.status_code == 200
+    d2 = detail_after.json()
+    assert d2["order_notes"] == "Sin cebolla en nada, voy para allá"
+    assert d2["table_number"] == "Mesa 5"
+    assert d2["cash_amount"] == "500"
+    assert d2["payment_method_intent"] == "cash"
+    assert d2["lines"][0]["line_notes"] == "Sin lechuga"
+
+    # 5. Check accounts list after acceptance
+    accounts_after = client.get(f"/api/v1/orders/accounts?branch_id={BRANCH_ID}", headers=_admin_headers())
+    assert accounts_after.status_code == 200
+    acc_after = next(item for item in accounts_after.json()["items"] if item["id"] == d2["id"])
+    assert acc_after["order_notes"] == "Sin cebolla en nada, voy para allá"
+    assert acc_after["table_number"] == "Mesa 5"
+    assert acc_after["cash_amount"] == "500"

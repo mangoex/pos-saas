@@ -290,6 +290,12 @@ export async function submitMobileOrder(
   const targetUrl = useIntent
     ? `${API_BASE_URL}/public/branches/${effectiveKey}/order-intents`
     : `${API_BASE_URL}/public/orders`;
+  const fullOrderNotes = [
+    info.order_notes?.trim(),
+    info.order_type === 'dine-in' && info.table_number?.trim() ? `Mesa: ${info.table_number.trim()}` : null,
+    info.payment_method === 'cash' && info.cash_amount?.trim() ? `Paga con: $${info.cash_amount.trim()}` : null,
+  ].filter(Boolean).join(' | ') || undefined;
+
   const response = await fetch(targetUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
@@ -297,12 +303,15 @@ export async function submitMobileOrder(
       customer_name: info.name.trim(),
       customer_phone: cleanPhone,
       order_type: apiOrderType,
-      delivery_address: deliveryAddressText ? { address_text: deliveryAddressText, notes: info.order_notes || undefined } : undefined,
-      order_notes: info.order_notes?.trim() || undefined,
+      table_number: info.order_type === 'dine-in' ? (info.table_number?.trim() || undefined) : undefined,
+      payment_method: info.payment_method || undefined,
+      cash_amount: info.payment_method === 'cash' ? (info.cash_amount?.trim() || undefined) : undefined,
+      delivery_address: deliveryAddressText ? { address_text: deliveryAddressText, notes: fullOrderNotes } : undefined,
+      order_notes: fullOrderNotes,
       lines: items.map(item => ({
         product_id: item.product.id || item.product.sku,
         quantity: item.quantity,
-        notes: item.notes || undefined,
+        notes: item.notes?.trim() || undefined,
         modifiers: (item.modifiers ?? []).map(({ option_id, text }) => ({
           option_id,
           ...(text?.trim() ? { text: text.trim() } : {}),
@@ -317,11 +326,13 @@ export async function submitMobileOrder(
       customer_lng: customerCoords?.lng,
       delivery_address: deliveryAddressText,
       payment_method_intent: info.payment_method,
-      order_notes: info.order_notes?.trim() || undefined,
+      table_number: info.order_type === 'dine-in' ? (info.table_number?.trim() || undefined) : undefined,
+      cash_amount: info.payment_method === 'cash' ? (info.cash_amount?.trim() || undefined) : undefined,
+      order_notes: fullOrderNotes,
       lines: items.map(item => ({
         product_id: item.product.id || item.product.sku,
         quantity: item.quantity,
-        notes: item.notes || '',
+        notes: item.notes?.trim() || '',
       })),
     }),
   });

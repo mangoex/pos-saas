@@ -4105,11 +4105,15 @@ def get_order_detail(
         addr = intent.get("delivery_address_snapshot") or {}
         phone = cust.get("phone") or addr.get("phone")
         full_address = (
-            addr.get("street") or addr.get("address_line1") or addr.get("formatted_address")
+            addr.get("street") or addr.get("address_line1") or addr.get("formatted_address") or addr.get("address_text")
         )
         if full_address and addr.get("neighborhood"):
             full_address = f"{full_address}, {addr['neighborhood']}"
-        delivery_notes = addr.get("notes") or intent.get("order_notes")
+        order_notes = intent.get("order_notes") or cust.get("order_notes") or addr.get("notes") or ""
+        delivery_notes = addr.get("notes") or order_notes
+        table_number = cust.get("table_number") or ""
+        cash_amount = cust.get("cash_amount") or ""
+        payment_method = cust.get("payment_method") or ""
         return {
             "id": intent["id"],
             "organization_id": intent["organization_id"],
@@ -4127,9 +4131,13 @@ def get_order_detail(
             "customer_phone": phone,
             "delivery_address": full_address,
             "delivery_notes": delivery_notes,
+            "order_notes": order_notes,
+            "table_number": table_number,
+            "cash_amount": cash_amount,
             "customer_snapshot": cust,
             "delivery_address_snapshot": addr,
-            "payment_method_intent": None,
+            "payment_method_intent": payment_method or None,
+            "payment_method": payment_method or None,
             "created_at": intent["created_at"],
             "accepted_at": intent.get("accepted_at"),
             "lines": [
@@ -4254,16 +4262,26 @@ def get_order_detail(
         or any(task["status"] != "PENDING" for task in tasks)
     )
     projection = _order_payment_projection(session, dict(order))
+    cust = dict(order.get("customer_snapshot") or {})
+    addr = dict(order.get("delivery_address_snapshot") or {})
+    order_notes = cust.get("order_notes") or addr.get("notes") or ""
+    table_number = cust.get("table_number") or ""
+    cash_amount = cust.get("cash_amount") or ""
+    payment_method = order.get("payment_method_intent") or cust.get("payment_method") or None
+    delivery_notes = addr.get("notes") or order_notes
     return {
         **projection,
         # Canonical aliases used by the account/history projection.  Legacy fields
         # remain in the detail payload for existing POS consumers.
-        "customer_label": (order.get("customer_snapshot") or {}).get("name")
-        or order.get("owner_name"),
-        "customer_phone": (order.get("customer_snapshot") or {}).get("phone") or "",
-        "delivery_address": (order.get("delivery_address_snapshot") or {}).get("address_text")
-        or "",
-        "delivery_notes": (order.get("delivery_address_snapshot") or {}).get("notes") or "",
+        "customer_label": cust.get("name") or order.get("owner_name"),
+        "customer_phone": cust.get("phone") or addr.get("phone") or "",
+        "delivery_address": addr.get("address_text") or addr.get("street") or "",
+        "delivery_notes": delivery_notes,
+        "order_notes": order_notes,
+        "table_number": table_number,
+        "cash_amount": cash_amount,
+        "payment_method_intent": payment_method,
+        "payment_method": payment_method,
         "channel": order.get("channel") or "POS",
         "service_type": order["order_type"],
         "lines": lines,
@@ -4755,7 +4773,10 @@ def list_order_accounts(
         )
         intent_rows = session.execute(intent_query).mappings().all()
         for intent in intent_rows:
-            cust_name = (intent.get("customer_snapshot") or {}).get("name")
+            cust = dict(intent.get("customer_snapshot") or {})
+            addr = dict(intent.get("delivery_address_snapshot") or {})
+            cust_name = cust.get("name")
+            order_notes = intent.get("order_notes") or cust.get("order_notes") or addr.get("notes") or ""
             items.append(
                 {
                     "id": intent["id"],
@@ -4769,6 +4790,9 @@ def list_order_accounts(
                     "currency": intent["currency"],
                     "created_at": intent["created_at"],
                     "customer_label": f"🌐 {cust_name or 'Cliente Web'}",
+                    "order_notes": order_notes,
+                    "table_number": cust.get("table_number") or "",
+                    "cash_amount": cust.get("cash_amount") or "",
                     "payment_status": "UNPAID",
                     "production_summary": {
                         "task_count": 0,
@@ -4797,6 +4821,9 @@ def list_order_accounts(
                 "created_at": order["created_at"],
                 "customer_label": (order.get("customer_snapshot") or {}).get("name")
                 or order.get("owner_name"),
+                "order_notes": detail.get("order_notes") or "",
+                "table_number": detail.get("table_number") or "",
+                "cash_amount": detail.get("cash_amount") or "",
                 "payment_status": detail["payment_status"],
                 "production_summary": {
                     "task_count": len(detail["production_tasks"]),
@@ -25499,6 +25526,12 @@ def create_public_order_intent(
         "order_notes": str(payload.get("order_notes") or "").strip() or None,
         "delivery_address": payload.get("delivery_address"),
     }
+    if payload.get("table_number"):
+        normalized["table_number"] = str(payload["table_number"]).strip()
+    if payload.get("payment_method"):
+        normalized["payment_method"] = str(payload["payment_method"]).strip()
+    if payload.get("cash_amount"):
+        normalized["cash_amount"] = str(payload["cash_amount"]).strip()
     digest = hashlib.sha256(
         json.dumps(
             {"contract": 1, "branch": branch_id, "payload": normalized},
@@ -25590,6 +25623,10 @@ def create_public_order_intent(
             customer_snapshot={
                 "name": normalized["customer_name"],
                 "phone": normalized["customer_phone"],
+                "order_notes": normalized["order_notes"],
+                "table_number": normalized.get("table_number"),
+                "payment_method": normalized.get("payment_method"),
+                "cash_amount": normalized.get("cash_amount"),
             },
             delivery_address_snapshot=normalized["delivery_address"],
             order_type=normalized["order_type"],
@@ -25833,6 +25870,20 @@ def accept_public_order_intent(
         if recovered:
             return recovered
         raise BusinessError("public_order_transition_invalid", "Public order intent changed")
+    cust_snap = dict(intent.get("customer_snapshot") or {})
+    if intent.get("order_notes") and not cust_snap.get("order_notes"):
+        cust_snap["order_notes"] = intent["order_notes"]
+
+    deliv_snap = (
+        dict(intent["delivery_address_snapshot"])
+        if intent.get("delivery_address_snapshot")
+        else None
+    )
+    if deliv_snap and not deliv_snap.get("notes") and intent.get("order_notes"):
+        deliv_snap["notes"] = intent["order_notes"]
+
+    payment_intent = cust_snap.get("payment_method") or None
+
     order = {
         "id": order_id,
         "organization_id": intent["organization_id"],
@@ -25841,16 +25892,16 @@ def accept_public_order_intent(
         "public_order_intent_id": intent_id,
         "public_order_intent_status": "ACCEPTED",
         "customer_id": None,
-        "customer_snapshot": intent["customer_snapshot"],
-        "delivery_address_snapshot": intent["delivery_address_snapshot"],
+        "customer_snapshot": cust_snap,
+        "delivery_address_snapshot": deliv_snap,
         "folio": folio,
         "channel": "PUBLIC_INTENT",
         "status": "ACCEPTED",
         "total_cents": int(intent["total_cents"]),
         "currency": "MXN",
-        "owner_name": (intent["customer_snapshot"] or {}).get("name"),
+        "owner_name": (cust_snap or {}).get("name"),
         "order_type": intent["order_type"],
-        "payment_method_intent": None,
+        "payment_method_intent": payment_intent,
         "version": 1,
         "created_at": now,
         "accepted_at": now,

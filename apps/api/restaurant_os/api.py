@@ -3128,6 +3128,9 @@ class PublicOrderIntentPayload(BaseModel):
     lines: list[PublicOrderIntentLine] = Field(min_length=1, max_length=100)
     order_notes: str | None = Field(default=None, max_length=500)
     delivery_address: PublicDeliveryAddress | None = None
+    table_number: str | None = Field(default=None, max_length=64)
+    payment_method: str | None = Field(default=None, max_length=32)
+    cash_amount: str | None = Field(default=None, max_length=32)
 
     @model_validator(mode="after")
     def delivery_requires_address(self) -> PublicOrderIntentPayload:

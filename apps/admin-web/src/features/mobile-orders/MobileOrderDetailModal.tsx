@@ -47,6 +47,9 @@ interface OrderDetail {
   customer_phone?: string;
   delivery_address?: string;
   delivery_notes?: string;
+  order_notes?: string;
+  cash_amount?: string;
+  payment_method_intent?: string;
   customer_snapshot?: {
     name?: string;
     phone?: string;
@@ -204,6 +207,35 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     (detail as any)?.table ||
     (detail?.customer_snapshot as any)?.table_number ||
     '';
+
+  const orderNotes =
+    detail?.order_notes ||
+    (detail as any)?.notes ||
+    (detail?.customer_snapshot as any)?.order_notes ||
+    detail?.delivery_notes ||
+    detail?.delivery_address_snapshot?.notes ||
+    '';
+
+  const cashAmount =
+    detail?.cash_amount ||
+    (detail as any)?.cash_amount ||
+    (detail?.customer_snapshot as any)?.cash_amount ||
+    '';
+
+  const paymentMethodRaw =
+    detail?.payment_method_intent ||
+    detail?.payment_method ||
+    (detail?.customer_snapshot as any)?.payment_method ||
+    '';
+
+  const paymentMethodLabel =
+    paymentMethodRaw === 'cash'
+      ? 'Efectivo'
+      : paymentMethodRaw === 'card'
+        ? 'Tarjeta'
+        : paymentMethodRaw === 'transfer'
+          ? 'Transferencia'
+          : paymentMethodRaw;
 
   const fullAddress =
     detail?.delivery_address ||
@@ -496,6 +528,25 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                 )}
               </div>
 
+              {/* Customer Notes & Special Instructions Card */}
+              {Boolean(orderNotes) && (
+                <div
+                  style={{
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: 12,
+                    padding: 14,
+                  }}
+                >
+                  <div style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    📝 INSTRUCCIONES / COMENTARIOS DEL CLIENTE
+                  </div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#78350f', whiteSpace: 'pre-wrap' }}>
+                    {orderNotes}
+                  </div>
+                </div>
+              )}
+
               {/* Order Lines & Modifiers */}
               <div
                 style={{
@@ -570,12 +621,16 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                             style={{
                               marginTop: 4,
                               paddingLeft: 16,
-                              fontSize: '0.8rem',
-                              color: '#d97706',
+                              fontSize: '0.825rem',
+                              color: '#b45309',
+                              fontWeight: 600,
                               fontStyle: 'italic',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
                             }}
                           >
-                            Nota: {line.line_notes}
+                            <span>📝 Nota:</span> <span>{line.line_notes}</span>
                           </div>
                         )}
                       </div>
@@ -603,7 +658,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 600 }}>
                       {detail.payment_status === 'CONFIRMED' ? 'Pagado' : 'Cobro pendiente'}
-                      {detail.payment_method ? ` (${detail.payment_method})` : ''}
+                      {paymentMethodLabel ? ` • ${paymentMethodLabel}` : ''}
+                      {cashAmount ? ` (Paga con: $${cashAmount})` : ''}
                     </div>
                   </div>
                   <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>

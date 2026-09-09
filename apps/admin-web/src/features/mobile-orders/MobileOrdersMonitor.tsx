@@ -29,6 +29,9 @@ interface OrderItem {
   payment_status?: string;
   channel?: string;
   is_public_intent?: boolean;
+  order_notes?: string;
+  table_number?: string;
+  cash_amount?: string;
 }
 
 interface MobileOrdersMonitorProps {
@@ -547,6 +550,29 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {/* Customer Notes snippet */}
+                  {order.order_notes && (
+                    <div
+                      style={{
+                        fontSize: '0.78rem',
+                        color: '#92400e',
+                        backgroundColor: '#fffbeb',
+                        border: '1px solid #fef3c7',
+                        padding: '4px 8px',
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span>📝</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.order_notes}</span>
+                    </div>
+                  )}
 
                   {/* Card Footer: Total, Status & Arrow */}
                   <div
