@@ -2,9 +2,24 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
-import { Plus, Store, Edit, Trash2, MapPin, Navigation, Phone, Star } from 'lucide-react';
+import {
+  Plus,
+  Store,
+  Edit,
+  Trash2,
+  MapPin,
+  Navigation,
+  Phone,
+  Star,
+  ExternalLink,
+  Compass,
+  Building2,
+  CheckCircle2,
+  MessageSquare,
+} from 'lucide-react';
 
 import '../../premium-catalogs.css';
+import './BranchesList.css';
 
 interface Branch {
   id: string;
@@ -62,6 +77,7 @@ const BranchesList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [formData, setFormData] = useState(emptyForm);
+  const [locatingGps, setLocatingGps] = useState(false);
 
   const { data: branches, isLoading, error } = useQuery<Branch[]>({
     queryKey: ['branches'],
@@ -72,6 +88,11 @@ const BranchesList = () => {
     queryKey: ['business-units'],
     queryFn: () => fetchApi('/business-units'),
   });
+
+  // Si hay más de 1 unidad de negocio y estamos creando, es relevante mostrarla
+  const showBusinessUnitSelector = businessUnits.length > 1 && !editingBranch;
+  // En la tabla, solo mostrar la columna si existen múltiples unidades
+  const showBusinessUnitColumn = businessUnits.length > 1;
 
   const saveMutation = useMutation({
     mutationFn: (data: typeof formData) => {
@@ -133,6 +154,29 @@ const BranchesList = () => {
     setIsModalOpen(true);
   };
 
+  const handleDetectGps = () => {
+    if (!navigator.geolocation) {
+      alert('Tu navegador no soporta geolocalización.');
+      return;
+    }
+    setLocatingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocatingGps(false);
+        setFormData((prev) => ({
+          ...prev,
+          latitude: position.coords.latitude.toFixed(7),
+          longitude: position.coords.longitude.toFixed(7),
+        }));
+      },
+      (err) => {
+        setLocatingGps(false);
+        alert(`No se pudo obtener la ubicación GPS: ${err.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const formatBranchAddress = (b: Branch) => {
     const parts = [];
     if (b.street) {
@@ -141,71 +185,106 @@ const BranchesList = () => {
     if (b.neighborhood) {
       parts.push(`Col. ${b.neighborhood}`);
     }
+    if (b.city) {
+      parts.push(b.city);
+    }
     return parts.length > 0 ? parts.join(', ') : 'Sin domicilio registrado';
   };
 
   return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div>
-          <h1 className="premium-header-title">Mi Restaurante y Sucursales</h1>
-          <p className="premium-header-subtitle">Administra los datos de tu restaurante, domicilio, coordenadas GPS y enlace de tu Menú Web Móvil.</p>
+    <div className="branches-page-container">
+      {/* Encabezado Principal */}
+      <header className="branches-header">
+        <div className="branches-header-left">
+          <div className="branches-eyebrow">
+            <Store size={13} />
+            <span>Puntos de Venta & Sucursales</span>
+          </div>
+          <h1 className="branches-title">Mi Restaurante y Sucursales</h1>
+          <p className="branches-subtitle">
+            Administra los datos operativos de tu restaurante, domicilio físico, coordenadas GPS y canales de pedido.
+          </p>
         </div>
-        <button className="premium-add-btn" onClick={() => openModal()}>
-          <Plus size={18} />
-          Nuevo Restaurante / Sucursal
-        </button>
-      </div>
 
-      <div className="premium-card">
+        <button className="branches-add-btn" onClick={() => openModal()}>
+          <Plus size={18} />
+          <span>Nueva Sucursal</span>
+        </button>
+      </header>
+
+      {/* Tabla de Sucursales */}
+      <div className="branches-card">
         {isLoading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>Cargando sucursales...</div>
+          <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>Cargando sucursales...</div>
         ) : error ? (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-red)' }}>Error al cargar sucursales.</div>
+          <div style={{ padding: 48, textAlign: 'center', color: '#dc2626' }}>Error al cargar sucursales.</div>
         ) : !branches || branches.length === 0 ? (
-          <div className="premium-empty-state">
-            <Store size={64} className="premium-empty-icon" />
-            <h3 style={{ marginBottom: 8, fontSize: '1.25rem', fontWeight: 600 }}>No hay sucursales registradas</h3>
-            <p style={{ color: 'var(--color-text-muted)' }}>Agrega la primera sucursal para operar.</p>
+          <div className="premium-empty-state" style={{ padding: '60px 24px', textAlign: 'center' }}>
+            <Store size={56} style={{ color: '#94a3b8', margin: '0 auto 16px', display: 'block' }} />
+            <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>No hay sucursales registradas</h3>
+            <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem' }}>Agrega tu restaurante o primera sucursal para comenzar a operar.</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="premium-table">
+          <div className="branches-table-wrap">
+            <table className="branches-modern-table">
               <thead>
                 <tr>
-                  <th>Nombre</th>
+                  <th>Restaurante / Sucursal</th>
                   <th>Estatus</th>
-                  <th>Código</th>
-                  <th>Domicilio & Entre Calles</th>
-                  <th>GPS (Lat, Lng)</th>
-                  <th>Unidad de negocio</th>
+                  <th>Código / Slug Móvil</th>
+                  <th>Domicilio & Referencias</th>
+                  <th>Ubicación GPS</th>
+                  {showBusinessUnitColumn && <th>Unidad de negocio</th>}
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {branches.map((branch) => (
                   <tr key={branch.id}>
-                    <td style={{ fontWeight: 500 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ padding: 8, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderRadius: 8 }}>
-                          <Store size={18} />
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div className="branches-store-icon">
+                          <Store size={20} />
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span>{branch.name}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{branch.name}</strong>
                             {branch.google_review_url && (
-                              <span title={`Google Reviews: ${branch.google_review_url}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef9c3', color: '#854d0e', padding: '2px 6px', borderRadius: 4, fontSize: '0.6875rem', fontWeight: 700 }}>
-                                <Star size={10} fill="#eab308" color="#eab308" /> Reseñas
-                              </span>
+                              <a
+                                href={branch.google_review_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`Google Reviews: ${branch.google_review_url}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  background: '#fef9c3',
+                                  color: '#854d0e',
+                                  padding: '2px 7px',
+                                  borderRadius: 6,
+                                  fontSize: '0.7rem',
+                                  fontWeight: 750,
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                <Star size={11} fill="#eab308" color="#eab308" /> Reseñas
+                              </a>
                             )}
                           </div>
                           {branch.phone && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                              <Phone size={12} /> {branch.phone}
+                            <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <Phone size={12} color="#94a3b8" /> {branch.phone}
+                              </span>
                               {branch.whatsapp_ordering_enabled ? (
-                                <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 5px', borderRadius: 4 }}>WhatsApp ✓</span>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 750, color: '#059669', background: '#ecfdf5', border: '1px solid #d1fae5', padding: '1px 6px', borderRadius: 4 }}>
+                                  WhatsApp ✓
+                                </span>
                               ) : (
-                                <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f1f5f9', padding: '1px 5px', borderRadius: 4 }}>Solo POS</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 4 }}>
+                                  Solo POS
+                                </span>
                               )}
                             </div>
                           )}
@@ -217,15 +296,19 @@ const BranchesList = () => {
                         {branch.status === 'active' ? 'Activa' : 'Inactiva'}
                       </Badge>
                     </td>
-                    <td style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{branch.code}</td>
                     <td>
-                      <div style={{ fontSize: '0.875rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <MapPin size={14} style={{ color: '#3b82f6', flexShrink: 0 }} />
-                          <span>{formatBranchAddress(branch)}</span>
+                      <span className="branches-slug-badge">
+                        {branch.code}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.86rem', maxWidth: 280 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                          <MapPin size={15} style={{ color: '#10b981', flexShrink: 0, marginTop: 2 }} />
+                          <span style={{ color: '#334155' }}>{formatBranchAddress(branch)}</span>
                         </div>
                         {branch.cross_streets && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2, paddingLeft: 18 }}>
+                          <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: 3, paddingLeft: 21 }}>
                             Entre: {branch.cross_streets}
                           </div>
                         )}
@@ -233,19 +316,35 @@ const BranchesList = () => {
                     </td>
                     <td>
                       {branch.latitude && branch.longitude ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8125rem', fontFamily: 'monospace', color: '#059669', background: '#ecfdf5', padding: '4px 8px', borderRadius: 6, width: 'fit-content' }}>
+                        <div className="branches-gps-pill">
                           <Navigation size={12} />
-                          <span>{Number(branch.latitude).toFixed(5)}, {Number(branch.longitude).toFixed(5)}</span>
+                          <span>{Number(branch.latitude).toFixed(4)}, {Number(branch.longitude).toFixed(4)}</span>
                         </div>
                       ) : (
-                        <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>Sin GPS</span>
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Sin GPS</span>
                       )}
                     </td>
-                    <td>{branch.business_unit_name}</td>
+                    {showBusinessUnitColumn && <td>{branch.business_unit_name}</td>}
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button className="premium-action-btn edit" onClick={() => openModal(branch)} title="Editar"><Edit size={18} /></button>
-                        <button className="premium-action-btn delete" onClick={() => deleteMutation.mutate(branch.id)} title="Desactivar"><Trash2 size={18} /></button>
+                        <button
+                          className="branches-action-icon-btn edit"
+                          onClick={() => openModal(branch)}
+                          title="Editar sucursal"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          className="branches-action-icon-btn delete"
+                          onClick={() => {
+                            if (window.confirm(`¿Estás seguro de desactivar la sucursal "${branch.name}"?`)) {
+                              deleteMutation.mutate(branch.id);
+                            }
+                          }}
+                          title="Desactivar sucursal"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -256,161 +355,268 @@ const BranchesList = () => {
         )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingBranch ? `Restaurante: ${editingBranch.name}` : 'Nuevo Restaurante'}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
-          <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 12 }}>
-            <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Datos del Restaurante</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      {/* Modal Modernizado de Sucursal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingBranch ? `Restaurante: ${editingBranch.name}` : 'Nuevo Restaurante / Sucursal'}
+      >
+        <div className="branch-form-modal">
+          {/* 1. Datos de Identidad y Contacto */}
+          <section className="branch-form-section">
+            <div className="branch-form-section-header">
+              <h3 className="branch-form-section-title">
+                <Store size={18} color="#10b981" />
+                Datos del Restaurante
+              </h3>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Nombre del restaurante o sucursal *</label>
-                <Input value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} placeholder="Ej. Mi Taquería / Sucursal Centro" />
+                <label className="branch-field-label">Nombre del restaurante o sucursal *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ej. Tacos el Güero / Matriz Centro"
+                />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Código / Slug móvil (ej. PILOTO) *</label>
-                <Input value={formData.code} onChange={(e: any) => setFormData({...formData, code: e.target.value})} placeholder="Ej. PILOTO o MITAQUERIA" />
-                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
+                <label className="branch-field-label">Código / Slug móvil (ej. PILOTO) *</label>
+                <Input
+                  value={formData.code}
+                  onChange={(e: any) => setFormData({ ...formData, code: e.target.value })}
+                  placeholder="Ej. ELGUERO o PILOTO"
+                />
+                <span className="branch-input-helper">
                   Identificador para tu Menú Web Móvil y QR (<code>?slug={formData.code || 'CODIGO'}</code>)
                 </span>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-              <div>
-                <label htmlFor="business-unit" style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Unidad de negocio</label>
-                <select
-                  id="business-unit"
-                  value={formData.business_unit_id}
-                  onChange={(event) => setFormData({...formData, business_unit_id: event.target.value})}
-                  disabled={Boolean(editingBranch)}
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)' }}
-                >
-                  <option value="">Selecciona una unidad</option>
-                  {businessUnits.map((unit) => (
-                    <option key={unit.id} value={unit.id}>{unit.name} · {unit.legal_entity_name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Teléfono de contacto / WhatsApp</label>
-                <Input value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value})} placeholder="Ej. 6671234567" />
-              </div>
-            </div>
 
-            <div style={{
-              marginTop: 14,
-              padding: '12px 14px',
-              background: formData.whatsapp_ordering_enabled ? '#f0fdf4' : 'var(--color-surface-subtle, #f8fafc)',
-              borderRadius: 10,
-              border: formData.whatsapp_ordering_enabled ? '1px solid #86efac' : '1px solid var(--color-border)',
-              transition: 'all 0.2s ease',
-            }}>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(formData.whatsapp_ordering_enabled)}
-                  onChange={(e) => setFormData({ ...formData, whatsapp_ordering_enabled: e.target.checked })}
-                  style={{ width: 18, height: 18, marginTop: 2, accentColor: '#16a34a', cursor: 'pointer' }}
-                />
+            <div style={{ display: 'grid', gridTemplateColumns: showBusinessUnitSelector ? '1fr 1fr' : '1fr', gap: 14 }}>
+              {showBusinessUnitSelector && (
                 <div>
-                  <span style={{ fontWeight: 700, fontSize: '0.875rem', color: formData.whatsapp_ordering_enabled ? '#15803d' : 'inherit', display: 'block' }}>
-                    Recibir pedidos por WhatsApp en esta sucursal
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>
-                    {formData.whatsapp_ordering_enabled
-                      ? '✓ Activo: Los clientes en celular podrán enviar el pedido detallado por WhatsApp a tu teléfono de contacto además de guardarse en el sistema.'
-                      : '✗ Desactivado: Los pedidos se registrarán únicamente en el sistema POS. NO se abrirá WhatsApp ni se mostrará el botón de envío.'}
-                  </span>
+                  <label htmlFor="business-unit" className="branch-field-label">Unidad de negocio</label>
+                  <select
+                    id="business-unit"
+                    value={formData.business_unit_id}
+                    onChange={(event) => setFormData({ ...formData, business_unit_id: event.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: 10,
+                      borderRadius: 10,
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      fontSize: '0.88rem',
+                    }}
+                  >
+                    <option value="">Selecciona una unidad</option>
+                    {businessUnits.map((unit) => (
+                      <option key={unit.id} value={unit.id}>{unit.name} · {unit.legal_entity_name}</option>
+                    ))}
+                  </select>
                 </div>
-              </label>
-            </div>
-          </div>
+              )}
 
-          <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 12 }}>
-            <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Domicilio Físico</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Calle</label>
-                <Input value={formData.street} onChange={(e: any) => setFormData({...formData, street: e.target.value})} placeholder="Ej. Av. Álvaro Obregón" />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>No. Exterior</label>
-                <Input value={formData.exterior_number} onChange={(e: any) => setFormData({...formData, exterior_number: e.target.value})} placeholder="Ej. 450" />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>No. Interior / Local</label>
-                <Input value={formData.interior_number} onChange={(e: any) => setFormData({...formData, interior_number: e.target.value})} placeholder="Ej. Local 3B" />
+                <label className="branch-field-label">Teléfono de contacto / WhatsApp</label>
+                <Input
+                  value={formData.phone}
+                  onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="Ej. 6671234567 o 526671234567"
+                />
+                <span className="branch-input-helper">Número a 10 dígitos (o con código de país) para recibir pedidos.</span>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginTop: 12 }}>
+            {/* Tarjeta de Pedidos por WhatsApp */}
+            <div
+              className={`branch-whatsapp-card ${formData.whatsapp_ordering_enabled ? 'active' : ''}`}
+              onClick={() => setFormData({ ...formData, whatsapp_ordering_enabled: !formData.whatsapp_ordering_enabled })}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(formData.whatsapp_ordering_enabled)}
+                onChange={(e) => setFormData({ ...formData, whatsapp_ordering_enabled: e.target.checked })}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MessageSquare size={15} color={formData.whatsapp_ordering_enabled ? '#059669' : '#64748b'} />
+                  <strong style={{ fontSize: '0.88rem', color: formData.whatsapp_ordering_enabled ? '#065f46' : '#1e293b' }}>
+                    Recibir pedidos por WhatsApp en esta sucursal
+                  </strong>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4 }}>
+                  {formData.whatsapp_ordering_enabled
+                    ? '✓ Activo: Los clientes en celular podrán enviar el pedido detallado por WhatsApp a tu teléfono de contacto además de guardarse en el sistema POS.'
+                    : '✕ Desactivado: Los pedidos se registrarán únicamente en el sistema POS. NO se abrirá WhatsApp ni se mostrará el botón de envío.'}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 2. Domicilio Físico */}
+          <section className="branch-form-section">
+            <div className="branch-form-section-header">
+              <h3 className="branch-form-section-title">
+                <MapPin size={18} color="#10b981" />
+                Domicilio Físico
+              </h3>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Colonia</label>
-                <Input value={formData.neighborhood} onChange={(e: any) => setFormData({...formData, neighborhood: e.target.value})} placeholder="Ej. Centro" />
+                <label className="branch-field-label">Calle</label>
+                <Input
+                  value={formData.street}
+                  onChange={(e: any) => setFormData({ ...formData, street: e.target.value })}
+                  placeholder="Ej. Av. Álvaro Obregón"
+                />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Código Postal</label>
-                <Input value={formData.postal_code} onChange={(e: any) => setFormData({...formData, postal_code: e.target.value})} placeholder="Ej. 80000" />
+                <label className="branch-field-label">No. Exterior</label>
+                <Input
+                  value={formData.exterior_number}
+                  onChange={(e: any) => setFormData({ ...formData, exterior_number: e.target.value })}
+                  placeholder="Ej. 450"
+                />
+              </div>
+              <div>
+                <label className="branch-field-label">No. Interior / Local</label>
+                <Input
+                  value={formData.interior_number}
+                  onChange={(e: any) => setFormData({ ...formData, interior_number: e.target.value })}
+                  placeholder="Ej. Local 3B"
+                />
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Ciudad</label>
-                <Input value={formData.city} onChange={(e: any) => setFormData({...formData, city: e.target.value})} placeholder="Ej. Culiacán" />
+                <label className="branch-field-label">Colonia</label>
+                <Input
+                  value={formData.neighborhood}
+                  onChange={(e: any) => setFormData({ ...formData, neighborhood: e.target.value })}
+                  placeholder="Ej. Centro"
+                />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Estado</label>
-                <Input value={formData.state} onChange={(e: any) => setFormData({...formData, state: e.target.value})} placeholder="Ej. Sinaloa" />
+                <label className="branch-field-label">Código Postal</label>
+                <Input
+                  value={formData.postal_code}
+                  onChange={(e: any) => setFormData({ ...formData, postal_code: e.target.value })}
+                  placeholder="Ej. 80000"
+                />
               </div>
             </div>
 
-            <div style={{ marginTop: 12 }}>
-              <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Entre calles / Referencias de ubicación</label>
-              <Input value={formData.cross_streets} onChange={(e: any) => setFormData({...formData, cross_streets: e.target.value})} placeholder="Ej. Entre Ruperto Paliza y Domingo Rubí, frente a catedral" />
-            </div>
-          </div>
-
-          <div>
-            <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geolocalización GPS (Para asignación automática)</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Latitud GPS (Lat)</label>
-                <Input value={formData.latitude} onChange={(e: any) => setFormData({...formData, latitude: e.target.value})} placeholder="Ej. 24.8083000" />
+                <label className="branch-field-label">Ciudad</label>
+                <Input
+                  value={formData.city}
+                  onChange={(e: any) => setFormData({ ...formData, city: e.target.value })}
+                  placeholder="Ej. Culiacán"
+                />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Longitud GPS (Lng)</label>
-                <Input value={formData.longitude} onChange={(e: any) => setFormData({...formData, longitude: e.target.value})} placeholder="Ej. -107.3941000" />
+                <label className="branch-field-label">Estado</label>
+                <Input
+                  value={formData.state}
+                  onChange={(e: any) => setFormData({ ...formData, state: e.target.value })}
+                  placeholder="Ej. Sinaloa"
+                />
               </div>
             </div>
-          </div>
 
-          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
-            <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Star size={16} style={{ color: '#eab308' }} /> Reputación & Reseñas de Google Maps
-            </h4>
             <div>
-              <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>
+              <label className="branch-field-label">Entre calles / Referencias de ubicación</label>
+              <Input
+                value={formData.cross_streets}
+                onChange={(e: any) => setFormData({ ...formData, cross_streets: e.target.value })}
+                placeholder="Ej. Entre Ruperto Paliza y Domingo Rubí, frente a catedral"
+              />
+            </div>
+          </section>
+
+          {/* 3. Geolocalización GPS */}
+          <section className="branch-form-section">
+            <div className="branch-form-section-header">
+              <h3 className="branch-form-section-title">
+                <Navigation size={18} color="#10b981" />
+                Geolocalización GPS
+              </h3>
+              <button type="button" className="branch-gps-btn" onClick={handleDetectGps} disabled={locatingGps}>
+                <Compass size={14} />
+                <span>{locatingGps ? 'Detectando...' : 'Obtener mi ubicación actual'}</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label className="branch-field-label">Latitud GPS (Lat)</label>
+                <Input
+                  value={formData.latitude}
+                  onChange={(e: any) => setFormData({ ...formData, latitude: e.target.value })}
+                  placeholder="Ej. 24.8083000"
+                />
+              </div>
+              <div>
+                <label className="branch-field-label">Longitud GPS (Lng)</label>
+                <Input
+                  value={formData.longitude}
+                  onChange={(e: any) => setFormData({ ...formData, longitude: e.target.value })}
+                  placeholder="Ej. -107.3941000"
+                />
+              </div>
+            </div>
+            <span className="branch-input-helper">
+              Permite la asignación automática de repartidores y cálculo de distancias para servicio a domicilio.
+            </span>
+          </section>
+
+          {/* 4. Reseñas y Reputación */}
+          <section className="branch-form-section">
+            <div className="branch-form-section-header">
+              <h3 className="branch-form-section-title">
+                <Star size={18} color="#eab308" fill="#eab308" />
+                Reputación & Reseñas de Google Maps
+              </h3>
+            </div>
+
+            <div>
+              <label className="branch-field-label">
                 Enlace para Solicitar Opiniones en Google (Google Reviews URL)
               </label>
               <Input
                 value={formData.google_review_url}
-                onChange={(e: any) => setFormData({...formData, google_review_url: e.target.value})}
+                onChange={(e: any) => setFormData({ ...formData, google_review_url: e.target.value })}
                 placeholder="Ej. https://g.page/r/AbCdEfGhIjK/review"
               />
-              <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+              <p className="branch-input-helper" style={{ margin: '6px 0 0' }}>
                 Los comensales que califiquen con 4 o 5 estrellas al confirmar su pedido serán invitados a compartir su reseña pública en este enlace.
               </p>
             </div>
-          </div>
+          </section>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button variant="primary" onClick={() => saveMutation.mutate(formData)} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? 'Guardando...' : 'Guardar'}
+          {/* Footer de Acciones */}
+          <div className="branch-modal-footer">
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => saveMutation.mutate(formData)}
+              disabled={saveMutation.isPending || !formData.name.trim() || !formData.code.trim()}
+            >
+              {saveMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
             </Button>
           </div>
         </div>
       </Modal>
-    </>
+    </div>
   );
 };
+
 export default BranchesList;

@@ -1,0 +1,312 @@
+/* ==========================================================================
+   Modern Restaurant & Branches Management Styles
+   ========================================================================== */
+
+.branches-page-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* Header */
+.branches-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 4px 0 8px;
+}
+
+.branches-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.branches-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid #d1fae5;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  width: fit-content;
+}
+
+.branches-title {
+  margin: 2px 0 0;
+  font-size: clamp(1.5rem, 2.2vw, 1.95rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: #0f172a;
+}
+
+.branches-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.branches-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+
+.branches-add-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
+}
+
+/* Card & Table */
+.branches-card {
+  background: #ffffff;
+  border: 1px solid #eef2f6;
+  border-radius: 20px;
+  box-shadow: 0 4px 24px -2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.branches-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.branches-modern-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+}
+
+.branches-modern-table thead tr {
+  background: #f8fafc;
+}
+
+.branches-modern-table th {
+  padding: 14px 20px;
+  font-size: 0.74rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.branches-modern-table td {
+  padding: 18px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.branches-modern-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.branches-modern-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+.branches-store-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #059669;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.branches-slug-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.branches-gps-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #d1fae5;
+  padding: 3px 9px;
+  border-radius: 8px;
+}
+
+.branches-action-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.branches-action-icon-btn.edit {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.branches-action-icon-btn.edit:hover {
+  background: #dbeafe;
+  transform: scale(1.06);
+}
+
+.branches-action-icon-btn.delete {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.branches-action-icon-btn.delete:hover {
+  background: #fee2e2;
+  transform: scale(1.06);
+}
+
+/* Modal Styling */
+.branch-form-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: 76vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.branch-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #eef2f6;
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+
+.branch-form-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.branch-form-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.branch-field-label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 650;
+  font-size: 0.84rem;
+  color: #334155;
+}
+
+.branch-input-helper {
+  display: block;
+  font-size: 0.74rem;
+  color: #64748b;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+/* WhatsApp Ordering Feature Card */
+.branch-whatsapp-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.branch-whatsapp-card.active {
+  background: #f0fdf4;
+  border-color: #86efac;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.08);
+}
+
+.branch-whatsapp-card input[type="checkbox"] {
+  width: 19px;
+  height: 19px;
+  accent-color: #10b981;
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+/* GPS Button */
+.branch-gps-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #334155;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.branch-gps-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* Modal Actions Footer */
+.branch-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
