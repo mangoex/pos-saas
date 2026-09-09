@@ -282,7 +282,7 @@ def test_public_intent_uses_canonical_selections_and_direct_client_signal() -> N
     assert limiter.calls[0][1] != "Cliente marcador"
 
 
-def test_public_catalog_modifier_can_be_captured_with_python_price() -> None:
+def test_public_order_intent_preserves_modifier_snapshot_before_and_after_acceptance() -> None:
     client = _client_with_seeded_database()
     _enable_public_order_capture(client)
     now = datetime.now(timezone.utc)
@@ -344,6 +344,7 @@ def test_public_catalog_modifier_can_be_captured_with_python_price() -> None:
         _payload(lines=[{
             "product_id": PRODUCT_ID,
             "quantity": 1,
+            "notes": "Sin cebolla en línea",
             "modifiers": [{"option_id": option_id, "text": "con hielo"}],
         }]),
         key="public-order-valid-modifier-001",
@@ -355,6 +356,27 @@ def test_public_catalog_modifier_can_be_captured_with_python_price() -> None:
         assert line["modifier_total_cents"] == 250
         assert line["line_total_cents"] == 9_750
         assert line["selected_modifiers"][0]["option_id"] == option_id
+
+    pending_detail = client.get(f"/api/v1/orders/{_intent_id(client, created.json()['public_reference'])}", headers=_admin_headers())
+    assert pending_detail.status_code == 200
+    pending_line = pending_detail.json()["lines"][0]
+    assert pending_line["line_notes"] == "Sin cebolla en línea"
+    pending_modifier = pending_line["selected_modifiers"][0]
+    assert pending_modifier["option_name"] == "Muy frio"
+    assert pending_modifier["kitchen_text"] == "con hielo"
+    assert pending_modifier["price_delta_cents"] == 250
+
+    accepted = client.post(
+        f"/api/v1/orders/{pending_detail.json()['id']}/accept",
+        headers=_admin_headers(),
+    )
+    assert accepted.status_code == 200
+
+    accepted_detail = client.get(f"/api/v1/orders/{pending_detail.json()['id']}", headers=_admin_headers())
+    assert accepted_detail.status_code == 200
+    accepted_line = accepted_detail.json()["lines"][0]
+    assert accepted_line["line_notes"] == "Sin cebolla en línea"
+    assert accepted_line["selected_modifiers"][0] == pending_modifier
 
 
 def test_expired_state_remains_reserved_in_the_data_model() -> None:
