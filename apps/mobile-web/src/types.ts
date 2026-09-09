@@ -68,6 +68,7 @@ export interface BranchInfo {
   google_review_url?: string | null;
   mobile_theme?: 'light' | 'dark' | string;
   whatsapp_ordering_enabled?: boolean;
+  has_active_shift?: boolean;
 }
 
 export interface StorefrontOrganization {

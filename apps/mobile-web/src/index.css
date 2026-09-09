@@ -1889,6 +1889,14 @@ body {
   cursor: not-allowed;
 }
 
+.btn-cart-submit-order.disabled-closed {
+  opacity: 0.65;
+  background: #64748b;
+  color: #f8fafc;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .cart-empty-view {
   padding: 40px 16px;
   text-align: center;

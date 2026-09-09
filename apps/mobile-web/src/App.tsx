@@ -51,6 +51,7 @@ export const App: React.FC = () => {
   const [storefrontError, setStorefrontError] = useState<string | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogRetry, setCatalogRetry] = useState(0);
+  const [catalogHasActiveShift, setCatalogHasActiveShift] = useState<boolean | undefined>(undefined);
   const [storageReadyKey, setStorageReadyKey] = useState<string | null>(null);
 
   // Visual Theme (Light vs Warm Dark)
@@ -159,16 +160,18 @@ export const App: React.FC = () => {
     setCatalogError(null);
     setProducts([]);
     setCategories([]);
+    setCatalogHasActiveShift(undefined);
     if (!selectedBranch?.public_key) {
       setProducts([]);
       setCategories([]);
       setLoading(false);
       return () => { isMounted = false; };
     }
-    fetchMobileMenu(selectedBranch.public_key).then(({ products: prods, categories: cats }) => {
+    fetchMobileMenu(selectedBranch.public_key).then(({ products: prods, categories: cats, has_active_shift }) => {
       if (isMounted) {
         setProducts(prods);
         setCategories(cats);
+        setCatalogHasActiveShift(has_active_shift);
         setLoading(false);
       }
     }).catch(() => {
@@ -441,6 +444,8 @@ export const App: React.FC = () => {
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalCartCents = cart.reduce((sum, item) => sum + item.line_total_cents, 0);
   const currentCategory = visibleCategories.find((c) => c.id === activeCategoryId);
+  const isBranchClosed = selectedBranch?.has_active_shift === false || catalogHasActiveShift === false;
+  const hasActiveShift = !isBranchClosed;
 
   if (catalogError && !storefrontError) {
     return <main className="mobile-app-shell feed-empty-state" role="alert">
@@ -501,7 +506,7 @@ export const App: React.FC = () => {
                 <h2>
                   {searchQuery ? `Resultados para "${searchQuery}"` : (
                     activeCategoryId === 'all'
-                      ? 'Todo el Menú'
+                      ? (isBranchClosed ? 'Menú (Cerrado por el momento)' : 'Todo el Menú')
                       : (currentCategory?.name || 'Menú')
                   )}
                 </h2>
@@ -583,6 +588,7 @@ export const App: React.FC = () => {
           allProducts={products}
           orderType={orderType}
           selectedBranch={selectedBranch}
+          hasActiveShift={hasActiveShift}
           onOpenBranchSelector={() => {
             setReturnToCartAfterBranch(true);
             setIsCartOpen(false);

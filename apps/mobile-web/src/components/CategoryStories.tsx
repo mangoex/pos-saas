@@ -88,7 +88,8 @@ export const CategoryStories: React.FC<CategoryStoriesProps> = ({
           const isAll = cat.id === 'all';
           const isActive = activeCategoryId === cat.id || (activeCategoryId === '' && isAll);
           const icon = getCategoryIcon(cat.name);
-          const count = productsCountByCategory[cat.id] || (isAll ? 'Todo el menú' : '');
+          const isClosed = cat.name.toLowerCase().includes('cerrado');
+          const count = productsCountByCategory[cat.id] || (isAll ? (isClosed ? 'Puedes explorar nuestro menú mientras abrimos' : 'Todo el menú') : '');
 
           return (
             <button

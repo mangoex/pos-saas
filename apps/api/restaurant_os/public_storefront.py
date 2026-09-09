@@ -128,11 +128,20 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         )
         if len(keys) != 1:
             raise HTTPException(409, detail={"code": "storefront_setup_required"})
+        has_active_shift = bool(
+            session.execute(
+                sa.select(models.cash_shifts.c.id).where(
+                    models.cash_shifts.c.branch_id == branch["id"],
+                    sa.func.upper(models.cash_shifts.c.status).in_(("OPEN", "CLOSING")),
+                )
+            ).first()
+        )
         branches.append(
             {
                 **{key: branch[key] for key in public_fields},
                 "public_key": keys[0],
                 "mobile_theme": org["mobile_theme"],
+                "has_active_shift": has_active_shift,
             }
         )
     selected = str(aliases[0]["id"]) if aliases else None

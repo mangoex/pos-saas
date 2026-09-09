@@ -25739,9 +25739,19 @@ def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
             }
         )
 
+    active_shift_exists = bool(
+        session.execute(
+            sa.select(models.cash_shifts.c.id).where(
+                models.cash_shifts.c.branch_id == active_branch_id,
+                sa.func.upper(models.cash_shifts.c.status).in_(("OPEN", "CLOSING")),
+            )
+        ).first()
+    )
+
     return {
         "branch_id": active_branch_id,
         "branch_name": branch_name,
+        "has_active_shift": active_shift_exists,
         "menu_home": menu_home(session, organization_id),
         "categories": categories,
         "items": items,

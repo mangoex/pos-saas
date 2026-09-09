@@ -92,7 +92,7 @@ export async function fetchPublicRestaurantInfo(slug: string): Promise<PublicRes
   }
 }
 
-export async function fetchMobileMenu(publicKey?: string | null): Promise<{ products: Product[]; categories: Category[] }> {
+export async function fetchMobileMenu(publicKey?: string | null): Promise<{ products: Product[]; categories: Category[]; has_active_shift?: boolean }> {
   try {
     if (!publicKey) throw new Error('storefront_branch_key_required');
     const catalogUrl = `${API_BASE_URL}/public/branches/${encodeURIComponent(publicKey)}/catalog`;
@@ -112,10 +112,14 @@ export async function fetchMobileMenu(publicKey?: string | null): Promise<{ prod
         && Number.isInteger((item as { price_cents: number }).price_cents)
       ))
       : [];
+    const isClosed = data.has_active_shift === false;
+    const defaultHomeName = isClosed ? 'Cerrado por el momento' : 'Todos';
     const categories: Category[] = [{
       id: 'all',
-      name: typeof data.menu_home?.name === 'string' && data.menu_home.name.trim() ? data.menu_home.name : 'Todos',
-      image_url: typeof data.menu_home?.image_url === 'string' ? data.menu_home.image_url : null,
+      name: isClosed
+        ? 'Cerrado por el momento'
+        : (typeof data.menu_home?.name === 'string' && data.menu_home.name.trim() ? data.menu_home.name : defaultHomeName),
+      image_url: isClosed ? null : (typeof data.menu_home?.image_url === 'string' ? data.menu_home.image_url : null),
     }];
     const seenCatNames = new Set<string>();
     const seenCatIds = new Set<string>(['all']);
@@ -172,7 +176,7 @@ export async function fetchMobileMenu(publicKey?: string | null): Promise<{ prod
       };
     });
 
-    return { products, categories };
+    return { products, categories, has_active_shift: typeof data.has_active_shift === 'boolean' ? data.has_active_shift : undefined };
   } catch (err) {
     throw err;
   }

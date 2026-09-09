@@ -44,3 +44,12 @@ Scenario: Modalidades públicas en barra, para llevar y envío
   When selecciona comer en local (en barra), para llevar o a domicilio y envía una intención válida
   Then la intención conserva el tipo de servicio validado por Python
   And la captura no crea pedido operativo, asignación de mesa ni turno de caja
+
+@BDD-SC-495
+Scenario: Modo catálogo y bloqueo de pedidos cuando la caja está cerrada
+  Given una sucursal activa sin turnos de caja en estado OPEN o CLOSING
+  When un comensal abre la aplicación web móvil del menú
+  Then la API pública de storefront y catálogo reporta "has_active_shift: false"
+  And la web móvil muestra los productos y categorías con navegación normal
+  And la categoría inicial se presenta como "Cerrado por el momento" en vez de "Todos"
+  And el botón de envío de pedido se encuentra deshabilitado mostrando "Abriremos pronto"

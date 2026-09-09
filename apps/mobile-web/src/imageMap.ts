@@ -20,6 +20,7 @@ export function getCategoryCover(categoryName: string): string {
 
 export function getCategoryIcon(categoryName: string): string {
   const cat = (categoryName || '').toLowerCase();
+  if (cat.includes('cerrado')) return '🕒';
   if (cat === 'todos' || cat === 'all') return '🍽️';
   if (cat.includes('sushi') || cat.includes('rollo') || cat.includes('gratinado') || cat.includes('natural')) return '🍣';
   if (cat.includes('taco') || cat.includes('asada') || cat.includes('pastor')) return '🌮';

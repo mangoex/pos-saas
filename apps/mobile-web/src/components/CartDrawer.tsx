@@ -45,6 +45,7 @@ interface CartDrawerProps {
   allProducts?: Product[];
   orderType: OrderType;
   selectedBranch: BranchInfo | null;
+  hasActiveShift?: boolean;
   onOpenBranchSelector?: () => void;
   onClose: () => void;
   onUpdateQuantity: (cartId: string, delta: number) => void;
@@ -60,6 +61,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   allProducts = [],
   orderType: initialOrderType,
   selectedBranch,
+  hasActiveShift,
   onOpenBranchSelector,
   onClose,
   onUpdateQuantity,
@@ -69,6 +71,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   isSubmitting,
   submitError,
 }) => {
+  const isBranchClosed = hasActiveShift === false || selectedBranch?.has_active_shift === false;
   const [orderType, setOrderType] = useState<OrderType>(initialOrderType);
   const [tableNumber, setTableNumber] = useState('');
   const [name, setName] = useState('');
@@ -170,6 +173,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+
+    if (isBranchClosed) {
+      setFormError('La sucursal se encuentra cerrada por el momento y no está recibiendo pedidos. Abriremos pronto.');
+      return;
+    }
 
     if (!name.trim()) {
       setFormError('Por favor ingresa tu nombre completo.');
@@ -639,15 +647,44 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
 
               <div className="cart-submit-sticky-bar">
+                {isBranchClosed && (
+                  <div
+                    className="cart-closed-notice-box"
+                    role="alert"
+                    style={{
+                      marginBottom: '10px',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      color: '#b91c1c',
+                      fontSize: '0.85rem',
+                      lineHeight: '1.4',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>🕒</span>
+                    <span>
+                      <strong>Caja cerrada por el momento:</strong> Esta sucursal no está recibiendo pedidos en este instante. ¡Abriremos pronto!
+                    </span>
+                  </div>
+                )}
                 {submitError && <p className="cart-form-error-alert" role="alert">{submitError}</p>}
                 <button
                   type="submit"
-                  className="btn-cart-submit-order"
-                  disabled={isSubmitting || items.length === 0}
+                  className={`btn-cart-submit-order ${isBranchClosed ? 'disabled-closed' : ''}`}
+                  disabled={isSubmitting || items.length === 0 || isBranchClosed}
+                  title={isBranchClosed ? 'Sucursal cerrada por el momento' : undefined}
                 >
                   <Send size={18} />
                   <span>
-                    {isSubmitting ? 'Enviando pedido…' : `Enviar Pedido • ${formatMoney(totalCents)}`}
+                    {isBranchClosed
+                      ? 'Abriremos pronto'
+                      : isSubmitting
+                      ? 'Enviando pedido…'
+                      : `Enviar Pedido • ${formatMoney(totalCents)}`}
                   </span>
                 </button>
               </div>
