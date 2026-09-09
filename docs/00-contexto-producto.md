@@ -49,10 +49,14 @@ El proyecto se apoya en un código base gastronómico probado, aplicando una est
   - Adaptadores existentes de FacturAPI (CFDI 4.0) y agregadores de delivery (Uber Eats, DiDi Food, Rappi).
 - **PODAR PARA MVP (Fuera de alcance inicial):**
   - Costeo teórico gramo a gramo y recetas/subrecetas multinivel.
+  - Mermas y desperdicios de cocina (requieren catálogo de insumos y costeo de almacén no presentes en Lite).
+  - Selector previo de categorías en catálogo (reemplazado por selección directa de productos y modificadores integrados).
+  - Vinculación de modificadores a inventario (adicionales operan como modificadores ágiles de venta con precio MXN y estación).
   - Lotes de producción interna de elaborados (panadería, salsas por lote).
   - Múltiples almacenes por sucursal y traspasos inter-almacén.
   - Cuentas por pagar, recepción de compras con XML de proveedores a crédito.
   - Despacho y optimización de rutas avanzadas para flotas de repartidores propios.
+
 
 ---
 

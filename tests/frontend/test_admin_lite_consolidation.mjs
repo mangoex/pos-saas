@@ -83,4 +83,61 @@ assert.equal(
   'AdminLayout must associate /cash-concepts to reports-hub'
 );
 
+// 7. CatalogHub pruned items verification
+assert.equal(
+  catalogHub.includes("path: '/category-options'"),
+  false,
+  'CatalogHub must NOT include category-options selector card in Lite SaaS'
+);
+assert.match(
+  catalogHub,
+  /Adicionales y Modificadores/,
+  'CatalogHub must feature Adicionales y Modificadores card'
+);
+
+// 8. ReportsHub pruned items verification
+assert.equal(
+  reportsHub.includes("path: '/waste'"),
+  false,
+  'ReportsHub must NOT include waste card in Lite SaaS'
+);
+
+// 9. CategorySubNav pruned items verification
+assert.equal(
+  subnav.includes("path: '/waste'"),
+  false,
+  'CategorySubNav must NOT include waste link'
+);
+assert.match(
+  subnav,
+  /Adicionales y Modificadores/,
+  'CategorySubNav must include Adicionales y Modificadores link'
+);
+
+// 10. App.tsx waste routes exclusion verification
+const appTsx = readFileSync(join(root, 'apps/admin-web/src/App.tsx'), 'utf8');
+assert.match(
+  appTsx,
+  /<Route path="inventory\/waste" element=\{<ExcludedCommercialModule module="Mermas y desperdicios" \/>\} \/>/,
+  'App.tsx must map inventory/waste to ExcludedCommercialModule'
+);
+assert.match(
+  appTsx,
+  /<Route path="waste" element=\{<ExcludedCommercialModule module="Mermas y desperdicios" \/>\} \/>/,
+  'App.tsx must map waste to ExcludedCommercialModule'
+);
+
+// 11. IngredientExtras decoupled from inventory
+const extrasTsx = readFileSync(join(root, 'apps/admin-web/src/features/catalog/IngredientExtras.tsx'), 'utf8');
+assert.equal(
+  extrasTsx.includes('/inventory/items'),
+  false,
+  'IngredientExtras must not depend on /inventory/items query in Lite SaaS'
+);
+assert.match(
+  extrasTsx,
+  /Adicionales y Modificadores/,
+  'IngredientExtras header must display Adicionales y Modificadores'
+);
+
 console.log('✓ All Lite Admin consolidation semantic tests PASSED!');

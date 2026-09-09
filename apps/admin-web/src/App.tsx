@@ -190,7 +190,7 @@ export const App = () => {
           <Route path="inventory/items" element={<ItemsList />} />
           <Route path="warehouses" element={<ExcludedCommercialModule module="Múltiples almacenes" />} />
           <Route path="production" element={<ExcludedCommercialModule module="Producción por lotes" />} />
-          <Route path="inventory/waste" element={<WasteList />} />
+          <Route path="inventory/waste" element={<ExcludedCommercialModule module="Mermas y desperdicios" />} />
           <Route path="inventory/transfers" element={<ExcludedCommercialModule module="Traspasos entre almacenes" />} />
           <Route path="inventory/counts" element={<PhysicalCountList />} />
           <Route path="inventory/units" element={<UnitsList />} />
@@ -209,7 +209,7 @@ export const App = () => {
 
           {/* Subroutes: Ventas y Reportes */}
           <Route path="reports" element={<CorporateReconciliationDashboard />} />
-          <Route path="waste" element={<WasteList />} />
+          <Route path="waste" element={<ExcludedCommercialModule module="Mermas y desperdicios" />} />
           <Route path="analytics" element={<div style={{ padding: 24 }}><h2>Analytics</h2><p>Panel de Métricas en vivo...</p></div>} />
 
           {/* Subroutes: Administración y Accesos */}

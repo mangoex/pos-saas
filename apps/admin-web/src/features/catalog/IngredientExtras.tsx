@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Plus, Search } from 'lucide-react';
 import { Button, Input, Modal } from '@restaurantos/ui';
@@ -54,8 +54,6 @@ export default function IngredientExtras() {
   const [status, setStatus] = useState('active');
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState('');
-  const [itemSearch, setItemSearch] = useState('');
-  const [itemId, setItemId] = useState('');
   const [label, setLabel] = useState('');
   const [portionQuantity, setPortionQuantity] = useState('1');
   const [salePriceMxn, setSalePriceMxn] = useState('');
@@ -68,23 +66,9 @@ export default function IngredientExtras() {
     queryKey: ['ingredient-extras', search, status],
     queryFn: () => fetchApi(`/catalog/ingredient-variations?search=${encodeURIComponent(search)}&status=${status}`),
   });
-  const items = useQuery<Ingredient[]>({
-    queryKey: ['ingredient-extra-items', itemSearch],
-    queryFn: () => fetchApi('/inventory/items'),
-    enabled: createOpen,
-  });
-  const inventory = useMemo(() => (items.data || []).filter((item) => (
-    item.item_type === 'ingredient'
-      && item.status === 'active'
-      && `${item.name} ${item.sku}`.toLowerCase().includes(itemSearch.toLowerCase()
-      )
-  )), [items.data, itemSearch]);
-  const chosen = inventory.find((item) => item.id === itemId);
   const refresh = () => client.invalidateQueries({ queryKey: ['ingredient-extras'] });
   const resetCreate = () => {
     setCreateOpen(false);
-    setItemSearch('');
-    setItemId('');
     setLabel('');
     setPortionQuantity('1');
     setSalePriceMxn('');
@@ -101,7 +85,6 @@ export default function IngredientExtras() {
     mutationFn: () => fetchApi('/catalog/ingredient-variations', {
       method: 'POST',
       body: JSON.stringify({
-        inventory_item_id: itemId || undefined,
         name: label.trim() || undefined,
         add_label: label.trim() || undefined,
         portion_quantity: portionQuantity,
@@ -114,7 +97,7 @@ export default function IngredientExtras() {
     onSuccess: (extra) => {
       resetCreate();
       setDetailId(extra.id);
-      setFeedback('Ingrediente adicional corporativo creado. Está disponible para cualquier producto.');
+      setFeedback('Adicional creado exitosamente. Está disponible para cualquier producto.');
       void refresh();
     },
     onError: (reason) => setOperationalError(errorMessage(reason, 'No fue posible crear el ingrediente adicional.')),
@@ -136,9 +119,9 @@ export default function IngredientExtras() {
     <header style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 18 }}>
       <Plus color="#10b981" />
       <div>
-        <h1 style={{ margin: 0 }}>Ingredientes adicionales</h1>
+        <h1 style={{ margin: 0 }}>Adicionales y Modificadores</h1>
         <p style={{ color: '#64748b', marginBottom: 0 }}>
-          Porciones corporativas con cantidad exacta, inventario, costo interno y precio explícito.
+          Ingredientes adicionales y extras con costo para enriquecer los platillos de tu menú (ej. Queso extra, Tocino, Aguacate).
         </p>
       </div>
     </header>
@@ -148,7 +131,7 @@ export default function IngredientExtras() {
         <Input
           value={search}
           onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearch(event.target.value)}
-          placeholder="Buscar adicional, insumo o SKU"
+          placeholder="Buscar adicional o modificador..."
           style={{ paddingLeft: 32 }}
         />
       </div>
@@ -157,7 +140,7 @@ export default function IngredientExtras() {
         <option value="needs_review">Requieren revisión</option>
         <option value="archived">Archivados</option>
       </select>
-      <Button onClick={openCreate}>Nuevo ingrediente adicional</Button>
+      <Button onClick={openCreate}>+ Nuevo adicional</Button>
     </section>
     {operationalError && <p role="alert" style={{ color: '#b91c1c' }}>{operationalError}</p>}
     {extras.isLoading ? <p>Cargando ingredientes adicionales…</p> : null}
@@ -170,30 +153,37 @@ export default function IngredientExtras() {
     ) : null}
     <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
       {(extras.data || []).map((extra) => <article key={extra.id} style={card}>
-        <strong>{extra.inventory_item_name}</strong>
-        <span style={{ color: '#64748b' }}> · {extra.inventory_item_sku} · {extra.unit_code}</span>
-        <p>
-          {extra.add_label} · Porción: {extra.portion_quantity || 'Sin configurar'} · Precio: {
-            extra.sale_price_cents == null ? 'Sin configurar' : `$${centsToMxn(extra.sale_price_cents)}`
-          } · Estación: {extra.station || 'Sin configurar'}
-        </p>
-        <p style={{ color: '#64748b' }}>Disponible para cualquier producto; no requiere relaciones por producto.</p>
-        {extra.status === 'needs_review' || extra.warnings.length > 0 ? <p role="note" style={{ color: '#92400e' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>{extra.add_label || extra.inventory_item_name}</strong>
+            <span style={{ color: '#10b981', fontWeight: 700, marginLeft: 10 }}>
+              {extra.sale_price_cents == null ? 'Sin precio' : `$${centsToMxn(extra.sale_price_cents)} MXN`}
+            </span>
+            <p style={{ color: '#64748b', margin: '4px 0 0', fontSize: '0.875rem' }}>
+              Estación: <strong>{extra.station === 'drinks' ? 'Bebidas' : extra.station === 'packing' ? 'Empaque' : 'Cocina'}</strong>
+              {Number(extra.display_order) > 0 ? ` · Orden: ${extra.display_order}` : ''}
+            </p>
+            <p style={{ color: '#94a3b8', margin: '4px 0 0', fontSize: '0.8125rem' }}>
+              Disponible para cualquier producto del menú.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button variant="secondary" onClick={() => setDetailId(extra.id)}>Configurar</Button>
+            <Button
+              variant="secondary"
+              disabled={statusMutation.isPending || extra.status === 'needs_review'}
+              onClick={() => statusMutation.mutate(extra)}
+            >
+              {extra.status === 'active' ? 'Archivar' : 'Reactivar'}
+            </Button>
+          </div>
+        </div>
+        {extra.status === 'needs_review' || extra.warnings.length > 0 ? <p role="note" style={{ color: '#92400e', margin: '8px 0 0' }}>
           <AlertTriangle size={14} /> Requiere configuración completa antes de volver a estar disponible en el POS.
         </p> : null}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button variant="secondary" onClick={() => setDetailId(extra.id)}>Configurar</Button>
-          <Button
-            variant="secondary"
-            disabled={statusMutation.isPending || extra.status === 'needs_review'}
-            onClick={() => statusMutation.mutate(extra)}
-          >
-            {extra.status === 'active' ? 'Archivar' : 'Reactivar'}
-          </Button>
-        </div>
       </article>)}
     </div>
-    <Modal isOpen={createOpen} onClose={resetCreate} title="Nuevo ingrediente adicional">
+    <Modal isOpen={createOpen} onClose={resetCreate} title="Nuevo adicional">
       <div style={{ display: 'grid', gap: 12 }}>
         {operationalError && <p role="alert" style={{ color: '#dc2626', margin: 0 }}>{operationalError}</p>}
         <label style={{ display: 'grid', gap: 4, fontWeight: 600 }}>Nombre del adicional (ej. Queso Extra, Tocino Extra)
@@ -203,30 +193,6 @@ export default function IngredientExtras() {
             placeholder="Ej. Queso Extra, Aguacate Extra…"
           />
         </label>
-        <details style={{ fontSize: '0.875rem', color: '#64748b' }}>
-          <summary style={{ cursor: 'pointer', padding: '4px 0' }}>Vincular a insumo de inventario (opcional)</summary>
-          <div style={{ marginTop: 8 }}>
-            <Input
-              value={itemSearch}
-              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setItemSearch(event.target.value)}
-              placeholder="Buscar insumo por nombre o SKU…"
-            />
-            <div style={{ maxHeight: 150, overflowY: 'auto', display: 'grid', gap: 4, marginTop: 6 }}>
-              {inventory.slice(0, 15).map((item) => <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setItemId(item.id);
-                  if (!label.trim()) setLabel(`Porción extra de ${item.name}`);
-                  setOperationalError('');
-                }}
-                style={{ textAlign: 'left', border: itemId === item.id ? '2px solid #10b981' : '1px solid #e2e8f0', borderRadius: 8, padding: 8, background: itemId === item.id ? '#ecfdf5' : '#fff' }}
-              >
-                {item.name} · {item.sku} · {item.unit_code || 'unidad base'}
-              </button>)}
-            </div>
-          </div>
-        </details>
         <CanonicalFields
           form={{ portion_quantity: portionQuantity, sale_price_mxn: salePriceMxn, station, display_order: displayOrder }}
           onChange={(form) => {
@@ -235,15 +201,9 @@ export default function IngredientExtras() {
             setStation(form.station);
             setDisplayOrder(form.display_order);
           }}
-          label={label}
-          onLabelChange={setLabel}
-          labelPlaceholder={chosen ? `Porción extra de ${chosen.name}` : 'Porción extra de…'}
         />
-        <p style={{ color: '#64748b', fontSize: '0.8125rem', margin: 0 }}>
-          La configuración corporativa aplica a cualquier producto; no existen overrides por sucursal.
-        </p>
         <Button
-          disabled={(!itemId && !label.trim()) || !portionQuantity.trim() || !salePriceMxn.trim() || create.isPending}
+          disabled={!label.trim() || !salePriceMxn.trim() || create.isPending}
           onClick={() => create.mutate()}
         >
           Crear adicional
@@ -315,7 +275,7 @@ function ExtraDetail({ id, onClose, onFeedback }: { id: string; onClose: () => v
           disabled={canonicalUpdate.isPending || !canonicalForm.portion_quantity.trim() || !canonicalForm.sale_price_mxn.trim()}
           onClick={() => canonicalUpdate.mutate()}
         >
-          {detail.data.status === 'needs_review' ? 'Guardar y activar' : 'Guardar configuración corporativa'}
+          {detail.data.status === 'needs_review' ? 'Guardar y activar' : 'Guardar cambios'}
         </Button>
       </> : null}
     </div>
@@ -325,35 +285,53 @@ function ExtraDetail({ id, onClose, onFeedback }: { id: string; onClose: () => v
 function CanonicalFields({
   form,
   onChange,
-  label,
-  onLabelChange,
-  labelPlaceholder,
 }: {
   form: CanonicalForm;
   onChange: (value: CanonicalForm) => void;
-  label?: string;
-  onLabelChange?: (value: string) => void;
-  labelPlaceholder?: string;
 }) {
-  return <div style={{ display: 'grid', gap: 8 }}>
-    {onLabelChange ? <label>Etiqueta visible
-      <Input value={label || ''} onChange={(event: React.ChangeEvent<HTMLInputElement>) => onLabelChange(event.target.value)} placeholder={labelPlaceholder} />
-    </label> : null}
-    <label>Cantidad Decimal
-      <Input inputMode="decimal" value={form.portion_quantity} onChange={(event: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, portion_quantity: event.target.value })} placeholder="0.250" />
+  return <div style={{ display: 'grid', gap: 10 }}>
+    <label style={{ display: 'grid', gap: 4, fontWeight: 500 }}>
+      Precio de venta (MXN)
+      <Input
+        inputMode="decimal"
+        value={form.sale_price_mxn}
+        onChange={(event: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, sale_price_mxn: event.target.value })}
+        placeholder="15.00"
+      />
     </label>
-    <label>Precio de venta (MXN)
-      <Input inputMode="decimal" value={form.sale_price_mxn} onChange={(event: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, sale_price_mxn: event.target.value })} placeholder="15.00" />
-    </label>
-    <label>Estación
-      <select value={form.station} onChange={(event) => onChange({ ...form, station: event.target.value as CanonicalForm['station'] })} style={{ width: '100%', padding: 9, border: '1px solid #cbd5e1', borderRadius: 8 }}>
+    <label style={{ display: 'grid', gap: 4, fontWeight: 500 }}>
+      Estación de preparación
+      <select
+        value={form.station}
+        onChange={(event) => onChange({ ...form, station: event.target.value as CanonicalForm['station'] })}
+        style={{ width: '100%', padding: 9, border: '1px solid #cbd5e1', borderRadius: 8 }}
+      >
         <option value="kitchen">Cocina</option>
         <option value="drinks">Bebidas</option>
         <option value="packing">Empaque</option>
       </select>
     </label>
-    <label>Orden de despliegue
-      <Input inputMode="numeric" value={form.display_order} onChange={(event: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, display_order: event.target.value })} />
+    <label style={{ display: 'grid', gap: 4, fontWeight: 500 }}>
+      Orden de despliegue
+      <Input
+        inputMode="numeric"
+        value={form.display_order}
+        onChange={(event: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, display_order: event.target.value })}
+      />
     </label>
+    <details style={{ fontSize: '0.8rem', color: '#64748b' }}>
+      <summary style={{ cursor: 'pointer', padding: '2px 0' }}>Opciones avanzadas</summary>
+      <div style={{ marginTop: 6 }}>
+        <label style={{ display: 'grid', gap: 4 }}>
+          Cantidad Decimal
+          <Input
+            inputMode="decimal"
+            value={form.portion_quantity}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, portion_quantity: event.target.value })}
+            placeholder="1"
+          />
+        </label>
+      </div>
+    </details>
   </div>;
 }

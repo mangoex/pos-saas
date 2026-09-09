@@ -10,13 +10,21 @@ En la versión Lite de RestaurantOS:
 
 ---
 
-## BDD-FEAT-LITE-001: Catálogo y Menú Lite sin Recetas Complejas
+## BDD-FEAT-LITE-001: Catálogo y Menú Lite sin Recetas Complejas ni Selectores Redundantes
 
-### BDD-SC-LITE-001: El Hub de Catálogo no expone recetas complejas
+### BDD-SC-LITE-001: El Hub de Catálogo no expone recetas complejas ni selector previo redundante
 Given el usuario administrador abre el panel de administración
 When accede al Hub de "Catálogo y Menú" (`/catalog`)
-Then visualiza tarjetas para Productos, Categorías, Comentarios/Notas, Ingredientes Extra y Opciones previas
-And la tarjeta de "Recetas" (fórmulas y explosión de insumos) no está presente en el menú de catálogo.
+Then visualiza tarjetas para Productos, Categorías, Comentarios/Notas y Adicionales y Modificadores
+And la tarjeta de "Recetas" (fórmulas y explosión de insumos) no está presente
+And la tarjeta de "Opciones previas" (selector previo de categoría) no está presente en la navegación principal.
+
+### BDD-SC-LITE-007: Modificadores y Adicionales desvinculados de insumos y almacén
+Given el usuario administrador entra a la gestión de "Adicionales y Modificadores" (`/ingredient-extras`)
+When crea o edita un adicional (ej. "Extra Queso", "Salsa Especial")
+Then el formulario únicamente solicita Nombre, Precio de Venta (MXN), Estación de preparación y Orden
+And no requiere vincular un insumo del almacén (`/inventory/items`) ni capturar obligatoriamente cantidades decimales
+And el adicional queda listo para seleccionarse de inmediato en la toma de comandas del POS y Menú Web.
 
 ---
 
@@ -57,3 +65,18 @@ And encuentra una tarjeta dedicada a "Facturación Electrónica (SAT CFDI 4.0)" 
 Given el usuario hace clic en "Facturación Electrónica" o "Canales de Delivery"
 When el sistema abre la vista correspondiente
 Then el usuario puede configurar de forma independiente las credenciales de delivery o los sellos digitales del SAT sin mezclar flujos.
+
+---
+
+## BDD-FEAT-LITE-005: Exclusión de Mermas y Desperdicios en Plan Lite SaaS
+
+### BDD-SC-LITE-008: Cajas y Reportes no expone Mermas y Desperdicios
+Given el usuario administrador accede al Hub de "Cajas y Reportes" (`/reports-hub`)
+When consulta los reportes disponibles
+Then no visualiza la tarjeta de "Mermas y Desperdicios" ni el enlace en la subnavegación
+And la vista prioriza el monitoreo de ventas, cortes de caja y conciliación diaria.
+
+### BDD-SC-LITE-009: Protección de rutas excluidas para Mermas
+Given un usuario intenta acceder a `/admin/waste` o `/admin/inventory/waste`
+When el sistema procesa la ruta en la aplicación Admin Web
+Then se muestra el componente de módulo comercial excluido indicando que el control de mermas e inventario detallado pertenece a planes superiores.

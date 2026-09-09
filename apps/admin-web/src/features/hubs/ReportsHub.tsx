@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, LineChart, Wallet, Trash2 } from 'lucide-react';
+import { BarChart3, LineChart, Wallet } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
 import { canManageCashConcepts } from '../cash/cashConceptState';
 
@@ -16,26 +16,6 @@ export const ReportsHub: React.FC = () => {
       iconColor: '#2563eb',
       path: '/reports',
     },
-    ...(hasCashConceptManage
-      ? [
-          {
-            title: 'Conceptos de Caja',
-            description: 'Motivos autorizados para ingresos y egresos de efectivo en turnos de caja.',
-            icon: <Wallet size={26} />,
-            iconBg: '#ecfdf5',
-            iconColor: '#047857',
-            path: '/cash-concepts',
-          },
-        ]
-      : []),
-    {
-      title: 'Mermas y Desperdicios',
-      description: 'Auditoría de alimentos descartados, pérdidas de cocina y cancelaciones de sucursal.',
-      icon: <Trash2 size={26} />,
-      iconBg: '#fef2f2',
-      iconColor: '#dc2626',
-      path: '/waste',
-    },
     {
       title: 'Métricas y Rendimiento',
       description: 'Visualización de tendencias, ventas por categoría e indicadores clave.',
@@ -44,6 +24,18 @@ export const ReportsHub: React.FC = () => {
       iconColor: '#16a34a',
       path: '/analytics',
     },
+    ...(hasCashConceptManage
+      ? [
+          {
+            title: 'Conceptos de Caja',
+            description: 'Ajustes opcionales de motivos de efectivo. El POS incluye los conceptos estándar predeterminados.',
+            icon: <Wallet size={26} />,
+            iconBg: '#ecfdf5',
+            iconColor: '#047857',
+            path: '/cash-concepts',
+          },
+        ]
+      : []),
   ];
 
   return (

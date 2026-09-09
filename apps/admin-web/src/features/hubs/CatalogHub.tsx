@@ -1,12 +1,8 @@
 import React from 'react';
-import { Package, Tags, MessageSquareText, Plus, ListTree } from 'lucide-react';
+import { Package, Tags, MessageSquareText, Plus } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
 
 export const CatalogHub: React.FC = () => {
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const hasCatalogManage = Boolean(
-    currentUser.is_superadmin || (currentUser.permissions || []).includes('catalog.manage')
-  );
 
   const cards: HubCardItem[] = [
     {
@@ -34,25 +30,13 @@ export const CatalogHub: React.FC = () => {
       path: '/variations',
     },
     {
-      title: 'Ingredientes Extra',
-      description: 'Extras y adiciones cobrables personalizadas para enriquecer los platillos.',
+      title: 'Adicionales y Modificadores',
+      description: 'Extras y adiciones cobrables para enriquecer los platillos (ej. Queso extra, Tocino, Aguacate).',
       icon: <Plus size={26} />,
       iconBg: '#ecfdf5',
       iconColor: '#059669',
       path: '/ingredient-extras',
     },
-    ...(hasCatalogManage
-      ? [
-          {
-            title: 'Selector previo',
-            description: 'Preguntas obligatorias al ordenar (ej. términos de cocción o tipos de base).',
-            icon: <ListTree size={26} />,
-            iconBg: '#fdf2f8',
-            iconColor: '#db2777',
-            path: '/category-options',
-          },
-        ]
-      : []),
   ];
 
   return (

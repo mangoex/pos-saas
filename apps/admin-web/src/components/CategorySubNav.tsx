@@ -22,7 +22,7 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     items: [
       { path: '/products', label: 'Productos y Precios' },
       { path: '/categories', label: 'Categorías' },
-      { path: '/ingredient-extras', label: 'Ingredientes Extra' },
+      { path: '/ingredient-extras', label: 'Adicionales y Modificadores' },
       { path: '/variations', label: 'Notas de Comanda' },
     ],
   },
@@ -65,7 +65,6 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
         label: 'Conceptos de Caja',
         requiredPermission: (user) => canManageCashConcepts(user),
       },
-      { path: '/waste', label: 'Mermas y Desperdicios' },
     ],
   },
   {
