@@ -119,3 +119,13 @@ And cada instrucción seleccionada muestra su texto operativo (por ejemplo, "Sin
 And ninguna selección válida se representa únicamente mediante el signo "+" o mediante una etiqueta vacía
 And las notas libres del producto permanecen visibles por separado de los modificadores y comentarios predefinidos
 And se presentan botones de acción rápida para avanzar el estado de preparación (Iniciar Preparación, Marcar Listo, Entregado) o contactar al comensal por WhatsApp.
+
+### BDD-SC-LITE-015: Flujo de pestañas Activos -> Listos -> Todos en el monitor móvil
+Given el monitor de comandas en la aplicación web móvil del administrador
+When se recibe un nuevo pedido con estado por aceptar
+Then se muestra en la columna "Activos" y en "Todos"
+And al pulsar "Aceptar Pedido" dentro del detalle, el pedido abandona "Activos" y pasa inmediatamente a "Listos"
+And la interfaz posiciona al usuario en la pestaña "Listos" para dar seguimiento a la preparación
+And el pedido nunca se traslada directamente a finalizado sin haber pasado por la columna "Listos"
+And al abrir el pedido desde "Listos", se ofrece la acción "Listo para Entregar" para finalizar la comanda
+And al pulsar "Listo para Entregar", el pedido sale de "Listos" y permanece registrado únicamente en "Todos".

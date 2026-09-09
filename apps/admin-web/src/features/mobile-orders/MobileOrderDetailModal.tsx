@@ -70,6 +70,7 @@ interface MobileOrderDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOrderUpdated?: () => void;
+  onOrderAccepted?: () => void;
   branchName?: string;
 }
 
@@ -78,6 +79,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
   isOpen,
   onClose,
   onOrderUpdated,
+  onOrderAccepted,
   branchName,
 }) => {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -127,7 +129,11 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
       await fetchApi(`/orders/${encodeURIComponent(orderId)}/accept`, {
         method: 'POST',
       });
-      if (onOrderUpdated) onOrderUpdated();
+      if (onOrderAccepted) {
+        onOrderAccepted();
+      } else if (onOrderUpdated) {
+        onOrderUpdated();
+      }
       onClose();
     } catch (err: any) {
       const msg =
@@ -243,19 +249,22 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     detail?.delivery_address_snapshot?.notes ||
     '';
 
+  const isCompleted = Boolean(
+    ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(detail?.status?.toUpperCase() || '')
+  );
+
   const isUnaccepted = Boolean(
-    detail?.is_public_intent ||
-    ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(detail?.status?.toUpperCase() || '')
+    !isCompleted &&
+    ((detail?.is_public_intent && detail?.status?.toUpperCase() !== 'ACCEPTED') ||
+    ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(detail?.status?.toUpperCase() || ''))
   );
 
   const isReadyOrInPrep = Boolean(
+    !isUnaccepted &&
+    !isCompleted &&
     ['ACCEPTED', 'READY', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'IN_DELIVERY'].includes(
       detail?.status?.toUpperCase() || ''
     )
-  );
-
-  const isCompleted = Boolean(
-    ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(detail?.status?.toUpperCase() || '')
   );
 
   // WhatsApp prefilled message
@@ -725,7 +734,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
               }}
             >
               <CheckCircle size={18} />
-              {actionLoading ? 'Finalizando...' : 'Finalizar / Entregado'}
+              {actionLoading ? 'Marcando listo para entregar...' : 'Listo para Entregar'}
             </button>
           )}
 
