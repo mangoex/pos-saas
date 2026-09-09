@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 import re
 import secrets
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Optional
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -21,18 +21,23 @@ from restaurant_os.config import get_settings
 from restaurant_os.database import get_session
 from restaurant_os.domain_dns import DnsUnavailable, lookup_txt
 from restaurant_os.operations import _audit, _now
-from restaurant_os.public_names import lock_public_name
+from restaurant_os.public_names import (
+    is_reserved_public_name,
+    is_wildcard_compatible_public_name,
+    lock_public_name,
+)
 from restaurant_os.saas_setup import _actor
 from restaurant_os.superadmin.service import require_superadmin
 
 router = APIRouter(prefix="/api/v1/saas", tags=["restaurant-links"])
 SessionDep = Annotated[Session, Depends(get_session)]
-AuthDep = Annotated[str | None, Header()]
+AuthDep = Annotated[Optional[str], Header()]
 
 
 def error(status: int, code: str) -> HTTPException:
     messages = {
         "alias_reserved": "Este nombre está reservado. Elige otro.",
+        "alias_invalid": "Este nombre no puede usarse como subdominio. Elige otro.",
         "alias_unavailable": "El nombre ya está ocupado. Elige otro.",
         "domain_invalid": "Escribe un dominio válido, sin https://, rutas ni puertos.",
         "domain_reserved": "Este dominio está reservado para la plataforma.",
@@ -56,6 +61,14 @@ def error(status: int, code: str) -> HTTPException:
 
 def platform_hosts() -> set[str]:
     return {h.strip().lower() for h in get_settings().platform_hosts.split(",") if h.strip()}
+
+
+def wildcard_domain() -> str:
+    return get_settings().storefront_wildcard_domain
+
+
+def host_routing_enabled() -> bool:
+    return bool(platform_hosts() or wildcard_domain())
 
 
 def base_url() -> str:
@@ -92,10 +105,11 @@ def normalize_hostname(value: str) -> str:
         pass
     else:
         raise error(422, "domain_invalid")
+    wildcard = wildcard_domain()
     reserved = platform_hosts() | {str(urlsplit(base_url()).hostname)}
     if host.endswith((".local", ".localhost", ".internal", ".test", ".invalid")) or any(
         host == name or host.endswith("." + name) for name in reserved
-    ):
+    ) or (wildcard and (host == wildcard or host.endswith("." + wildcard))):
         raise error(422, "domain_reserved")
     return host
 
@@ -151,13 +165,29 @@ def links(session: Session, org_id: str) -> dict[str, Any]:
         .mappings()
         .all()
     )
-    active = (
-        next((row for row in domains if row["status"] == "active"), None)
-        if platform_hosts()
-        else None
+    active = next((row for row in domains if row["status"] == "active"), None)
+    canonical_slug = str(org["slug"])
+    alias = str(org["preferred_public_slug"] or canonical_slug)
+    wildcard = wildcard_domain()
+    wildcard_alias: str | None = None
+    if is_wildcard_compatible_public_name(alias):
+        wildcard_alias = alias
+    elif is_wildcard_compatible_public_name(canonical_slug):
+        wildcard_alias = canonical_slug
+    if active and host_routing_enabled():
+        origin = "https://" + active["hostname"]
+        menu = origin + f"/menu/{alias}/"
+    elif wildcard and wildcard_alias:
+        origin = f"https://{wildcard_alias}.{wildcard}"
+        menu = origin + "/"
+    else:
+        origin = base_url()
+        menu = origin + f"/menu/{alias}/"
+    canonical_menu_url = (
+        f"https://{canonical_slug}.{wildcard}/"
+        if wildcard and is_wildcard_compatible_public_name(canonical_slug)
+        else base_url() + f"/menu/{canonical_slug}/"
     )
-    origin = "https://" + active["hostname"] if active else base_url()
-    alias = org["preferred_public_slug"] or org["slug"]
     return {
         "name": org["name"],
         "canonical_slug": org["slug"],
@@ -166,11 +196,11 @@ def links(session: Session, org_id: str) -> dict[str, Any]:
             "admin": origin + "/admin/",
             "pos": origin + "/pos/",
             "kds": origin + "/kds/",
-            "menu": origin + f"/menu/{alias}/",
+            "menu": menu,
         },
-        "canonical_menu_url": base_url() + f"/menu/{org['slug']}/",
+        "canonical_menu_url": canonical_menu_url,
         "domains": [domain_view(row) for row in domains],
-        "domain_routing_enabled": bool(platform_hosts()),
+        "domain_routing_enabled": host_routing_enabled(),
     }
 
 
@@ -208,8 +238,10 @@ def set_alias(
     ).one()
     alias = payload.alias
     lock_public_name(session, alias)
-    if alias in {"admin", "pos", "kds", "api", "menu", "register", "login", "matriz"}:
+    if is_reserved_public_name(alias):
         raise error(409, "alias_reserved")
+    if wildcard_domain() and not is_wildcard_compatible_public_name(alias):
+        raise error(409, "alias_invalid")
     existing = (
         session.execute(
             sa.select(models.storefront_aliases).where(models.storefront_aliases.c.alias == alias)

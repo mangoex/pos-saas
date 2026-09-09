@@ -15,6 +15,7 @@ from restaurant_os.public_order_rate_limit import (
     InMemoryPublicOrderRateLimiter,
     RedisPublicOrderRateLimiter,
 )
+from restaurant_os.public_storefront import host_context_router
 from restaurant_os.public_storefront import router as storefront_router
 from restaurant_os.request_audit import bind_support_audit_context
 from restaurant_os.restaurant_domains import router as domains_router
@@ -50,7 +51,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="RestaurantOS API",
         version=settings.app_version,
-        dependencies=[Depends(bind_domain_host)] if settings.platform_hosts.strip() else [],
+        dependencies=[Depends(bind_domain_host)]
+        if settings.platform_hosts.strip() or settings.storefront_wildcard_domain
+        else [],
     )
     intents_enabled = settings.public_order_intents_enabled
     app.state.public_order_intents_enabled = intents_enabled
@@ -90,6 +93,7 @@ def create_app() -> FastAPI:
         )
     app.include_router(platform_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(storefront_router)
+    app.include_router(host_context_router)
     app.include_router(setup_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(domains_router, dependencies=[Depends(bind_support_audit_context)])
 
@@ -151,6 +155,8 @@ def create_app() -> FastAPI:
     @app.get("/", tags=["platform"])
     def platform_home(request: Request) -> Response:
         slug = getattr(request.state, "restaurant_slug", None)
+        if slug and getattr(request.state, "host_class", None) == "wildcard":
+            return serve_spa("mobile-web", "")
         if slug:
             return RedirectResponse(f"/menu/{slug}/", headers={"Cache-Control": "no-store"})
         return _with_device_variant_headers(serve_spa("landing-web", ""))

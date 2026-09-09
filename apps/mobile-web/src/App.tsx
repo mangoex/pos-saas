@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier, StorefrontOrganization } from './types';
-import { fetchMobileMenu, submitMobileOrder, fetchStorefront } from './api';
+import { fetchMobileMenu, submitMobileOrder, fetchStorefront, fetchStorefrontContext } from './api';
 import { HeroHeader } from './components/HeroHeader';
 import { CategoryCircles } from './components/CategoryCircles';
 import { SizeSelectorFilter } from './components/SizeSelectorFilter';
@@ -89,15 +89,12 @@ export const App: React.FC = () => {
   }, []);
 
   const resolveStorefront = useCallback(async () => {
-    if (!storefrontIdentifier) {
-      setStorefrontError('Falta la dirección del restaurante. Abre el enlace de su menú.');
-      setIsResolvingStorefront(false);
-      return;
-    }
     setIsResolvingStorefront(true);
     setStorefrontError(null);
     try {
-      const storefront = await fetchStorefront(storefrontIdentifier);
+      const storefront = storefrontIdentifier
+        ? await fetchStorefront(storefrontIdentifier)
+        : await fetchStorefrontContext();
       setOrganization(storefront.organization);
       setBranches(storefront.branches);
       let savedId: string | null = null;
@@ -222,8 +219,10 @@ export const App: React.FC = () => {
       manifest.rel = 'manifest';
       document.head.appendChild(manifest);
     }
-    manifest.href = `${API_BASE_URL}/public/storefronts/${encodeURIComponent(organization.public_slug)}/manifest.webmanifest`;
-  }, [organization]);
+    manifest.href = storefrontIdentifier
+      ? `${API_BASE_URL}/public/storefronts/${encodeURIComponent(organization.public_slug)}/manifest.webmanifest`
+      : `${API_BASE_URL}/public/storefront-context/manifest.webmanifest`;
+  }, [organization, storefrontIdentifier]);
 
   useEffect(() => {
     if (storageNamespace && storageReadyKey === storageNamespace) localStorage.setItem(`${storageNamespace}:favorites`, JSON.stringify(Array.from(likedProductIds)));
