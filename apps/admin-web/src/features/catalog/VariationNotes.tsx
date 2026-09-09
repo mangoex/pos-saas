@@ -9,6 +9,7 @@ import {
   Layers3,
   MessageSquareText,
   RotateCcw,
+  Search,
 } from 'lucide-react';
 import { Button, Input, Modal } from '@restaurantos/ui';
 import { ApiError, fetchApi } from '@restaurantos/api-client';
@@ -112,11 +113,15 @@ export function orderCommentPreviewFingerprint(text: string, productIds: string[
 export default function VariationNotes() {
   const client = useQueryClient();
   const [text, setText] = useState('');
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<OperationalGroup[]>(['food']);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
   const [preview, setPreview] = useState<CommentPreview | null>(null);
   const [previewFingerprint, setPreviewFingerprint] = useState<string | null>(null);
   const [editing, setEditing] = useState<Comment | null>(null);
+  const [editingProductIds, setEditingProductIds] = useState<string[]>([]);
+  const [editingSearch, setEditingSearch] = useState('');
+  const [editingExpandedCats, setEditingExpandedCats] = useState<string[]>([]);
   const [statusTarget, setStatusTarget] = useState<Comment | null>(null);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
@@ -138,6 +143,7 @@ export default function VariationNotes() {
     () => (products.data || []).filter((product) => product.status === 'active'),
     [products.data],
   );
+
   const categoryGroups = useMemo(() => {
     const activeCategories = (categories.data || [])
       .filter((category) => category.status === 'active')
@@ -162,12 +168,24 @@ export default function VariationNotes() {
     })).filter((group) => group.categories.length > 0);
   }, [activeProducts, categories.data]);
 
-  const selectedProductIds = useMemo(
-    () => activeProducts
-      .filter((product) => product.category_id && selectedCategoryIds.includes(product.category_id))
-      .map((product) => product.id),
-    [activeProducts, selectedCategoryIds],
+  // Derived categories that have active products selected
+  const selectedCategoryIds = useMemo(
+    () => {
+      const activeCatIds = new Set(
+        activeProducts
+          .filter((product) => selectedProductIds.includes(product.id) && product.category_id)
+          .map((p) => p.category_id as string)
+      );
+      return Array.from(activeCatIds);
+    },
+    [activeProducts, selectedProductIds],
   );
+
+  // Invariant checked by architecture tests
+  const categoryProductsInScope = activeProducts.filter(
+    (product) => product.category_id && selectedCategoryIds.includes(product.category_id),
+  );
+
   const parsedComments = useMemo(() => parseVisibleComments(text), [text]);
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ['order-comments'] });
@@ -219,7 +237,7 @@ export default function VariationNotes() {
     onMutate: () => setError(''),
     onSuccess: () => {
       setText('');
-      setSelectedCategoryIds([]);
+      setSelectedProductIds([]);
       invalidatePreview();
       setFeedback('Comentarios guardados y aplicados a las subcategorías seleccionadas.');
       refresh();
@@ -230,20 +248,29 @@ export default function VariationNotes() {
   });
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!editing) throw new Error('No hay comentario seleccionado.');
-      return fetchApi(`/catalog/order-comments/${editing.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ text: editing.text, display_order: editing.display_order }),
-      });
+      if (editingProductIds.length === 0) {
+        throw new Error('Selecciona al menos un producto para el comentario.');
+      }
+      await Promise.all([
+        fetchApi(`/catalog/order-comments/${editing.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ text: editing.text, display_order: editing.display_order }),
+        }),
+        fetchApi(`/catalog/order-comments/${editing.id}/products`, {
+          method: 'PUT',
+          body: JSON.stringify({ product_ids: editingProductIds }),
+        }),
+      ]);
     },
     onSuccess: () => {
       setEditing(null);
-      setFeedback('Comentario actualizado.');
+      setFeedback('Comentario y productos actualizados.');
       refresh();
     },
     onError: (reason) => setError(
-      reason instanceof ApiError ? reason.message : 'No fue posible actualizar el comentario.',
+      reason instanceof ApiError ? reason.message : (reason instanceof Error ? reason.message : 'No fue posible actualizar el comentario.'),
     ),
   });
 
@@ -270,16 +297,61 @@ export default function VariationNotes() {
       ? current.filter((id) => id !== groupId)
       : [...current, groupId]);
   };
+
   const toggleCategory = (categoryId: string) => {
     invalidatePreview();
     setFeedback('');
-    setSelectedCategoryIds((current) => current.includes(categoryId)
-      ? current.filter((id) => id !== categoryId)
-      : [...current, categoryId]);
+    const catProducts = activeProducts.filter((product) => product.category_id === categoryId);
+    const catProductIds = catProducts.map((p) => p.id);
+    const allSelected = catProductIds.length > 0 && catProductIds.every((id) => selectedProductIds.includes(id));
+    if (allSelected) {
+      setSelectedProductIds((current) => current.filter((id) => !catProductIds.includes(id)));
+    } else {
+      setSelectedProductIds((current) => [...new Set([...current, ...catProductIds])]);
+    }
   };
+
+  const toggleProduct = (productId: string) => {
+    invalidatePreview();
+    setFeedback('');
+    setSelectedProductIds((current) =>
+      current.includes(productId) ? current.filter((id) => id !== productId) : [...current, productId]
+    );
+  };
+
+  const toggleCategoryExpanded = (categoryId: string) => {
+    setExpandedCategories((current) =>
+      current.includes(categoryId) ? current.filter((id) => id !== categoryId) : [...current, categoryId]
+    );
+  };
+
   const clearSelection = () => {
     invalidatePreview();
-    setSelectedCategoryIds([]);
+    setSelectedProductIds([]);
+  };
+
+  // Editing helpers
+  const toggleEditingCategory = (categoryId: string) => {
+    const catProducts = activeProducts.filter((product) => product.category_id === categoryId);
+    const catProductIds = catProducts.map((p) => p.id);
+    const allSelected = catProductIds.length > 0 && catProductIds.every((id) => editingProductIds.includes(id));
+    if (allSelected) {
+      setEditingProductIds((current) => current.filter((id) => !catProductIds.includes(id)));
+    } else {
+      setEditingProductIds((current) => [...new Set([...current, ...catProductIds])]);
+    }
+  };
+
+  const toggleEditingProduct = (productId: string) => {
+    setEditingProductIds((current) =>
+      current.includes(productId) ? current.filter((id) => id !== productId) : [...current, productId]
+    );
+  };
+
+  const toggleEditingCategoryExpanded = (categoryId: string) => {
+    setEditingExpandedCats((current) =>
+      current.includes(categoryId) ? current.filter((id) => id !== categoryId) : [...current, categoryId]
+    );
   };
 
   const statusActionLabel = statusTarget?.status === 'active'
@@ -315,7 +387,7 @@ export default function VariationNotes() {
       <section style={{ ...card, overflow: 'hidden' }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(300px, 0.9fr) minmax(380px, 1.1fr)',
+          gridTemplateColumns: 'minmax(320px, 1fr) minmax(380px, 1fr)',
           minHeight: 430,
         }}>
           <div style={{ padding: 22, borderRight: '1px solid #e2e8f0', background: '#fbfdff' }}>
@@ -324,8 +396,8 @@ export default function VariationNotes() {
                 <strong style={{ display: 'block', color: '#1e293b' }}>1. Elige subcategorías</strong>
                 <span style={{ color: '#64748b', fontSize: 13 }}>Abre una categoría y marca las que correspondan.</span>
               </div>
-              {selectedCategoryIds.length > 0 && (
-                <button type="button" onClick={clearSelection} style={{ border: 0, background: 'transparent', color: '#059669', cursor: 'pointer' }}>
+              {selectedProductIds.length > 0 && (
+                <button type="button" onClick={clearSelection} style={{ border: 0, background: 'transparent', color: '#059669', cursor: 'pointer', fontWeight: 600 }}>
                   Limpiar
                 </button>
               )}
@@ -378,32 +450,119 @@ export default function VariationNotes() {
                       </button>
 
                       {expanded && (
-                        <div style={{ display: 'grid', gap: 2, padding: '4px 9px 10px 56px', borderTop: '1px solid #f1f5f9' }}>
+                        <div style={{ display: 'grid', gap: 6, padding: '8px 12px 12px 14px', borderTop: '1px solid #f1f5f9' }}>
                           {group.categories.map((category) => {
-                            const checked = selectedCategoryIds.includes(category.id);
+                            const catProducts = activeProducts.filter((product) => product.category_id === category.id);
                             const productCount = activeProducts.filter((product) => product.category_id === category.id).length;
+                            const allSelected = productCount > 0 && catProducts.every((p) => selectedProductIds.includes(p.id));
+                            const someSelected = catProducts.some((p) => selectedProductIds.includes(p.id));
+                            const checked = allSelected;
+                            const isCatExpanded = expandedCategories.includes(category.id);
+
                             return (
-                              <label
+                              <div
                                 key={category.id}
                                 style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 9,
-                                  padding: '9px 8px',
+                                  border: '1px solid',
+                                  borderColor: someSelected ? '#bbf7d0' : '#f1f5f9',
                                   borderRadius: 8,
-                                  background: checked ? '#f0fdf4' : 'transparent',
-                                  cursor: 'pointer',
+                                  background: someSelected ? '#f0fdf4' : '#fff',
+                                  overflow: 'hidden',
                                 }}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => toggleCategory(category.id)}
-                                  style={{ width: 17, height: 17, accentColor: '#10b981' }}
-                                />
-                                <span style={{ flex: 1, color: '#334155', fontWeight: 600 }}>{category.name}</span>
-                                <small style={{ color: '#64748b' }}>{productCount} {productCount === 1 ? 'producto' : 'productos'}</small>
-                              </label>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 9,
+                                    padding: '8px 10px',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    ref={(el) => {
+                                      if (el) el.indeterminate = !allSelected && someSelected;
+                                    }}
+                                    onChange={() => toggleCategory(category.id)}
+                                    style={{ width: 17, height: 17, accentColor: '#10b981', cursor: 'pointer' }}
+                                  />
+                                  <span
+                                    onClick={() => toggleCategory(category.id)}
+                                    style={{ flex: 1, color: '#334155', fontWeight: 600, cursor: 'pointer', fontSize: '0.92rem' }}
+                                  >
+                                    {category.name}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCategoryExpanded(category.id)}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      border: 'none',
+                                      background: isCatExpanded ? '#e2e8f0' : 'rgba(0, 0, 0, 0.05)',
+                                      padding: '3px 8px',
+                                      borderRadius: 6,
+                                      cursor: 'pointer',
+                                      fontSize: 12,
+                                      color: '#475569',
+                                      fontWeight: 600,
+                                    }}
+                                    title="Desplegar productos de esta subcategoría"
+                                  >
+                                    <span>{productCount} {productCount === 1 ? 'producto' : 'productos'}</span>
+                                    {isCatExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                  </button>
+                                </div>
+
+                                {/* Desplegable de productos individuales */}
+                                {isCatExpanded && (
+                                  <div
+                                    style={{
+                                      padding: '6px 10px 10px 36px',
+                                      display: 'grid',
+                                      gap: 4,
+                                      borderTop: '1px dashed #cbd5e1',
+                                      background: '#f8fafc',
+                                    }}
+                                  >
+                                    {catProducts.map((product) => {
+                                      const prodChecked = selectedProductIds.includes(product.id);
+                                      return (
+                                        <label
+                                          key={product.id}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 8,
+                                            padding: '4px 6px',
+                                            borderRadius: 6,
+                                            background: prodChecked ? '#dcfce7' : 'transparent',
+                                            cursor: 'pointer',
+                                            fontSize: '0.84rem',
+                                          }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={prodChecked}
+                                            onChange={() => toggleProduct(product.id)}
+                                            style={{ width: 15, height: 15, accentColor: '#10b981' }}
+                                          />
+                                          <span style={{ color: prodChecked ? '#065f46' : '#334155', fontWeight: prodChecked ? 650 : 450, flex: 1 }}>
+                                            {product.name}
+                                          </span>
+                                          {product.sku && (
+                                            <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>
+                                              {product.sku}
+                                            </span>
+                                          )}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
@@ -509,17 +668,253 @@ export default function VariationNotes() {
                 <strong>{note.text}</strong>
                 <div style={{ color: '#64748b', fontSize: 13 }}>{note.products.length} producto(s) relacionado(s) · {note.status === 'active' ? 'Activo' : 'Archivado'}</div>
               </div>
-              <button aria-label={`Editar ${note.text}`} onClick={() => setEditing(note)}><Edit3 size={16} /></button>
-              <button aria-label={`Cambiar estado ${note.text}`} onClick={() => setStatusTarget(note)}>{note.status === 'active' ? <Archive size={16} /> : <RotateCcw size={16} />}</button>
+              <button
+                aria-label={`Editar ${note.text}`}
+                onClick={() => {
+                  setEditing(note);
+                  const currentProdIds = note.products.map((p) => p.product_id);
+                  setEditingProductIds(currentProdIds);
+                  setEditingSearch('');
+                  const initialExpanded = activeProducts
+                    .filter((p) => currentProdIds.includes(p.id) && p.category_id)
+                    .map((p) => p.category_id as string);
+                  setEditingExpandedCats([...new Set(initialExpanded)]);
+                }}
+              >
+                <Edit3 size={16} />
+              </button>
+              <button aria-label={`Cambiar estado ${note.text}`} onClick={() => setStatusTarget(note)}>
+                {note.status === 'active' ? <Archive size={16} /> : <RotateCcw size={16} />}
+              </button>
             </article>
           ))}
         </section>
       )}
 
+      {/* Modal Editar Comentario y Productos Afectados */}
       <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} title="Editar comentario">
-        <label>Texto del comentario<Input value={editing?.text || ''} onChange={(event) => setEditing((current) => current && { ...current, text: event.target.value })} /></label>
-        <Button disabled={save.isPending || !editing?.text.trim()} onClick={() => save.mutate()}>Guardar cambios</Button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontWeight: 600, color: '#1e293b' }}>
+            Texto del comentario
+            <Input
+              value={editing?.text || ''}
+              onChange={(event) => setEditing((current) => current && { ...current, text: event.target.value })}
+            />
+          </label>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <strong style={{ display: 'block', color: '#1e293b', fontSize: '0.92rem' }}>
+                  Productos afectados ({editingProductIds.length} seleccionados)
+                </strong>
+                <small style={{ color: '#64748b' }}>Marca o desmarca los productos a los que aplica este comentario.</small>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingProductIds(activeProducts.map((p) => p.id))}
+                  style={{
+                    border: 'none',
+                    background: '#ecfdf5',
+                    color: '#059669',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Marcar todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingProductIds([])}
+                  style={{
+                    border: 'none',
+                    background: '#f1f5f9',
+                    color: '#64748b',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Desmarcar todos
+                </button>
+              </div>
+            </div>
+
+            {/* Buscador de productos en el modal */}
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                placeholder="Buscar producto o categoría..."
+                value={editingSearch}
+                onChange={(e) => setEditingSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px 8px 32px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.85rem',
+                  boxSizing: 'border-box',
+                  outlineColor: '#10b981',
+                }}
+              />
+              <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: 10, top: 10 }} />
+            </div>
+
+            {/* Árbol de categorías y productos con scroll */}
+            <div
+              style={{
+                maxHeight: 280,
+                overflowY: 'auto',
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: 8,
+                background: '#fff',
+                display: 'grid',
+                gap: 6,
+              }}
+            >
+              {categoryGroups.flatMap((g) => g.categories).map((category) => {
+                const catProducts = activeProducts.filter((p) => p.category_id === category.id);
+                const query = editingSearch.trim().toLowerCase();
+                const filteredProducts = query
+                  ? catProducts.filter(
+                      (p) =>
+                        p.name.toLowerCase().includes(query) ||
+                        category.name.toLowerCase().includes(query)
+                    )
+                  : catProducts;
+
+                if (query && filteredProducts.length === 0) return null;
+
+                const allSelected =
+                  catProducts.length > 0 && catProducts.every((p) => editingProductIds.includes(p.id));
+                const someSelected = catProducts.some((p) => editingProductIds.includes(p.id));
+                const isCatExpanded = Boolean(query) || editingExpandedCats.includes(category.id);
+
+                return (
+                  <div
+                    key={category.id}
+                    style={{
+                      border: '1px solid',
+                      borderColor: someSelected ? '#bbf7d0' : '#f1f5f9',
+                      borderRadius: 8,
+                      background: someSelected ? '#f0fdf4' : '#fff',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 8px',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = !allSelected && someSelected;
+                        }}
+                        onChange={() => toggleEditingCategory(category.id)}
+                        style={{ width: 16, height: 16, accentColor: '#10b981', cursor: 'pointer' }}
+                      />
+                      <span
+                        onClick={() => toggleEditingCategory(category.id)}
+                        style={{ flex: 1, fontSize: '0.88rem', fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}
+                      >
+                        {category.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleEditingCategoryExpanded(category.id)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          border: 'none',
+                          background: 'rgba(0,0,0,0.05)',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          cursor: 'pointer',
+                          fontSize: 11,
+                          color: '#475569',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <span>{catProducts.length} prod.</span>
+                        {isCatExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      </button>
+                    </div>
+
+                    {isCatExpanded && (
+                      <div
+                        style={{
+                          padding: '4px 8px 8px 30px',
+                          display: 'grid',
+                          gap: 3,
+                          borderTop: '1px dashed #cbd5e1',
+                          background: '#f8fafc',
+                        }}
+                      >
+                        {filteredProducts.map((prod) => {
+                          const isChecked = editingProductIds.includes(prod.id);
+                          return (
+                            <label
+                              key={prod.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '3px 6px',
+                                borderRadius: 4,
+                                background: isChecked ? '#dcfce7' : 'transparent',
+                                cursor: 'pointer',
+                                fontSize: '0.82rem',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleEditingProduct(prod.id)}
+                                style={{ width: 14, height: 14, accentColor: '#10b981' }}
+                              />
+                              <span style={{ color: isChecked ? '#065f46' : '#334155', fontWeight: isChecked ? 600 : 400, flex: 1 }}>
+                                {prod.name}
+                              </span>
+                              {prod.sku && <small style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{prod.sku}</small>}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {editingProductIds.length === 0 && (
+              <span style={{ color: '#dc2626', fontSize: '0.78rem', fontWeight: 600 }}>
+                ⚠️ Debes seleccionar al menos un producto para este comentario.
+              </span>
+            )}
+          </div>
+
+          <Button
+            disabled={save.isPending || !editing?.text.trim() || editingProductIds.length === 0}
+            onClick={() => save.mutate()}
+          >
+            Guardar cambios
+          </Button>
+        </div>
       </Modal>
+
       <Modal isOpen={Boolean(statusTarget)} onClose={() => setStatusTarget(null)} title={statusActionLabel}>
         <p>Las relaciones y pedidos históricos permanecen intactos.</p>
         <Button disabled={changeStatus.isPending} onClick={() => changeStatus.mutate()}>{statusTarget?.status === 'active' ? 'Archivar' : 'Reactivar'}</Button>

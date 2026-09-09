@@ -349,7 +349,7 @@ const AdminLayout = () => {
         <div className="admin-sidebar-logo" style={{ display: 'flex', justifyContent: isCollapsed ? 'center' : 'space-between', alignItems: 'center', padding: isCollapsed ? '24px 0' : '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div className="admin-sidebar-logo-icon" style={{ background: 'transparent', fontSize: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              🥝
+              🍽️
             </div>
             {!isCollapsed && <span style={{ fontWeight: 700, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>RestaurantOS</span>}
           </div>
