@@ -8,41 +8,24 @@ import {
   ChevronDown,
   CircleDollarSign,
   Clock3,
-  Download,
+  ExternalLink,
   Flame,
   Package,
+  QrCode,
   ReceiptText,
-  Search,
   ShoppingBag,
+  ShoppingCart,
+  Sparkles,
   Store,
+  TrendingUp,
   Utensils,
   WalletCards,
-  Carrot,
-  Box,
-  Truck,
-  ClipboardCheck,
-  Receipt,
-  Briefcase,
-  Bike,
-  Share2,
-  BarChart2,
-  FileText,
-  Users,
-  Database,
-  Tags,
-  MessageSquareText,
-  Plus,
-  ShoppingCart,
-  Layers,
-  Trash2,
-  Sparkles,
-  QrCode,
 } from 'lucide-react';
 import { fetchApi } from '@restaurantos/api-client';
 import { redirectToPos } from '../../lib/posHandoff';
-import { ExecutiveCopilot } from './ExecutiveCopilot';
 import { OnboardingWizardModal } from '../onboarding/OnboardingWizardModal';
 import { QRCodeCard } from '../onboarding/QRCodeCard';
+import './Overview.css';
 
 type Branch = {
   id: string;
@@ -146,33 +129,7 @@ const monthOptions = Array.from({ length: 5 }, (_, index) => {
   return { value, label: label.charAt(0).toUpperCase() + label.slice(1) };
 });
 
-const StatCard = ({
-  title,
-  value,
-  helper,
-  icon,
-  tone,
-}: {
-  title: string;
-  value: string;
-  helper: string;
-  icon: React.ReactNode;
-  tone: 'green' | 'orange' | 'blue' | 'dark';
-}) => (
-  <section className={`admin-kpi-card ${tone}`}>
-    <div className="admin-kpi-icon">{icon}</div>
-    <div>
-      <p>{title}</p>
-      <strong>{value}</strong>
-      <span>
-        <ArrowUpRight size={14} />
-        {helper}
-      </span>
-    </div>
-  </section>
-);
-
-const Overview = () => {
+export const Overview = () => {
   const navigate = useNavigate();
   const now = new Date();
   const currentMonthValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -261,42 +218,93 @@ const Overview = () => {
     1,
     ...data.activity_chart.map(point => Math.max(point.completed, point.pending))
   );
+
+  // Totales y distribución de canales
+  const mostradorCount = data.order_types?.mostrador ?? 0;
+  const llevarCount = data.order_types?.para_llevar ?? 0;
+  const domicilioCount = data.order_types?.domicilio ?? 0;
+  const totalChannelOrders = mostradorCount + llevarCount + domicilioCount;
+
+  const mostradorPct = totalChannelOrders > 0 ? (mostradorCount / totalChannelOrders) * 100 : 0;
+  const llevarPct = totalChannelOrders > 0 ? (llevarCount / totalChannelOrders) * 100 : 0;
+  const domicilioPct = totalChannelOrders > 0 ? (domicilioCount / totalChannelOrders) * 100 : 0;
+
   const orderTypes = [
-    { label: 'Mostrador', value: data.order_types?.mostrador ?? 0, color: '#22c55e' },
-    { label: 'Para llevar', value: data.order_types?.para_llevar ?? 0, color: '#f97316' },
-    { label: 'Domicilio', value: data.order_types?.domicilio ?? 0, color: '#0f766e' },
+    { label: 'Mostrador', value: mostradorCount, pct: mostradorPct, color: '#10b981' },
+    { label: 'Para llevar', value: llevarCount, pct: llevarPct, color: '#f97316' },
+    { label: 'Domicilio', value: domicilioCount, pct: domicilioPct, color: '#0ea5e9' },
   ];
 
+  const categoryColors = ['#10b981', '#f97316', '#0ea5e9', '#8b5cf6', '#64748b'];
 
   return (
-    <main className="admin-dashboard-modern" aria-busy={loading}>
-      <div className="admin-dashboard-heading">
-        <div>
-          <span className="admin-eyebrow">Resumen operativo</span>
-          <h1>Panel administrativo</h1>
-          <p>Ventas, turnos, productos y movimientos.</p>
+    <main className="dash-container" aria-busy={loading}>
+      {/* Header Ejecutivo */}
+      <header className="dash-header">
+        <div className="dash-header-left">
+          <div className="dash-badge-eyebrow">
+            <Store size={13} />
+            <span>{selectedBranchName}</span>
+          </div>
+          <h1 className="dash-title">
+            Hola, {orgProfile?.name || 'Administrador'} 👋
+          </h1>
+          <p className="dash-subtitle">
+            Rendimiento de ventas, comensales y actividad operativa en tiempo real.
+          </p>
         </div>
-        <div className="admin-dashboard-filters">
-          <label>
-            <CalendarDays size={16} />
-            <select value={selectedMonth} onChange={event => setSelectedMonth(event.target.value)}>
+
+        <div className="dash-controls">
+          {branches.length > 1 && (
+            <label className="dash-select-pill">
+              <Store size={15} color="#64748b" />
+              <select
+                value={selectedBranch}
+                onChange={e => setSelectedBranch(e.target.value)}
+                aria-label="Filtrar por sucursal"
+              >
+                <option value="">Todas las sucursales</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} color="#94a3b8" />
+            </label>
+          )}
+
+          <label className="dash-select-pill">
+            <CalendarDays size={15} color="#64748b" />
+            <select
+              value={selectedMonth}
+              onChange={event => setSelectedMonth(event.target.value)}
+              aria-label="Seleccionar mes del reporte"
+            >
               {monthOptions.map(month => (
                 <option key={month.value} value={month.value}>{month.label}</option>
               ))}
             </select>
-            <ChevronDown size={15} />
+            <ChevronDown size={14} color="#94a3b8" />
           </label>
-        </div>
-      </div>
 
+          <button
+            type="button"
+            className="dash-cta-pos"
+            onClick={() => void redirectToPos('pos').catch(() => navigate('/login'))}
+          >
+            <ShoppingCart size={16} />
+            <span>Abrir POS</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Asistente de Configuración Inicial (si está pendiente) */}
       {onboardingStep !== 'complete' && (
         <section
           style={{
             background: 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%)',
-            borderRadius: 16,
-            padding: '24px 28px',
+            borderRadius: 20,
+            padding: '22px 28px',
             color: '#fff',
-            marginBottom: 24,
             boxShadow: '0 10px 25px -5px rgba(5, 150, 105, 0.25)',
             display: 'flex',
             alignItems: 'center',
@@ -324,14 +332,14 @@ const Overview = () => {
             >
               <Sparkles size={14} /> Asistente de Configuración Inicial
             </div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 8px', color: '#fff', letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 6px', color: '#fff', letterSpacing: '-0.02em' }}>
               ¡Bienvenido a RestaurantOS{orgProfile?.name ? `, ${orgProfile.name}` : ''}!
             </h2>
-            <p style={{ margin: 0, fontSize: '0.92rem', color: '#d1fae5', lineHeight: 1.5 }}>
-              Configura tu identidad comercial, carga tu menú inicial de prueba con 1 solo clic y genera tu Código QR listo para imprimir y recibir pedidos de clientes.
+            <p style={{ margin: 0, fontSize: '0.9rem', color: '#d1fae5', lineHeight: 1.5 }}>
+              Configura tu identidad comercial, carga tu menú inicial con 1 clic y genera tu Código QR listo para imprimir y recibir comandas.
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div>
             <button
               type="button"
               onClick={() => setIsWizardOpen(true)}
@@ -339,7 +347,7 @@ const Overview = () => {
                 background: '#fff',
                 color: '#065f46',
                 border: 'none',
-                borderRadius: 12,
+                borderRadius: 14,
                 padding: '12px 24px',
                 fontWeight: 700,
                 fontSize: '0.92rem',
@@ -357,336 +365,258 @@ const Overview = () => {
         </section>
       )}
 
-      <ExecutiveCopilot selectedBranchId={selectedBranch} branches={branches} />
-
-      <section className="admin-kpi-grid">
-        <StatCard
-          title="Ventas del periodo"
-          value={formatCurrency(data.total_revenue_cents)}
-          helper="Actualizado con pagos confirmados"
-          icon={<CircleDollarSign size={24} />}
-          tone="green"
-        />
-        <StatCard
-          title="Ordenes"
-          value={String(data.total_orders)}
-          helper="Incluye POS por sucursal"
-          icon={<ShoppingBag size={24} />}
-          tone="orange"
-        />
-        <StatCard
-          title="Ticket promedio"
-          value={formatCurrency(data.average_ticket_cents)}
-          helper="Calculado por el backend"
-          icon={<ReceiptText size={24} />}
-          tone="blue"
-        />
-        <StatCard
-          title="Productos activos"
-          value={String(data.total_products)}
-          helper="Catalogo disponible"
-          icon={<Package size={24} />}
-          tone="dark"
-        />
-      </section>
-
-      {/* Central Modules Hub Menu */}
-      <section className="admin-modules-section" aria-label="Módulos del sistema">
-        <div className="admin-modules-section-header">
-          <div>
-            <h2>
-              <Layers size={22} style={{ color: '#10b981' }} />
-              Centro de Módulos Operativos
-            </h2>
-            <p>Acceso rápido a los módulos organizados por áreas de negocio.</p>
-          </div>
-        </div>
-
-        <div className="admin-modules-grid">
-          {/* 1. Catálogo y Menú */}
-          <div className="admin-module-card">
-            <div className="admin-module-header">
-              <div className="admin-module-icon green">
-                <Utensils size={24} />
-              </div>
-              <div className="admin-module-title-group">
-                <h3>Catálogo y Menú</h3>
-                <p>Platillos, recetas, categorías, modificadores e ingredientes extra.</p>
-              </div>
+      {/* Grid de KPIs Superiores (4 métricas ejecutivas) */}
+      <section className="dash-kpis-grid" aria-label="Métricas clave">
+        {/* KPI 1: Ventas */}
+        <article className="dash-kpi-card">
+          <div className="dash-kpi-top">
+            <div className="dash-kpi-icon-wrap emerald">
+              <CircleDollarSign size={22} />
             </div>
-            <div className="admin-module-actions">
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/products')}>
-                <Package size={13} /> Productos
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/recipes')}>
-                <Utensils size={13} /> Recetas
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/categories')}>
-                <Tags size={13} /> Categorías
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/variations')}>
-                <MessageSquareText size={13} /> Modificadores
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/ingredient-extras')}>
-                <Plus size={13} /> Extras
-              </button>
-            </div>
-          </div>
-
-          {/* 2. Inventario y Almacén */}
-          <div className="admin-module-card">
-            <div className="admin-module-header">
-              <div className="admin-module-icon amber">
-                <Box size={24} />
-              </div>
-              <div className="admin-module-title-group">
-                <h3>Inventario y Almacén</h3>
-                <p>Insumos base, almacenes, lotes de producción, mermas y traspasos.</p>
-              </div>
-            </div>
-            <div className="admin-module-actions">
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/inventory/items')}>
-                <Carrot size={13} /> Insumos
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/warehouses')}>
-                <Box size={13} /> Almacenes
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/production')}>
-                <Flame size={13} /> Producción
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/inventory/waste')}>
-                <Trash2 size={13} /> Mermas
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/inventory/transfers')}>
-                <Truck size={13} /> Traspasos
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/inventory/counts')}>
-                <ClipboardCheck size={13} /> Conteos
-              </button>
-            </div>
-          </div>
-
-          {/* 3. Compras y Proveedores */}
-          <div className="admin-module-card">
-            <div className="admin-module-header">
-              <div className="admin-module-icon blue">
-                <Receipt size={24} />
-              </div>
-              <div className="admin-module-title-group">
-                <h3>Compras y Proveedores</h3>
-                <p>Facturas de compras, catálogo de proveedores y presentaciones de compra.</p>
-              </div>
-            </div>
-            <div className="admin-module-actions">
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/purchases')}>
-                <Receipt size={13} /> Compras
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/suppliers')}>
-                <Briefcase size={13} /> Proveedores
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/purchase-presentations')}>
-                <Package size={13} /> Presentaciones
-              </button>
-            </div>
-          </div>
-
-          {/* 4. Sucursales y Canales */}
-          <div className="admin-module-card">
-            <div className="admin-module-header">
-              <div className="admin-module-icon purple">
-                <Store size={24} />
-              </div>
-              <div className="admin-module-title-group">
-                <h3>Sucursales y Canales</h3>
-                <p>Sucursales activas, repartidores e integraciones Uber Eats.</p>
-              </div>
-            </div>
-            <div className="admin-module-actions">
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/branches')}>
-                <Store size={13} /> Sucursales
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/drivers')}>
-                <Bike size={13} /> Repartidores
-              </button>
-              <button type="button" className="admin-module-chip primary-action" onClick={() => navigate('/integrations')}>
-                <Share2 size={13} /> Integraciones Uber
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/cash-concepts')}>
-                <Briefcase size={13} /> Conceptos Caja
-              </button>
-            </div>
-          </div>
-
-          {/* 5. Ventas y Reportes */}
-          <div className="admin-module-card">
-            <div className="admin-module-header">
-              <div className="admin-module-icon teal">
-                <BarChart2 size={24} />
-              </div>
-              <div className="admin-module-title-group">
-                <h3>Ventas y Reportes</h3>
-                <p>Monitor de ventas en vivo, reportes históricos, comandas y reembolsos.</p>
-              </div>
-            </div>
-            <div className="admin-module-actions">
-              <button
-                type="button"
-                className="admin-module-chip"
-                onClick={() => void redirectToPos('/sales-monitor').catch(() => navigate('/login'))}
-              >
-                <BarChart2 size={13} /> Monitor Ventas
-              </button>
-              <button
-                type="button"
-                className="admin-module-chip"
-                onClick={() => void redirectToPos('/historical-reports').catch(() => navigate('/login'))}
-              >
-                <FileText size={13} /> Reportes Históricos
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/orders')}>
-                <ReceiptText size={13} /> Órdenes
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/reports')}>
-                <WalletCards size={13} /> Reembolsos
-              </button>
-            </div>
-          </div>
-
-          {/* 6. Punto de Venta & Sistema */}
-          <div className="admin-module-card">
-            <div className="admin-module-header">
-              <div className="admin-module-icon dark">
-                <ShoppingCart size={24} />
-              </div>
-              <div className="admin-module-title-group">
-                <h3>Punto de Venta & Accesos</h3>
-                <p>Operación en caja, usuarios, permisos corporativos e importaciones.</p>
-              </div>
-            </div>
-            <div className="admin-module-actions">
-              <button
-                type="button"
-                className="admin-module-chip primary-action"
-                onClick={() => void redirectToPos('pos').catch(() => navigate('/login'))}
-              >
-                <ShoppingCart size={13} /> Abrir Punto de Venta POS
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/users')}>
-                <Users size={13} /> Usuarios
-              </button>
-              <button type="button" className="admin-module-chip" onClick={() => navigate('/imports')}>
-                <Database size={13} /> Importaciones
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="admin-dashboard-grid">
-        <div className="admin-card admin-revenue-card">
-          <div className="admin-card-header">
-            <div>
-              <span>Ventas</span>
-              <h2>Actividad del periodo</h2>
-            </div>
-            <span className="admin-soft-pill">
-              <WalletCards size={15} />
-              {formatCurrency(data.total_revenue_cents)}
+            <span className="dash-kpi-pill emerald">
+              <TrendingUp size={12} /> Confirmado
             </span>
           </div>
-          <div className="admin-line-chart" aria-label="Grafica de actividad de ordenes">
-            <svg viewBox="0 0 720 220" role="img">
-              <defs>
-                <linearGradient id="adminRevenueFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#22c55e" stopOpacity="0.24" />
-                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
-                </linearGradient>
-              </defs>
-              {[40, 80, 120, 160, 200].map(y => (
-                <line key={y} x1="0" y1={y} x2="720" y2={y} className="admin-chart-gridline" />
+          <div className="dash-kpi-body">
+            <span className="dash-kpi-label">Ventas del Período</span>
+            <strong className="dash-kpi-value">{formatCurrency(data.total_revenue_cents)}</strong>
+          </div>
+          <p className="dash-kpi-footer">
+            <CheckCircle2 size={13} style={{ color: '#10b981' }} />
+            Ingresos netos por comandas pagadas
+          </p>
+        </article>
+
+        {/* KPI 2: Total Órdenes */}
+        <article className="dash-kpi-card">
+          <div className="dash-kpi-top">
+            <div className="dash-kpi-icon-wrap orange">
+              <ShoppingBag size={22} />
+            </div>
+            <span className="dash-kpi-pill orange">
+              En el mes
+            </span>
+          </div>
+          <div className="dash-kpi-body">
+            <span className="dash-kpi-label">Total de Comandas</span>
+            <strong className="dash-kpi-value">{data.total_orders}</strong>
+          </div>
+          <p className="dash-kpi-footer">
+            Mostrador, para llevar y servicio a domicilio
+          </p>
+        </article>
+
+        {/* KPI 3: Ticket Promedio */}
+        <article className="dash-kpi-card">
+          <div className="dash-kpi-top">
+            <div className="dash-kpi-icon-wrap indigo">
+              <ReceiptText size={22} />
+            </div>
+            <span className="dash-kpi-pill indigo">
+              Por orden
+            </span>
+          </div>
+          <div className="dash-kpi-body">
+            <span className="dash-kpi-label">Ticket Promedio</span>
+            <strong className="dash-kpi-value">{formatCurrency(data.average_ticket_cents)}</strong>
+          </div>
+          <p className="dash-kpi-footer">
+            Consumo promedio calculado
+          </p>
+        </article>
+
+        {/* KPI 4: Catálogo Activo */}
+        <article className="dash-kpi-card">
+          <div className="dash-kpi-top">
+            <div className="dash-kpi-icon-wrap slate">
+              <Package size={22} />
+            </div>
+            <span className="dash-kpi-pill slate">
+              Catálogo
+            </span>
+          </div>
+          <div className="dash-kpi-body">
+            <span className="dash-kpi-label">Productos Activos</span>
+            <strong className="dash-kpi-value">{data.total_products}</strong>
+          </div>
+          <p className="dash-kpi-footer">
+            Platillos y bebidas listados en menú
+          </p>
+        </article>
+      </section>
+
+      {/* Sección Central: Gráfica de Rendimiento + Widgets Laterales */}
+      <section className="dash-middle-grid">
+        {/* Card Principal: Actividad de Comandas & Distribución de Canales */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <div className="dash-card-header-left">
+              <h2>
+                <TrendingUp size={20} style={{ color: '#10b981' }} />
+                Rendimiento de Comandas
+              </h2>
+              <p>Órdenes completadas y pendientes registradas durante los últimos días.</p>
+            </div>
+            <div className="dash-chart-legend">
+              <div className="dash-chart-legend-item">
+                <span className="dash-legend-dot" style={{ background: '#10b981' }} />
+                <span>Completadas</span>
+              </div>
+              <div className="dash-chart-legend-item">
+                <span className="dash-legend-dot" style={{ background: '#f97316' }} />
+                <span>En proceso</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="dash-chart-container">
+            <div className="dash-chart-svg-wrap" aria-label="Gráfica de actividad de comandas">
+              <svg viewBox="0 0 720 180" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="completedGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.01" />
+                  </linearGradient>
+                  <linearGradient id="pendingGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f97316" stopOpacity="0.22" />
+                    <stop offset="100%" stopColor="#f97316" stopOpacity="0.01" />
+                  </linearGradient>
+                </defs>
+
+                {/* Gridlines */}
+                {[30, 75, 120, 160].map(y => (
+                  <line
+                    key={y}
+                    x1="0"
+                    y1={y}
+                    x2="720"
+                    y2={y}
+                    stroke="#f1f5f9"
+                    strokeWidth="1"
+                    strokeDasharray="4 4"
+                  />
+                ))}
+
+                {/* Area fills */}
+                {data.activity_chart.length > 0 && (
+                  <>
+                    <polygon
+                      fill="url(#completedGradient)"
+                      points={`0,170 ${data.activity_chart.map((point, index) => {
+                        const x = data.activity_chart.length <= 1 ? 0 : (index / (data.activity_chart.length - 1)) * 720;
+                        const y = 165 - (point.completed / maxActivity) * 135;
+                        return `${x},${y}`;
+                      }).join(' ')} 720,170`}
+                    />
+                    <polyline
+                      fill="none"
+                      stroke="#f97316"
+                      strokeWidth="2.5"
+                      strokeDasharray="5 4"
+                      points={data.activity_chart.map((point, index) => {
+                        const x = data.activity_chart.length <= 1 ? 0 : (index / (data.activity_chart.length - 1)) * 720;
+                        const y = 165 - (point.pending / maxActivity) * 135;
+                        return `${x},${y}`;
+                      }).join(' ')}
+                    />
+                    <polyline
+                      fill="none"
+                      stroke="#10b981"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points={data.activity_chart.map((point, index) => {
+                        const x = data.activity_chart.length <= 1 ? 0 : (index / (data.activity_chart.length - 1)) * 720;
+                        const y = 165 - (point.completed / maxActivity) * 135;
+                        return `${x},${y}`;
+                      }).join(' ')}
+                    />
+                  </>
+                )}
+              </svg>
+            </div>
+
+            <div className="dash-chart-axis-days">
+              {(data.activity_chart.length ? data.activity_chart : [{ day: dayFormatter.format(now), completed: 0, pending: 0 }]).slice(-7).map(point => (
+                <span key={point.day}>{point.day}</span>
               ))}
-              <polyline
-                className="admin-chart-line secondary"
-                points={data.activity_chart.map((point, index) => {
-                  const x = data.activity_chart.length <= 1 ? 0 : (index / (data.activity_chart.length - 1)) * 720;
-                  const y = 210 - (point.pending / maxActivity) * 170;
-                  return `${x},${y}`;
-                }).join(' ')}
-              />
-              <polyline
-                className="admin-chart-line"
-                points={data.activity_chart.map((point, index) => {
-                  const x = data.activity_chart.length <= 1 ? 0 : (index / (data.activity_chart.length - 1)) * 720;
-                  const y = 210 - (point.completed / maxActivity) * 170;
-                  return `${x},${y}`;
-                }).join(' ')}
-              />
-            </svg>
-          </div>
-          <div className="admin-chart-days">
-            {(data.activity_chart.length ? data.activity_chart : [{ day: dayFormatter.format(now), completed: 0, pending: 0 }]).slice(-7).map(point => (
-              <span key={point.day}>{point.day}</span>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        <div className="admin-card admin-donut-card">
-          <div className="admin-card-header">
-            <div>
-              <span>Catalogo</span>
-              <h2>Categorias principales</h2>
-            </div>
-          </div>
-          <div className="admin-donut-wrap">
-            <div className="admin-donut" />
-            <div className="admin-donut-center">
-              <strong>{data.popular_categories.length}</strong>
-              <span>categorias</span>
-            </div>
-          </div>
-          <div className="admin-category-list">
-            {data.popular_categories.slice(0, 4).map((category, index) => (
-              <div key={category.id}>
-                <span className={`admin-category-dot dot-${index + 1}`} />
-                <p>{category.name}</p>
-                <strong>{(category.share_bps / 100).toFixed(1)}%</strong>
+            {/* Distribución por Canales de Venta */}
+            <div className="dash-channels-block">
+              <h3 className="dash-channels-title">Distribución por Canales de Venta</h3>
+
+              <div className="dash-channels-bar-stacked">
+                <div
+                  className="dash-channel-segment"
+                  style={{ width: `${mostradorPct}%`, background: '#10b981' }}
+                  title={`Mostrador: ${mostradorCount} (${mostradorPct.toFixed(1)}%)`}
+                />
+                <div
+                  className="dash-channel-segment"
+                  style={{ width: `${llevarPct}%`, background: '#f97316' }}
+                  title={`Para llevar: ${llevarCount} (${llevarPct.toFixed(1)}%)`}
+                />
+                <div
+                  className="dash-channel-segment"
+                  style={{ width: `${domicilioPct}%`, background: '#0ea5e9' }}
+                  title={`Domicilio: ${domicilioCount} (${domicilioPct.toFixed(1)}%)`}
+                />
               </div>
-            ))}
-            {data.popular_categories.length === 0 && <p className="admin-empty-copy">Sin categorias registradas.</p>}
-          </div>
-        </div>
 
-        <div className="admin-card admin-orders-card">
-          <div className="admin-card-header">
-            <div>
-              <span>Ordenes</span>
-              <h2>Resumen por tipo</h2>
+              <div className="dash-channels-stats">
+                {orderTypes.map(item => (
+                  <div key={item.label} className="dash-channel-stat-item">
+                    <span className="dash-channel-stat-dot" style={{ background: item.color }} />
+                    <div className="dash-channel-stat-info">
+                      <span className="dash-channel-stat-label">{item.label}</span>
+                      <strong className="dash-channel-stat-value">
+                        {item.value} <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8' }}>({item.pct.toFixed(0)}%)</span>
+                      </strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="admin-order-type-list">
-            {orderTypes.map(item => (
-              <div key={item.label}>
-                <div>
-                  <span style={{ background: item.color }} />
-                  <p>{item.label}</p>
-                </div>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
-          </div>
         </div>
 
-        <aside className="admin-side-column">
+        {/* Widgets Laterales: Lanzador POS + Menú Digital QR */}
+        <aside className="dash-side-widgets">
+          {/* Quick Action POS Launcher */}
+          <div className="dash-pos-launcher-card">
+            <div>
+              <span className="dash-pos-launcher-badge">
+                <ShoppingCart size={13} /> Caja y Comandas
+              </span>
+              <h3 className="dash-pos-launcher-title" style={{ marginTop: 12 }}>
+                Punto de Venta POS
+              </h3>
+              <p className="dash-pos-launcher-desc">
+                Accede rápidamente a la caja para tomar pedidos en mesa, mostrador y realizar cobros instantáneos.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="dash-pos-launcher-btn"
+              onClick={() => void redirectToPos('pos').catch(() => navigate('/login'))}
+            >
+              <ShoppingCart size={16} />
+              <span>Abrir Terminal POS</span>
+            </button>
+          </div>
+
+          {/* Menú Digital QR Widget */}
           {orgProfile?.slug && (
-            <div className="admin-card admin-qr-widget-card" style={{ padding: 16 }}>
+            <div className="dash-card" style={{ padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Menú Digital QR
+                  <span className="dash-badge-eyebrow">
+                    <QrCode size={13} /> Menú Digital QR
                   </span>
-                  <h2 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '2px 0 0', color: '#0f172a' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '6px 0 0', color: '#0f172a' }}>
                     Código de Mesa
-                  </h2>
+                  </h3>
                 </div>
                 <button
                   type="button"
@@ -694,8 +624,8 @@ const Overview = () => {
                   style={{
                     background: '#f1f5f9',
                     border: 'none',
-                    borderRadius: 6,
-                    padding: '4px 8px',
+                    borderRadius: 8,
+                    padding: '5px 10px',
                     fontSize: '0.75rem',
                     cursor: 'pointer',
                     color: '#475569',
@@ -712,106 +642,164 @@ const Overview = () => {
               />
             </div>
           )}
-
-          <div className="admin-card admin-trending-card">
-            <div className="admin-card-header">
-              <div>
-                <span>Menu</span>
-                <h2>Productos destacados</h2>
-              </div>
-              <Flame size={18} />
-            </div>
-            <div className="admin-product-list">
-              {recentProducts.map(product => (
-                <article key={product.id}>
-                  <div className="admin-product-thumb">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} />
-                    ) : (
-                      <Utensils size={28} />
-                    )}
-                  </div>
-                  <div>
-                    <h3>{product.name}</h3>
-                    <p>{product.category_name || 'Sin categoria'}</p>
-                    <strong>{formatCurrency(product.price_cents || 0)}</strong>
-                  </div>
-                </article>
-              ))}
-              {recentProducts.length === 0 && <p className="admin-empty-copy">Agrega productos para verlos aqui.</p>}
-            </div>
-          </div>
-
-          <div className="admin-card admin-activity-card">
-            <div className="admin-card-header">
-              <div>
-                <span>Turnos</span>
-                <h2>Actividad reciente</h2>
-              </div>
-              <BellRing size={18} />
-            </div>
-            <div className="admin-activity-list">
-              {data.recent_notifications.slice(0, 5).map(item => {
-                const isOpen = item.action === 'cash_shift.opened';
-                return (
-                  <article key={item.id}>
-                    <div className={isOpen ? 'open' : 'closed'}>
-                      {isOpen ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}
-                    </div>
-                    <div>
-                      <strong>{isOpen ? 'Caja abierta' : 'Caja cerrada'}</strong>
-                      <p>{item.register_code || 'Caja'} por {item.actor_name || 'Sistema'}</p>
-                    </div>
-                    <time>{formatTime(item.created_at)}</time>
-                  </article>
-                );
-              })}
-              {data.recent_notifications.length === 0 && <p className="admin-empty-copy">Sin actividad de caja reciente.</p>}
-            </div>
-          </div>
         </aside>
+      </section>
 
-        <div className="admin-card admin-transactions-card">
-          <div className="admin-card-header">
-            <div>
-              <span>Pagos</span>
-              <h2>Ordenes recientes</h2>
-            </div>
-            <div className="admin-table-actions">
-              <Search size={16} />
-              <Download size={16} />
+      {/* Sección Inferior: Categorías Populares, Órdenes Recientes y Actividad de Caja */}
+      <section className="dash-bottom-grid">
+        {/* Categorías Principales */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <div className="dash-card-header-left">
+              <h2>
+                <Utensils size={18} style={{ color: '#10b981' }} />
+                Categorías Populares
+              </h2>
+              <p>Distribución de ventas por grupo de productos.</p>
             </div>
           </div>
-          <div className="admin-table-shell">
-            <table className="admin-modern-table">
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {data.popular_categories.slice(0, 5).map((category, index) => {
+              const pct = (category.share_bps / 100).toFixed(1);
+              const color = categoryColors[index % categoryColors.length];
+              return (
+                <div key={category.id} className="dash-category-item">
+                  <div className="dash-category-item-head">
+                    <span className="dash-category-name">
+                      <span style={{ width: 8, height: 8, borderRadius: 9999, background: color }} />
+                      {category.name}
+                    </span>
+                    <span className="dash-category-pct">{pct}%</span>
+                  </div>
+                  <div className="dash-category-bar-track">
+                    <div
+                      className="dash-category-bar-fill"
+                      style={{ width: `${pct}%`, background: color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+
+            {data.popular_categories.length === 0 && (
+              <p className="dash-empty-state">No hay ventas por categoría registradas en este período.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Órdenes Recientes (Tabla de Transacciones) */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <div className="dash-card-header-left">
+              <h2>
+                <WalletCards size={18} style={{ color: '#10b981' }} />
+                Últimas Órdenes
+              </h2>
+              <p>Transacciones recientes registradas en el sistema.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/orders')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#059669',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <span>Ver todas</span>
+              <ArrowUpRight size={14} />
+            </button>
+          </div>
+
+          <div className="dash-table-wrapper">
+            <table className="dash-table">
               <thead>
                 <tr>
                   <th>Folio</th>
                   <th>Fecha</th>
                   <th>Estado</th>
-                  <th>Monto</th>
+                  <th style={{ textAlign: 'right' }}>Total</th>
                 </tr>
               </thead>
               <tbody>
-                {data.recent_transactions.map(transaction => (
+                {data.recent_transactions.slice(0, 6).map(transaction => (
                   <tr key={transaction.id}>
-                    <td>{transaction.folio}</td>
+                    <td>
+                      <span className="dash-folio-code">{transaction.folio}</span>
+                    </td>
                     <td>{formatDate(transaction.created_at)}</td>
-                    <td><span className="admin-status-pill">Confirmado</span></td>
-                    <td>{formatCurrency(transaction.amount_cents)}</td>
+                    <td>
+                      <span className="dash-status-badge">
+                        <CheckCircle2 size={11} /> Confirmado
+                      </span>
+                    </td>
+                    <td className="dash-amount-col">
+                      {formatCurrency(transaction.amount_cents)}
+                    </td>
                   </tr>
                 ))}
                 {data.recent_transactions.length === 0 && (
                   <tr>
-                    <td colSpan={4}>No hay transacciones recientes.</td>
+                    <td colSpan={4} className="dash-empty-state">
+                      Sin órdenes registradas en el período.
+                    </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
+
+        {/* Actividad de Caja y Turnos */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <div className="dash-card-header-left">
+              <h2>
+                <BellRing size={18} style={{ color: '#10b981' }} />
+                Turnos de Caja
+              </h2>
+              <p>Historial de aperturas y cierres operativos.</p>
+            </div>
+          </div>
+
+          <div className="dash-shift-list">
+            {data.recent_notifications.slice(0, 4).map(item => {
+              const isOpen = item.action === 'cash_shift.opened';
+              return (
+                <div key={item.id} className="dash-shift-item">
+                  <div className={`dash-shift-icon ${isOpen ? 'open' : 'closed'}`}>
+                    {isOpen ? <CheckCircle2 size={18} /> : <Clock3 size={18} />}
+                  </div>
+                  <div className="dash-shift-details">
+                    <h4 className="dash-shift-title">
+                      {isOpen ? 'Caja Abierta' : 'Caja Cerrada'}
+                    </h4>
+                    <p className="dash-shift-meta">
+                      {item.register_code || 'Caja'} • {item.actor_name || 'Sistema'}
+                    </p>
+                  </div>
+                  <time className="dash-shift-time">
+                    {formatTime(item.created_at)}
+                  </time>
+                </div>
+              );
+            })}
+
+            {data.recent_notifications.length === 0 && (
+              <p className="dash-empty-state">Sin aperturas o cierres de caja recientes.</p>
+            )}
+          </div>
+        </div>
       </section>
 
+      {/* Modal del Asistente de Configuración */}
       <OnboardingWizardModal
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
