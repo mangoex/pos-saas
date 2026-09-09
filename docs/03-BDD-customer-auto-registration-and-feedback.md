@@ -28,6 +28,21 @@ Feature: Auto-registro de clientes en pedidos y trazabilidad de satisfacción en
     Then el sistema almacena el feedback en "customer_feedbacks" vinculado a su "customer_id"
     And registra el rating de 3 estrellas y el texto del comentario
 
+  @BDD-SC-493
+  Scenario: Vinculación de feedback emitido antes de la aceptación del pedido móvil
+    Given una intención de pedido móvil en revisión con referencia "REF-7701" y teléfono "6689998877"
+    When el comensal califica inmediatamente con 5 estrellas antes de que el restaurante acepte
+    And posteriormente el restaurante acepta el pedido generando el folio operativo
+    Then el feedback queda vinculado al nuevo cliente creado
+    And el directorio de clientes refleja la calificación de 5 estrellas en su promedio
+
+  @BDD-SC-494
+  Scenario: Actualización idempotente de comentario privado en feedback
+    Given un comensal que selecciona 2 estrellas para la referencia "REF-7702"
+    When posteriormente envía un comentario privado "El pedido tardó demasiado"
+    Then el sistema actualiza la retroalimentación existente sin generar registros duplicados
+    And el cliente conserva una sola calificación de 2 estrellas con su comentario asociado
+
   @BDD-SC-492
   Scenario: Consulta de promedio de satisfacción en directorio administrativo
     Given un cliente con dos calificaciones registradas de 5 y 3 estrellas

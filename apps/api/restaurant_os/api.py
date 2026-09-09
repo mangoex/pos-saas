@@ -3361,17 +3361,44 @@ def submit_customer_feedback_endpoint(
 
     resolved_customer_id = payload.customer_id
     clean_phone = payload.customer_phone.strip() if payload.customer_phone else None
+    effective_name = payload.customer_name.strip() if payload.customer_name else None
 
-    # Try resolving customer_id via order_folio if not given
+    # Try resolving customer_id via order_folio in orders or public_order_intents
     if not resolved_customer_id and payload.order_folio:
+        clean_folio = payload.order_folio.strip()
         order_match = session.execute(
             sa.select(models.orders.c.customer_id).where(
-                models.orders.c.folio == payload.order_folio.strip(),
+                models.orders.c.folio == clean_folio,
                 models.orders.c.organization_id == branch["organization_id"],
             )
         ).mappings().first()
         if order_match and order_match["customer_id"]:
             resolved_customer_id = str(order_match["customer_id"])
+
+        if not resolved_customer_id:
+            intent_match = session.execute(
+                sa.select(
+                    models.public_order_intents.c.customer_snapshot,
+                    models.public_order_intents.c.accepted_order_id,
+                ).where(
+                    models.public_order_intents.c.public_reference == clean_folio,
+                    models.public_order_intents.c.organization_id == branch["organization_id"],
+                )
+            ).mappings().first()
+            if intent_match:
+                if intent_match.get("accepted_order_id"):
+                    ord_row = session.execute(
+                        sa.select(models.orders.c.customer_id).where(
+                            models.orders.c.id == intent_match["accepted_order_id"]
+                        )
+                    ).mappings().first()
+                    if ord_row and ord_row["customer_id"]:
+                        resolved_customer_id = str(ord_row["customer_id"])
+                snap = intent_match.get("customer_snapshot") or {}
+                if not clean_phone and snap.get("phone"):
+                    clean_phone = str(snap["phone"]).strip()
+                if not effective_name and snap.get("name"):
+                    effective_name = str(snap["name"]).strip()
 
     # Try resolving customer_id via phone if still not resolved
     if not resolved_customer_id and clean_phone:
@@ -3398,22 +3425,72 @@ def submit_customer_feedback_endpoint(
             if phone_match:
                 resolved_customer_id = str(phone_match["customer_id"])
 
-    feedback_id = str(uuid.uuid4())
+    # If still not resolved and we have a phone or name, proactively find or create the customer
+    if not resolved_customer_id and (clean_phone or effective_name):
+        try:
+            resolved_customer_id = find_or_create_order_customer(
+                session=session,
+                organization_id=branch["organization_id"],
+                branch_id=payload.branch_id,
+                name=effective_name,
+                phone=clean_phone,
+            )
+        except Exception:
+            pass
+
+    # Check for existing feedback with the same order_folio in this organization (upsert)
+    existing_fb = None
+    if payload.order_folio:
+        existing_fb = session.execute(
+            sa.select(models.customer_feedbacks).where(
+                models.customer_feedbacks.c.organization_id == branch["organization_id"],
+                models.customer_feedbacks.c.order_folio == payload.order_folio.strip(),
+            )
+        ).mappings().first()
+
     now = datetime.now(timezone.utc)
-    session.execute(
-        models.customer_feedbacks.insert().values(
-            id=feedback_id,
-            organization_id=branch["organization_id"],
-            branch_id=payload.branch_id,
-            customer_id=resolved_customer_id,
-            customer_phone=clean_phone,
-            order_folio=payload.order_folio.strip() if payload.order_folio else None,
-            rating=payload.rating,
-            customer_name=payload.customer_name.strip() if payload.customer_name else None,
-            comment=payload.comment.strip() if payload.comment else None,
-            created_at=now,
+    if existing_fb:
+        feedback_id = str(existing_fb["id"])
+        session.execute(
+            models.customer_feedbacks.update()
+            .where(models.customer_feedbacks.c.id == feedback_id)
+            .values(
+                rating=payload.rating,
+                customer_id=resolved_customer_id or existing_fb["customer_id"],
+                customer_phone=clean_phone or existing_fb["customer_phone"],
+                customer_name=effective_name or existing_fb["customer_name"],
+                comment=payload.comment.strip() if payload.comment else existing_fb["comment"],
+            )
         )
-    )
+    else:
+        feedback_id = str(uuid.uuid4())
+        session.execute(
+            models.customer_feedbacks.insert().values(
+                id=feedback_id,
+                organization_id=branch["organization_id"],
+                branch_id=payload.branch_id,
+                customer_id=resolved_customer_id,
+                customer_phone=clean_phone,
+                order_folio=payload.order_folio.strip() if payload.order_folio else None,
+                rating=payload.rating,
+                customer_name=effective_name,
+                comment=payload.comment.strip() if payload.comment else None,
+                created_at=now,
+            )
+        )
+
+    # Link any unlinked feedbacks for this phone in the organization
+    if clean_phone and resolved_customer_id:
+        session.execute(
+            models.customer_feedbacks.update()
+            .where(
+                models.customer_feedbacks.c.organization_id == branch["organization_id"],
+                models.customer_feedbacks.c.customer_id.is_(None),
+                models.customer_feedbacks.c.customer_phone == clean_phone,
+            )
+            .values(customer_id=resolved_customer_id)
+        )
+
     session.commit()
     return {"id": feedback_id, "status": "recorded"}
 

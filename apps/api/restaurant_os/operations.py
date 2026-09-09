@@ -18347,6 +18347,31 @@ def _customer_scope_organization(
     return str(resolved)
 
 
+def _link_orphaned_feedbacks_by_phone(
+    session: Session,
+    organization_id: str,
+    customer_id: str,
+    phone_candidates: list[str | None],
+) -> None:
+    valid_phones = list(
+        {
+            str(p).strip()
+            for p in phone_candidates
+            if p and str(p).strip()
+        }
+    )
+    if valid_phones:
+        session.execute(
+            models.customer_feedbacks.update()
+            .where(
+                models.customer_feedbacks.c.organization_id == organization_id,
+                models.customer_feedbacks.c.customer_id.is_(None),
+                models.customer_feedbacks.c.customer_phone.in_(valid_phones),
+            )
+            .values(customer_id=customer_id)
+        )
+
+
 def find_or_create_order_customer(
     session: Session,
     organization_id: str,
@@ -18366,6 +18391,7 @@ def find_or_create_order_customer(
     """
     normalized_phone: str | None = None
     clean_captured: str | None = None
+    raw_phone: str | None = None
     if phone and str(phone).strip():
         raw_phone = str(phone).strip()
         try:
@@ -18418,6 +18444,9 @@ def find_or_create_order_customer(
                     .where(models.customers.c.id == cust_id)
                     .values(name=effective_name, updated_at=_now())
                 )
+            _link_orphaned_feedbacks_by_phone(
+                session, organization_id, cust_id, [normalized_phone, clean_captured, raw_phone]
+            )
             return cust_id
 
     # If neither valid phone nor valid specific name is given, do not create a phantom customer
@@ -18464,6 +18493,10 @@ def find_or_create_order_customer(
                 updated_at=now,
             )
         )
+
+    _link_orphaned_feedbacks_by_phone(
+        session, organization_id, cust_id, [normalized_phone, clean_captured, raw_phone]
+    )
 
     return cust_id
 
@@ -18524,6 +18557,8 @@ def create_customer(
     session.execute(models.customers.insert().values(**customer))
     if phone_rows:
         session.execute(models.customer_phones.insert(), phone_rows)
+        phone_cands = [p["captured_number"] for p in phone_rows] + [p["normalized_number"] for p in phone_rows]
+        _link_orphaned_feedbacks_by_phone(session, organization_id, customer["id"], phone_cands)
     _audit(
         session,
         action="customer.created",
@@ -19100,6 +19135,29 @@ def list_customers_page(
         cid: {"average_rating": None, "rating_count": 0, "recent_feedbacks": []}
         for cid in customer_ids
     }
+    # Reconcile / heal orphaned feedbacks by phone for these customers
+    for cid in customer_ids:
+        c_phones = phones_by_customer.get(cid, [])
+        phone_nums = [
+            str(p["normalized_number"]).strip()
+            for p in c_phones
+            if p.get("normalized_number") and str(p["normalized_number"]).strip()
+        ] + [
+            str(p["captured_number"]).strip()
+            for p in c_phones
+            if p.get("captured_number") and str(p["captured_number"]).strip()
+        ]
+        if phone_nums:
+            session.execute(
+                models.customer_feedbacks.update()
+                .where(
+                    models.customer_feedbacks.c.organization_id == organization_id,
+                    models.customer_feedbacks.c.customer_id.is_(None),
+                    models.customer_feedbacks.c.customer_phone.in_(phone_nums),
+                )
+                .values(customer_id=cid)
+            )
+
     feedback_rows = list(
         session.execute(
             sa.select(models.customer_feedbacks)
@@ -19155,6 +19213,33 @@ def get_customer_feedbacks(
     customer_id: str,
     organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    # Heal unlinked feedbacks for this customer by phone
+    c_phones = session.execute(
+        sa.select(models.customer_phones.c.normalized_number, models.customer_phones.c.captured_number)
+        .where(models.customer_phones.c.customer_id == customer_id)
+    ).mappings().all()
+    phone_nums = [
+        str(p["normalized_number"]).strip()
+        for p in c_phones
+        if p.get("normalized_number") and str(p["normalized_number"]).strip()
+    ] + [
+        str(p["captured_number"]).strip()
+        for p in c_phones
+        if p.get("captured_number") and str(p["captured_number"]).strip()
+    ]
+    if phone_nums:
+        heal_criteria = [
+            models.customer_feedbacks.c.customer_id.is_(None),
+            models.customer_feedbacks.c.customer_phone.in_(phone_nums),
+        ]
+        if organization_id:
+            heal_criteria.append(models.customer_feedbacks.c.organization_id == organization_id)
+        session.execute(
+            models.customer_feedbacks.update()
+            .where(*heal_criteria)
+            .values(customer_id=customer_id)
+        )
+
     query = (
         sa.select(
             models.customer_feedbacks.c.id,
@@ -26138,6 +26223,32 @@ def accept_public_order_intent(
         )
         .values(accepted_order_id=order_id)
     )
+
+    # Link feedbacks submitted during intent review to the newly created / resolved customer
+    if resolved_customer_id:
+        phone_val = (cust_snap.get("phone") or "").strip()
+        link_criteria = [
+            models.customer_feedbacks.c.order_folio == intent["public_reference"],
+            models.customer_feedbacks.c.order_folio == folio,
+        ]
+        if phone_val:
+            link_criteria.append(
+                sa.and_(
+                    models.customer_feedbacks.c.customer_id.is_(None),
+                    models.customer_feedbacks.c.customer_phone == phone_val,
+                )
+            )
+        session.execute(
+            models.customer_feedbacks.update()
+            .where(
+                models.customer_feedbacks.c.organization_id == intent["organization_id"],
+                sa.or_(*link_criteria),
+            )
+            .values(
+                customer_id=resolved_customer_id,
+                order_folio=folio,
+            )
+        )
     lines = (
         session.execute(
             sa.select(models.public_order_intent_lines).where(
