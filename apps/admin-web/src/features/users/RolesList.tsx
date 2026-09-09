@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
@@ -18,6 +18,85 @@ interface Permission {
   code: string;
   description: string;
 }
+
+const EXCLUDED_PERMISSION_PATTERNS = [
+  'recipes.',
+  'waste',
+  'ingredient_sales',
+  'production.',
+  'transfer',
+  'sync.events',
+  'purchases.',
+  'warehouses',
+  'count',
+];
+
+interface PermissionCategory {
+  title: string;
+  icon: string;
+  codes: string[];
+}
+
+const PERMISSION_CATEGORIES: PermissionCategory[] = [
+  {
+    title: 'Punto de Venta y Comandas (POS)',
+    icon: '🛒',
+    codes: [
+      'pos.operate',
+      'orders.read',
+      'orders.create',
+      'orders.amend',
+      'orders.cancel',
+      'orders.fulfill',
+      'payments.read',
+      'payments.confirm',
+    ],
+  },
+  {
+    title: 'Caja, Turnos y Arqueos',
+    icon: '💵',
+    codes: [
+      'cash.shift.read',
+      'cash.shift.open',
+      'cash.shift.close',
+      'cash.movement.read',
+      'cash.movement.withdraw',
+      'cash.movement.deposit',
+      'cash.concept.read',
+      'cash.concept.manage',
+      'cash.user_cut.read',
+      'cash.user_cut.create',
+      'cash.withdraw',
+    ],
+  },
+  {
+    title: 'Catálogo y Menú',
+    icon: '🍽️',
+    codes: [
+      'catalog.manage',
+      'catalog.branch.manage',
+    ],
+  },
+  {
+    title: 'Ventas y Reportes',
+    icon: '📊',
+    codes: [
+      'dashboard.read',
+      'reports.sales.read',
+      'reports.expenses.read',
+    ],
+  },
+  {
+    title: 'Administración y Equipo',
+    icon: '⚙️',
+    codes: [
+      'admin.manage',
+      'branch.admin.access',
+      'branch.staff.read',
+      'access.organization.all_branches',
+    ],
+  },
+];
 
 const RolesList = () => {
   const queryClient = useQueryClient();
@@ -48,6 +127,37 @@ const RolesList = () => {
       setSelectedPermissions(rolePermissions);
     }
   }, [rolePermissions]);
+
+  const activePermissions = useMemo(() => {
+    if (!permissions) return [];
+    return permissions.filter((perm) => {
+      const code = perm.code.toLowerCase();
+      return !EXCLUDED_PERMISSION_PATTERNS.some((pattern) => code.includes(pattern));
+    });
+  }, [permissions]);
+
+  const groupedPermissions = useMemo(() => {
+    const map: Record<string, Permission[]> = {};
+    const usedIds = new Set<string>();
+
+    for (const cat of PERMISSION_CATEGORIES) {
+      map[cat.title] = [];
+      for (const code of cat.codes) {
+        const found = activePermissions.find((p) => p.code === code);
+        if (found) {
+          map[cat.title].push(found);
+          usedIds.add(found.id);
+        }
+      }
+    }
+
+    const unmapped = activePermissions.filter((p) => !usedIds.has(p.id));
+    if (unmapped.length > 0) {
+      map['Otros Permisos Operativos'] = unmapped;
+    }
+
+    return map;
+  }, [activePermissions]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -166,26 +276,92 @@ const RolesList = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Nombre del Rol</label>
-            <Input value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} />
+            <Input value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} placeholder="Ej. Supervisor de Turno" />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Alcance (organization / branch)</label>
-            <Input value={formData.scope} onChange={(e: any) => setFormData({...formData, scope: e.target.value})} />
+            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Alcance de Operación</label>
+            <select
+              value={formData.scope}
+              onChange={(e) => setFormData({ ...formData, scope: e.target.value })}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontSize: '0.95rem' }}
+            >
+              <option value="branch">Sucursal (Asignado a colaboradores de una sucursal específica)</option>
+              <option value="organization">Restaurante Global (Acceso general en todas las sucursales)</option>
+            </select>
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <h4 style={{ marginBottom: 12, fontWeight: 600 }}>Permisos</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '200px', overflowY: 'auto', padding: 8, border: '1px solid var(--color-border)', borderRadius: 8 }}>
-              {permissions?.map(perm => (
-                <label key={perm.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={selectedPermissions.includes(perm.id)} 
-                    onChange={() => togglePermission(perm.id)} 
-                  />
-                  <span>{perm.description} <small style={{ color: 'var(--color-text-muted)' }}>({perm.code})</small></span>
-                </label>
-              ))}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <h4 style={{ margin: 0, fontWeight: 600, fontSize: '0.95rem' }}>Permisos del Rol ({selectedPermissions.length} seleccionados)</h4>
+            </div>
+            <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: '#64748b' }}>
+              Selecciona las opciones operativas autorizadas para este rol en el sistema.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '340px', overflowY: 'auto', paddingRight: 4 }}>
+              {Object.entries(groupedPermissions).map(([catTitle, perms]) => {
+                if (perms.length === 0) return null;
+                const categoryDef = PERMISSION_CATEGORIES.find((c) => c.title === catTitle);
+                const allSelected = perms.every((p) => selectedPermissions.includes(p.id));
+                const toggleGroup = () => {
+                  if (allSelected) {
+                    setSelectedPermissions((prev) => prev.filter((id) => !perms.some((p) => p.id === id)));
+                  } else {
+                    const idsToAdd = perms.map((p) => p.id);
+                    setSelectedPermissions((prev) => Array.from(new Set([...prev, ...idsToAdd])));
+                  }
+                };
+
+                return (
+                  <div key={catTitle} style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+                    <div
+                      onClick={toggleGroup}
+                      style={{
+                        padding: '8px 12px',
+                        background: '#f8fafc',
+                        borderBottom: '1px solid #e2e8f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{categoryDef?.icon || '📋'}</span>
+                        <span>{catTitle}</span>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600 }}>
+                        {allSelected ? 'Deseleccionar grupo' : 'Seleccionar todos'}
+                      </span>
+                    </div>
+
+                    <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {perms.map((perm) => {
+                        const isChecked = selectedPermissions.includes(perm.id);
+                        return (
+                          <label key={perm.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => togglePermission(perm.id)}
+                              style={{ marginTop: 2 }}
+                            />
+                            <div style={{ fontSize: '0.85rem' }}>
+                              <span style={{ color: '#0f172a', fontWeight: isChecked ? 600 : 400 }}>
+                                {perm.description}
+                              </span>
+                              <span style={{ color: '#94a3b8', fontSize: '0.75rem', marginLeft: 6 }}>
+                                ({perm.code})
+                              </span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

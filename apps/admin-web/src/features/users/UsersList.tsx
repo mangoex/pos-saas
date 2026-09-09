@@ -26,17 +26,17 @@ interface Role {
   permissions?: string[];
 }
 
-const CANONICAL_ROLES_META: Record<string, { rank: number; label: string; desc: string }> = {
-  'cajero': { rank: 1, label: 'Cajero', desc: 'Operación POS, órdenes, cobros y retiros menores autorizados' },
-  'cajero jefe': { rank: 2, label: 'Cajero Jefe', desc: 'Apertura/cierre turnos, arqueos, depósitos, compras locales y mermas' },
-  'líder': { rank: 3, label: 'Líder', desc: 'Cortes por usuario (X/Z), cancelaciones de pedidos autorizados' },
-  'lider': { rank: 3, label: 'Líder', desc: 'Cortes por usuario (X/Z), cancelaciones de pedidos autorizados' },
-  'supervisor': { rank: 4, label: 'Supervisor', desc: 'Gestión de recetas, inventario/kardex, reportes de insumos y mermas' },
-  'administrador de restaurante': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
-  'administrador': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
-  'dueño': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
-  'dueno': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
-  'owner': { rank: 5, label: 'Administrador de Restaurante', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
+const CANONICAL_ROLES_META: Record<string, { label: string; desc: string }> = {
+  'dueño': { label: 'Administrador / Dueño', desc: 'Control total de la cuenta, sucursales, colaboradores y reportes' },
+  'dueno': { label: 'Administrador / Dueño', desc: 'Control total de la cuenta, sucursales, colaboradores y reportes' },
+  'owner': { label: 'Administrador / Dueño', desc: 'Control total de la cuenta, sucursales, colaboradores y reportes' },
+  'administrador': { label: 'Administrador', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
+  'administrador de restaurante': { label: 'Administrador', desc: 'Control total del restaurante, sucursales, colaboradores y reportes' },
+  'supervisor': { label: 'Supervisor', desc: 'Supervisión de operaciones, reportes de ventas y cortes de caja' },
+  'líder': { label: 'Encargado de Turno', desc: 'Cortes X/Z, supervisión de pedidos y operación POS' },
+  'lider': { label: 'Encargado de Turno', desc: 'Cortes X/Z, supervisión de pedidos y operación POS' },
+  'cajero jefe': { label: 'Cajero Encargado', desc: 'Apertura/cierre turnos, arqueos y ventas POS' },
+  'cajero': { label: 'Cajero', desc: 'Operación exclusiva del punto de venta (POS), cobros y comandas' },
 };
 
 const UsersList = () => {
@@ -61,18 +61,13 @@ const UsersList = () => {
     queryFn: () => fetchApi('/branches'),
   });
 
-  // Filter and sort strictly the 6 official canonical roles
+  // Filter and sort canonical roles
   const canonicalRoles = useMemo(() => {
     if (!rawRoles) return [];
     return rawRoles
       .filter((r) => {
         const norm = r.name.trim().toLowerCase();
         return norm in CANONICAL_ROLES_META;
-      })
-      .sort((a, b) => {
-        const rankA = CANONICAL_ROLES_META[a.name.trim().toLowerCase()]?.rank || 99;
-        const rankB = CANONICAL_ROLES_META[b.name.trim().toLowerCase()]?.rank || 99;
-        return rankA - rankB;
       });
   }, [rawRoles]);
 
@@ -82,10 +77,20 @@ const UsersList = () => {
 
   const saveMutation = useMutation({
     mutationFn: (data: typeof formData) => {
-      const payload = {
-        ...data,
+      const payload: Record<string, any> = {
+        display_name: data.display_name.trim(),
+        email: data.email.trim(),
+        role_id: data.role_id,
         branch_id: requiresBranch ? data.branch_id : null,
       };
+      if (data.employee_code && data.employee_code.trim()) {
+        payload.employee_code = data.employee_code.trim().toUpperCase();
+      } else {
+        payload.employee_code = '';
+      }
+      if (data.password && data.password.trim()) {
+        payload.password = data.password.trim();
+      }
       if (editingUser) {
         return fetchApi(`/users/${editingUser.id}`, {
           method: 'PUT',
@@ -128,21 +133,21 @@ const UsersList = () => {
   };
 
   const saveUser = () => {
-    const employeeCode = formData.employee_code.trim().toUpperCase();
-    if (!/^[A-Z0-9]{6}$/.test(employeeCode)) {
-      setFormError('El código debe tener exactamente 6 caracteres alfanuméricos.');
+    const rawCode = formData.employee_code.trim().toUpperCase();
+    if (rawCode && !/^[A-Z0-9]{6}$/.test(rawCode)) {
+      setFormError('Si asignas código de empleado, debe tener exactamente 6 caracteres alfanuméricos.');
       return;
     }
     if (!formData.role_id) {
-      setFormError('Debes seleccionar uno de los roles oficiales.');
+      setFormError('Debes seleccionar un rol para el usuario.');
       return;
     }
     if (requiresBranch && !formData.branch_id) {
-      setFormError('Debes seleccionar la sucursal asignada para roles operativos (Cajero, Cajero Jefe, Líder).');
+      setFormError('Debes seleccionar la sucursal asignada para el rol de cajero.');
       return;
     }
     setFormError('');
-    saveMutation.mutate({ ...formData, employee_code: employeeCode });
+    saveMutation.mutate({ ...formData, employee_code: rawCode });
   };
 
   return (
@@ -241,10 +246,13 @@ const UsersList = () => {
               maxLength={6}
               pattern="[A-Za-z0-9]{6}"
               title="6 caracteres alfanuméricos"
-              placeholder="Ej. CAJ001"
+              placeholder="Ej. CAJ001 (Opcional)"
               value={formData.employee_code}
               onChange={(e: any) => setFormData({...formData, employee_code: e.target.value.replace(/[^a-z0-9]/gi, '').toUpperCase()})}
             />
+            <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: 2, display: 'block' }}>
+              Opcional. Solo necesario para cajeros que registran turno en punto de venta POS o reloj checador.
+            </small>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Correo electrónico</label>
@@ -255,18 +263,18 @@ const UsersList = () => {
             <Input value={formData.display_name} onChange={(e: any) => setFormData({...formData, display_name: e.target.value})} placeholder="Nombre completo" />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Rol Oficial</label>
+            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Rol del Usuario</label>
             <select 
               value={formData.role_id} 
               onChange={(e) => setFormData({...formData, role_id: e.target.value})}
               style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontSize: '0.95rem', outline: 'none' }}
             >
-              <option value="">Selecciona uno de los roles oficiales</option>
+              <option value="">Selecciona un rol</option>
               {canonicalRoles.map(r => {
                 const meta = CANONICAL_ROLES_META[r.name.trim().toLowerCase()];
                 return (
                   <option key={r.id} value={r.id}>
-                    {meta ? `${meta.rank}. ${meta.label} (${r.scope === 'organization' ? 'Corporativo' : 'Sucursal'})` : r.name}
+                    {meta ? meta.label : r.name}
                   </option>
                 );
               })}

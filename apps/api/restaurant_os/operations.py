@@ -607,8 +607,8 @@ def create_user(
     )
     if existing:
         raise BusinessError("user_already_exists", "User already exists")
-    normalized_employee_code = _normalize_employee_code(employee_code)
-    assert normalized_employee_code is not None
+    raw_code = str(employee_code or "").strip()
+    normalized_employee_code = _normalize_employee_code(raw_code) if raw_code else None
     target_org = _modifier_actor_organization(session, actor_id)
 
     role_scope = None
@@ -619,13 +619,14 @@ def create_user(
     now = _now()
     has_password = bool((password or "").strip())
     user_id = _id()
-    _assign_employee_code(
-        session,
-        normalized_employee_code,
-        subject_type="user",
-        subject_id=user_id,
-        organization_id=target_org,
-    )
+    if normalized_employee_code:
+        _assign_employee_code(
+            session,
+            normalized_employee_code,
+            subject_type="user",
+            subject_id=user_id,
+            organization_id=target_org,
+        )
     user = {
         "id": user_id,
         "organization_id": target_org,
@@ -11157,16 +11158,18 @@ def update_user(
     if display_name is not None:
         update_data["display_name"] = display_name.strip()
     if employee_code is not None:
-        normalized_employee_code = _normalize_employee_code(employee_code)
-        assert normalized_employee_code is not None
-        _assign_employee_code(
-            session,
-            normalized_employee_code,
-            subject_type="user",
-            subject_id=user_id,
-            organization_id=user_org_id,
-        )
-        update_data["employee_code"] = normalized_employee_code
+        raw_code = str(employee_code).strip()
+        if raw_code:
+            normalized_employee_code = _normalize_employee_code(raw_code)
+            assert normalized_employee_code is not None
+            _assign_employee_code(
+                session,
+                normalized_employee_code,
+                subject_type="user",
+                subject_id=user_id,
+                organization_id=user_org_id,
+            )
+            update_data["employee_code"] = normalized_employee_code
 
     if update_data:
         update_data["updated_at"] = _now()

@@ -6626,6 +6626,37 @@ def test_update_user_profile() -> None:
     assert update_res.json()["display_name"] == "Miguel G. Espino"
 
 
+def test_update_user_password_without_employee_code() -> None:
+    client = _client_with_seeded_database()
+
+    login_res = client.post(
+        "/api/v1/auth/login",
+        json={"email": "mangoex@gmail.com", "password": "superadmin-test-password"},
+    )
+    assert login_res.status_code == 200
+    token = login_res.json()["token"]
+    user_id = login_res.json()["user"]["id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    update_res = client.put(
+        f"/api/v1/users/{user_id}",
+        headers=headers,
+        json={
+            "display_name": "Miguel Admin",
+            "email": "mangoex@gmail.com",
+            "password": "brand-new-secret-password-123",
+            "employee_code": "",
+        },
+    )
+    assert update_res.status_code == 200
+
+    new_login_res = client.post(
+        "/api/v1/auth/login",
+        json={"email": "mangoex@gmail.com", "password": "brand-new-secret-password-123"},
+    )
+    assert new_login_res.status_code == 200
+
+
 def _login_headers(client: TestClient, email: str, password: str) -> dict[str, str]:
     response = client.post(
         "/api/v1/auth/login",
