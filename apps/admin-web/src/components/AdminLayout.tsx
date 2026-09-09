@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Settings, BarChart2, Bell, Search, UserRound,
   LogOut, Package, Store, Carrot, ChevronLeft, ChevronRight, Camera,
-  ShoppingCart, Receipt, Share2, Crown, Sparkles
+  ShoppingCart, Receipt, Share2, Crown, Sparkles, ChefHat
 } from 'lucide-react';
 import { Modal, Input, Button } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
@@ -15,6 +15,7 @@ import { CategorySubNav } from './CategorySubNav';
 import { canManageCashConcepts } from '../features/cash/cashConceptState';
 import { ImpersonationBanner } from '../features/superadmin/ImpersonationBanner';
 import { OnboardingWizardModal } from '../features/onboarding/OnboardingWizardModal';
+import { MobileOrdersMonitor } from '../features/mobile-orders/MobileOrdersMonitor';
 
 const compressImage = (dataUrl: string, maxWidth = 128, maxHeight = 128): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -64,6 +65,20 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  });
+  const [forceDesktopView, setForceDesktopView] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    const adapt = () => setIsMobile(media.matches);
+    adapt();
+    media.addEventListener('change', adapt);
+    return () => media.removeEventListener('change', adapt);
+  }, []);
+
   useEffect(() => {
     if (!['/restaurant-links', '/superadmin/domains'].includes(location.pathname)) return;
     const media = window.matchMedia('(max-width: 700px)');
@@ -280,6 +295,17 @@ const AdminLayout = () => {
         '/customers',
       ],
     },
+    ...(isMobile
+      ? [
+          {
+            path: '/orders-mobile',
+            label: 'Monitor de Pedidos',
+            icon: <ChefHat size={20} color="#38bdf8" />,
+            badge: 'Móvil',
+            matchingPrefixes: ['/orders-mobile'],
+          },
+        ]
+      : []),
     ...(currentUser.is_superadmin && !localStorage.getItem('impersonation_info')
       ? [
           {
@@ -303,9 +329,55 @@ const AdminLayout = () => {
     }] : []),
   ];
 
+  if (isMobile && !forceDesktopView && (location.pathname === '/' || location.pathname === '/orders-mobile')) {
+    return (
+      <div style={{ minHeight: '100vh', width: '100vw' }}>
+        <ImpersonationBanner />
+        <MobileOrdersMonitor
+          branchId={branchId}
+          branchName={branches.find((b) => b.id === branchId)?.name}
+          onSwitchToDesktopView={() => setForceDesktopView(true)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
       <ImpersonationBanner />
+      {isMobile && forceDesktopView && (
+        <div
+          style={{
+            backgroundColor: '#0284c7',
+            color: '#ffffff',
+            padding: '8px 16px',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexShrink: 0,
+            zIndex: 9999,
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>📱 Panel completo activo en celular</span>
+          <button
+            type="button"
+            onClick={() => setForceDesktopView(false)}
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#0284c7',
+              border: 'none',
+              borderRadius: 6,
+              padding: '4px 10px',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+            }}
+          >
+            Volver a Monitor de Pedidos
+          </button>
+        </div>
+      )}
       <div className="admin-layout" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       {/* Dark Admin Sidebar */}
       <div className="admin-sidebar" style={{ width: isCollapsed ? '80px' : '260px', transition: 'width 0.3s', display: 'flex', flexDirection: 'column' }}>
@@ -353,6 +425,9 @@ const AdminLayout = () => {
                 onClick={() => {
                   if (item.path === '/pos-app') {
                     void redirectToPos('pos').catch(() => navigate('/login'));
+                  } else if (item.path === '/orders-mobile') {
+                    setForceDesktopView(false);
+                    navigate('/');
                   } else {
                     navigate(item.path);
                   }

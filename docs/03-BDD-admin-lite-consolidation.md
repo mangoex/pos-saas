@@ -98,3 +98,21 @@ Given el usuario administrador edita o crea una sucursal en el panel de administ
 When consulta los campos de contacto
 Then visualiza la casilla "Habilitar confirmación y envío de pedidos por WhatsApp"
 And al desmarcarla, el menú móvil registra pedidos directamente en el sistema sin forzar la apertura de WhatsApp.
+
+---
+
+## BDD-FEAT-LITE-007: Monitor de Pedidos Móvil para mimenu.onl/admin
+
+### BDD-SC-LITE-013: Detección de dispositivo móvil y despliegue del monitor de comandas
+Given un encargado o cocinero que ingresa a mimenu.onl/admin desde un smartphone o pantalla táctil pequeña (viewport < 768px)
+When se carga la pantalla principal del panel de administración
+Then el sistema detecta el dispositivo móvil y presenta de forma directa la relación de pedidos activos en lugar del panel de escritorio complejo
+And muestra cada orden con folio, tiempo transcurrido, modalidad (comer aquí con mesa, llevar o domicilio), cliente, total y estado
+And ofrece un selector accesible para alternar entre el "Monitor de Pedidos" y el "Panel Completo de Administración".
+
+### BDD-SC-LITE-014: Apertura de detalle de comanda interactivo al tocar un pedido
+Given la lista de pedidos en el monitor móvil
+When el usuario toca una tarjeta de pedido
+Then se abre un modal de detalle con la información completa del cliente, teléfono con enlace directo a WhatsApp y llamada, y modalidad de entrega
+And se despliega cada producto con su cantidad, precio, notas y lista de ingredientes adicionales o modificadores seleccionados
+And se presentan botones de acción rápida para avanzar el estado de preparación (Iniciar Preparación, Marcar Listo, Entregado) o contactar al comensal por WhatsApp.

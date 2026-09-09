@@ -40,6 +40,8 @@ import { canManageCashConcepts } from './features/cash/cashConceptState';
 import { redirectToPos } from './lib/posHandoff';
 import { SaaSConsoleView } from './features/superadmin/SaaSConsoleView';
 import RestaurantLinks from './features/domains/RestaurantLinks';
+import { MobileOrdersMonitor } from './features/mobile-orders/MobileOrdersMonitor';
+import { resolveBranchId } from './lib/branchContext';
 
 const SuperadminRoute = ({ children }: { children: React.ReactNode }) => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -166,6 +168,7 @@ export const App = () => {
           </ProtectedRoute>
         }>
           <Route index element={<Overview />} />
+          <Route path="orders-mobile" element={<MobileOrdersMonitor branchId={resolveBranchId()} />} />
           <Route path="superadmin" element={<SuperadminRoute><SaaSConsoleView /></SuperadminRoute>} />
           <Route path="restaurant-links" element={<RestaurantLinks />} />
           <Route path="superadmin/domains" element={<SuperadminRoute><RestaurantLinks supervision /></SuperadminRoute>} />
