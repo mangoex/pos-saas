@@ -54,7 +54,7 @@ const emptyForm = {
   longitude: '',
   phone: '',
   google_review_url: '',
-  whatsapp_ordering_enabled: true,
+  whatsapp_ordering_enabled: false,
 };
 
 const BranchesList = () => {
@@ -121,7 +121,7 @@ const BranchesList = () => {
         longitude: branch.longitude !== null && branch.longitude !== undefined ? String(branch.longitude) : '',
         phone: branch.phone || '',
         google_review_url: branch.google_review_url || '',
-        whatsapp_ordering_enabled: branch.whatsapp_ordering_enabled !== false,
+        whatsapp_ordering_enabled: Boolean(branch.whatsapp_ordering_enabled),
       });
     } else {
       setEditingBranch(null);
@@ -200,8 +200,13 @@ const BranchesList = () => {
                             )}
                           </div>
                           {branch.phone && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                               <Phone size={12} /> {branch.phone}
+                              {branch.whatsapp_ordering_enabled ? (
+                                <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 5px', borderRadius: 4 }}>WhatsApp ✓</span>
+                              ) : (
+                                <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f1f5f9', padding: '1px 5px', borderRadius: 4 }}>Solo POS</span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -290,19 +295,32 @@ const BranchesList = () => {
               </div>
             </div>
 
-            <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--color-surface-subtle, #f8fafc)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+            <div style={{
+              marginTop: 14,
+              padding: '12px 14px',
+              background: formData.whatsapp_ordering_enabled ? '#f0fdf4' : 'var(--color-surface-subtle, #f8fafc)',
+              borderRadius: 10,
+              border: formData.whatsapp_ordering_enabled ? '1px solid #86efac' : '1px solid var(--color-border)',
+              transition: 'all 0.2s ease',
+            }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
-                  checked={formData.whatsapp_ordering_enabled}
+                  checked={Boolean(formData.whatsapp_ordering_enabled)}
                   onChange={(e) => setFormData({ ...formData, whatsapp_ordering_enabled: e.target.checked })}
-                  style={{ width: 16, height: 16, accentColor: '#25D366' }}
+                  style={{ width: 18, height: 18, marginTop: 2, accentColor: '#16a34a', cursor: 'pointer' }}
                 />
-                <span>Habilitar confirmación y envío de pedidos por WhatsApp (para recepción en celular)</span>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: '0.875rem', color: formData.whatsapp_ordering_enabled ? '#15803d' : 'inherit', display: 'block' }}>
+                    Recibir pedidos por WhatsApp en esta sucursal
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>
+                    {formData.whatsapp_ordering_enabled
+                      ? '✓ Activo: Los clientes en celular podrán enviar el pedido detallado por WhatsApp a tu teléfono de contacto además de guardarse en el sistema.'
+                      : '✗ Desactivado: Los pedidos se registrarán únicamente en el sistema POS. NO se abrirá WhatsApp ni se mostrará el botón de envío.'}
+                  </span>
+                </div>
               </label>
-              <p style={{ margin: '4px 0 0 24px', fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-                Al estar activo, cuando el cliente pida desde la versión móvil del menú, además de guardarse en el sistema, se abrirá WhatsApp con el pedido completo para enviártelo a este teléfono.
-              </p>
             </div>
           </div>
 

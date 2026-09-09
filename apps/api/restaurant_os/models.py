@@ -110,7 +110,7 @@ branches = sa.Table(
         "whatsapp_ordering_enabled",
         sa.Boolean(),
         nullable=False,
-        server_default=sa.true(),
+        server_default=sa.false(),
     ),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),

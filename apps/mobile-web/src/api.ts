@@ -368,7 +368,7 @@ export async function submitMobileOrder(
       ? intent.whatsapp_phone
       : (typeof branchPhone === 'string' && branchPhone.trim() ? branchPhone : undefined);
 
-    const whatsappUrl = (whatsappOrderingEnabled !== false && effectivePhone)
+    const whatsappUrl = (whatsappOrderingEnabled === true && effectivePhone)
       ? (typeof intent.whatsapp_url === 'string' && intent.whatsapp_url
           ? intent.whatsapp_url
           : buildWhatsAppLink(intent.public_reference, info, items, totalCents, effectivePhone, branchName))
@@ -392,7 +392,7 @@ export async function submitMobileOrder(
     ? persisted.whatsapp_phone
     : (typeof branchPhone === 'string' && branchPhone.trim() ? branchPhone : undefined);
 
-  const whatsappUrl = (whatsappOrderingEnabled !== false && effectivePhone)
+  const whatsappUrl = (whatsappOrderingEnabled === true && effectivePhone)
     ? buildWhatsAppLink(persisted.folio, info, items, persisted.total_cents, effectivePhone, branchName)
     : undefined;
 

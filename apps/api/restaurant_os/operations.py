@@ -1011,7 +1011,7 @@ def create_branch(
         "google_review_url": str(google_review_url).strip() if google_review_url else None,
         "whatsapp_ordering_enabled": bool(whatsapp_ordering_enabled)
         if whatsapp_ordering_enabled is not None
-        else True,
+        else False,
         "created_at": now,
         "updated_at": now,
     }

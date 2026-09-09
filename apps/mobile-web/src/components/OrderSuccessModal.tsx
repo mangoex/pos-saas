@@ -26,9 +26,11 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
-  // Auto-redirect to WhatsApp on mobile devices when URL is present
+  const isWhatsAppEnabled = Boolean(branch?.whatsapp_ordering_enabled) && Boolean(orderResult.whatsapp_url);
+
+  // Auto-redirect to WhatsApp on mobile devices ONLY when enabled by branch and URL is present
   React.useEffect(() => {
-    if (orderResult.whatsapp_url && typeof window !== 'undefined') {
+    if (isWhatsAppEnabled && orderResult.whatsapp_url && typeof window !== 'undefined') {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768;
       if (isMobile) {
         const timer = setTimeout(() => {
@@ -37,7 +39,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
         return () => clearTimeout(timer);
       }
     }
-  }, [orderResult.whatsapp_url]);
+  }, [isWhatsAppEnabled, orderResult.whatsapp_url]);
 
   const handleSelectRating = (selected: number) => {
     setRating(selected);
@@ -340,7 +342,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             )}
           </div>
 
-          {orderResult.whatsapp_url && (
+          {isWhatsAppEnabled && orderResult.whatsapp_url && (
             <div style={{
               background: '#f0fdf4',
               border: '1px solid #bbf7d0',
@@ -363,7 +365,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             </div>
           )}
 
-          {orderResult.whatsapp_url && (
+          {isWhatsAppEnabled && orderResult.whatsapp_url && (
             <a
               href={orderResult.whatsapp_url}
               target="_blank"

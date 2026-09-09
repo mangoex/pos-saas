@@ -37,12 +37,44 @@ assert.match(
   'BranchesList.tsx must include whatsapp_ordering_enabled in state/form'
 );
 
-// 3. Verify that BranchInfo in mobile-web types.ts includes whatsapp_ordering_enabled
-const mobileTypes = readFileSync(join(root, 'apps/mobile-web/src/types.ts'), 'utf8');
+// 4. Verify that BranchesList.tsx defaults whatsapp_ordering_enabled to false (opt-in)
 assert.match(
-  mobileTypes,
-  /whatsapp_ordering_enabled\?: boolean/,
-  'mobile-web types.ts must include whatsapp_ordering_enabled in BranchInfo'
+  branchesList,
+  /whatsapp_ordering_enabled:\s*false/,
+  'BranchesList.tsx must default whatsapp_ordering_enabled to false'
+);
+
+// 5. Verify that App.tsx strictly checks whatsapp_ordering_enabled === true
+const appTsx = readFileSync(join(root, 'apps/mobile-web/src/App.tsx'), 'utf8');
+assert.match(
+  appTsx,
+  /Boolean\(selectedBranch\?\.whatsapp_ordering_enabled\)\s*===\s*true/,
+  'App.tsx must pass Boolean(selectedBranch?.whatsapp_ordering_enabled) === true'
+);
+
+// 6. Verify that api.ts strictly checks whatsappOrderingEnabled === true
+assert.match(
+  mobileApi,
+  /whatsappOrderingEnabled\s*===\s*true/,
+  'api.ts must only create whatsappUrl if whatsappOrderingEnabled === true'
+);
+
+// 7. Verify that OrderSuccessModal.tsx guards both redirect and button with isWhatsAppEnabled
+const orderSuccessModal = readFileSync(join(root, 'apps/mobile-web/src/components/OrderSuccessModal.tsx'), 'utf8');
+assert.match(
+  orderSuccessModal,
+  /const isWhatsAppEnabled = Boolean\(branch\?\.whatsapp_ordering_enabled\) && Boolean\(orderResult\.whatsapp_url\);/,
+  'OrderSuccessModal must compute isWhatsAppEnabled based on branch.whatsapp_ordering_enabled'
+);
+assert.match(
+  orderSuccessModal,
+  /if\s*\(isWhatsAppEnabled && orderResult\.whatsapp_url/,
+  'OrderSuccessModal must guard useEffect redirect with isWhatsAppEnabled'
+);
+assert.match(
+  orderSuccessModal,
+  /\{isWhatsAppEnabled && orderResult\.whatsapp_url &&/,
+  'OrderSuccessModal must guard WhatsApp button with isWhatsAppEnabled'
 );
 
 console.log('✓ All Mobile WhatsApp order details tests PASSED!');

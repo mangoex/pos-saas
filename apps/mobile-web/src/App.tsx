@@ -327,7 +327,7 @@ export const App: React.FC = () => {
         customerCoords || undefined,
         selectedBranch?.public_key || selectedBranch?.id,
         selectedBranch?.phone,
-        selectedBranch?.whatsapp_ordering_enabled !== false,
+        Boolean(selectedBranch?.whatsapp_ordering_enabled) === true,
       );
       setCreatedOrderResult(result);
       setCart([]);
