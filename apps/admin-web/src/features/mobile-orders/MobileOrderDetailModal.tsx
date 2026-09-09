@@ -130,8 +130,14 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
       });
       if (onOrderUpdated) onOrderUpdated();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Error al aceptar el pedido.');
+    } catch (err: any) {
+      const msg =
+        typeof err?.message === 'string'
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Error al aceptar el pedido.';
+      setError(msg);
     } finally {
       setActionLoading(false);
     }
@@ -150,8 +156,14 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
       });
       if (onOrderUpdated) onOrderUpdated();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Error al actualizar el estado de la comanda.');
+    } catch (err: any) {
+      const msg =
+        typeof err?.message === 'string'
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Error al actualizar el estado de la comanda.';
+      setError(msg);
     } finally {
       setActionLoading(false);
     }
@@ -352,7 +364,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
               }}
             >
               <AlertCircle size={18} />
-              <span>{error}</span>
+              <span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>
             </div>
           )}
 

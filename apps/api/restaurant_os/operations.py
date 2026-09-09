@@ -3884,8 +3884,12 @@ def fulfill_order(
         return dict(existing["response_snapshot"])
 
     try:
-        current = OrderState(str(order["status"]))
-        order_type = str(order["order_type"])
+        raw_status = str(order["status"]).upper()
+        if raw_status in {"PENDING", "PENDING_REVIEW"}:
+            current = OrderState.ACCEPTED
+        else:
+            current = OrderState(raw_status)
+        order_type = str(order["order_type"]).lower()
         targets = {
             "start_delivery": OrderState.IN_DELIVERY,
             "deliver": OrderState.DELIVERED,
@@ -3900,6 +3904,8 @@ def fulfill_order(
 
         state_cursor = current
         if normalized_command in {"deliver", "close"}:
+            if state_cursor == OrderState.DRAFT:
+                state_cursor = OrderStateMachine.transition(state_cursor, OrderState.ACCEPTED)
             if state_cursor == OrderState.ACCEPTED:
                 state_cursor = OrderStateMachine.transition(state_cursor, OrderState.SENT_TO_PRODUCTION)
             if state_cursor == OrderState.SENT_TO_PRODUCTION:
@@ -3917,6 +3923,8 @@ def fulfill_order(
                 state_cursor = OrderStateMachine.transition(state_cursor, OrderState.CLOSED)
         elif normalized_command == "start_delivery":
             if order_type == "delivery":
+                if state_cursor == OrderState.DRAFT:
+                    state_cursor = OrderStateMachine.transition(state_cursor, OrderState.ACCEPTED)
                 if state_cursor == OrderState.ACCEPTED:
                     state_cursor = OrderStateMachine.transition(state_cursor, OrderState.SENT_TO_PRODUCTION)
                 if state_cursor == OrderState.SENT_TO_PRODUCTION:
@@ -3938,7 +3946,7 @@ def fulfill_order(
 
     changed = session.execute(
         models.orders.update()
-        .where(models.orders.c.id == order_id, models.orders.c.status == current.value)
+        .where(models.orders.c.id == order_id, models.orders.c.status == order["status"])
         .values(status=next_state.value)
     )
     if changed.rowcount != 1:
@@ -3951,7 +3959,7 @@ def fulfill_order(
             models.production_tasks.c.order_id == order_id,
             models.production_tasks.c.status.in_(["PENDING", "IN_PROGRESS"]),
         )
-        .values(status="COMPLETED", updated_at=now)
+        .values(status="COMPLETED", completed_at=now)
     )
     response = {"id": order_id, "status": next_state.value, "order_type": order_type}
     session.execute(

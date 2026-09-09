@@ -34,18 +34,29 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
       // Could trigger a redirect to /login here if we use a global event or react context
     }
 
-    let errorData;
+    let errorData: any;
     try {
       errorData = await response.json();
     } catch {
       throw new ApiError(response.status, "unknown_error", "An unknown error occurred");
     }
 
-    throw new ApiError(
-      response.status,
-      errorData.detail?.code || "api_error",
-      errorData.detail?.message || errorData.detail || "API Error"
-    );
+    const detail = errorData?.detail;
+    let message = "API Error";
+    let code = errorData?.code || "api_error";
+
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (Array.isArray(detail)) {
+      message = detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(", ");
+    } else if (typeof detail === "object" && detail !== null) {
+      code = detail.code || code;
+      message = detail.message || (detail.code ? `Error: ${detail.code}` : JSON.stringify(detail));
+    } else if (errorData?.message && typeof errorData.message === "string") {
+      message = errorData.message;
+    }
+
+    throw new ApiError(response.status, code, message);
   }
 
   if (response.status === 204) {
