@@ -422,6 +422,8 @@ export async function submitMobileOrder(
 export async function submitCustomerFeedback(payload: {
   branch_id: string;
   rating: number;
+  customer_id?: string;
+  customer_phone?: string;
   order_folio?: string;
   customer_name?: string;
   comment?: string;

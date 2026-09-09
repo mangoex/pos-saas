@@ -4,7 +4,8 @@ import { Button, Modal, Input } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
 import {
   Users, Search, Plus, MapPin, ReceiptText, Phone, Mail,
-  Store, ShoppingBag, MessageCircle, ChevronLeft, ChevronRight
+  Store, ShoppingBag, MessageCircle, ChevronLeft, ChevronRight,
+  Star, MessageSquare
 } from 'lucide-react';
 
 interface CustomerPhone {
@@ -40,6 +41,24 @@ interface TaxProfile {
   billing_email?: string;
 }
 
+export interface CustomerFeedbackItem {
+  id: string;
+  rating: number;
+  comment?: string | null;
+  order_folio?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  created_at: string;
+  branch_name?: string | null;
+  branch_code?: string | null;
+}
+
+export interface CustomerRatingSummary {
+  average_rating: number | null;
+  rating_count: number;
+  recent_feedbacks: CustomerFeedbackItem[];
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -53,6 +72,7 @@ interface Customer {
     average_ticket_cents: number;
     last_order_at?: string | null;
   };
+  rating_summary?: CustomerRatingSummary;
   created_at: string;
 }
 
@@ -122,11 +142,19 @@ export const CustomersList: React.FC = () => {
   const [activeTaxCustomer, setActiveTaxCustomer] = useState<Customer | null>(null);
   const [taxForm, setTaxForm] = useState(emptyTaxForm);
 
+  const [activeFeedbacksCustomer, setActiveFeedbacksCustomer] = useState<Customer | null>(null);
+
   const [formError, setFormError] = useState<string>('');
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
     queryFn: () => fetchApi('/branches'),
+  });
+
+  const { data: customerFeedbacks = [], isLoading: isLoadingFeedbacks } = useQuery<CustomerFeedbackItem[]>({
+    queryKey: ['customer_feedbacks', activeFeedbacksCustomer?.id],
+    queryFn: () => fetchApi(`/customers/${activeFeedbacksCustomer!.id}/feedbacks`),
+    enabled: Boolean(activeFeedbacksCustomer?.id),
   });
 
   const { data: crmData } = useQuery<{
@@ -203,12 +231,19 @@ export const CustomersList: React.FC = () => {
     );
     const avgTicketCents = totalWithOrders > 0 ? Math.round(totalTicketsCents / totalWithOrders) : 0;
 
+    const rated = rawCustomers.filter((c) => c.rating_summary && c.rating_summary.rating_count > 0);
+    const totalRatings = rated.reduce((acc, c) => acc + (c.rating_summary?.rating_count || 0), 0);
+    const sumRatings = rated.reduce((acc, c) => acc + ((c.rating_summary?.average_rating || 0) * (c.rating_summary?.rating_count || 0)), 0);
+    const avgRating = totalRatings > 0 ? Math.round((sumRatings / totalRatings) * 10) / 10 : null;
+
     return {
       total: totalCount,
       withOrders: totalWithOrders,
       withAddresses: totalWithAddresses,
       withTax: totalWithTax,
       avgTicketCents,
+      totalRatings,
+      avgRating,
     };
   }, [rawCustomers, totalCount]);
 
@@ -420,6 +455,19 @@ export const CustomersList: React.FC = () => {
             Por orden completada
           </span>
         </div>
+
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px 20px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Satisfacción Promedio
+          </span>
+          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#d97706', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Star size={24} fill="#eab308" color="#d97706" />
+            <span>{stats.avgRating !== null ? `${stats.avgRating.toFixed(1)} / 5` : '—'}</span>
+          </div>
+          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
+            {stats.totalRatings} {stats.totalRatings === 1 ? 'opinión registrada' : 'opiniones registradas'}
+          </span>
+        </div>
       </div>
 
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
@@ -539,6 +587,7 @@ export const CustomersList: React.FC = () => {
                   <th style={{ padding: '16px 20px', fontWeight: 700 }}>Sucursal Origen</th>
                   <th style={{ padding: '16px 20px', fontWeight: 700 }}>Domicilios</th>
                   <th style={{ padding: '16px 20px', fontWeight: 700 }}>Historial Pedidos</th>
+                  <th style={{ padding: '16px 20px', fontWeight: 700 }}>Calificación</th>
                   <th style={{ padding: '16px 20px', fontWeight: 700 }}>Fiscal (CFDI)</th>
                   <th style={{ padding: '16px 20px', fontWeight: 700, textAlign: 'right' }}>Acciones</th>
                 </tr>
@@ -678,6 +727,37 @@ export const CustomersList: React.FC = () => {
                       </td>
 
                       <td style={{ padding: '16px 20px' }}>
+                        {customer.rating_summary && customer.rating_summary.rating_count > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveFeedbacksCustomer(customer)}
+                            style={{
+                              background: '#fefce8',
+                              border: '1px solid #fef08a',
+                              color: '#854d0e',
+                              padding: '4px 10px',
+                              borderRadius: '8px',
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                            }}
+                            title="Ver opiniones y comentarios del cliente"
+                          >
+                            <Star size={14} fill="#eab308" color="#ca8a04" />
+                            <span>{customer.rating_summary.average_rating?.toFixed(1) || '—'}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#a16207', fontWeight: 600 }}>
+                              ({customer.rating_summary.rating_count})
+                            </span>
+                          </button>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>Sin calif.</span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '16px 20px' }}>
                         {customer.tax_profile?.tax_id ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ background: '#fdf4ff', color: '#86198f', border: '1px solid #f5d0fe', padding: '3px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700 }}>
@@ -691,6 +771,27 @@ export const CustomersList: React.FC = () => {
 
                       <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          <button
+                            onClick={() => setActiveFeedbacksCustomer(customer)}
+                            title="Ver opiniones y comentarios"
+                            style={{
+                              background: '#fefce8',
+                              border: '1px solid #fef08a',
+                              color: '#854d0e',
+                              padding: '6px 10px',
+                              borderRadius: '8px',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <Star size={13} fill="#eab308" color="#ca8a04" />
+                            <span>Reseñas</span>
+                          </button>
+
                           <button
                             onClick={() => openAddressModal(customer)}
                             title="Gestionar domicilios"
@@ -1061,6 +1162,108 @@ export const CustomersList: React.FC = () => {
               onClick={() => saveTaxMutation.mutate()}
             >
               {saveTaxMutation.isPending ? 'Guardando...' : 'Guardar Datos Fiscales'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(activeFeedbacksCustomer)}
+        onClose={() => setActiveFeedbacksCustomer(null)}
+        title={`Historial de Opiniones · ${activeFeedbacksCustomer?.name || ''}`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Calificación Promedio</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                <Star size={20} fill="#eab308" color="#d97706" />
+                <strong style={{ fontSize: '1.25rem', color: '#0f172a' }}>
+                  {activeFeedbacksCustomer?.rating_summary?.average_rating !== null && activeFeedbacksCustomer?.rating_summary?.average_rating !== undefined
+                    ? activeFeedbacksCustomer.rating_summary.average_rating.toFixed(1)
+                    : '—'}
+                </strong>
+                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>/ 5.0</span>
+              </div>
+            </div>
+            <span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600, background: '#f1f5f9', padding: '4px 10px', borderRadius: '8px' }}>
+              {customerFeedbacks.length} {customerFeedbacks.length === 1 ? 'opinión' : 'opiniones'}
+            </span>
+          </div>
+
+          {isLoadingFeedbacks ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+              Cargando opiniones...
+            </div>
+          ) : customerFeedbacks.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>
+              <MessageSquare size={32} style={{ margin: '0 auto 8px', display: 'block', color: '#cbd5e1' }} />
+              <p style={{ margin: 0, fontSize: '0.9rem' }}>Este cliente aún no ha registrado calificaciones o comentarios.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '420px', overflowY: 'auto' }}>
+              {customerFeedbacks.map((fb) => {
+                const isNegative = fb.rating < 4;
+                return (
+                  <div
+                    key={fb.id}
+                    style={{
+                      border: `1px solid ${isNegative ? '#fed7aa' : '#e2e8f0'}`,
+                      background: isNegative ? '#fffbeb' : '#ffffff',
+                      borderRadius: '12px',
+                      padding: '12px 16px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            size={16}
+                            fill={s <= fb.rating ? '#eab308' : '#e2e8f0'}
+                            color={s <= fb.rating ? '#ca8a04' : '#cbd5e1'}
+                          />
+                        ))}
+                        <strong style={{ marginLeft: '4px', fontSize: '0.88rem', color: '#0f172a' }}>
+                          {fb.rating} / 5
+                        </strong>
+                      </div>
+                      <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        {new Date(fb.created_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {fb.comment ? (
+                      <div style={{
+                        background: isNegative ? '#fef3c7' : '#f8fafc',
+                        border: `1px solid ${isNegative ? '#fde68a' : '#e2e8f0'}`,
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        fontSize: '0.85rem',
+                        color: isNegative ? '#92400e' : '#334155',
+                        margin: '6px 0',
+                        lineHeight: 1.4,
+                      }}>
+                        {isNegative && <strong style={{ display: 'block', fontSize: '0.75rem', textTransform: 'uppercase', color: '#b45309', marginBottom: '2px' }}>⚠️ Comentario para gerencia:</strong>}
+                        <span>"{fb.comment}"</span>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>Sin comentarios adicionales</span>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#64748b', marginTop: '6px' }}>
+                      {fb.branch_name ? <span>📍 {fb.branch_name}</span> : <span>📍 Sucursal</span>}
+                      {fb.order_folio ? <span>Pedido: #{fb.order_folio}</span> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+            <Button variant="secondary" onClick={() => setActiveFeedbacksCustomer(null)}>
+              Cerrar
             </Button>
           </div>
         </div>

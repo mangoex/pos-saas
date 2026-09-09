@@ -3330,6 +3330,7 @@ def create_local_order(
     driver_id: str | None = None,
     adjustment_authorization_id: str | None = None,
     idempotency_key: str | None = None,
+    customer_phone: str | None = None,
 ) -> dict[str, Any]:
     _begin_cash_shift_serialization(session)
     if not lines:
@@ -3429,6 +3430,17 @@ def create_local_order(
     now = _now()
     order_id = _id()
     folio = _next_unique_folio(session, actual_branch_id)
+    if not customer_id and (customer_phone or (owner_name and owner_name != "Cliente General")):
+        auto_cust_id = find_or_create_order_customer(
+            session=session,
+            organization_id=organization_id,
+            branch_id=actual_branch_id,
+            name=owner_name,
+            phone=customer_phone,
+        )
+        if auto_cust_id:
+            customer_id = auto_cust_id
+
     customer_snapshot, address_snapshot = _resolve_order_customer_snapshots(
         session,
         customer_id=customer_id,
@@ -18335,6 +18347,127 @@ def _customer_scope_organization(
     return str(resolved)
 
 
+def find_or_create_order_customer(
+    session: Session,
+    organization_id: str,
+    branch_id: str | None,
+    name: str | None = None,
+    phone: str | None = None,
+    email: str | None = None,
+) -> str | None:
+    """
+    Look up or automatically create a customer when an order is placed
+    (via POS or mobile storefront).
+    If a valid Mexican phone is provided, looks up by normalized number.
+    If existing customer found, links and updates name if current name is generic.
+    If not found, creates a customer in `customers` and `customer_phones` with
+    origin_branch_id set to branch_id.
+    Returns customer_id or None.
+    """
+    normalized_phone: str | None = None
+    clean_captured: str | None = None
+    if phone and str(phone).strip():
+        raw_phone = str(phone).strip()
+        try:
+            normalized_phone = normalize_mexican_phone(raw_phone)
+            clean_captured = raw_phone
+        except Exception:
+            digits = "".join(c for c in raw_phone if c.isdigit())
+            if len(digits) >= 10:
+                normalized_phone = f"+52{digits[-10:]}"
+                clean_captured = digits[-10:]
+            else:
+                clean_captured = raw_phone
+
+    clean_name = str(name or "").strip()
+    if clean_name.lower() in ("cliente general", "general", "cliente", "anónimo", "anonimo", ""):
+        effective_name = "Cliente"
+    else:
+        effective_name = clean_name
+
+    # 1. Search by normalized phone if available
+    if normalized_phone:
+        existing_phone_row = session.execute(
+            sa.select(
+                models.customer_phones.c.customer_id,
+                models.customers.c.name.label("customer_name"),
+            )
+            .select_from(
+                models.customer_phones.join(
+                    models.customers,
+                    models.customer_phones.c.customer_id == models.customers.c.id,
+                )
+            )
+            .where(
+                models.customers.c.organization_id == organization_id,
+                models.customer_phones.c.normalized_number == normalized_phone,
+                models.customer_phones.c.status == "active",
+            )
+        ).mappings().first()
+
+        if existing_phone_row:
+            cust_id = str(existing_phone_row["customer_id"])
+            current_cust_name = str(existing_phone_row["customer_name"] or "").strip()
+            # If current customer name is generic, but the order provides a specific name, update it
+            if (
+                effective_name != "Cliente"
+                and current_cust_name in ("Cliente", "Cliente General", "")
+            ):
+                session.execute(
+                    models.customers.update()
+                    .where(models.customers.c.id == cust_id)
+                    .values(name=effective_name, updated_at=_now())
+                )
+            return cust_id
+
+    # If neither valid phone nor valid specific name is given, do not create a phantom customer
+    if not normalized_phone and effective_name == "Cliente":
+        return None
+
+    # 2. Create new customer
+    cust_id = _id()
+    now = _now()
+    clean_email = email.strip().lower() if email and str(email).strip() else None
+
+    customer_data = {
+        "id": cust_id,
+        "organization_id": organization_id,
+        "name": (
+            effective_name
+            if effective_name != "Cliente"
+            else (f"Cliente {clean_captured}" if clean_captured else "Cliente")
+        ),
+        "email": clean_email,
+        "customer_type": "person",
+        "customer_segment": None,
+        "notes": None,
+        "status": "active",
+        "origin_branch_id": branch_id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    session.execute(models.customers.insert().values(**customer_data))
+
+    if normalized_phone:
+        session.execute(
+            models.customer_phones.insert().values(
+                id=_id(),
+                customer_id=cust_id,
+                captured_number=clean_captured or normalized_phone,
+                normalized_number=normalized_phone,
+                phone_type="mobile",
+                is_primary=True,
+                whatsapp_enabled=True,
+                is_verified=False,
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    return cust_id
+
+
 def create_customer(
     session: Session,
     name: str,
@@ -18808,6 +18941,7 @@ def list_customers(
         )
         customer["tax_profile"] = dict(tax_profile) if tax_profile else None
         customer["order_summary"] = get_customer_order_summary(session, str(row["id"]))
+        customer["rating_summary"] = get_customer_rating_summary(session, str(row["id"]))
         result.append(customer)
     return result
 
@@ -18962,6 +19096,30 @@ def list_customers_page(
             reference = payload.get("legacy_address") if isinstance(payload, dict) else None
             legacy_by_customer[cid] = str(reference) if reference else None
 
+    ratings_by_customer: dict[str, dict[str, Any]] = {
+        cid: {"average_rating": None, "rating_count": 0, "recent_feedbacks": []}
+        for cid in customer_ids
+    }
+    feedback_rows = list(
+        session.execute(
+            sa.select(models.customer_feedbacks)
+            .where(models.customer_feedbacks.c.customer_id.in_(customer_ids))
+            .order_by(models.customer_feedbacks.c.created_at.desc())
+        ).mappings()
+    )
+    for fb in feedback_rows:
+        cid = str(fb["customer_id"])
+        if cid in ratings_by_customer:
+            ratings_by_customer[cid]["recent_feedbacks"].append(dict(fb))
+
+    for cid, data in ratings_by_customer.items():
+        fbs = data["recent_feedbacks"]
+        if fbs:
+            ratings = [int(f["rating"]) for f in fbs if f.get("rating")]
+            data["average_rating"] = round(sum(ratings) / len(ratings), 1) if ratings else None
+            data["rating_count"] = len(ratings)
+            data["recent_feedbacks"] = fbs[:5]
+
     items = []
     for row in customer_rows:
         customer = dict(row)
@@ -18980,8 +19138,62 @@ def list_customers_page(
                 "recent_orders": [],
             },
         )
+        customer["rating_summary"] = ratings_by_customer.get(
+            customer_id,
+            {
+                "average_rating": None,
+                "rating_count": 0,
+                "recent_feedbacks": [],
+            },
+        )
         items.append(customer)
     return {"items": items, "total": total, "limit": bounded_limit, "offset": bounded_offset}
+
+
+def get_customer_feedbacks(
+    session: Session,
+    customer_id: str,
+    organization_id: str | None = None,
+) -> list[dict[str, Any]]:
+    query = (
+        sa.select(
+            models.customer_feedbacks.c.id,
+            models.customer_feedbacks.c.branch_id,
+            models.customer_feedbacks.c.customer_id,
+            models.customer_feedbacks.c.customer_phone,
+            models.customer_feedbacks.c.order_folio,
+            models.customer_feedbacks.c.rating,
+            models.customer_feedbacks.c.customer_name,
+            models.customer_feedbacks.c.comment,
+            models.customer_feedbacks.c.created_at,
+            models.branches.c.name.label("branch_name"),
+            models.branches.c.code.label("branch_code"),
+        )
+        .select_from(
+            models.customer_feedbacks.outerjoin(
+                models.branches,
+                models.customer_feedbacks.c.branch_id == models.branches.c.id,
+            )
+        )
+        .where(models.customer_feedbacks.c.customer_id == customer_id)
+        .order_by(models.customer_feedbacks.c.created_at.desc())
+    )
+    if organization_id:
+        query = query.where(models.customer_feedbacks.c.organization_id == organization_id)
+    return [dict(r) for r in session.execute(query).mappings()]
+
+
+def get_customer_rating_summary(session: Session, customer_id: str) -> dict[str, Any]:
+    fbs = get_customer_feedbacks(session, customer_id)
+    if not fbs:
+        return {"average_rating": None, "rating_count": 0, "recent_feedbacks": []}
+    ratings = [int(f["rating"]) for f in fbs if f.get("rating")]
+    avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
+    return {
+        "average_rating": avg_rating,
+        "rating_count": len(ratings),
+        "recent_feedbacks": fbs[:5],
+    }
 
 
 def get_customer_order_summary(session: Session, customer_id: str) -> dict[str, Any]:
@@ -25884,6 +26096,17 @@ def accept_public_order_intent(
 
     payment_intent = cust_snap.get("payment_method") or None
 
+    resolved_customer_id = None
+    if cust_snap:
+        resolved_customer_id = find_or_create_order_customer(
+            session=session,
+            organization_id=intent["organization_id"],
+            branch_id=intent["branch_id"],
+            name=cust_snap.get("name"),
+            phone=cust_snap.get("phone"),
+            email=cust_snap.get("email"),
+        )
+
     order = {
         "id": order_id,
         "organization_id": intent["organization_id"],
@@ -25891,7 +26114,7 @@ def accept_public_order_intent(
         "cash_shift_id": None,
         "public_order_intent_id": intent_id,
         "public_order_intent_status": "ACCEPTED",
-        "customer_id": None,
+        "customer_id": resolved_customer_id,
         "customer_snapshot": cust_snap,
         "delivery_address_snapshot": deliv_snap,
         "folio": folio,

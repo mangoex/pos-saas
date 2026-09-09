@@ -43,14 +43,15 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
 
   const handleSelectRating = (selected: number) => {
     setRating(selected);
-    if (selected >= 4 && branch?.id) {
-      // Record positive feedback automatically
+    if (branch?.id) {
+      // Record feedback immediately for all ratings (1-5) linked to customer phone
       submitCustomerFeedback({
         branch_id: branch.id,
         rating: selected,
+        customer_phone: orderResult.customer_info.phone,
         order_folio: orderFolio,
         customer_name: orderResult.customer_info.name,
-        comment: 'Calificación 4-5 estrellas (Redirigido a Google Reviews)',
+        comment: selected >= 4 ? 'Calificación positiva (App Móvil)' : undefined,
       });
     }
   };
@@ -62,6 +63,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
       await submitCustomerFeedback({
         branch_id: branch.id,
         rating: rating,
+        customer_phone: orderResult.customer_info.phone,
         order_folio: orderFolio,
         customer_name: orderResult.customer_info.name,
         comment: privateComment.trim() || undefined,

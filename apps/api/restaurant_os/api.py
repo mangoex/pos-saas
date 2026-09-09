@@ -152,6 +152,7 @@ from restaurant_os.operations import (
     delete_user,
     get_branch_context,
     get_cash_shift_summary,
+    get_customer_feedbacks,
     get_ingredient_variation,
     get_open_cash_shift,
     get_order_detail,
@@ -2670,6 +2671,7 @@ def create_order(
     branch_id = payload.get("branch_id")
     register_id = payload.get("register_id")
     customer_id = payload.get("customer_id")
+    customer_phone = payload.get("customer_phone")
     delivery_address_id = payload.get("delivery_address_id")
     payment_method_intent = payload.get("payment_method_intent")
     driver_id = payload.get("driver_id")
@@ -2709,6 +2711,7 @@ def create_order(
             driver_id,
             adjustment_authorization_id,
             idempotency_key,
+            customer_phone=customer_phone,
         )
 
     return _business_response(operation)
@@ -3328,6 +3331,8 @@ class CustomerFeedbackPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     branch_id: str = Field(min_length=1, max_length=36)
     rating: int = Field(ge=1, le=5)
+    customer_id: str | None = Field(default=None, max_length=36)
+    customer_phone: str | None = Field(default=None, max_length=32)
     order_folio: str | None = Field(default=None, max_length=64)
     customer_name: str | None = Field(default=None, max_length=160)
     comment: str | None = Field(default=None, max_length=1000)
@@ -3354,6 +3359,45 @@ def submit_customer_feedback_endpoint(
             detail={"code": "branch_not_found", "message": "Branch not found or inactive"},
         )
 
+    resolved_customer_id = payload.customer_id
+    clean_phone = payload.customer_phone.strip() if payload.customer_phone else None
+
+    # Try resolving customer_id via order_folio if not given
+    if not resolved_customer_id and payload.order_folio:
+        order_match = session.execute(
+            sa.select(models.orders.c.customer_id).where(
+                models.orders.c.folio == payload.order_folio.strip(),
+                models.orders.c.organization_id == branch["organization_id"],
+            )
+        ).mappings().first()
+        if order_match and order_match["customer_id"]:
+            resolved_customer_id = str(order_match["customer_id"])
+
+    # Try resolving customer_id via phone if still not resolved
+    if not resolved_customer_id and clean_phone:
+        try:
+            norm_phone = normalize_mexican_phone(clean_phone)
+        except Exception:
+            digits = "".join(c for c in clean_phone if c.isdigit())
+            norm_phone = f"+52{digits[-10:]}" if len(digits) >= 10 else None
+        if norm_phone:
+            phone_match = session.execute(
+                sa.select(models.customer_phones.c.customer_id)
+                .select_from(
+                    models.customer_phones.join(
+                        models.customers,
+                        models.customer_phones.c.customer_id == models.customers.c.id,
+                    )
+                )
+                .where(
+                    models.customers.c.organization_id == branch["organization_id"],
+                    models.customer_phones.c.normalized_number == norm_phone,
+                    models.customer_phones.c.status == "active",
+                )
+            ).mappings().first()
+            if phone_match:
+                resolved_customer_id = str(phone_match["customer_id"])
+
     feedback_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     session.execute(
@@ -3361,6 +3405,8 @@ def submit_customer_feedback_endpoint(
             id=feedback_id,
             organization_id=branch["organization_id"],
             branch_id=payload.branch_id,
+            customer_id=resolved_customer_id,
+            customer_phone=clean_phone,
             order_folio=payload.order_folio.strip() if payload.order_folio else None,
             rating=payload.rating,
             customer_name=payload.customer_name.strip() if payload.customer_name else None,
@@ -5350,6 +5396,19 @@ def get_customers(
         )
 
     return _business_response(operation)
+
+
+@router.get("/customers/{customer_id}/feedbacks")
+def get_customer_feedbacks_endpoint(
+    customer_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> list[dict[str, Any]]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    authorize_branch_scope(session, actor_id, "orders.read", None)
+    organization_id = _actor_org_from_request(session, actor_id)
+    return get_customer_feedbacks(session, customer_id, organization_id)
 
 
 @router.post("/customers")

@@ -262,6 +262,7 @@ Estado permitido: `Propuesto`, `Disenado`, `Scaffold`, `Probado`, `Implementado`
 | PRD-FR-734 | Configuración multi-sucursal de enlace directo de Google Reviews en Administrador y exposición pública | BDD-SC-473, BDD-SC-474 | TDD-TS-105, TDD-TC-231 | Implementado |
 | PRD-FR-735 | Smart Rating de satisfacción en confirmación de pedido y retención de feedback privado | BDD-SC-475 | TDD-TS-105, TDD-TC-232 | Implementado |
 | PRD-FR-736 | SDD §45: venta cruzada determinista, complementaria y acotada al catálogo efectivo de la sucursal, sin autoridad sobre checkout | BDD-SC-484, BDD-SC-485, BDD-SC-486, BDD-SC-487, BDD-SC-488 | TDD-TS-107, TDD-TC-238, TDD-TC-239, TDD-TC-240, TDD-TC-241 | Implementado |
+| PRD-FR-737 | Auto-registro y vinculación de clientes por pedido (POS y App Móvil) y trazabilidad de calificaciones promedio y comentarios en directorio de clientes del Administrador | BDD-SC-489, BDD-SC-490, BDD-SC-491, BDD-SC-492 | TDD-TS-108, TDD-TC-242, TDD-TC-243, TDD-TC-244, TDD-TC-245 | Implementado |
 
 Evidencia operativa de `PRD-FR-708` y `PRD-FR-718`: PCO-004 fue publicado mediante PR #24 y la
 compatibilidad histórica gobernada mediante PR #25. El despliegue productivo quedó en

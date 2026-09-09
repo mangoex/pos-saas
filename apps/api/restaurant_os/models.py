@@ -3061,10 +3061,13 @@ customer_feedbacks = sa.Table(
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
     sa.Column("branch_id", sa.String(36), sa.ForeignKey("branches.id"), nullable=False),
+    sa.Column("customer_id", sa.String(36), sa.ForeignKey("customers.id"), nullable=True),
+    sa.Column("customer_phone", sa.String(32), nullable=True),
     sa.Column("order_folio", sa.String(64), nullable=True),
     sa.Column("rating", sa.Integer(), nullable=False),
     sa.Column("customer_name", sa.String(160), nullable=True),
     sa.Column("comment", sa.Text(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Index("ix_customer_feedbacks_branch_created", "branch_id", "created_at"),
+    sa.Index("ix_customer_feedbacks_customer_id", "customer_id"),
 )

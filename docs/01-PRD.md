@@ -413,6 +413,7 @@ La versión previa reutilizó identificadores para significados diferentes. Se c
 - `PRD-FR-734`: Registro histórico de PRD-FR-234 — Configuración multi-sucursal de enlace directo de Google Reviews en Administrador y exposición pública. Su alcance y evidencia se conservan en BDD/TDD históricos; no añade alcance comercial.
 - `PRD-FR-735`: Registro histórico de PRD-FR-235 — Smart Rating de satisfacción en confirmación de pedido y retención de feedback privado. Su alcance y evidencia se conservan en BDD/TDD históricos; no añade alcance comercial.
 - `PRD-FR-736`: Registro histórico de PRD-FR-236 — SDD §45: venta cruzada determinista, complementaria y acotada al catálogo efectivo de la sucursal, sin autoridad sobre checkout. Su alcance y evidencia se conservan en BDD/TDD históricos; no añade alcance comercial.
+- `PRD-FR-737`: Auto-registro y vinculación de clientes por pedido (POS y App Móvil) y trazabilidad de calificaciones promedio y comentarios en directorio de clientes del Administrador.
 - `PRD-NFR-501`: Registro histórico de PRD-NFR-001 — Offline-first gateway. Su alcance y evidencia se conservan en BDD/TDD históricos; no añade alcance comercial.
 - `PRD-NFR-502`: Registro histórico de PRD-NFR-002 — Idempotency and command log; PCO-008P publicado sólo tras CI/PR. Su alcance y evidencia se conservan en BDD/TDD históricos; no añade alcance comercial.
 - `PRD-NFR-503`: Registro histórico de PRD-NFR-003 — Performance envelope. Su alcance y evidencia se conservan en BDD/TDD históricos; no añade alcance comercial.

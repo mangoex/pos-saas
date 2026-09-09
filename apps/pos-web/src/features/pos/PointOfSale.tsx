@@ -1192,9 +1192,11 @@ const PointOfSale = () => {
       return;
     }
 
+    const effectivePhone = (customerPhone || '').trim() || selectedCustomer?.phones?.[0]?.captured_number || undefined;
     const payload = {
       owner_name: ownerName || 'Cliente General',
       customer_id: selectedCustomer?.id || undefined,
+      customer_phone: effectivePhone,
       delivery_address_id: selectedAddressId || undefined,
       payment_method_intent: orderType === 'dine-in' ? undefined : paymentMethod,
       driver_id: orderType === 'delivery' && selectedDriverId ? selectedDriverId : undefined,
@@ -2126,15 +2128,28 @@ const PointOfSale = () => {
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Nombre del cliente</label>
-          <input
-            type="text"
-            value={ownerName}
-            onChange={(e) => setOwnerName(e.target.value)}
-            placeholder="Ej. Juan Pérez"
-            style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--glass-border)', fontSize: '1rem', outline: 'none' }}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Nombre del cliente</label>
+            <input
+              type="text"
+              value={ownerName}
+              onChange={(e) => setOwnerName(e.target.value)}
+              placeholder="Ej. Juan Pérez"
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--glass-border)', fontSize: '1rem', outline: 'none' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Teléfono (10 dígitos)</label>
+            <input
+              type="tel"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              placeholder="Ej. 6671234567"
+              maxLength={10}
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--glass-border)', fontSize: '1rem', outline: 'none' }}
+            />
+          </div>
         </div>
         <section className="pos-payment-methods" aria-labelledby="payment-method-title">
           <div className="pos-payment-heading">
