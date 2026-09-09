@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { fetchApi, ApiError } from '@restaurantos/api-client';
+import { fetchApi, ApiError, formatOrderModifier } from '@restaurantos/api-client';
 import {
   X,
   Phone,
@@ -23,11 +23,7 @@ interface OrderLineItem {
   unit_price_cents: number;
   line_total_cents: number;
   station?: string;
-  selected_modifiers?: Array<{
-    name: string;
-    price_cents?: number;
-    [key: string]: any;
-  }>;
+  selected_modifiers?: unknown[];
   line_notes?: string;
 }
 
@@ -592,8 +588,9 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                         {/* Modifiers / Extras */}
                         {line.selected_modifiers && line.selected_modifiers.length > 0 && (
                           <div style={{ marginTop: 4, paddingLeft: 16 }}>
-                            {line.selected_modifiers.map((mod, idx) => (
-                              <div
+                            {line.selected_modifiers.map((mod, idx) => {
+                              const presentation = formatOrderModifier(mod);
+                              return <div
                                 key={idx}
                                 style={{
                                   fontSize: '0.8125rem',
@@ -604,14 +601,14 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                                 }}
                               >
                                 <span style={{ color: '#059669', fontWeight: 600 }}>+</span>
-                                <span>{mod.name}</span>
-                                {mod.price_cents ? (
+                                <span>{presentation.label}</span>
+                                {presentation.priceLabel ? (
                                   <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                                    (+${(mod.price_cents / 100).toFixed(2)})
+                                    ({presentation.priceLabel})
                                   </span>
                                 ) : null}
-                              </div>
-                            ))}
+                              </div>;
+                            })}
                           </div>
                         )}
 

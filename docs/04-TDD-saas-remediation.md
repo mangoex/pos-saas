@@ -138,6 +138,15 @@ Verificar BDD-SC-732 con fixture de dos organizaciones. Oráculo: resultado func
 
 Verificar BDD-SC-733 con fixture de dos organizaciones. Oráculo: resultado funcional completo del requisito, efectos persistidos en A y ausencia de efectos/lecturas en B; no basta HTTP 200 ni texto de UI. Cubrir rechazo de entradas inválidas y rollback si hay escritura. Evidencia ejecutable y resultado pendientes; no atribuir suites ERP por coincidencia de IDs.
 
+Regresión de presentación de instrucciones del pedido:
+
+- ejecutar el mismo formateador usado por Admin móvil y POS con un snapshot canónico que contenga `option_name="Sin azúcar"`, `kitchen_text="Sin azúcar"` y `price_delta_cents=0`; el resultado visible debe ser `Sin azúcar`;
+- verificar precedencia de `kitchen_text` cuando contiene una instrucción libre distinta del nombre de catálogo y compatibilidad con snapshots históricos `name`/`text`;
+- verificar el precio desde `price_delta_cents` y la compatibilidad histórica con `price_cents`, incluyendo cero sin texto monetario engañoso;
+- ante un objeto legado o incompleto, mostrar una etiqueta explícita y nunca un signo `+` aislado;
+- comprobar que Admin móvil y el detalle de historial POS importan y usan el mismo formateador, mientras `line_notes` continúa mostrándose como nota independiente;
+- conservar una prueba API de que el pedido pendiente y el pedido aceptado exponen `option_name`, `kitchen_text`, `price_delta_cents` y `line_notes` sin mutar el snapshot persistido.
+
 ## TDD-TS-234 PRD-FR-062: Carrito y Checkout para WhatsApp
 
 Verificar BDD-SC-734 con fixture de dos organizaciones. Oráculo: resultado funcional completo del requisito, efectos persistidos en A y ausencia de efectos/lecturas en B; no basta HTTP 200 ni texto de UI. Cubrir rechazo de entradas inválidas y rollback si hay escritura. Evidencia ejecutable y resultado pendientes; no atribuir suites ERP por coincidencia de IDs.

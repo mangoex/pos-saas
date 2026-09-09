@@ -522,6 +522,10 @@ Feature: Personalización de Platillos en Menú Web
     And los datos de entrada y permisos del requisito PRD-FR-061 satisfechos
     When el actor autorizado ejecuta el recorrido definido en PRD-FR-061
     Then Personalización de Platillos en Menú Web: El comensal puede elegir opciones, modificadores y extras con recálculo dinámico de precio.
+    And el detalle del pedido en Admin móvil y en POS presenta el texto operativo de cada selección usando el snapshot canónico de la API
+    And admite snapshots canónicos con option_name, kitchen_text y price_delta_cents, además de las formas históricas name, text y price_cents
+    And una selección válida nunca queda reducida a un signo "+" sin etiqueta
+    And las notas libres de una línea se muestran separadas de los modificadores
     And no se consultan ni modifican datos de B
 ```
 
