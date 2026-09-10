@@ -13,12 +13,15 @@ import {
   AlertCircle,
   Phone,
   Power,
+  Sparkles,
 } from 'lucide-react';
 
 interface MobileBranchSettingsTabProps {
   branchId: string;
   branchName?: string;
   onSwitchToDesktop?: () => void;
+  onOpenOnboarding?: () => void;
+  onboardingPending?: boolean;
 }
 
 interface Branch {
@@ -47,6 +50,8 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   branchId,
   branchName: _branchName,
   onSwitchToDesktop,
+  onOpenOnboarding,
+  onboardingPending,
 }) => {
   const queryClient = useQueryClient();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -177,6 +182,71 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       </header>
 
       <main style={{ padding: '16px 14px', maxWidth: 640, margin: '0 auto' }}>
+        {/* Onboarding Quickstart Card */}
+        {onOpenOnboarding && (
+          <section
+            style={{
+              background: onboardingPending
+                ? 'linear-gradient(135deg, #064e3b 0%, #047857 100%)'
+                : 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+              borderRadius: 16,
+              padding: '16px 18px',
+              color: '#ffffff',
+              marginBottom: 16,
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                <Sparkles size={12} /> {onboardingPending ? 'Configuración Inicial' : 'Asistente'}
+              </div>
+              <h3 style={{ margin: '0 0 2px', fontSize: '0.95rem', fontWeight: 800, color: '#ffffff' }}>
+                Asistente de Menú y QR
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#d1fae5' }}>
+                {onboardingPending
+                  ? 'Configura tu menú con IA y genera tu QR listo para imprimir.'
+                  : 'Vuelve a abrir el asistente para recargar menú o revisar tu QR.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenOnboarding}
+              style={{
+                backgroundColor: '#ffffff',
+                color: '#065f46',
+                border: 'none',
+                borderRadius: 10,
+                padding: '8px 14px',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              }}
+            >
+              Abrir
+            </button>
+          </section>
+        )}
+
         {/* Toast */}
         {toastMessage && (
           <div

@@ -282,8 +282,11 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     setIsCategoryModalOpen(true);
   };
 
-  // File to base64 for camera/gallery
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File to base64 for camera/gallery (product & category)
+  const handlePhotoUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: 'product' | 'category' = 'product'
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -296,7 +299,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         img.src = dataUrl;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const maxDim = 600;
+          const maxDim = target === 'category' ? 800 : 600;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -316,12 +319,18 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
             const compressed = canvas.toDataURL('image/jpeg', 0.8);
-            setProductForm((prev) => ({ ...prev, image_url: compressed }));
+            if (target === 'category') {
+              setCategoryForm((prev) => ({ ...prev, image_url: compressed }));
+            } else {
+              setProductForm((prev) => ({ ...prev, image_url: compressed }));
+            }
           }
         };
       }
     };
     reader.readAsDataURL(file);
+    // Reset input value so the same file can be chosen again if needed
+    e.target.value = '';
   };
 
   return (
@@ -1023,7 +1032,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                   </div>
                 ) : null}
 
-                {/* Camera upload button */}
+                {/* Camera / Gallery upload button */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                   <label
                     style={{
@@ -1043,12 +1052,11 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                     }}
                   >
                     <Camera size={18} />
-                    Tomar foto / Galería
+                    Tomar foto/Cargar
                     <input
                       type="file"
                       accept="image/*"
-                      capture="environment"
-                      onChange={handlePhotoUpload}
+                      onChange={(e) => handlePhotoUpload(e, 'product')}
                       style={{ display: 'none' }}
                     />
                   </label>
@@ -1199,24 +1207,127 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                  Liga de imagen o portada (opcional)
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Fotografía de portada de la categoría
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://ejemplo.com/portada.jpg"
-                  value={categoryForm.image_url}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, image_url: e.target.value })}
+
+                {/* Preview if any */}
+                {categoryForm.image_url ? (
+                  <div style={{ position: 'relative', marginBottom: 10, borderRadius: 10, overflow: 'hidden' }}>
+                    <img
+                      src={categoryForm.image_url}
+                      alt="Vista previa categoría"
+                      style={{ width: '100%', height: 120, objectFit: 'cover' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCategoryForm({ ...categoryForm, image_url: '' })}
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: 6,
+                        padding: '4px 8px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Quitar foto
+                    </button>
+                  </div>
+                ) : null}
+
+                {/* Camera / Gallery upload button */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <label
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      backgroundColor: '#eff6ff',
+                      border: '1px dashed #3b82f6',
+                      borderRadius: 10,
+                      color: '#1d4ed8',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Camera size={18} />
+                    Tomar foto/Cargar
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePhotoUpload(e, 'category')}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+
+                {/* Category Preset Suggestions */}
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Sparkles size={14} color="#f59e0b" /> Portadas apetitosas sugeridas:
+                </div>
+                <div
                   style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    padding: '10px 12px',
-                    fontSize: '0.9rem',
-                    borderRadius: 10,
-                    border: '1px solid #cbd5e1',
-                    outline: 'none',
+                    display: 'flex',
+                    gap: 6,
+                    overflowX: 'auto',
+                    paddingBottom: 6,
+                    scrollbarWidth: 'none',
                   }}
-                />
+                >
+                  {FOOD_PRESET_IMAGES.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setCategoryForm({ ...categoryForm, image_url: preset.url })}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 8,
+                        border: categoryForm.image_url === preset.url ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                        backgroundColor: '#ffffff',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>{preset.emoji}</span>
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Optional URL input fallback */}
+                <div style={{ marginTop: 8 }}>
+                  <input
+                    type="url"
+                    placeholder="O pega enlace https://... (opcional)"
+                    value={categoryForm.image_url.startsWith('data:') ? '' : categoryForm.image_url}
+                    onChange={(e) => setCategoryForm({ ...categoryForm, image_url: e.target.value })}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '8px 10px',
+                      fontSize: '0.8rem',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      outline: 'none',
+                      color: '#475569',
+                    }}
+                  />
+                </div>
               </div>
 
               <button

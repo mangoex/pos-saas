@@ -13,6 +13,9 @@ import {
   ExternalLink,
   Laptop,
   Check,
+  Camera,
+  UploadCloud,
+  FileText,
 } from 'lucide-react';
 import { Card, Button, Input, Select } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
@@ -71,11 +74,15 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   const [registerName, setRegisterName] = useState('CAJA-01');
   const [savingStep1, setSavingStep1] = useState(false);
 
-  // Step 2 Seed State
+  // Step 2 Seed State & Choices: 'ai_type' | 'upload' | 'manual'
   const [seedingMenu, setSeedingMenu] = useState(false);
   const [menuSeeded, setMenuSeeded] = useState(false);
   const [seedSuccessMsg, setSeedSuccessMsg] = useState('');
   const [setupError, setSetupError] = useState('');
+  const [menuChoice, setMenuChoice] = useState<'ai_type' | 'upload' | 'manual'>('ai_type');
+  const [uploadedMenuPhoto, setUploadedMenuPhoto] = useState<string | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string>('');
+  const [selectedSeedType, setSelectedSeedType] = useState<string>('restaurant');
 
   // Load organization profile on mount
   useEffect(() => {
@@ -89,6 +96,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
           setProfile(data);
           setRestaurantName(data.name || '');
           setBusinessType(data.business_type || 'restaurant');
+          setSelectedSeedType(data.business_type || 'restaurant');
           setWhatsappPhone(data.owner_phone || '');
           setMobileTheme(data.mobile_theme || 'light');
           if (data.products_count > 0) {
@@ -117,6 +125,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
         }),
       });
       setProfile(updated);
+      setSelectedSeedType(businessType);
       await fetchApi<OnboardingStatus>('/saas/onboarding', {
         method: 'PUT',
         body: JSON.stringify({
@@ -132,14 +141,15 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
     }
   };
 
-  const handleSeedStarterMenu = async () => {
+  const handleSeedStarterMenu = async (typeOverride?: string) => {
     setSeedingMenu(true);
     setSeedSuccessMsg('');
     setSetupError('');
+    const targetType = typeOverride || selectedSeedType || businessType;
     try {
       await fetchApi<OnboardingStatus>('/saas/onboarding', {
         method: 'PUT',
-        body: JSON.stringify({ step: 'menu', business_type: onboardingTemplate(businessType) }),
+        body: JSON.stringify({ step: 'menu', business_type: onboardingTemplate(targetType) }),
       });
       setMenuSeeded(true);
       setSeedSuccessMsg('¡Menú inicial importado exitosamente con platillos y precios!');
@@ -152,6 +162,21 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
     } finally {
       setSeedingMenu(false);
     }
+  };
+
+  const handleMenuPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setUploadedMenuPhoto(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleContinueToQr = async () => {
@@ -425,19 +450,91 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
             </form>
           )}
 
-          {/* STEP 2: Carga Rápida de Menú */}
+          {/* STEP 2: Carga Rápida de Menú (IA, Subir o Manual) */}
           {step === 2 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 4px' }}>
-                Tu menú es el corazón de tu negocio. Puedes cargar una plantilla de platillos de muestra para empezar de inmediato o continuar con tu propio menú.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 2px' }}>
+                Tu menú es el corazón de tu negocio. Elige cómo deseas dar de alta tu catálogo inicial:
               </p>
+
+              {/* Selector de las 3 opciones */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setMenuChoice('ai_type')}
+                  style={{
+                    padding: '12px 10px',
+                    borderRadius: 14,
+                    border: menuChoice === 'ai_type' ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
+                    backgroundColor: menuChoice === 'ai_type' ? '#eff6ff' : '#ffffff',
+                    color: menuChoice === 'ai_type' ? '#1d4ed8' : '#334155',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    textAlign: 'center',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Sparkles size={22} color={menuChoice === 'ai_type' ? '#2563eb' : '#64748b'} />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800 }}>Con IA por Tipo</span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>1 clic según tu giro</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMenuChoice('upload')}
+                  style={{
+                    padding: '12px 10px',
+                    borderRadius: 14,
+                    border: menuChoice === 'upload' ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
+                    backgroundColor: menuChoice === 'upload' ? '#eff6ff' : '#ffffff',
+                    color: menuChoice === 'upload' ? '#1d4ed8' : '#334155',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    textAlign: 'center',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Camera size={22} color={menuChoice === 'upload' ? '#2563eb' : '#64748b'} />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800 }}>Subir Carta</span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Foto o carta PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMenuChoice('manual')}
+                  style={{
+                    padding: '12px 10px',
+                    borderRadius: 14,
+                    border: menuChoice === 'manual' ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
+                    backgroundColor: menuChoice === 'manual' ? '#eff6ff' : '#ffffff',
+                    color: menuChoice === 'manual' ? '#1d4ed8' : '#334155',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    textAlign: 'center',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Utensils size={22} color={menuChoice === 'manual' ? '#2563eb' : '#64748b'} />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800 }}>Manual</span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Catálogo en blanco</span>
+                </button>
+              </div>
 
               {seedSuccessMsg && (
                 <div style={{
                   padding: 12,
                   backgroundColor: 'rgba(16, 185, 129, 0.12)',
                   color: '#065f46',
-                  borderRadius: 10,
+                  borderRadius: 12,
                   fontSize: '0.875rem',
                   fontWeight: 600,
                   display: 'flex',
@@ -449,50 +546,177 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                 </div>
               )}
 
-              <div style={{
-                background: '#f8fafc',
-                border: '1.5px dashed #cbd5e1',
-                borderRadius: 16,
-                padding: '28px 20px',
-                textAlign: 'center',
-              }}>
+              {/* CONTENIDO OPCIÓN 1: CON IA POR TIPO DE RESTAURANTE */}
+              {menuChoice === 'ai_type' && (
                 <div style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: '50%',
-                  background: 'rgba(37, 99, 235, 0.1)',
-                  color: '#2563eb',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 12px',
+                  background: '#f8fafc',
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: 16,
+                  padding: '20px 16px',
+                  textAlign: 'center',
                 }}>
-                  <Utensils size={26} />
-                </div>
-                <h3 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
-                  {profile && profile.products_count > 0 ? 'Menú Activo' : '¿Quieres cargar un menú de inicio en 1 clic?'}
-                </h3>
-                <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '0.85rem', maxWidth: 460, marginInline: 'auto' }}>
-                  {profile && profile.products_count > 0
-                    ? `Actualmente tienes ${profile.products_count} platillos registrados en tu catálogo listos para la venta.`
-                    : `Podemos crear un catálogo inicial con 8-10 platillos populares para ${businessType.toUpperCase()} con precios y fotos listos para editar.`}
-                </p>
+                  <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    Selecciona el giro de tu restaurante
+                  </h4>
+                  <p style={{ margin: '0 0 14px', color: '#64748b', fontSize: '0.82rem', maxWidth: 440, marginInline: 'auto' }}>
+                    La IA precargará 8-10 platillos populares para este giro con precios mexicanos sugeridos, fotos y categorías listas para editar.
+                  </p>
 
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginBottom: 16 }}>
+                    {[
+                      { id: 'taqueria', label: '🌮 Taquería' },
+                      { id: 'cafeteria', label: '☕ Cafetería' },
+                      { id: 'pizzeria', label: '🍕 Pizzería' },
+                      { id: 'hamburgueseria', label: '🍔 Hamburguesería' },
+                      { id: 'general', label: '🍽️ Restaurante General' },
+                      { id: 'bar', label: '🍺 Bar / Snacks' },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSelectedSeedType(t.id)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 9999,
+                          border: selectedSeedType === t.id ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                          backgroundColor: selectedSeedType === t.id ? '#eff6ff' : '#ffffff',
+                          color: selectedSeedType === t.id ? '#1d4ed8' : '#475569',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={seedingMenu}
+                      onClick={() => handleSeedStarterMenu(selectedSeedType)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                    >
+                      <Sparkles size={16} />
+                      {seedingMenu ? 'Cargando catálogo...' : (profile && profile.products_count > 0 ? 'Recargar Menú de Muestra' : 'Cargar Menú de Muestra')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENIDO OPCIÓN 2: SUBIR CARTA FÍSICA O PDF */}
+              {menuChoice === 'upload' && (
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: 16,
+                  padding: '20px 16px',
+                  textAlign: 'center',
+                }}>
+                  <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    Digitaliza tu carta física o digital
+                  </h4>
+                  <p style={{ margin: '0 0 14px', color: '#64748b', fontSize: '0.82rem', maxWidth: 440, marginInline: 'auto' }}>
+                    Toma una foto a tu menú impreso o selecciona un archivo/foto de tu galería. Nuestro asistente extraerá y organizará tus platillos.
+                  </p>
+
+                  {uploadedMenuPhoto ? (
+                    <div style={{ maxWidth: 280, margin: '0 auto 14px' }}>
+                      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: '1px solid #cbd5e1', marginBottom: 8 }}>
+                        <img
+                          src={uploadedMenuPhoto}
+                          alt="Carta subida"
+                          style={{ width: '100%', height: 140, objectFit: 'cover' }}
+                        />
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: 10 }}>
+                        {uploadFileName || 'Carta cargada'}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        disabled={seedingMenu}
+                        onClick={() => handleSeedStarterMenu(selectedSeedType)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, margin: '0 auto' }}
+                      >
+                        <Sparkles size={16} />
+                        {seedingMenu ? 'Procesando carta...' : 'Digitalizar Carta con IA'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                      <label
+                        style={{
+                          padding: '14px 20px',
+                          backgroundColor: '#eff6ff',
+                          border: '1.5px dashed #3b82f6',
+                          borderRadius: 14,
+                          color: '#1d4ed8',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Camera size={20} />
+                        Tomar foto/Cargar carta
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={handleMenuPhotoUpload}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* CONTENIDO OPCIÓN 3: MANUAL EN BLANCO */}
+              {menuChoice === 'manual' && (
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: 16,
+                  padding: '20px 16px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    background: 'rgba(37, 99, 235, 0.1)',
+                    color: '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 10px',
+                  }}>
+                    <Utensils size={22} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    Crear menú manualmente desde cero
+                  </h4>
+                  <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '0.82rem', maxWidth: 440, marginInline: 'auto' }}>
+                    Si prefieres dar de alta tus platillos uno a uno con fotos tomadas directamente desde tu celular, puedes continuar con tu catálogo vacío y configurar tus productos en la pestaña Menú.
+                  </p>
                   <Button
                     type="button"
-                    variant="primary"
+                    variant="secondary"
                     disabled={seedingMenu}
-                    onClick={handleSeedStarterMenu}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                    onClick={handleContinueToQr}
+                    style={{ fontWeight: 700 }}
                   >
-                    <Sparkles size={16} />
-                    {seedingMenu ? 'Cargando catálogo...' : (profile && profile.products_count > 0 ? 'Recargar Menú de Muestra' : 'Cargar Menú de Muestra')}
+                    Continuar con catálogo en blanco
                   </Button>
                 </div>
-              </div>
+              )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                 <Button
                   type="button"
                   variant="secondary"
