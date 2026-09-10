@@ -475,8 +475,7 @@ def test_wildcard_storefront_binds_only_direct_tenant_and_serves_root_apps(wildc
     sushi_key = sushi_storefront["branches"][0]["public_key"]
     assert client.get(f"/api/v1/public/storefronts/{sushi_slug}", headers=host).status_code == 404
     assert (
-        client.get(f"/api/v1/public/branches/{sushi_key}/catalog", headers=host).status_code
-        == 404
+        client.get(f"/api/v1/public/branches/{sushi_key}/catalog", headers=host).status_code == 404
     )
     assert (
         client.post(
@@ -507,7 +506,12 @@ def test_wildcard_storefront_binds_only_direct_tenant_and_serves_root_apps(wildc
         client.post(
             "/api/v1/public/feedback",
             headers=host,
-            json={"branch_id": sushi_storefront["branches"][0]["id"]},
+            json={
+                "branch_id": sushi_storefront["branches"][0]["id"],
+                "rating": 5,
+                "customer_phone": "6671234567",
+                "order_folio": "PI-CROSS-TENANT",
+            },
         ).status_code
         == 404
     )

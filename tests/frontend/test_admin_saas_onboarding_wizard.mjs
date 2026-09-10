@@ -63,8 +63,13 @@ const qrCard = readFileSync(
 );
 assert.match(
   qrCard,
+  /fetchApi<RestaurantLinksResponse>\('\/saas\/links'\)/,
+  'QRCodeCard must obtain the canonical public URL from /saas/links'
+);
+assert.doesNotMatch(
+  qrCard,
   /\/menu\/\$\{restaurantSlug\}\//,
-  'QRCodeCard must construct URL targeting /menu/:slug/'
+  'QRCodeCard must not reconstruct a tenant URL from untrusted local state'
 );
 assert.match(
   qrCard,

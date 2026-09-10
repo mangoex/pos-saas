@@ -22,6 +22,6 @@
 - Archivo: `apps/api/tests/test_customer_order_auto_registration.py::test_mobile_public_order_feedback_linked_before_and_after_acceptance`
 - Propósito: Asegurar que una calificación emitida inmediatamente tras enviar el pedido en la web móvil (previo a la aceptación operativa) quede vinculada al cliente y se refleje en su promedio de satisfacción.
 
-### TDD-TC-247 Actualización idempotente de feedback y auto-sanación de calificaciones huérfanas
-- Archivo: `apps/api/tests/test_customer_order_auto_registration.py::test_feedback_upsert_and_retroactive_healing`
-- Propósito: Validar que el envío posterior de comentario privado actualiza el feedback sin duplicarlo, y que calificaciones históricas con `customer_id` nulo se auto-sanan por número de teléfono.
+### TDD-TC-247 Actualización idempotente, aislamiento organizacional y auto-sanación de feedback
+- Archivos: `apps/api/tests/test_customer_order_auto_registration.py` y `apps/api/tests/test_customer_feedback_reference_migration.py`
+- Propósito: Validar que el envío posterior de comentario privado con referencia y teléfono persistidos actualiza sin duplicar; `customer_id` público, referencias o teléfonos ajenos se rechazan; las lecturas filtran organización y la unicidad de referencia resiste concurrencia. Las calificaciones históricas con `customer_id` nulo sólo se auto-sanan dentro de su organización.

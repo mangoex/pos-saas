@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
+import { commandKeyStore } from '../cash/cashConceptState';
 import {
   CircleDollarSign,
   Lock,
@@ -61,8 +62,10 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
   const [movementType, setMovementType] = useState<'deposit' | 'withdrawal'>('deposit');
   const [movementAmount, setMovementAmount] = useState('');
   const [movementConcept, setMovementConcept] = useState('Aportación de cambio');
+  const [movementEvidence, setMovementEvidence] = useState('');
   const [movementSubmitting, setMovementSubmitting] = useState(false);
   const [concepts, setConcepts] = useState<CashConcept[]>([]);
+  const commandKeys = useRef(commandKeyStore());
 
   // Close shift modal
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
@@ -117,19 +120,23 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
       return;
     }
     const cents = Math.round(amountNum * 100);
+    const operation = `mobile-open:${branchId}:${registerId}:${cents}`;
     setOpeningSubmitting(true);
     setError(null);
     setNotice(null);
     try {
       const newShift = await fetchApi<CashShift>('/cash/shifts/open', {
         method: 'POST',
-        headers: { 'Idempotency-Key': `open-${Date.now()}` },
+        headers: {
+          'Idempotency-Key': commandKeys.current.get(operation, () => crypto.randomUUID()),
+        },
         body: JSON.stringify({
           branch_id: branchId,
           register_id: registerId,
           opening_cash_cents: cents,
         }),
       });
+      commandKeys.current.clear(operation);
       setShift(newShift);
       setNotice('¡Turno de caja abierto correctamente!');
     } catch (err) {
@@ -148,24 +155,48 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
     }
     const cents = Math.round(amountNum * 100);
     const conceptId = concepts.length > 0 ? concepts[0].concept_id : '';
+    const cleanReference = movementConcept.trim();
+    const cleanEvidence = movementEvidence.trim();
+    if (!conceptId) {
+      setError('No existe un concepto de caja disponible para este movimiento.');
+      return;
+    }
+    if (!cleanReference || !cleanEvidence) {
+      setError('Captura el motivo y una referencia de evidencia real.');
+      return;
+    }
+    const operation = [
+      'mobile-movement',
+      branchId,
+      registerId,
+      movementType,
+      conceptId,
+      String(cents),
+      cleanReference,
+      cleanEvidence,
+    ].join(':');
     setMovementSubmitting(true);
     setError(null);
     try {
       await fetchApi('/cash/movements', {
         method: 'POST',
-        headers: { 'Idempotency-Key': `mov-${Date.now()}` },
+        headers: {
+          'Idempotency-Key': commandKeys.current.get(operation, () => crypto.randomUUID()),
+        },
         body: JSON.stringify({
           branch_id: branchId,
           register_id: registerId,
           movement_type: movementType,
-          concept_id: conceptId || undefined,
+          concept_id: conceptId,
           amount_cents: cents,
-          reference: movementConcept.trim() || 'Movimiento rápido de caja móvil',
-          evidence_refs: ['registro-movil.jpg'],
+          reference: cleanReference,
+          evidence_refs: [movementEvidence.trim()],
         }),
       });
+      commandKeys.current.clear(operation);
       setIsMovementModalOpen(false);
       setMovementAmount('');
+      setMovementEvidence('');
       setNotice(`Movimiento de ${movementType === 'deposit' ? 'entrada' : 'retiro'} registrado con éxito.`);
       void loadShift(true);
     } catch (err) {
@@ -177,14 +208,18 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
 
   const handleCloseShift = async () => {
     if (!shift) return;
+    const operation = `mobile-close:${branchId}:${registerId}:${shift.id}`;
     setCloseSubmitting(true);
     setError(null);
     try {
       await fetchApi(`/cash/shifts/${encodeURIComponent(shift.id)}/close-operationally`, {
         method: 'POST',
-        headers: { 'Idempotency-Key': `close-${Date.now()}` },
+        headers: {
+          'Idempotency-Key': commandKeys.current.get(operation, () => crypto.randomUUID()),
+        },
         body: JSON.stringify({}),
       });
+      commandKeys.current.clear(operation);
       setIsCloseModalOpen(false);
       setShift(null);
       setNotice('Turno de caja cerrado exitosamente.');
@@ -697,6 +732,29 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                   onChange={(e) => setMovementConcept(e.target.value)}
                   required
                   placeholder="Ej. Pago de hielo, cambio, etc."
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '12px 14px',
+                    fontSize: '0.95rem',
+                    borderRadius: 10,
+                    border: '1px solid #cbd5e1',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Referencia de evidencia
+                </label>
+                <input
+                  type="text"
+                  value={movementEvidence}
+                  onChange={(e) => setMovementEvidence(e.target.value)}
+                  required
+                  maxLength={600}
+                  placeholder="Ej. ticket:ABC-123 o foto:corte-2026-09-09"
                   style={{
                     width: '100%',
                     boxSizing: 'border-box',

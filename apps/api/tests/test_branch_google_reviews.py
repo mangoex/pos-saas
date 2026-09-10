@@ -123,6 +123,44 @@ def auth_headers():
     return {"Authorization": f"Bearer {token}"}
 
 
+def _seed_feedback_order(test_db, branch_id, reference, name, phone):
+    now = datetime.now(timezone.utc)
+    public_key = test_db.scalar(
+        models.public_order_keys.select()
+        .with_only_columns(models.public_order_keys.c.public_key)
+        .where(models.public_order_keys.c.branch_id == branch_id)
+    )
+    if not public_key:
+        public_key = f"pk_feedback_{reference.lower()}"
+        test_db.execute(
+            models.public_order_keys.insert().values(
+                public_key=public_key,
+                organization_id=ORGANIZATION_ID,
+                branch_id=branch_id,
+                status="active",
+                created_at=now,
+            )
+        )
+    test_db.execute(
+        models.public_order_intents.insert().values(
+            id=str(uuid.uuid4()),
+            organization_id=ORGANIZATION_ID,
+            branch_id=branch_id,
+            public_key=public_key,
+            public_reference=reference,
+            correlation_id=str(uuid.uuid4()),
+            status="PENDING_REVIEW",
+            customer_snapshot={"name": name, "phone": phone},
+            order_type="takeout",
+            total_cents=0,
+            currency="MXN",
+            version=1,
+            created_at=now,
+        )
+    )
+    test_db.commit()
+
+
 def test_branch_google_review_url_crud(client, test_db, auth_headers):
     """
     TDD-TC-231: Persistencia y CRUD de google_review_url en Sucursales.
@@ -176,6 +214,8 @@ def test_public_customer_feedback_endpoint(client, test_db, auth_headers):
         google_review_url="https://g.page/r/CentroReview/review",
     )
     branch_id = b_res["id"]
+    _seed_feedback_order(test_db, branch_id, "ORD-1001", "Juan Perez", "6671234567")
+    _seed_feedback_order(test_db, branch_id, "ORD-1002", "Maria Lopez", "6677654321")
 
     # 1. Enviar feedback positivo (5 estrellas)
     fb1 = client.post(
@@ -184,7 +224,7 @@ def test_public_customer_feedback_endpoint(client, test_db, auth_headers):
             "branch_id": branch_id,
             "rating": 5,
             "order_folio": "ORD-1001",
-            "customer_name": "Juan Perez",
+            "customer_phone": "6671234567",
             "comment": "¡Excelente servicio y rapidez!",
         },
     )
@@ -198,7 +238,7 @@ def test_public_customer_feedback_endpoint(client, test_db, auth_headers):
             "branch_id": branch_id,
             "rating": 2,
             "order_folio": "ORD-1002",
-            "customer_name": "Maria Lopez",
+            "customer_phone": "6677654321",
             "comment": "La hamburguesa llegó un poco fría.",
         },
     )
@@ -210,6 +250,8 @@ def test_public_customer_feedback_endpoint(client, test_db, auth_headers):
         json={
             "branch_id": branch_id,
             "rating": 6,
+            "customer_phone": "6671234567",
+            "order_folio": "ORD-1001",
         },
     )
     assert fb_invalid.status_code == 422
@@ -220,6 +262,8 @@ def test_public_customer_feedback_endpoint(client, test_db, auth_headers):
         json={
             "branch_id": "non-existent-branch-id",
             "rating": 4,
+            "customer_phone": "6671234567",
+            "order_folio": "ORD-404",
         },
     )
     assert fb_404.status_code == 404

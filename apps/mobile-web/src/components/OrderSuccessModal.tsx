@@ -50,7 +50,6 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
         rating: selected,
         customer_phone: orderResult.customer_info.phone,
         order_folio: orderFolio,
-        customer_name: orderResult.customer_info.name,
         comment: selected >= 4 ? 'Calificación positiva (App Móvil)' : undefined,
       });
     }
@@ -65,7 +64,6 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
         rating: rating,
         customer_phone: orderResult.customer_info.phone,
         order_folio: orderFolio,
-        customer_name: orderResult.customer_info.name,
         comment: privateComment.trim() || undefined,
       });
       setFeedbackSubmitted(true);

@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from restaurant_os import models, operations
 from restaurant_os.auth import create_session_token
+from restaurant_os.config import get_settings
 from restaurant_os.database import get_session
 from restaurant_os.main import create_app
 from restaurant_os.operations import ORGANIZATION_ID
@@ -216,9 +217,6 @@ def test_db():
     session.close()
 
 
-from restaurant_os.config import get_settings
-
-
 def _auth_headers(session):
     token = create_session_token(
         {"sub": USER_ID, "org_id": ORGANIZATION_ID, "role": "owner"},
@@ -232,7 +230,8 @@ def _auth_headers(session):
 
 
 def test_mobile_admin_tabs_and_contracts(test_db):
-    """TDD-TC-246: Check backend endpoints supporting mobile admin tabs."""
+    """TDD-TC-250: Check backend endpoints supporting mobile admin tabs."""
+
     def override_get_session():
         yield test_db
 
@@ -271,7 +270,8 @@ def test_mobile_admin_tabs_and_contracts(test_db):
 
 
 def test_mobile_cash_shift_open_close_and_movements(test_db):
-    """TDD-TC-247: Validate cash shift opening with float, movements and operational close."""
+    """TDD-TC-251: Validate cash shift opening with float, movements and operational close."""
+
     def override_get_session():
         yield test_db
 
@@ -349,7 +349,8 @@ def test_mobile_cash_shift_open_close_and_movements(test_db):
 
 
 def test_mobile_catalog_toggle_availability_and_product_image(test_db):
-    """TDD-TC-248: Validate toggling availability and creating/updating product with image."""
+    """TDD-TC-252: Validate toggling availability and creating/updating product with image."""
+
     def override_get_session():
         yield test_db
 
@@ -398,7 +399,8 @@ def test_mobile_catalog_toggle_availability_and_product_image(test_db):
 
 
 def test_mobile_branch_settings_and_links(test_db):
-    """TDD-TC-249: Check updating branch settings and querying SaaS links."""
+    """TDD-TC-253: Check updating branch settings and querying SaaS links."""
+
     def override_get_session():
         yield test_db
 

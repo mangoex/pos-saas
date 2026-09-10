@@ -37,11 +37,13 @@ Feature: Auto-registro de clientes en pedidos y trazabilidad de satisfacción en
     And el directorio de clientes refleja la calificación de 5 estrellas en su promedio
 
   @BDD-SC-494
-  Scenario: Actualización idempotente de comentario privado en feedback
-    Given un comensal que selecciona 2 estrellas para la referencia "REF-7702"
-    When posteriormente envía un comentario privado "El pedido tardó demasiado"
+  Scenario: Actualización idempotente y aislada de comentario privado en feedback
+    Given un comensal que selecciona 2 estrellas para una referencia persistida y su teléfono coincidente
+    When posteriormente envía el comentario privado "El pedido tardó demasiado" con la misma referencia y teléfono
     Then el sistema actualiza la retroalimentación existente sin generar registros duplicados
     And el cliente conserva una sola calificación de 2 estrellas con su comentario asociado
+    But una solicitud con `customer_id`, referencia ajena, sucursal distinta o teléfono no coincidente se rechaza sin crear ni modificar feedback
+    And los resúmenes administrativos excluyen feedback de otra organización aunque exista una asociación histórica inválida
 
   @BDD-SC-492
   Scenario: Consulta de promedio de satisfacción en directorio administrativo

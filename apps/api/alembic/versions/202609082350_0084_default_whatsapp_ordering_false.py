@@ -16,18 +16,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "branches",
-        "whatsapp_ordering_enabled",
-        server_default=sa.false(),
-    )
+    # Batch mode preserves the PostgreSQL ALTER while rebuilding the table on SQLite,
+    # whose dialect does not support ALTER COLUMN SET DEFAULT.
+    with op.batch_alter_table("branches") as batch:
+        batch.alter_column(
+            "whatsapp_ordering_enabled",
+            existing_type=sa.Boolean(),
+            existing_nullable=False,
+            server_default=sa.false(),
+        )
     # Set existing branches to false by default so WhatsApp ordering is strictly opt-in
     op.execute("UPDATE branches SET whatsapp_ordering_enabled = false WHERE whatsapp_ordering_enabled IS TRUE")
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "branches",
-        "whatsapp_ordering_enabled",
-        server_default=sa.true(),
-    )
+    with op.batch_alter_table("branches") as batch:
+        batch.alter_column(
+            "whatsapp_ordering_enabled",
+            existing_type=sa.Boolean(),
+            existing_nullable=False,
+            server_default=sa.true(),
+        )

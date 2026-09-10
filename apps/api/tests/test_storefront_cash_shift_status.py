@@ -5,14 +5,13 @@ whether an active cash shift exists for a branch (has_active_shift).
 
 import uuid
 from datetime import datetime, timezone
+
 import sqlalchemy as sa
+from restaurant_os import models
+from restaurant_os.operations import get_public_catalog
+from restaurant_os.public_storefront import resolve_storefront
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
-
-from restaurant_os import models
-from restaurant_os.public_storefront import resolve_storefront
-from restaurant_os.operations import get_public_catalog
 
 
 def test_storefront_and_catalog_report_active_cash_shift_status():
