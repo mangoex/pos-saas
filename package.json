@@ -24,6 +24,7 @@
     "test:pco007-recipe": "node tests/frontend/test_pco007_recipe.mjs",
     "test:mobile-web-order-flow": "node tests/frontend/test_mobile_web_order_flow.mjs",
     "test:mobile-order-modifier-labels": "node tests/frontend/test_mobile_order_modifier_labels.mjs",
+    "test:mobile-admin-cash-safety": "node tests/frontend/test_mobile_admin_cash_safety.mjs",
     "test:pos-order-reopen": "node tests/frontend/test_pos_order_reopen.mjs",
     "test:pos-python-authority": "node tests/frontend/test_pos_python_authority.mjs",
     "test:kds-authority": "node tests/frontend/test_kds_authority.mjs",
@@ -35,7 +36,7 @@
     "test:pco008-offline-cash": "node tests/frontend/test_pco008_offline_cash.mjs",
     "test:admin-lite-consolidation": "node tests/frontend/test_admin_lite_consolidation.mjs",
     "test:pos-lite-consolidation": "node tests/frontend/test_pos_lite_consolidation.mjs",
-    "test:frontend-semantic": "pnpm test:ingredient-variation-money && pnpm test:pos-global-comments-extras && pnpm test:pos-order-edit-restore && pnpm test:pos-category-options && pnpm test:pos-product-card-presentation && pnpm test:admin-category-options && pnpm test:admin-modifier-option-creation && pnpm test:admin-executive-copilot-ux && pnpm test:admin-cash-concepts && pnpm test:admin-ai-assistant && pnpm test:pos-cash-movement-form && pnpm test:pos-operational-shift-sales-monitor && pnpm test:pos-user-cash-cuts && pnpm test:pco007-reports && pnpm test:pco007-recipe && pnpm test:mobile-web-order-flow && pnpm test:mobile-order-modifier-labels && pnpm test:pos-order-reopen && pnpm test:pos-purchases-reprint && pnpm test:reconciliation-reports && pnpm test:pos-python-authority && pnpm test:kds-authority && pnpm test:pos-session-handoff && pnpm test:pos-checkout-idempotency && pnpm test:pos-assisted-order-capture && pnpm test:pco008-offline-cash && pnpm test:admin-lite-consolidation && pnpm test:pos-lite-consolidation && pnpm test:saas-recovery",
+    "test:frontend-semantic": "pnpm test:ingredient-variation-money && pnpm test:pos-global-comments-extras && pnpm test:pos-order-edit-restore && pnpm test:pos-category-options && pnpm test:pos-product-card-presentation && pnpm test:admin-category-options && pnpm test:admin-modifier-option-creation && pnpm test:admin-executive-copilot-ux && pnpm test:admin-cash-concepts && pnpm test:admin-ai-assistant && pnpm test:pos-cash-movement-form && pnpm test:pos-operational-shift-sales-monitor && pnpm test:pos-user-cash-cuts && pnpm test:pco007-reports && pnpm test:pco007-recipe && pnpm test:mobile-web-order-flow && pnpm test:mobile-order-modifier-labels && pnpm test:mobile-admin-cash-safety && pnpm test:pos-order-reopen && pnpm test:pos-purchases-reprint && pnpm test:reconciliation-reports && pnpm test:pos-python-authority && pnpm test:kds-authority && pnpm test:pos-session-handoff && pnpm test:pos-checkout-idempotency && pnpm test:pos-assisted-order-capture && pnpm test:pco008-offline-cash && pnpm test:admin-lite-consolidation && pnpm test:pos-lite-consolidation && pnpm test:saas-recovery",
     "test:saas-recovery": "node tests/frontend/test_saas_frontend_recovery.mjs && node tests/frontend/test_admin_saas_onboarding_wizard.mjs && node tests/frontend/test_restaurant_links.mjs && node tests/frontend/test_category_presentation.mjs"
   },
   "engines": {

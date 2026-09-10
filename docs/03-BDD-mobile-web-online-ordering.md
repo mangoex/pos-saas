@@ -45,7 +45,7 @@ Scenario: Modalidades públicas en barra, para llevar y envío
   Then la intención conserva el tipo de servicio validado por Python
   And la captura no crea pedido operativo, asignación de mesa ni turno de caja
 
-@BDD-SC-495
+@BDD-SC-501
 Scenario: Modo catálogo y bloqueo de pedidos cuando la caja está cerrada
   Given una sucursal activa sin turnos de caja en estado OPEN o CLOSING
   When un comensal abre la aplicación web móvil del menú

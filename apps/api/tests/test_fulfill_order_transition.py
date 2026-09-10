@@ -4,12 +4,11 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from restaurant_os import models
+from restaurant_os.operations import BRANCH_ID, ORGANIZATION_ID, fulfill_order
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from restaurant_os import models
-from restaurant_os.operations import fulfill_order, ORGANIZATION_ID, BRANCH_ID
 
 
 @pytest.fixture
@@ -154,11 +153,19 @@ def test_fulfill_order_deliver_from_ready(test_session):
     assert result["status"] == "DELIVERED"
 
     # Verify order status in DB
-    order_row = s.execute(select(models.orders).where(models.orders.c.id == order_id)).mappings().one()
+    order_row = (
+        s.execute(select(models.orders).where(models.orders.c.id == order_id))
+        .mappings()
+        .one()
+    )
     assert order_row["status"] == "DELIVERED"
 
     # Verify production task was completed and completed_at is set
-    task_row = s.execute(select(models.production_tasks).where(models.production_tasks.c.id == task_id)).mappings().one()
+    task_row = (
+        s.execute(select(models.production_tasks).where(models.production_tasks.c.id == task_id))
+        .mappings()
+        .one()
+    )
     assert task_row["status"] == "COMPLETED"
     assert task_row["completed_at"] is not None
 
@@ -218,7 +225,11 @@ def test_fulfill_order_close(test_session):
     result = fulfill_order(s, order_id, "close", f"key-{order_id}-close", user_id)
     assert result["status"] == "CLOSED"
 
-    order_row = s.execute(select(models.orders).where(models.orders.c.id == order_id)).mappings().one()
+    order_row = (
+        s.execute(select(models.orders).where(models.orders.c.id == order_id))
+        .mappings()
+        .one()
+    )
     assert order_row["status"] == "CLOSED"
 
 
@@ -247,5 +258,9 @@ def test_fulfill_order_deliver_from_draft(test_session):
     result = fulfill_order(s, order_id, "deliver", f"key-{order_id}-deliver", user_id)
     assert result["status"] == "DELIVERED"
 
-    order_row = s.execute(select(models.orders).where(models.orders.c.id == order_id)).mappings().one()
+    order_row = (
+        s.execute(select(models.orders).where(models.orders.c.id == order_id))
+        .mappings()
+        .one()
+    )
     assert order_row["status"] == "DELIVERED"

@@ -120,7 +120,7 @@ def test_domain_claim_race_and_migration_history():
             )
             assert (
                 session.scalar(sa.text("select version_num from alembic_version"))
-                == "0082_category_presentation"
+                == "0086_secure_customer_feedback_reference"
             )
     finally:
         engine.dispose()

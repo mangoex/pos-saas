@@ -1,1 +1,52 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["items","next_cursor"],"properties":{"items":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","folio","branch_id","status","service_type","total_cents","currency","created_at","payment_status","production_summary","reopen_eligible","active_reopen_request_status"],"properties":{"id":{"type":"string"},"folio":{"type":"string"},"branch_id":{"type":"string"},"cash_shift_id":{"type":"string"},"register_code":{"type":["string","null"]},"status":{"type":"string"},"service_type":{"enum":["dine-in","takeout","delivery"]},"total_cents":{"type":"integer"},"currency":{"type":"string"},"created_at":{"type":"string","format":"date-time"},"customer_label":{"type":["string","null"]},"payment_status":{"enum":["PENDING","CONFIRMED"]},"production_summary":{"type":"object"},"reopen_eligible":{"type":"boolean"},"active_reopen_request_status":{"type":["string","null"]}}}},"next_cursor":{"type":["string","null"]}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "next_cursor"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "folio",
+          "branch_id",
+          "status",
+          "service_type",
+          "total_cents",
+          "currency",
+          "created_at",
+          "payment_status",
+          "production_summary",
+          "reopen_eligible",
+          "active_reopen_request_status"
+        ],
+        "properties": {
+          "id": {"type": "string"},
+          "folio": {"type": "string"},
+          "branch_id": {"type": "string"},
+          "cash_shift_id": {"type": ["string", "null"]},
+          "register_code": {"type": ["string", "null"]},
+          "status": {"type": "string"},
+          "service_type": {"enum": ["dine-in", "takeout", "delivery"]},
+          "total_cents": {"type": "integer"},
+          "currency": {"type": "string"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "customer_label": {"type": ["string", "null"]},
+          "order_notes": {"type": "string"},
+          "table_number": {"type": "string"},
+          "cash_amount": {"type": "string"},
+          "payment_status": {"enum": ["PENDING", "CONFIRMED", "UNPAID"]},
+          "production_summary": {"type": "object"},
+          "reopen_eligible": {"type": "boolean"},
+          "active_reopen_request_status": {"type": ["string", "null"]},
+          "is_public_intent": {"type": "boolean"},
+          "public_reference": {"type": "string"}
+        }
+      }
+    },
+    "next_cursor": {"type": ["string", "null"]}
+  }
+}

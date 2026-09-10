@@ -3070,4 +3070,11 @@ customer_feedbacks = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Index("ix_customer_feedbacks_branch_created", "branch_id", "created_at"),
     sa.Index("ix_customer_feedbacks_customer_id", "customer_id"),
+    sa.Index(
+        "uq_customer_feedbacks_order_reference",
+        "organization_id",
+        "branch_id",
+        "order_folio",
+        unique=True,
+    ),
 )

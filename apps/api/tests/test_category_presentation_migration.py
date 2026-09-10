@@ -95,9 +95,14 @@ def test_presentation_upgrade_and_protected_rollback(tmp_path, dialect):
         assert blocked.returncode != 0
         assert "preserve menu presentation" in blocked.stderr
         with engine.connect() as conn:
+            expected_revision = (
+                "0086_secure_customer_feedback_reference"
+                if dialect == "postgresql"
+                else "0082_category_presentation"
+            )
             assert (
                 conn.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0082_category_presentation"
+                == expected_revision
             )
             assert (
                 conn.scalar(

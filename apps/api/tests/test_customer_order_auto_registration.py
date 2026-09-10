@@ -4,13 +4,16 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from restaurant_os import models, operations
 from restaurant_os.auth import create_session_token
+from restaurant_os.config import get_settings
 from restaurant_os.database import get_session
 from restaurant_os.main import create_app
 from restaurant_os.operations import ORGANIZATION_ID
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -119,9 +122,6 @@ def client(test_db):
     app.dependency_overrides.clear()
 
 
-from restaurant_os.config import get_settings
-
-
 class _AvailableRateLimiter:
     def allow(self, *_args: object, **_kwargs: object) -> bool:
         return True
@@ -195,11 +195,15 @@ def _create_test_product(test_db):
 
 
 def _enable_public_orders(client, test_db, branch_id):
-    row = test_db.execute(
-        models.public_order_keys.select().where(
-            models.public_order_keys.c.branch_id == branch_id
+    row = (
+        test_db.execute(
+            models.public_order_keys.select().where(
+                models.public_order_keys.c.branch_id == branch_id
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row:
         public_key = row["public_key"]
     else:
@@ -216,6 +220,46 @@ def _enable_public_orders(client, test_db, branch_id):
     client.app.state.public_order_intents_enabled = True
     client.app.state.public_order_rate_limiter = _AvailableRateLimiter()
     return public_key
+
+
+def _create_and_accept_public_intent(
+    client,
+    test_db,
+    auth_headers,
+    *,
+    public_key,
+    product_id,
+    phone,
+    name,
+):
+    intent_response = client.post(
+        f"/api/v1/public/branches/{public_key}/order-intents",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        json={
+            "customer_name": name,
+            "customer_phone": phone,
+            "order_type": "takeout",
+            "lines": [{"product_id": product_id, "quantity": 1}],
+        },
+    )
+    assert intent_response.status_code == 201, intent_response.text
+    public_reference = intent_response.json()["public_reference"]
+    intent_id = test_db.scalar(
+        sa.select(models.public_order_intents.c.id).where(
+            models.public_order_intents.c.public_reference == public_reference
+        )
+    )
+    accept_response = client.post(
+        f"/api/v1/order-intents/{intent_id}/accept",
+        headers={**auth_headers, "Idempotency-Key": str(uuid.uuid4())},
+        json={"expected_version": 1},
+    )
+    assert accept_response.status_code in (200, 201), accept_response.text
+    accepted_order = accept_response.json()
+    customer_id = test_db.scalar(
+        sa.select(models.orders.c.customer_id).where(models.orders.c.id == accepted_order["id"])
+    )
+    return public_reference, {**accepted_order, "customer_id": customer_id}
 
 
 def test_mobile_public_order_intent_auto_registers_customer(client, test_db, auth_headers):
@@ -243,11 +287,15 @@ def test_mobile_public_order_intent_auto_registers_customer(client, test_db, aut
     intent_data = intent_res.json()
     public_ref = intent_data["public_reference"]
 
-    intent_row = test_db.execute(
-        models.public_order_intents.select().where(
-            models.public_order_intents.c.public_reference == public_ref
+    intent_row = (
+        test_db.execute(
+            models.public_order_intents.select().where(
+                models.public_order_intents.c.public_reference == public_ref
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     assert intent_row is not None
     intent_id = intent_row["id"]
 
@@ -262,26 +310,36 @@ def test_mobile_public_order_intent_auto_registers_customer(client, test_db, aut
     order_id = accepted_data["id"]
 
     # 3. Validar que la orden tenga customer_id asignado
-    order_row = test_db.execute(
-        models.orders.select().where(models.orders.c.id == order_id)
-    ).mappings().first()
+    order_row = (
+        test_db.execute(models.orders.select().where(models.orders.c.id == order_id))
+        .mappings()
+        .first()
+    )
     assert order_row is not None
     assert order_row["customer_id"] is not None
 
     # 4. Validar que el cliente exista en `customers` con los datos correctos
-    customer_row = test_db.execute(
-        models.customers.select().where(models.customers.c.id == order_row["customer_id"])
-    ).mappings().first()
+    customer_row = (
+        test_db.execute(
+            models.customers.select().where(models.customers.c.id == order_row["customer_id"])
+        )
+        .mappings()
+        .first()
+    )
     assert customer_row is not None
     assert customer_row["name"] == "Carlos Beltrán"
     assert customer_row["origin_branch_id"] == branch_id
 
     # 5. Validar que el teléfono esté registrado en `customer_phones` normalizado
-    phone_row = test_db.execute(
-        models.customer_phones.select().where(
-            models.customer_phones.c.customer_id == customer_row["id"]
+    phone_row = (
+        test_db.execute(
+            models.customer_phones.select().where(
+                models.customer_phones.c.customer_id == customer_row["id"]
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     assert phone_row is not None
     assert phone_row["normalized_number"] == "+526671234567"
     assert phone_row["is_primary"] is True
@@ -313,9 +371,11 @@ def test_pos_local_order_auto_registers_or_links_customer(client, test_db, auth_
     cust1_id = order1["customer_id"]
 
     # Verificar datos del cliente
-    c1 = test_db.execute(
-        models.customers.select().where(models.customers.c.id == cust1_id)
-    ).mappings().first()
+    c1 = (
+        test_db.execute(models.customers.select().where(models.customers.c.id == cust1_id))
+        .mappings()
+        .first()
+    )
     assert c1["name"] == "Mariana Rios"
     assert c1["origin_branch_id"] == branch_id
 
@@ -333,11 +393,13 @@ def test_pos_local_order_auto_registers_or_links_customer(client, test_db, auth_
     assert order2["customer_id"] == cust1_id
 
     # Conteo de clientes con ese teléfono debe ser exactamente 1
-    phone_rows = list(test_db.execute(
-        models.customer_phones.select().where(
-            models.customer_phones.c.normalized_number == "+526699887766"
-        )
-    ).mappings())
+    phone_rows = list(
+        test_db.execute(
+            models.customer_phones.select().where(
+                models.customer_phones.c.normalized_number == "+526699887766"
+            )
+        ).mappings()
+    )
     assert len(phone_rows) == 1
 
 
@@ -347,70 +409,53 @@ def test_customer_feedback_persistence_and_average_rating(client, test_db, auth_
     vinculado a customer_id y cálculo del promedio de satisfacción.
     """
     branch_id = _create_test_branch(client, auth_headers, "SUC-03", "Sucursal Tres")
+    product_id = _create_test_product(test_db)
+    public_key = _enable_public_orders(client, test_db, branch_id)
+    first_reference, first_order = _create_and_accept_public_intent(
+        client,
+        test_db,
+        auth_headers,
+        public_key=public_key,
+        product_id=product_id,
+        phone="6681122334",
+        name="Roberto Gomez",
+    )
+    second_reference, second_order = _create_and_accept_public_intent(
+        client,
+        test_db,
+        auth_headers,
+        public_key=public_key,
+        product_id=product_id,
+        phone="6681122334",
+        name="Roberto Gomez",
+    )
+    cust_id = first_order["customer_id"]
+    assert second_order["customer_id"] == cust_id
 
-    # Crear cliente manualmente
-    cust_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
-    test_db.execute(
-        models.customers.insert().values(
-            id=cust_id,
-            organization_id=ORGANIZATION_ID,
-            name="Roberto Gomez",
-            status="active",
-            origin_branch_id=branch_id,
-            created_at=now,
-            updated_at=now,
+    for reference, rating, comment in [
+        (first_reference, 5, "Todo excelente"),
+        (second_reference, 3, "La salsa estaba muy picante"),
+    ]:
+        feedback_response = client.post(
+            "/api/v1/public/feedback",
+            json={
+                "branch_id": branch_id,
+                "rating": rating,
+                "customer_phone": "6681122334",
+                "order_folio": reference,
+                "comment": comment,
+            },
         )
-    )
-    test_db.execute(
-        models.customer_phones.insert().values(
-            id=str(uuid.uuid4()),
-            customer_id=cust_id,
-            captured_number="6681122334",
-            normalized_number="+526681122334",
-            phone_type="mobile",
-            is_primary=True,
-            whatsapp_enabled=True,
-            is_verified=False,
-            status="active",
-            created_at=now,
-            updated_at=now,
-        )
-    )
-    test_db.commit()
-
-    # 1. Enviar feedback 5 estrellas con customer_id
-    fb1 = client.post(
-        "/api/v1/public/feedback",
-        json={
-            "branch_id": branch_id,
-            "rating": 5,
-            "customer_id": cust_id,
-            "customer_name": "Roberto Gomez",
-            "comment": "Todo excelente",
-        },
-    )
-    assert fb1.status_code == 201
-
-    # 2. Enviar feedback 3 estrellas con teléfono (debe resolver al cliente)
-    fb2 = client.post(
-        "/api/v1/public/feedback",
-        json={
-            "branch_id": branch_id,
-            "rating": 3,
-            "customer_phone": "6681122334",
-            "customer_name": "Roberto Gomez",
-            "comment": "La salsa estaba muy picante",
-        },
-    )
-    assert fb2.status_code == 201
+        assert feedback_response.status_code == 201
 
     # Validar que ambos feedbacks quedaron vinculados a cust_id
-    feedbacks = list(test_db.execute(
-        models.customer_feedbacks.select().where(
-            models.customer_feedbacks.c.customer_id == cust_id
-        )
-    ).mappings())
+    feedbacks = list(
+        test_db.execute(
+            models.customer_feedbacks.select().where(
+                models.customer_feedbacks.c.customer_id == cust_id
+            )
+        ).mappings()
+    )
     assert len(feedbacks) == 2
 
 
@@ -484,12 +529,14 @@ def test_list_customers_includes_rating_summary_and_feedbacks(client, test_db, a
     assert len(feedbacks) == 2
 
 
-def test_mobile_public_order_feedback_linked_before_and_after_acceptance(client, test_db, auth_headers):
+def test_mobile_public_order_feedback_linked_before_and_after_acceptance(
+    client, test_db, auth_headers
+):
     """
     TDD-TC-246: Vinculación de feedback emitido antes de la aceptación del pedido móvil.
-    El comensal califica en el modal de éxito inmediatamente al enviar el pedido (status PENDING_REVIEW,
-    con folio de referencia pública REF-...).
-    Al aceptarse el pedido, el feedback debe quedar vinculado al cliente creado y reflejarse en /customers.
+    El comensal califica en el modal de éxito inmediatamente al enviar el pedido
+    (status PENDING_REVIEW, con folio de referencia pública REF-...). Al aceptarse,
+    el feedback queda vinculado al cliente creado y se refleja en /customers.
     """
     branch_id = _create_test_branch(client, auth_headers, "SUC-FB1", "Sucursal Feedback 1")
     prod_id = _create_test_product(test_db)
@@ -510,15 +557,19 @@ def test_mobile_public_order_feedback_linked_before_and_after_acceptance(client,
     intent_data = intent_res.json()
     public_ref = intent_data["public_reference"]
 
-    intent_row = test_db.execute(
-        models.public_order_intents.select().where(
-            models.public_order_intents.c.public_reference == public_ref
+    intent_row = (
+        test_db.execute(
+            models.public_order_intents.select().where(
+                models.public_order_intents.c.public_reference == public_ref
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     assert intent_row is not None
     intent_id = intent_row["id"]
 
-    # 2. Comensal califica inmediatamente con 5 estrellas en el modal (ANTES de que el restaurante acepte)
+    # 2. El comensal califica antes de que el restaurante acepte el pedido.
     fb_res = client.post(
         "/api/v1/public/feedback",
         json={
@@ -526,7 +577,6 @@ def test_mobile_public_order_feedback_linked_before_and_after_acceptance(client,
             "rating": 5,
             "customer_phone": "6689998877",
             "order_folio": public_ref,
-            "customer_name": "Ana Silva",
             "comment": "Calificación positiva (App Móvil)",
         },
     )
@@ -541,9 +591,11 @@ def test_mobile_public_order_feedback_linked_before_and_after_acceptance(client,
     assert accept_res.status_code in (200, 201)
     accepted_order_id = accept_res.json()["id"]
 
-    order_row = test_db.execute(
-        models.orders.select().where(models.orders.c.id == accepted_order_id)
-    ).mappings().first()
+    order_row = (
+        test_db.execute(models.orders.select().where(models.orders.c.id == accepted_order_id))
+        .mappings()
+        .first()
+    )
     assert order_row is not None
     cust_id = order_row["customer_id"]
     assert cust_id is not None
@@ -559,7 +611,10 @@ def test_mobile_public_order_feedback_linked_before_and_after_acceptance(client,
     assert ana["rating_summary"]["rating_count"] == 1
     assert len(ana["rating_summary"]["recent_feedbacks"]) == 1
     assert ana["rating_summary"]["recent_feedbacks"][0]["rating"] == 5
-    assert ana["rating_summary"]["recent_feedbacks"][0]["comment"] == "Calificación positiva (App Móvil)"
+    assert (
+        ana["rating_summary"]["recent_feedbacks"][0]["comment"]
+        == "Calificación positiva (App Móvil)"
+    )
 
     # 5. Validar que el endpoint individual de feedbacks del cliente retorna la reseña
     ind_res = client.get(f"/api/v1/customers/{cust_id}/feedbacks", headers=auth_headers)
@@ -573,15 +628,28 @@ def test_mobile_public_order_feedback_linked_before_and_after_acceptance(client,
 def test_feedback_upsert_and_retroactive_healing(client, test_db, auth_headers):
     """
     TDD-TC-247: Validación de upsert en comentarios privados y auto-sanación de feedbacks huérfanos.
-    1. Si un comensal envía una calificación inicial de 2 estrellas y luego envía un comentario privado
-       con el mismo order_folio, no se debe duplicar el registro sino actualizarlo.
-    2. Si existía un feedback previo con customer_id NULL y teléfono normalizado, al consultar
-       los clientes o crear el cliente, el feedback se auto-sana y vincula.
+    1. Si un comensal envía una calificación inicial y después un comentario privado
+       con el mismo order_folio, se actualiza el registro sin duplicarlo.
+    2. Si existía un feedback previo con customer_id NULL y teléfono normalizado, al crear
+       el cliente, el feedback se auto-sana y vincula dentro de la organización.
     """
     branch_id = _create_test_branch(client, auth_headers, "SUC-FB2", "Sucursal Feedback 2")
 
-    # A) Upsert al enviar comentario privado posterior
-    ref_order = "REF-TEST-UPSERT"
+    # A) Upsert al enviar comentario privado posterior para una referencia persistida
+    product_id = _create_test_product(test_db)
+    public_key = _enable_public_orders(client, test_db, branch_id)
+    intent_response = client.post(
+        f"/api/v1/public/branches/{public_key}/order-intents",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        json={
+            "customer_name": "Mario Gomez",
+            "customer_phone": "6681122334",
+            "order_type": "takeout",
+            "lines": [{"product_id": product_id, "quantity": 1}],
+        },
+    )
+    assert intent_response.status_code == 201, intent_response.text
+    ref_order = intent_response.json()["public_reference"]
     fb1 = client.post(
         "/api/v1/public/feedback",
         json={
@@ -589,7 +657,6 @@ def test_feedback_upsert_and_retroactive_healing(client, test_db, auth_headers):
             "rating": 2,
             "customer_phone": "6681122334",
             "order_folio": ref_order,
-            "customer_name": "Mario Gomez",
             "comment": None,
         },
     )
@@ -602,17 +669,18 @@ def test_feedback_upsert_and_retroactive_healing(client, test_db, auth_headers):
             "rating": 2,
             "customer_phone": "6681122334",
             "order_folio": ref_order,
-            "customer_name": "Mario Gomez",
             "comment": "El pedido tardó demasiado",
         },
     )
     assert fb2.status_code == 201
 
-    rows = list(test_db.execute(
-        models.customer_feedbacks.select().where(
-            models.customer_feedbacks.c.order_folio == ref_order
-        )
-    ).mappings())
+    rows = list(
+        test_db.execute(
+            models.customer_feedbacks.select().where(
+                models.customer_feedbacks.c.order_folio == ref_order
+            )
+        ).mappings()
+    )
     # Debe existir exactamente 1 registro, no 2
     assert len(rows) == 1
     assert rows[0]["rating"] == 2
@@ -651,7 +719,7 @@ def test_feedback_upsert_and_retroactive_healing(client, test_db, auth_headers):
     assert create_cust.status_code in (200, 201)
     beatriz_id = create_cust.json()["id"]
 
-    # Al consultar el directorio, el feedback huérfano debe haberse auto-sanado y vinculado a Beatriz
+    # Consultar el directorio conserva el vínculo auto-sanado con Beatriz.
     custs_res = client.get("/api/v1/customers", headers=auth_headers)
     assert custs_res.status_code == 200
     b_data = custs_res.json()
@@ -661,3 +729,140 @@ def test_feedback_upsert_and_retroactive_healing(client, test_db, auth_headers):
     assert beatriz["rating_summary"]["average_rating"] == 4.0
     assert beatriz["rating_summary"]["rating_count"] == 1
     assert beatriz["rating_summary"]["recent_feedbacks"][0]["comment"] == "Muy buen sabor"
+
+
+def test_public_feedback_requires_matching_persisted_order_identity(client, test_db, auth_headers):
+    """TDD-TC-247: la frontera pública no acepta identidad elegida ni referencias ajenas."""
+    branch_id = _create_test_branch(client, auth_headers, "SUC-FB-SEC", "Sucursal Feedback")
+    other_branch_id = _create_test_branch(
+        client, auth_headers, "SUC-FB-OTHER", "Sucursal Feedback Otra"
+    )
+    product_id = _create_test_product(test_db)
+    public_key = _enable_public_orders(client, test_db, branch_id)
+    intent_response = client.post(
+        f"/api/v1/public/branches/{public_key}/order-intents",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        json={
+            "customer_name": "Cliente Seguro",
+            "customer_phone": "6671234567",
+            "order_type": "takeout",
+            "lines": [{"product_id": product_id, "quantity": 1}],
+        },
+    )
+    assert intent_response.status_code == 201, intent_response.text
+    public_reference = intent_response.json()["public_reference"]
+
+    chosen_identity = client.post(
+        "/api/v1/public/feedback",
+        json={
+            "branch_id": branch_id,
+            "rating": 1,
+            "customer_id": str(uuid.uuid4()),
+            "customer_phone": "6671234567",
+            "order_folio": public_reference,
+            "comment": "No debe persistir",
+        },
+    )
+    assert chosen_identity.status_code == 422
+
+    wrong_phone = client.post(
+        "/api/v1/public/feedback",
+        json={
+            "branch_id": branch_id,
+            "rating": 1,
+            "customer_phone": "6699999999",
+            "order_folio": public_reference,
+            "comment": "No debe persistir",
+        },
+    )
+    assert wrong_phone.status_code == 404
+
+    wrong_branch = client.post(
+        "/api/v1/public/feedback",
+        json={
+            "branch_id": other_branch_id,
+            "rating": 1,
+            "customer_phone": "6671234567",
+            "order_folio": public_reference,
+            "comment": "No debe persistir",
+        },
+    )
+    assert wrong_branch.status_code == 404
+
+    persisted = test_db.scalar(
+        sa.select(sa.func.count())
+        .select_from(models.customer_feedbacks)
+        .where(models.customer_feedbacks.c.order_folio == public_reference)
+    )
+    assert persisted == 0
+
+
+def test_customer_rating_summary_excludes_cross_organization_feedback(test_db):
+    """TDD-TC-247: una asociación histórica inválida no cruza el tenant de lectura."""
+    now = datetime.now(timezone.utc)
+    other_organization_id = "018f6f73-2d0a-74f0-8f1c-000000000099"
+    customer_id = str(uuid.uuid4())
+    test_db.execute(
+        models.organizations.insert().values(
+            id=other_organization_id,
+            slug="other-restaurant",
+            name="Otra Organización",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.customers.insert().values(
+            id=customer_id,
+            organization_id=other_organization_id,
+            name="Cliente Otra Organización",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    test_db.execute(
+        models.customer_feedbacks.insert().values(
+            id=str(uuid.uuid4()),
+            organization_id=ORGANIZATION_ID,
+            branch_id=operations.BRANCH_ID,
+            customer_id=customer_id,
+            order_folio="CROSS-ORG-1",
+            rating=1,
+            comment="Dato de otra organización",
+            created_at=now,
+        )
+    )
+    test_db.commit()
+
+    summary = operations.get_customer_rating_summary(test_db, customer_id, other_organization_id)
+    assert summary == {
+        "average_rating": None,
+        "rating_count": 0,
+        "recent_feedbacks": [],
+    }
+
+
+def test_customer_feedback_order_reference_is_unique_per_branch(test_db):
+    """TDD-TC-247: dos escritores no pueden crear dos filas para la misma referencia."""
+    now = datetime.now(timezone.utc)
+    first = {
+        "id": str(uuid.uuid4()),
+        "organization_id": ORGANIZATION_ID,
+        "branch_id": operations.BRANCH_ID,
+        "order_folio": "UNIQUE-FEEDBACK-1",
+        "rating": 4,
+        "created_at": now,
+    }
+    test_db.execute(models.customer_feedbacks.insert().values(**first))
+    test_db.commit()
+
+    with pytest.raises(IntegrityError):
+        test_db.execute(
+            models.customer_feedbacks.insert().values(
+                **{**first, "id": str(uuid.uuid4()), "rating": 2}
+            )
+        )
+        test_db.commit()
+    test_db.rollback()

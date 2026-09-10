@@ -328,7 +328,15 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
   2. **Caja (`cash`)**: Control de turno de caja (`MobileCashShiftTab`). Si está cerrada: formulario de apertura con fondo inicial en efectivo (`POST /cash/shifts/open`). Si está abierta: resumen en tiempo real de apertura, saldo y ventas, movimientos de caja (`POST /cash/movements`) y cierre operativo (`POST /cash/shifts/{id}/close-operationally`).
   3. **Menú (`menu`)**: Gestión compacta de catálogo (`MobileMenuManagerTab`), creación y edición ágil de categorías y platillos, conmutador inmediato de disponibilidad activo/agotado (`PUT /catalog/products/{id}`), y asignación de imágenes mediante cámara/galería o presets de alta calidad.
   4. **Sucursal (`settings`)**: Configuración operativa (`MobileBranchSettingsTab`) de estado de sucursal, recepción de pedidos por WhatsApp, enlace directo y códigos para compartir el menú móvil digital, y enlace para alternar a la versión completa de escritorio.
+- Los comandos de apertura, movimiento y cierre construyen una intención estable a partir del payload. Una falla sin confirmación conserva su `Idempotency-Key`; la clave se descarta sólo tras éxito confirmado o al cambiar el payload. El movimiento manual captura una referencia de evidencia real del operador y no usa valores sintéticos.
 - Sin regresión sobre la experiencia de comensal en `mobile-web` ni sobre el backoffice de escritorio.
+
+### 5.7 Frontera pública de feedback y aislamiento de cliente
+
+- `POST /public/feedback` acepta exclusivamente sucursal, referencia persistida, teléfono, rating y comentario. `customer_id`, nombre y organización son datos derivados del pedido o intención y no autoridad del cliente público.
+- La referencia debe pertenecer a la misma sucursal y organización solicitadas, y el teléfono normalizado debe coincidir con el snapshot persistido. Referencia inexistente, sucursal distinta o teléfono distinto producen la misma respuesta cerrada sin revelar qué dato falló.
+- La unicidad `(organization_id, branch_id, order_folio)` evita duplicados concurrentes para una referencia no nula. La migración se detiene si encuentra duplicados históricos y no los elimina automáticamente.
+- Lecturas y reparaciones de feedback filtran simultáneamente por `customer_id` y `organization_id`; consultar un cliente nunca incorpora filas de otra organización.
 
 ---
 

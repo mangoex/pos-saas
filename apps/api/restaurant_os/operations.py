@@ -607,8 +607,8 @@ def create_user(
     )
     if existing:
         raise BusinessError("user_already_exists", "User already exists")
-    raw_code = str(employee_code or "").strip()
-    normalized_employee_code = _normalize_employee_code(raw_code) if raw_code else None
+    normalized_employee_code = _normalize_employee_code(employee_code)
+    assert normalized_employee_code is not None
     target_org = _modifier_actor_organization(session, actor_id)
 
     role_scope = None
@@ -619,14 +619,13 @@ def create_user(
     now = _now()
     has_password = bool((password or "").strip())
     user_id = _id()
-    if normalized_employee_code:
-        _assign_employee_code(
-            session,
-            normalized_employee_code,
-            subject_type="user",
-            subject_id=user_id,
-            organization_id=target_org,
-        )
+    _assign_employee_code(
+        session,
+        normalized_employee_code,
+        subject_type="user",
+        subject_id=user_id,
+        organization_id=target_org,
+    )
     user = {
         "id": user_id,
         "organization_id": target_org,
@@ -4279,7 +4278,9 @@ def get_order_detail(
     order_notes = cust.get("order_notes") or addr.get("notes") or ""
     table_number = cust.get("table_number") or ""
     cash_amount = cust.get("cash_amount") or ""
-    payment_method = order.get("payment_method_intent") or cust.get("payment_method") or None
+    payment_method_intent = (
+        order.get("payment_method_intent") or cust.get("payment_method") or None
+    )
     delivery_notes = addr.get("notes") or order_notes
     return {
         **projection,
@@ -4292,8 +4293,7 @@ def get_order_detail(
         "order_notes": order_notes,
         "table_number": table_number,
         "cash_amount": cash_amount,
-        "payment_method_intent": payment_method,
-        "payment_method": payment_method,
+        "payment_method_intent": payment_method_intent,
         "channel": order.get("channel") or "POS",
         "service_type": order["order_type"],
         "lines": lines,
@@ -18501,6 +18501,202 @@ def find_or_create_order_customer(
     return cust_id
 
 
+def _feedback_order_source(
+    session: Session,
+    organization_id: str,
+    branch_id: str,
+    order_folio: str,
+) -> tuple[str, dict[str, Any], str | None]:
+    intent = (
+        session.execute(
+            sa.select(
+                models.public_order_intents.c.customer_snapshot,
+                models.public_order_intents.c.accepted_order_id,
+            ).where(
+                models.public_order_intents.c.organization_id == organization_id,
+                models.public_order_intents.c.branch_id == branch_id,
+                models.public_order_intents.c.public_reference == order_folio,
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if intent:
+        customer_id = None
+        if intent["accepted_order_id"]:
+            customer_id = session.scalar(
+                sa.select(models.orders.c.customer_id).where(
+                    models.orders.c.id == intent["accepted_order_id"],
+                    models.orders.c.organization_id == organization_id,
+                    models.orders.c.branch_id == branch_id,
+                )
+            )
+        return "public_intent", dict(intent["customer_snapshot"] or {}), customer_id
+
+    order = (
+        session.execute(
+            sa.select(
+                models.orders.c.customer_snapshot,
+                models.orders.c.customer_id,
+            ).where(
+                models.orders.c.organization_id == organization_id,
+                models.orders.c.branch_id == branch_id,
+                models.orders.c.folio == order_folio,
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if order:
+        return "order", dict(order["customer_snapshot"] or {}), order["customer_id"]
+    raise NotFoundError("feedback_order_not_found", "Feedback order was not found")
+
+
+def submit_public_customer_feedback(
+    session: Session,
+    *,
+    branch_id: str,
+    order_folio: str,
+    customer_phone: str,
+    rating: int,
+    comment: str | None,
+) -> dict[str, Any]:
+    branch = (
+        session.execute(
+            sa.select(models.branches.c.id, models.branches.c.organization_id).where(
+                models.branches.c.id == branch_id,
+                models.branches.c.status == "active",
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if not branch:
+        raise NotFoundError("feedback_order_not_found", "Feedback order was not found")
+    organization_id = str(branch["organization_id"])
+    clean_folio = order_folio.strip()
+    try:
+        normalized_phone = normalize_mexican_phone(customer_phone)
+    except BusinessError as exc:
+        logger.info(
+            "public_feedback_rejected",
+            extra={
+                "metric": "public_feedback",
+                "result": "rejected",
+                "reason": "order_identity_mismatch",
+                "organization_id": organization_id,
+                "branch_id": branch_id,
+            },
+        )
+        raise NotFoundError("feedback_order_not_found", "Feedback order was not found") from exc
+
+    source_kind, customer_snapshot, resolved_customer_id = _feedback_order_source(
+        session, organization_id, branch_id, clean_folio
+    )
+    stored_phone = str(customer_snapshot.get("phone") or "")
+    try:
+        normalized_stored_phone = normalize_mexican_phone(stored_phone)
+    except BusinessError as exc:
+        raise NotFoundError("feedback_order_not_found", "Feedback order was not found") from exc
+    if not secrets.compare_digest(normalized_phone, normalized_stored_phone):
+        logger.info(
+            "public_feedback_rejected",
+            extra={
+                "metric": "public_feedback",
+                "result": "rejected",
+                "reason": "order_identity_mismatch",
+                "organization_id": organization_id,
+                "branch_id": branch_id,
+                "source_kind": source_kind,
+            },
+        )
+        raise NotFoundError("feedback_order_not_found", "Feedback order was not found")
+
+    if resolved_customer_id:
+        resolved_customer_id = session.scalar(
+            sa.select(models.customers.c.id).where(
+                models.customers.c.id == resolved_customer_id,
+                models.customers.c.organization_id == organization_id,
+            )
+        )
+        if not resolved_customer_id:
+            raise NotFoundError("feedback_order_not_found", "Feedback order was not found")
+
+    existing_query = sa.select(models.customer_feedbacks).where(
+        models.customer_feedbacks.c.organization_id == organization_id,
+        models.customer_feedbacks.c.branch_id == branch_id,
+        models.customer_feedbacks.c.order_folio == clean_folio,
+    )
+    existing = session.execute(existing_query).mappings().first()
+    clean_comment = comment.strip() if comment and comment.strip() else None
+    customer_name = str(customer_snapshot.get("name") or "").strip() or None
+    now = _now()
+    created = existing is None
+
+    if existing:
+        feedback_id = str(existing["id"])
+        session.execute(
+            models.customer_feedbacks.update()
+            .where(models.customer_feedbacks.c.id == feedback_id)
+            .values(
+                rating=rating,
+                customer_id=resolved_customer_id or existing["customer_id"],
+                customer_phone=normalized_phone,
+                customer_name=customer_name or existing["customer_name"],
+                comment=clean_comment if clean_comment is not None else existing["comment"],
+            )
+        )
+    else:
+        feedback_id = _id()
+        values = {
+            "id": feedback_id,
+            "organization_id": organization_id,
+            "branch_id": branch_id,
+            "customer_id": resolved_customer_id,
+            "customer_phone": normalized_phone,
+            "order_folio": clean_folio,
+            "rating": rating,
+            "customer_name": customer_name,
+            "comment": clean_comment,
+            "created_at": now,
+        }
+        try:
+            with session.begin_nested():
+                session.execute(models.customer_feedbacks.insert().values(**values))
+        except IntegrityError:
+            existing = session.execute(existing_query).mappings().first()
+            if not existing:
+                raise
+            created = False
+            feedback_id = str(existing["id"])
+            session.execute(
+                models.customer_feedbacks.update()
+                .where(models.customer_feedbacks.c.id == feedback_id)
+                .values(
+                    rating=rating,
+                    customer_id=resolved_customer_id or existing["customer_id"],
+                    customer_phone=normalized_phone,
+                    customer_name=customer_name or existing["customer_name"],
+                    comment=(
+                        clean_comment if clean_comment is not None else existing["comment"]
+                    ),
+                )
+            )
+
+    session.commit()
+    logger.info(
+        "public_feedback_recorded",
+        extra={
+            "metric": "public_feedback",
+            "result": "created" if created else "updated",
+            "organization_id": organization_id,
+            "branch_id": branch_id,
+            "source_kind": source_kind,
+        },
+    )
+    return {"id": feedback_id, "status": "recorded"}
+
+
 def create_customer(
     session: Session,
     name: str,
@@ -18976,7 +19172,9 @@ def list_customers(
         )
         customer["tax_profile"] = dict(tax_profile) if tax_profile else None
         customer["order_summary"] = get_customer_order_summary(session, str(row["id"]))
-        customer["rating_summary"] = get_customer_rating_summary(session, str(row["id"]))
+        customer["rating_summary"] = get_customer_rating_summary(
+            session, str(row["id"]), organization_id
+        )
         result.append(customer)
     return result
 
@@ -19135,33 +19333,13 @@ def list_customers_page(
         cid: {"average_rating": None, "rating_count": 0, "recent_feedbacks": []}
         for cid in customer_ids
     }
-    # Reconcile / heal orphaned feedbacks by phone for these customers
-    for cid in customer_ids:
-        c_phones = phones_by_customer.get(cid, [])
-        phone_nums = [
-            str(p["normalized_number"]).strip()
-            for p in c_phones
-            if p.get("normalized_number") and str(p["normalized_number"]).strip()
-        ] + [
-            str(p["captured_number"]).strip()
-            for p in c_phones
-            if p.get("captured_number") and str(p["captured_number"]).strip()
-        ]
-        if phone_nums:
-            session.execute(
-                models.customer_feedbacks.update()
-                .where(
-                    models.customer_feedbacks.c.organization_id == organization_id,
-                    models.customer_feedbacks.c.customer_id.is_(None),
-                    models.customer_feedbacks.c.customer_phone.in_(phone_nums),
-                )
-                .values(customer_id=cid)
-            )
-
     feedback_rows = list(
         session.execute(
             sa.select(models.customer_feedbacks)
-            .where(models.customer_feedbacks.c.customer_id.in_(customer_ids))
+            .where(
+                models.customer_feedbacks.c.organization_id == organization_id,
+                models.customer_feedbacks.c.customer_id.in_(customer_ids),
+            )
             .order_by(models.customer_feedbacks.c.created_at.desc())
         ).mappings()
     )
@@ -19170,7 +19348,7 @@ def list_customers_page(
         if cid in ratings_by_customer:
             ratings_by_customer[cid]["recent_feedbacks"].append(dict(fb))
 
-    for cid, data in ratings_by_customer.items():
+    for data in ratings_by_customer.values():
         fbs = data["recent_feedbacks"]
         if fbs:
             ratings = [int(f["rating"]) for f in fbs if f.get("rating")]
@@ -19211,34 +19389,16 @@ def list_customers_page(
 def get_customer_feedbacks(
     session: Session,
     customer_id: str,
-    organization_id: str | None = None,
+    organization_id: str,
 ) -> list[dict[str, Any]]:
-    # Heal unlinked feedbacks for this customer by phone
-    c_phones = session.execute(
-        sa.select(models.customer_phones.c.normalized_number, models.customer_phones.c.captured_number)
-        .where(models.customer_phones.c.customer_id == customer_id)
-    ).mappings().all()
-    phone_nums = [
-        str(p["normalized_number"]).strip()
-        for p in c_phones
-        if p.get("normalized_number") and str(p["normalized_number"]).strip()
-    ] + [
-        str(p["captured_number"]).strip()
-        for p in c_phones
-        if p.get("captured_number") and str(p["captured_number"]).strip()
-    ]
-    if phone_nums:
-        heal_criteria = [
-            models.customer_feedbacks.c.customer_id.is_(None),
-            models.customer_feedbacks.c.customer_phone.in_(phone_nums),
-        ]
-        if organization_id:
-            heal_criteria.append(models.customer_feedbacks.c.organization_id == organization_id)
-        session.execute(
-            models.customer_feedbacks.update()
-            .where(*heal_criteria)
-            .values(customer_id=customer_id)
+    customer_exists = session.scalar(
+        sa.select(models.customers.c.id).where(
+            models.customers.c.id == customer_id,
+            models.customers.c.organization_id == organization_id,
         )
+    )
+    if not customer_exists:
+        raise NotFoundError("customer_not_found", "Customer was not found")
 
     query = (
         sa.select(
@@ -19260,16 +19420,19 @@ def get_customer_feedbacks(
                 models.customer_feedbacks.c.branch_id == models.branches.c.id,
             )
         )
-        .where(models.customer_feedbacks.c.customer_id == customer_id)
+        .where(
+            models.customer_feedbacks.c.organization_id == organization_id,
+            models.customer_feedbacks.c.customer_id == customer_id,
+        )
         .order_by(models.customer_feedbacks.c.created_at.desc())
     )
-    if organization_id:
-        query = query.where(models.customer_feedbacks.c.organization_id == organization_id)
     return [dict(r) for r in session.execute(query).mappings()]
 
 
-def get_customer_rating_summary(session: Session, customer_id: str) -> dict[str, Any]:
-    fbs = get_customer_feedbacks(session, customer_id)
+def get_customer_rating_summary(
+    session: Session, customer_id: str, organization_id: str
+) -> dict[str, Any]:
+    fbs = get_customer_feedbacks(session, customer_id, organization_id)
     if not fbs:
         return {"average_rating": None, "rating_count": 0, "recent_feedbacks": []}
     ratings = [int(f["rating"]) for f in fbs if f.get("rating")]
@@ -26236,28 +26399,15 @@ def accept_public_order_intent(
 
     # Link feedbacks submitted during intent review to the newly created / resolved customer
     if resolved_customer_id:
-        phone_val = (cust_snap.get("phone") or "").strip()
-        link_criteria = [
-            models.customer_feedbacks.c.order_folio == intent["public_reference"],
-            models.customer_feedbacks.c.order_folio == folio,
-        ]
-        if phone_val:
-            link_criteria.append(
-                sa.and_(
-                    models.customer_feedbacks.c.customer_id.is_(None),
-                    models.customer_feedbacks.c.customer_phone == phone_val,
-                )
-            )
         session.execute(
             models.customer_feedbacks.update()
             .where(
                 models.customer_feedbacks.c.organization_id == intent["organization_id"],
-                sa.or_(*link_criteria),
+                models.customer_feedbacks.c.branch_id == intent["branch_id"],
+                models.customer_feedbacks.c.customer_id.is_(None),
+                models.customer_feedbacks.c.order_folio == intent["public_reference"],
             )
-            .values(
-                customer_id=resolved_customer_id,
-                order_folio=folio,
-            )
+            .values(customer_id=resolved_customer_id)
         )
     lines = (
         session.execute(
