@@ -82,8 +82,6 @@ export default function CashMovements() {
   const branchId = resolvePosBranchId();
   const registerId = localStorage.getItem('pos_register_id') || '';
   const [type, setType] = useState<'withdrawal' | 'deposit'>(capabilities.initialType);
-  const [concepts, setConcepts] = useState<Concept[]>([]);
-  const [selectedConceptId, setSelectedConceptId] = useState<string>('');
   const [conceptText, setConceptText] = useState<string>('');
   const [ledger, setLedger] = useState<LedgerItem[]>([]);
   const [amount, setAmount] = useState('');
@@ -148,19 +146,7 @@ export default function CashMovements() {
       .catch(() => setStatus('No se pudo verificar el turno actual.'));
   }, [branchId, capabilities.canWrite, registerId]);
 
-  useEffect(() => {
-    if (!capabilities.canWrite || !shiftReady) return;
-    setConcepts([]);
-    setSelectedConceptId('');
-    void fetchApi<Concept[]>(`/cash/concepts/effective?branch_id=${encodeURIComponent(branchId)}&movement_type=${type}`)
-      .then(data => {
-        setConcepts(data);
-        if (data.length > 0) {
-          setSelectedConceptId(data[0].concept_id);
-        }
-      })
-      .catch(() => setStatus('No se pudieron cargar conceptos de movimiento.'));
-  }, [branchId, capabilities.canWrite, shiftReady, type]);
+  // Decoupled from /cash/concepts/effective: cash movements now capture concept / reason text directly
 
   useEffect(() => {
     setOfflineGrant(null);
@@ -221,7 +207,6 @@ export default function CashMovements() {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cents = parseCashCents(amount);
-    const concept = (event.currentTarget.elements.namedItem('concept_id') as HTMLSelectElement)?.value || selectedConceptId;
     const cText = conceptText.trim();
     const rText = reference.trim();
     const eText = evidence.trim() || 'Comprobante interno';
@@ -229,7 +214,7 @@ export default function CashMovements() {
     // El concepto abierto o referencia deben contener la descripción del movimiento
     const combinedReference = cText && rText ? `${cText} — Ref: ${rText}` : (cText || rText);
 
-    if (!cents || !concept || !combinedReference || !shiftReady) {
+    if (!cents || !cText || !shiftReady) {
       setStatus('Captura el concepto del movimiento, el importe y confirma un turno abierto.');
       return;
     }
@@ -241,7 +226,7 @@ export default function CashMovements() {
       branch_id: branchId,
       register_id: registerId,
       movement_type: type,
-      concept_id: concept,
+      concept: cText,
       amount_cents: cents,
       reference: combinedReference.slice(0, 600),
       evidence_refs: [eText.slice(0, 600)],
@@ -272,7 +257,7 @@ export default function CashMovements() {
             {
               register_id: registerId,
               movement_type: type,
-              concept_id: concept,
+              concept: cText,
               amount_cents: cents,
               reference: combinedReference.slice(0, 600),
               evidence_refs: [eText.slice(0, 600)],
@@ -410,13 +395,6 @@ export default function CashMovements() {
                 </div>
               )}
 
-              {!loading && shiftReady && !concepts.length && (
-                <div className="cash-alert cash-alert-info" role="status">
-                  <Info size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-                  <span>No hay conceptos efectivos para este tipo.</span>
-                </div>
-              )}
-
               {/* Selector de Tipo */}
               <div className="cash-type-toggle">
                 <button
@@ -443,35 +421,11 @@ export default function CashMovements() {
                 {/* Select de tipo oculto o de respaldo para compatibilidad de formulario */}
                 <input type="hidden" name="movement_type" value={type} />
 
-                {/* Movimiento (Catálogo) */}
-                <div className="cash-form-group">
-                  <label className="cash-form-label">
-                    <Tag size={15} style={{ color: '#64748b' }} />
-                    <span>Movimiento</span>
-                    <span className="cash-form-label-required">*</span>
-                  </label>
-                  <select
-                    name="concept_id"
-                    required
-                    disabled={!shiftReady || loading || !concepts.length}
-                    className="cash-select"
-                    value={selectedConceptId}
-                    onChange={e => setSelectedConceptId(e.target.value)}
-                  >
-                    {concepts.length === 0 && <option value="">Selecciona tipo de movimiento</option>}
-                    {concepts.map(c => (
-                      <option value={c.concept_id} key={c.concept_id}>
-                        {c.code} — {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Concepto (Campo Abierto) */}
+                {/* Concepto / Motivo */}
                 <div className="cash-form-group">
                   <label className="cash-form-label">
                     <FileText size={15} style={{ color: '#64748b' }} />
-                    <span>Concepto</span>
+                    <span>Concepto / Motivo</span>
                     <span className="cash-form-label-required">*</span>
                   </label>
                   <input
@@ -542,7 +496,7 @@ export default function CashMovements() {
                 {/* Botón de Confirmación */}
                 <button
                   type="submit"
-                  disabled={loading || !shiftReady || !concepts.length}
+                  disabled={loading || !shiftReady}
                   className={`cash-submit-btn ${type}`}
                 >
                   {loading ? (

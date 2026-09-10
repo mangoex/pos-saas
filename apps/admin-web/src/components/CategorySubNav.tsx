@@ -1,7 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
-import { canManageCashConcepts } from '../features/cash/cashConceptState';
 
 interface SubNavItem {
   path: string;
@@ -60,11 +59,7 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     categoryTitle: 'Cajas y Reportes',
     items: [
       { path: '/reports', label: 'Cortes X/Z y Ventas' },
-      {
-        path: '/cash-concepts',
-        label: 'Conceptos de Caja',
-        requiredPermission: (user) => canManageCashConcepts(user),
-      },
+      // Catálogo 'Conceptos de Caja' desvinculado de la operación según requerimiento de simplificación
     ],
   },
   {

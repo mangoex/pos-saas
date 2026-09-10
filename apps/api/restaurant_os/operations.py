@@ -8671,34 +8671,50 @@ def _validate_pco008_sync_envelope(envelope: dict[str, Any]) -> None:
     if invalid_envelope:
         raise BusinessError("invalid_sync_payload", "Cash offline envelope is invalid")
     payload = envelope["payload"]
-    expected = {
+    required_keys = {
+        "register_id",
+        "movement_type",
+        "amount_cents",
+    }
+    allowed_keys = {
         "register_id",
         "movement_type",
         "concept_id",
+        "concept",
+        "reason",
         "amount_cents",
         "reference",
         "evidence_refs",
     }
-    if not isinstance(payload, dict) or set(payload) != expected:
+    if not isinstance(payload, dict) or not required_keys.issubset(payload) or not set(payload).issubset(allowed_keys):
         raise BusinessError("invalid_sync_payload", "Cash offline payload is invalid")
+    has_concept_id = payload.get("concept_id") is not None
     invalid_payload = (
         not isinstance(payload["movement_type"], str)
         or payload["movement_type"] not in {"deposit", "withdrawal"}
         or isinstance(payload["amount_cents"], bool)
         or not isinstance(payload["amount_cents"], int)
         or payload["amount_cents"] <= 0
-        or any(
-            not isinstance(payload[field], str) or not payload[field].strip()
-            for field in ("register_id", "concept_id")
+        or not isinstance(payload.get("register_id"), str)
+        or not str(payload["register_id"]).strip()
+        or (has_concept_id and not _is_pco008_uuid_string(payload["concept_id"]))
+        or (
+            payload.get("reference") is not None
+            and (
+                not isinstance(payload["reference"], str)
+                or not 1 <= len(payload["reference"].strip()) <= 600
+            )
         )
-        or not _is_pco008_uuid_string(payload["concept_id"])
-        or not isinstance(payload["reference"], str)
-        or not 1 <= len(payload["reference"].strip()) <= 600
-        or not isinstance(payload["evidence_refs"], list)
-        or not 1 <= len(payload["evidence_refs"]) <= 10
-        or any(
-            not isinstance(item, str) or not 1 <= len(item.strip()) <= 600
-            for item in payload["evidence_refs"]
+        or (
+            payload.get("evidence_refs") is not None
+            and (
+                not isinstance(payload["evidence_refs"], list)
+                or not 1 <= len(payload["evidence_refs"]) <= 10
+                or any(
+                    not isinstance(item, str) or not 1 <= len(item.strip()) <= 600
+                    for item in payload["evidence_refs"]
+                )
+            )
         )
     )
     if invalid_payload:
@@ -21925,41 +21941,73 @@ def create_cash_movement(
     replay = _cash_movement_replay(session, key, request_hash, organization_id)
     if replay is not None:
         return replay
-    expected_fields = {
+    required_fields = {
         "branch_id",
         "register_id",
         "movement_type",
-        "concept_id",
         "amount_cents",
+    }
+    allowed_fields = {
+        "branch_id",
+        "register_id",
+        "movement_type",
+        "amount_cents",
+        "concept_id",
+        "concept",
+        "reason",
         "reference",
         "evidence_refs",
     }
-    if set(payload) != expected_fields:
+    if not required_fields.issubset(set(payload)) or not set(payload).issubset(allowed_fields):
         raise BusinessError("cash_movement_invalid", "Cash movement fields are invalid")
     branch_id = str(payload["branch_id"]).strip()
     register_id = str(payload["register_id"]).strip()
     movement_type = str(payload["movement_type"]).strip().lower()
-    concept_id = str(payload["concept_id"]).strip()
+    raw_concept_id = payload.get("concept_id")
+    concept_id = str(raw_concept_id).strip() if raw_concept_id else None
     if (
         not branch_id
         or not register_id
         or movement_type not in {"deposit", "withdrawal"}
-        or not concept_id
     ):
         raise BusinessError(
-            "cash_movement_invalid", "Cash movement branch, register, type and concept are required"
+            "cash_movement_invalid", "Cash movement branch, register, and type are required"
         )
     permission = "cash.movement.deposit" if movement_type == "deposit" else "cash.movement.withdraw"
     authorize_branch_scope(session, actor_id, permission, branch_id)
     amount_cents = _validate_cash_amount(payload["amount_cents"])
-    reference = str(payload["reference"]).strip()
-    if not reference or len(reference) > 600:
-        raise BusinessError("cash_reference_required", "Cash movement reference is required")
-    evidence_refs = _validate_cash_evidence(payload["evidence_refs"])
+
+    if concept_id:
+        snapshot = _effective_cash_concept_snapshot(
+            session, concept_id, movement_type, actor_id, branch_id
+        )
+        concept_version_id = snapshot["version_id"]
+        concept_snapshot = snapshot
+        reason = str(snapshot["name"])
+    else:
+        concept_id = None
+        concept_version_id = None
+        concept_snapshot = None
+        concept_name = str(payload.get("concept") or payload.get("reason") or payload.get("reference") or "").strip()
+        if not concept_name:
+            concept_name = "Depósito de efectivo" if movement_type == "deposit" else "Retiro de efectivo"
+        reason = concept_name[:240]
+
+    raw_reference = payload.get("reference")
+    if raw_reference is not None and str(raw_reference).strip():
+        reference = str(raw_reference).strip()
+        if len(reference) > 600:
+            raise BusinessError("cash_reference_required", "Cash movement reference is too long")
+    else:
+        reference = reason[:600]
+
+    raw_evidence = payload.get("evidence_refs")
+    if raw_evidence:
+        evidence_refs = _validate_cash_evidence(raw_evidence)
+    else:
+        evidence_refs = ["Comprobante interno"]
+
     shift = _guard_open_cash_shift(session, register_id, branch_id)
-    snapshot = _effective_cash_concept_snapshot(
-        session, concept_id, movement_type, actor_id, branch_id
-    )
     now = _now()
     movement = {
         "id": _id(),
@@ -21969,7 +22017,7 @@ def create_cash_movement(
         "movement_type": movement_type,
         "amount_cents": amount_cents,
         "reason_code": "MANUAL_DEPOSIT" if movement_type == "deposit" else "MANUAL_WITHDRAWAL",
-        "reason": str(snapshot["name"]),
+        "reason": reason,
         "source_type": "manual",
         "source_id": None,
         "actor_user_id": actor_id,
@@ -21979,8 +22027,8 @@ def create_cash_movement(
         "status": "confirmed",
         "reversal_of_id": None,
         "concept_id": concept_id,
-        "concept_version_id": snapshot["version_id"],
-        "concept_snapshot": snapshot,
+        "concept_version_id": concept_version_id,
+        "concept_snapshot": concept_snapshot,
         "reference": reference,
         "evidence_refs": evidence_refs,
         "compensates_movement_id": None,

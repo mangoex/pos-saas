@@ -1,12 +1,8 @@
 import React from 'react';
-import { BarChart3, LineChart, Wallet } from 'lucide-react';
+import { BarChart3, LineChart } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
-import { canManageCashConcepts } from '../cash/cashConceptState';
 
 export const ReportsHub: React.FC = () => {
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const hasCashConceptManage = canManageCashConcepts(currentUser);
-
   const cards: HubCardItem[] = [
     {
       title: 'Cierre y Reconciliación',
@@ -24,24 +20,12 @@ export const ReportsHub: React.FC = () => {
       iconColor: '#16a34a',
       path: '/analytics',
     },
-    ...(hasCashConceptManage
-      ? [
-          {
-            title: 'Conceptos de Caja',
-            description: 'Ajustes opcionales de motivos de efectivo. El POS incluye los conceptos estándar predeterminados.',
-            icon: <Wallet size={26} />,
-            iconBg: '#ecfdf5',
-            iconColor: '#047857',
-            path: '/cash-concepts',
-          },
-        ]
-      : []),
   ];
 
   return (
     <CategoryHubView
       title="Cajas y Reportes"
-      subtitle="Monitoreo financiero, control de conceptos de caja, cortes de turno y métricas de venta."
+      subtitle="Monitoreo financiero, cortes de turno y métricas de venta."
       cards={cards}
     />
   );

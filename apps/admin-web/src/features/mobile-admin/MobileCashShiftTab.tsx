@@ -64,7 +64,6 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
   const [movementConcept, setMovementConcept] = useState('Aportación de cambio');
   const [movementEvidence, setMovementEvidence] = useState('');
   const [movementSubmitting, setMovementSubmitting] = useState(false);
-  const [concepts, setConcepts] = useState<CashConcept[]>([]);
   const commandKeys = useRef(commandKeyStore());
 
   // Close shift modal
@@ -90,27 +89,9 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
     }
   }, [branchId]);
 
-  const loadConcepts = useCallback(async () => {
-    if (!branchId) return;
-    try {
-      const res = await fetchApi<CashConcept[]>(
-        `/cash/concepts/effective?branch_id=${encodeURIComponent(branchId)}&movement_type=${movementType}`
-      );
-      setConcepts(Array.isArray(res) ? res : []);
-    } catch {
-      // ignore
-    }
-  }, [branchId, movementType]);
-
   useEffect(() => {
     void loadShift();
   }, [loadShift]);
-
-  useEffect(() => {
-    if (shift) {
-      void loadConcepts();
-    }
-  }, [shift, loadConcepts]);
 
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,15 +135,10 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
       return;
     }
     const cents = Math.round(amountNum * 100);
-    const conceptId = concepts.length > 0 ? concepts[0].concept_id : '';
-    const cleanReference = movementConcept.trim();
-    const cleanEvidence = movementEvidence.trim();
-    if (!conceptId) {
-      setError('No existe un concepto de caja disponible para este movimiento.');
-      return;
-    }
-    if (!cleanReference || !cleanEvidence) {
-      setError('Captura el motivo y una referencia de evidencia real.');
+    const cleanConcept = movementConcept.trim();
+    const cleanEvidence = movementEvidence.trim() || 'Registro móvil';
+    if (!cleanConcept) {
+      setError('Captura el motivo o concepto del movimiento.');
       return;
     }
     const operation = [
@@ -170,10 +146,8 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
       branchId,
       registerId,
       movementType,
-      conceptId,
       String(cents),
-      cleanReference,
-      cleanEvidence,
+      cleanConcept,
     ].join(':');
     setMovementSubmitting(true);
     setError(null);
@@ -187,10 +161,10 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
           branch_id: branchId,
           register_id: registerId,
           movement_type: movementType,
-          concept_id: conceptId,
+          concept: cleanConcept,
           amount_cents: cents,
-          reference: cleanReference,
-          evidence_refs: [movementEvidence.trim()],
+          reference: cleanConcept,
+          evidence_refs: [cleanEvidence],
         }),
       });
       commandKeys.current.clear(operation);
@@ -746,15 +720,14 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
 
               <div style={{ marginBottom: 20 }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                  Referencia de evidencia
+                  Referencia / Comprobante (Opcional)
                 </label>
                 <input
                   type="text"
                   value={movementEvidence}
                   onChange={(e) => setMovementEvidence(e.target.value)}
-                  required
                   maxLength={600}
-                  placeholder="Ej. ticket:ABC-123 o foto:corte-2026-09-09"
+                  placeholder="Ej. Ticket #12, Vale de caja, etc."
                   style={{
                     width: '100%',
                     boxSizing: 'border-box',

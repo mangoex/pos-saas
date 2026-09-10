@@ -427,16 +427,20 @@ def _validate_command(envelope: dict[str, Any]) -> None:
     ):
         raise InvalidCommandEnvelope("invalid_command_envelope")
     payload = envelope["payload"]
-    required_payload = {
+    required_keys = {"register_id", "movement_type", "amount_cents"}
+    allowed_keys = {
         "register_id",
         "movement_type",
-        "concept_id",
         "amount_cents",
+        "concept_id",
+        "concept",
+        "reason",
         "reference",
         "evidence_refs",
     }
-    if set(payload) != required_payload:
+    if not isinstance(payload, dict) or not required_keys.issubset(payload) or not set(payload).issubset(allowed_keys):
         raise InvalidCommandEnvelope("invalid_cash_payload")
+    has_concept_id = payload.get("concept_id") is not None
     invalid = (
         payload["movement_type"] not in {"deposit", "withdrawal"}
         or isinstance(payload["amount_cents"], bool)
@@ -444,14 +448,24 @@ def _validate_command(envelope: dict[str, Any]) -> None:
         or payload["amount_cents"] <= 0
         or not isinstance(payload["register_id"], str)
         or not payload["register_id"].strip()
-        or not _is_uuid_string(payload["concept_id"])
-        or not isinstance(payload["reference"], str)
-        or not 1 <= len(payload["reference"].strip()) <= 600
-        or not isinstance(payload["evidence_refs"], list)
-        or not 1 <= len(payload["evidence_refs"]) <= 10
-        or any(
-            not isinstance(item, str) or not 1 <= len(item.strip()) <= 600
-            for item in payload["evidence_refs"]
+        or (has_concept_id and not _is_uuid_string(payload["concept_id"]))
+        or (
+            payload.get("reference") is not None
+            and (
+                not isinstance(payload["reference"], str)
+                or not 1 <= len(payload["reference"].strip()) <= 600
+            )
+        )
+        or (
+            payload.get("evidence_refs") is not None
+            and (
+                not isinstance(payload["evidence_refs"], list)
+                or not 1 <= len(payload["evidence_refs"]) <= 10
+                or any(
+                    not isinstance(item, str) or not 1 <= len(item.strip()) <= 600
+                    for item in payload["evidence_refs"]
+                )
+            )
         )
     )
     if invalid:

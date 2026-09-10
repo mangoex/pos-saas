@@ -1211,3 +1211,40 @@ def test_current_cash_shift_accepts_withdraw_only_and_legacy_read_only() -> None
     )
     assert legacy_read_only.status_code == 200
     assert legacy_read_only.json()["cash_shift"]["id"] == SHIFT_ID
+
+
+def test_cash_movement_without_catalog_concept() -> None:
+    client = _cash_concept_client()
+    factory = client.app.state.test_session_factory
+    with factory() as session:
+        _grant_cash_permissions(session, "cash.movement.withdraw", "cash.movement.read")
+        _insert_shift(session)
+
+    response = client.post(
+        "/api/v1/cash/movements",
+        headers={
+            "X-Actor-User-Id": CASHIER_ID,
+            "Idempotency-Key": "key-no-catalog-concept-1",
+        },
+        json={
+            "branch_id": BRANCH_A,
+            "register_id": "CAJA-01",
+            "movement_type": "withdrawal",
+            "amount_cents": 1500,
+            "concept": "Compra de verdura para cocina",
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["movement"]["concept_id"] is None
+    assert body["movement"]["reason"] == "Compra de verdura para cocina"
+    assert body["movement"]["amount_cents"] == 1500
+    assert body["movement"]["reference"] == "Compra de verdura para cocina"
+
+    ledger_res = client.get(
+        "/api/v1/cash/movements",
+        headers={"X-Actor-User-Id": CASHIER_ID},
+        params={"branch_id": BRANCH_A},
+    )
+    assert ledger_res.status_code == 200
+    assert any(item["id"] == body["movement"]["id"] and item["concept_id"] is None for item in items)

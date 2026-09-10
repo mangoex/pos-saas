@@ -100,11 +100,11 @@ Feature: Registrar efectivo y revisar cuentas históricas
 
   @PRD-FR-716
   @BDD-SC-278
-  Scenario: Concepto versionado gobierna depósito o retiro
-    Given un concepto activo compatible con retiro que requiere referencia
-    When un actor autorizado registra un retiro con importe positivo, referencia e idempotency key
-    Then se congela el snapshot del concepto y se crea un movimiento append-only
-    And un concepto inactivo, tipo incompatible o referencia omitida se rechaza
+  Scenario: Movimiento directo de caja con concepto libre o snapshot opcional
+    Given un turno abierto en la terminal de caja
+    When un actor autorizado registra un retiro o depósito con importe positivo y concepto en texto libre
+    Then se crea un movimiento append-only con el motivo indicado sin exigir catálogo corporativo previo
+    And si se proporciona un concepto versionado opcional, se preserva su snapshot para compatibilidad
 
   @PRD-FR-716 @PRD-NFR-521
   @BDD-SC-279
