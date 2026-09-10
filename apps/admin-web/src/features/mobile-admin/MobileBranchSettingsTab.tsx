@@ -15,6 +15,9 @@ import {
   Power,
   Sparkles,
   Globe,
+  Bike,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 
 interface MobileBranchSettingsTabProps {
@@ -25,6 +28,13 @@ interface MobileBranchSettingsTabProps {
   onboardingPending?: boolean;
 }
 
+export interface DeliveryTier {
+  id: string;
+  name: string;
+  fee_cents: number;
+  is_default_web: boolean;
+}
+
 interface Branch {
   id: string;
   name: string;
@@ -33,6 +43,9 @@ interface Branch {
   phone?: string;
   google_review_url?: string;
   whatsapp_ordering_enabled?: boolean;
+  delivery_fee_enabled?: boolean;
+  delivery_tiers?: DeliveryTier[];
+  free_delivery_min_cents?: number | null;
 }
 
 interface LinksResponse {
@@ -82,6 +95,9 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [googleReviewUrl, setGoogleReviewUrl] = useState('');
   const [isOpenForOrders, setIsOpenForOrders] = useState(true);
+  const [deliveryFeeEnabled, setDeliveryFeeEnabled] = useState(true);
+  const [freeDeliveryMinPesos, setFreeDeliveryMinPesos] = useState('');
+  const [deliveryTiers, setDeliveryTiers] = useState<DeliveryTier[]>([]);
 
   // Alias / Public link customization state
   const [aliasInput, setAliasInput] = useState('');
@@ -95,6 +111,22 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       setWhatsappEnabled(Boolean(currentBranch.whatsapp_ordering_enabled));
       setGoogleReviewUrl(currentBranch.google_review_url || '');
       setIsOpenForOrders(currentBranch.status !== 'inactive');
+      setDeliveryFeeEnabled(currentBranch.delivery_fee_enabled !== false);
+      setFreeDeliveryMinPesos(
+        currentBranch.free_delivery_min_cents != null && currentBranch.free_delivery_min_cents > 0
+          ? String(currentBranch.free_delivery_min_cents / 100)
+          : ''
+      );
+      setDeliveryTiers(
+        currentBranch.delivery_tiers && currentBranch.delivery_tiers.length > 0
+          ? currentBranch.delivery_tiers
+          : [
+              { id: 'tier-corta', name: 'Corta ($20)', fee_cents: 2000, is_default_web: false },
+              { id: 'tier-media', name: 'Media ($30)', fee_cents: 3000, is_default_web: false },
+              { id: 'tier-lejana', name: 'Lejana ($40)', fee_cents: 4000, is_default_web: false },
+              { id: 'tier-gratis', name: 'Gratis ($0)', fee_cents: 0, is_default_web: true },
+            ]
+      );
     }
   }, [currentBranch]);
 
@@ -179,6 +211,9 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       whatsapp_ordering_enabled: whatsappEnabled,
       google_review_url: googleReviewUrl.trim(),
       status: isOpenForOrders ? 'active' : 'inactive',
+      delivery_fee_enabled: deliveryFeeEnabled,
+      delivery_tiers: deliveryTiers,
+      free_delivery_min_cents: freeDeliveryMinPesos.trim() ? Math.round(parseFloat(freeDeliveryMinPesos) * 100) : null,
     });
   };
 
@@ -751,6 +786,240 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                     outline: 'none',
                   }}
                 />
+              </div>
+
+              {/* Card: Costos de Envío a Domicilio */}
+              <div
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: 16,
+                  padding: 16,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                  marginBottom: 18,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Bike size={20} color="#059669" />
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    Costos de Envío a Domicilio
+                  </h3>
+                </div>
+
+                {/* Toggle Delivery Fee */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 0',
+                    borderBottom: '1px solid #f1f5f9',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
+                      Cobrar costo de envío
+                    </div>
+                    <div style={{ fontSize: '0.775rem', color: '#64748b' }}>
+                      {deliveryFeeEnabled ? 'Tarifas activas para POS y Menú Digital' : 'Envío siempre sin costo adicional'}
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={deliveryFeeEnabled}
+                    onChange={(e) => setDeliveryFeeEnabled(e.target.checked)}
+                    style={{ width: 22, height: 22, cursor: 'pointer', accentColor: '#059669' }}
+                  />
+                </div>
+
+                {deliveryFeeEnabled && (
+                  <>
+                    {/* Free Delivery threshold */}
+                    <div style={{ padding: '14px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          color: '#334155',
+                          marginBottom: 4,
+                        }}
+                      >
+                        Envío GRATIS en compras a partir de ($ MXN)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="Ej. 300 (opcional, deja vacío si no aplica)"
+                        value={freeDeliveryMinPesos}
+                        onChange={(e) => setFreeDeliveryMinPesos(e.target.value)}
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '10px 12px',
+                          fontSize: '0.9rem',
+                          borderRadius: 10,
+                          border: '1px solid #cbd5e1',
+                          outline: 'none',
+                        }}
+                      />
+                      <span style={{ display: 'block', marginTop: 4, fontSize: '0.75rem', color: '#64748b' }}>
+                        Si el subtotal del cliente alcanza este monto, el sistema aplicará automáticamente envío gratis ($0).
+                      </span>
+                    </div>
+
+                    {/* Tiers List */}
+                    <div style={{ paddingTop: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <label
+                          style={{
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            color: '#334155',
+                          }}
+                        >
+                          Tarifas por distancia / zona
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newId = `tier-${Date.now()}`;
+                            setDeliveryTiers([
+                              ...deliveryTiers,
+                              { id: newId, name: 'Nueva Zona', fee_cents: 2500, is_default_web: false },
+                            ]);
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            backgroundColor: '#ecfdf5',
+                            border: '1px solid #a7f3d0',
+                            borderRadius: 8,
+                            color: '#047857',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <Plus size={14} /> Agregar tarifa
+                        </button>
+                      </div>
+                      <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: '#64748b' }}>
+                        Selecciona con el radio cuál es la tarifa <strong>por defecto para el Menú Web Móvil</strong> (puedes marcar Gratis si no deseas cobrar envío por la web).
+                      </p>
+
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {deliveryTiers.map((tier, idx) => (
+                          <div
+                            key={tier.id || idx}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '10px 12px',
+                              backgroundColor: tier.is_default_web ? '#f0fdf4' : '#f8fafc',
+                              border: `1px solid ${tier.is_default_web ? '#86efac' : '#e2e8f0'}`,
+                              borderRadius: 10,
+                            }}
+                          >
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', margin: 0 }}>
+                              <input
+                                type="radio"
+                                name="default_web_tier"
+                                checked={tier.is_default_web}
+                                onChange={() => {
+                                  setDeliveryTiers(
+                                    deliveryTiers.map((t, i) => ({
+                                      ...t,
+                                      is_default_web: i === idx,
+                                    }))
+                                  );
+                                }}
+                                title="Predeterminado Web"
+                                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#16a34a' }}
+                              />
+                              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: tier.is_default_web ? '#059669' : '#64748b', whiteSpace: 'nowrap' }}>
+                                {tier.is_default_web ? 'Predeterminado Web' : 'Web'}
+                              </span>
+                            </label>
+
+                            <input
+                              type="text"
+                              value={tier.name}
+                              onChange={(e) => {
+                                const updated = [...deliveryTiers];
+                                updated[idx] = { ...updated[idx], name: e.target.value };
+                                setDeliveryTiers(updated);
+                              }}
+                              placeholder="Nombre (ej. Corta, Gratis)"
+                              style={{
+                                flex: 1,
+                                minWidth: 80,
+                                padding: '6px 8px',
+                                fontSize: '0.85rem',
+                                borderRadius: 6,
+                                border: '1px solid #cbd5e1',
+                                outline: 'none',
+                                background: '#ffffff',
+                              }}
+                            />
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: '0.85rem', color: '#64748b' }}>$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={tier.fee_cents / 100}
+                                onChange={(e) => {
+                                  const updated = [...deliveryTiers];
+                                  const val = parseFloat(e.target.value) || 0;
+                                  updated[idx] = { ...updated[idx], fee_cents: Math.max(0, Math.round(val * 100)) };
+                                  setDeliveryTiers(updated);
+                                }}
+                                style={{
+                                  width: 65,
+                                  padding: '6px 8px',
+                                  fontSize: '0.85rem',
+                                  borderRadius: 6,
+                                  border: '1px solid #cbd5e1',
+                                  outline: 'none',
+                                  background: '#ffffff',
+                                }}
+                              />
+                            </div>
+
+                            {deliveryTiers.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = deliveryTiers.filter((_, i) => i !== idx);
+                                  if (tier.is_default_web && updated.length > 0) {
+                                    updated[0].is_default_web = true;
+                                  }
+                                  setDeliveryTiers(updated);
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#94a3b8',
+                                  cursor: 'pointer',
+                                  padding: 4,
+                                }}
+                                title="Eliminar tarifa"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <button

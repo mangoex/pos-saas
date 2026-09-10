@@ -2676,6 +2676,7 @@ def create_order(
     delivery_address_id = payload.get("delivery_address_id")
     payment_method_intent = payload.get("payment_method_intent")
     driver_id = payload.get("driver_id")
+    delivery_fee_cents = int(payload.get("delivery_fee_cents") or 0)
     adjustment_authorization_id = (
         str(payload.get("adjustment_authorization_id") or "").strip() or None
     )
@@ -2713,6 +2714,7 @@ def create_order(
             adjustment_authorization_id,
             idempotency_key,
             customer_phone=customer_phone,
+            delivery_fee_cents=delivery_fee_cents,
         )
 
     return _business_response(operation)

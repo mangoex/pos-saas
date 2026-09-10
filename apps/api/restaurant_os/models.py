@@ -112,6 +112,14 @@ branches = sa.Table(
         nullable=False,
         server_default=sa.false(),
     ),
+    sa.Column(
+        "delivery_fee_enabled",
+        sa.Boolean(),
+        nullable=False,
+        server_default=sa.false(),
+    ),
+    sa.Column("delivery_tiers", sa.JSON(), nullable=False, server_default="[]"),
+    sa.Column("free_delivery_min_cents", sa.Integer(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     sa.UniqueConstraint("organization_id", "code", name="uq_branches_organization_code"),
@@ -1615,6 +1623,7 @@ orders = sa.Table(
     sa.Column("channel", sa.String(32), nullable=False),
     sa.Column("status", sa.String(32), nullable=False),
     sa.Column("total_cents", sa.Integer(), nullable=False),
+    sa.Column("delivery_fee_cents", sa.Integer(), nullable=False, server_default="0"),
     sa.Column("currency", sa.String(3), nullable=False, server_default="MXN"),
     sa.Column("owner_name", sa.String(160), nullable=True),
     sa.Column("order_type", sa.String(32), nullable=False, server_default="dine-in"),
@@ -1623,6 +1632,10 @@ orders = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
     sa.UniqueConstraint("branch_id", "folio", name="uq_orders_branch_folio"),
+    sa.CheckConstraint(
+        "delivery_fee_cents >= 0",
+        name="ck_orders_delivery_fee_cents_non_negative",
+    ),
     sa.CheckConstraint(
         "cash_shift_id IS NOT NULL OR channel IN ('UBER_EATS', 'DIDI_FOOD', 'RAPPI') "
         "OR (channel = 'PUBLIC_INTENT' "
@@ -1668,6 +1681,7 @@ public_order_intents = sa.Table(
     sa.Column("order_type", sa.String(32), nullable=False),
     sa.Column("order_notes", sa.String(500), nullable=True),
     sa.Column("total_cents", sa.Integer(), nullable=False),
+    sa.Column("delivery_fee_cents", sa.Integer(), nullable=False, server_default="0"),
     sa.Column("currency", sa.String(3), nullable=False, server_default="MXN"),
     sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
     sa.Column(
@@ -1683,7 +1697,8 @@ public_order_intents = sa.Table(
         name="ck_public_order_intents_status",
     ),
     sa.CheckConstraint(
-        "total_cents >= 0 AND version > 0", name="ck_public_order_intents_amount_version"
+        "total_cents >= 0 AND delivery_fee_cents >= 0 AND version > 0",
+        name="ck_public_order_intents_amount_version",
     ),
 )
 sa.UniqueConstraint(

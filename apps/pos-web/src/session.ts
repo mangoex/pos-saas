@@ -25,6 +25,13 @@ export interface SessionBusinessUnit {
   unit_type: string;
 }
 
+export interface DeliveryTier {
+  id: string;
+  name: string;
+  fee_cents: number;
+  is_default_web: boolean;
+}
+
 export interface SessionActiveBranch {
   id: string;
   name: string;
@@ -34,6 +41,9 @@ export interface SessionActiveBranch {
   business_unit: SessionBusinessUnit;
   legal_entity: { id: string; name: string };
   warehouse: { id: string; name: string } | null;
+  delivery_fee_enabled?: boolean;
+  delivery_tiers?: DeliveryTier[];
+  free_delivery_min_cents?: number | null;
 }
 
 export interface PosSession {

@@ -1854,3 +1854,67 @@ def test_audit_fulfillment_migration_sqlite_upgrade_and_guarded_downgrade(
     blocked = run_alembic("downgrade", "0043_reconciliation_audit_log")
     assert blocked.returncode != 0
     assert "Order fulfillment or adjustment history blocks downgrade" in blocked.stderr
+
+
+def test_delivery_fees_migration_roundtrip(tmp_path: Path) -> None:
+    database_path = tmp_path / "delivery-fees-migration.db"
+    env = {
+        **os.environ,
+        "RESTAURANTOS_DATABASE_URL": f"sqlite+pysqlite:///{database_path}",
+    }
+
+    def run_alembic(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "alembic", "-c", "alembic.ini", *args],
+            cwd=ROOT / "apps" / "api",
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    # Upgrade to head (includes 0088)
+    up = run_alembic("upgrade", "head")
+    assert up.returncode == 0, up.stderr
+
+    conn = sqlite3.connect(database_path)
+    try:
+        branches_cols = [r[1] for r in conn.execute("PRAGMA table_info(branches)").fetchall()]
+        assert "delivery_fee_enabled" in branches_cols
+        assert "delivery_tiers" in branches_cols
+        assert "free_delivery_min_cents" in branches_cols
+
+        orders_cols = [r[1] for r in conn.execute("PRAGMA table_info(orders)").fetchall()]
+        assert "delivery_fee_cents" in orders_cols
+
+        intents_cols = [
+            r[1] for r in conn.execute("PRAGMA table_info(public_order_intents)").fetchall()
+        ]
+        assert "delivery_fee_cents" in intents_cols
+    finally:
+        conn.close()
+
+    # Downgrade to 0087
+    down = run_alembic("downgrade", "0087_widen_image_url_columns")
+    assert down.returncode == 0, down.stderr
+
+    conn = sqlite3.connect(database_path)
+    try:
+        branches_cols = [r[1] for r in conn.execute("PRAGMA table_info(branches)").fetchall()]
+        assert "delivery_fee_enabled" not in branches_cols
+        assert "delivery_tiers" not in branches_cols
+        assert "free_delivery_min_cents" not in branches_cols
+
+        orders_cols = [r[1] for r in conn.execute("PRAGMA table_info(orders)").fetchall()]
+        assert "delivery_fee_cents" not in orders_cols
+
+        intents_cols = [
+            r[1] for r in conn.execute("PRAGMA table_info(public_order_intents)").fetchall()
+        ]
+        assert "delivery_fee_cents" not in intents_cols
+    finally:
+        conn.close()
+
+    # Re-upgrade to head
+    up_again = run_alembic("upgrade", "head")
+    assert up_again.returncode == 0, up_again.stderr

@@ -47,6 +47,13 @@ export interface Category {
   image_url?: string | null;
 }
 
+export interface DeliveryTier {
+  id: string;
+  name: string;
+  fee_cents: number;
+  is_default_web: boolean;
+}
+
 export interface BranchInfo {
   id: string;
   name: string;
@@ -68,6 +75,9 @@ export interface BranchInfo {
   google_review_url?: string | null;
   mobile_theme?: 'light' | 'dark' | string;
   whatsapp_ordering_enabled?: boolean;
+  delivery_fee_enabled?: boolean;
+  delivery_tiers?: DeliveryTier[];
+  free_delivery_min_cents?: number | null;
   has_active_shift?: boolean;
 }
 
@@ -108,12 +118,14 @@ export interface CustomerOrderInfo {
   payment_method: PaymentMethod;
   cash_amount?: string;
   order_notes?: string;
+  delivery_fee_cents?: number;
 }
 
 interface PersistedOrderResultBase {
   customer_info: CustomerOrderInfo;
   items: CartItem[];
   total_cents: number;
+  delivery_fee_cents?: number;
   whatsapp_url?: string;
 }
 

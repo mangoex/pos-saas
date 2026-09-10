@@ -16,10 +16,18 @@ import {
   Building2,
   CheckCircle2,
   MessageSquare,
+  Bike,
 } from 'lucide-react';
 
 import '../../premium-catalogs.css';
 import './BranchesList.css';
+
+export interface DeliveryTier {
+  id: string;
+  name: string;
+  fee_cents: number;
+  is_default_web: boolean;
+}
 
 interface Branch {
   id: string;
@@ -39,6 +47,9 @@ interface Branch {
   phone?: string;
   google_review_url?: string;
   whatsapp_ordering_enabled?: boolean;
+  delivery_fee_enabled?: boolean;
+  delivery_tiers?: DeliveryTier[];
+  free_delivery_min_cents?: number | null;
   organization_id: string;
   business_unit_id: string;
   business_unit_name: string;
@@ -52,6 +63,13 @@ interface BusinessUnit {
   unit_type: 'restaurant' | 'other';
   legal_entity_name: string;
 }
+
+const defaultDeliveryTiers: DeliveryTier[] = [
+  { id: 'tier-corta', name: 'Corta', fee_cents: 2000, is_default_web: false },
+  { id: 'tier-media', name: 'Media', fee_cents: 3000, is_default_web: false },
+  { id: 'tier-lejana', name: 'Lejana', fee_cents: 4000, is_default_web: false },
+  { id: 'tier-gratis', name: 'Gratis', fee_cents: 0, is_default_web: true },
+];
 
 const emptyForm = {
   name: '',
@@ -70,6 +88,9 @@ const emptyForm = {
   phone: '',
   google_review_url: '',
   whatsapp_ordering_enabled: false,
+  delivery_fee_enabled: true,
+  free_delivery_min_pesos: '',
+  delivery_tiers: defaultDeliveryTiers,
 };
 
 const BranchesList = () => {
@@ -100,7 +121,11 @@ const BranchesList = () => {
         ...data,
         latitude: data.latitude.trim() ? parseFloat(data.latitude) : null,
         longitude: data.longitude.trim() ? parseFloat(data.longitude) : null,
+        free_delivery_min_cents: data.free_delivery_min_pesos && data.free_delivery_min_pesos.trim()
+          ? Math.round(parseFloat(data.free_delivery_min_pesos) * 100)
+          : null,
       };
+      delete payload.free_delivery_min_pesos;
       if (editingBranch) {
         return fetchApi(`/branches/${editingBranch.id}`, {
           method: 'PUT',
@@ -143,6 +168,13 @@ const BranchesList = () => {
         phone: branch.phone || '',
         google_review_url: branch.google_review_url || '',
         whatsapp_ordering_enabled: Boolean(branch.whatsapp_ordering_enabled),
+        delivery_fee_enabled: branch.delivery_fee_enabled !== false,
+        free_delivery_min_pesos: branch.free_delivery_min_cents != null && branch.free_delivery_min_cents > 0
+          ? String(branch.free_delivery_min_cents / 100)
+          : '',
+        delivery_tiers: branch.delivery_tiers && branch.delivery_tiers.length > 0
+          ? branch.delivery_tiers
+          : defaultDeliveryTiers,
       });
     } else {
       setEditingBranch(null);
@@ -598,6 +630,186 @@ const BranchesList = () => {
                 Los comensales que califiquen con 4 o 5 estrellas al confirmar su pedido serán invitados a compartir su reseña pública en este enlace.
               </p>
             </div>
+          </section>
+
+          {/* 5. Costos de Envío a Domicilio */}
+          <section className="branch-form-section">
+            <div className="branch-form-section-header">
+              <h3 className="branch-form-section-title">
+                <Bike size={18} color="#10b981" />
+                Costos de Envío a Domicilio
+              </h3>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0' }}>
+              <input
+                type="checkbox"
+                id="branch-delivery-enabled"
+                checked={formData.delivery_fee_enabled}
+                onChange={(e) => setFormData({ ...formData, delivery_fee_enabled: e.target.checked })}
+                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#10b981' }}
+              />
+              <label htmlFor="branch-delivery-enabled" style={{ fontSize: '0.88rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                Habilitar cobro de envío a domicilio
+              </label>
+            </div>
+
+            {formData.delivery_fee_enabled && (
+              <>
+                <div style={{ margin: '12px 0' }}>
+                  <label className="branch-field-label">Envío GRATIS a partir de compras mayores a ($ MXN)</label>
+                  <Input
+                    type="number"
+                    value={formData.free_delivery_min_pesos}
+                    onChange={(e: any) => setFormData({ ...formData, free_delivery_min_pesos: e.target.value })}
+                    placeholder="Ej. 300 (opcional)"
+                  />
+                  <span className="branch-input-helper">
+                    Si el subtotal del cliente supera este monto, el sistema aplicará automáticamente $0 de envío.
+                  </span>
+                </div>
+
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <label className="branch-field-label" style={{ margin: 0 }}>Tarifas por distancia / zona</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newId = `tier-${Date.now()}`;
+                        setFormData({
+                          ...formData,
+                          delivery_tiers: [
+                            ...formData.delivery_tiers,
+                            { id: newId, name: 'Nueva Zona', fee_cents: 2500, is_default_web: false },
+                          ],
+                        });
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        backgroundColor: '#ecfdf5',
+                        border: '1px solid #a7f3d0',
+                        borderRadius: 6,
+                        color: '#047857',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Plus size={13} /> Agregar tarifa
+                    </button>
+                  </div>
+                  <span className="branch-input-helper" style={{ marginBottom: 8, display: 'block' }}>
+                    Marca con el radio cuál es la tarifa por defecto para el Menú Web Móvil (puedes marcar Gratis si no deseas cobrar envío en la app móvil).
+                  </span>
+
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {formData.delivery_tiers.map((tier, idx) => (
+                      <div
+                        key={tier.id || idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '8px 10px',
+                          backgroundColor: tier.is_default_web ? '#f0fdf4' : '#f8fafc',
+                          border: `1px solid ${tier.is_default_web ? '#86efac' : '#e2e8f0'}`,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', margin: 0 }}>
+                          <input
+                            type="radio"
+                            name="default_web_tier_branch"
+                            checked={tier.is_default_web}
+                            onChange={() => {
+                              setFormData({
+                                ...formData,
+                                delivery_tiers: formData.delivery_tiers.map((t, i) => ({
+                                  ...t,
+                                  is_default_web: i === idx,
+                                })),
+                              });
+                            }}
+                            title="Predeterminado Web"
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#10b981' }}
+                          />
+                          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: tier.is_default_web ? '#059669' : '#64748b', whiteSpace: 'nowrap' }}>
+                            {tier.is_default_web ? 'Predeterminado Web' : 'Web'}
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          value={tier.name}
+                          onChange={(e) => {
+                            const updated = [...formData.delivery_tiers];
+                            updated[idx] = { ...updated[idx], name: e.target.value };
+                            setFormData({ ...formData, delivery_tiers: updated });
+                          }}
+                          placeholder="Nombre (ej. Corta, Gratis)"
+                          style={{
+                            flex: 1,
+                            minWidth: 80,
+                            padding: '6px 8px',
+                            fontSize: '0.85rem',
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            outline: 'none',
+                          }}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: '0.85rem', color: '#64748b' }}>$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={tier.fee_cents / 100}
+                            onChange={(e) => {
+                              const updated = [...formData.delivery_tiers];
+                              const val = parseFloat(e.target.value) || 0;
+                              updated[idx] = { ...updated[idx], fee_cents: Math.max(0, Math.round(val * 100)) };
+                              setFormData({ ...formData, delivery_tiers: updated });
+                            }}
+                            style={{
+                              width: 65,
+                              padding: '6px 8px',
+                              fontSize: '0.85rem',
+                              borderRadius: 6,
+                              border: '1px solid #cbd5e1',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                        {formData.delivery_tiers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = formData.delivery_tiers.filter((_, i) => i !== idx);
+                              if (tier.is_default_web && updated.length > 0) {
+                                updated[0].is_default_web = true;
+                              }
+                              setFormData({ ...formData, delivery_tiers: updated });
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              padding: 4,
+                            }}
+                            title="Eliminar tarifa"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </section>
 
           {/* Footer de Acciones */}

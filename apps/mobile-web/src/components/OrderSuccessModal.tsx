@@ -180,6 +180,16 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                 {orderResult.customer_info.order_type === 'takeaway' ? '🏃 Recoger en Sucursal' : '🛵 Envío a Domicilio'}
               </span>
             </div>
+            {orderResult.customer_info.order_type === 'delivery' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                <strong style={{ fontSize: '13px', color: '#64748b' }}>Envío a Domicilio:</strong>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: (orderResult.delivery_fee_cents || orderResult.customer_info.delivery_fee_cents) ? '#0f172a' : '#16a34a' }}>
+                  {(orderResult.delivery_fee_cents || orderResult.customer_info.delivery_fee_cents)
+                    ? formatMoney(orderResult.delivery_fee_cents || orderResult.customer_info.delivery_fee_cents!)
+                    : '¡Gratis!'}
+                </span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
               <strong style={{ fontSize: '13px', color: '#64748b' }}>Total a Pagar:</strong>
               <span style={{ fontSize: '14px', fontWeight: 800, color: '#10b981' }}>{formatMoney(orderResult.total_cents)}</span>

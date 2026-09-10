@@ -942,6 +942,9 @@ def create_branch(
     phone: str | None = None,
     google_review_url: str | None = None,
     whatsapp_ordering_enabled: bool | None = None,
+    delivery_fee_enabled: bool | None = None,
+    delivery_tiers: list[dict[str, Any]] | None = None,
+    free_delivery_min_cents: int | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -1011,6 +1014,13 @@ def create_branch(
         "whatsapp_ordering_enabled": bool(whatsapp_ordering_enabled)
         if whatsapp_ordering_enabled is not None
         else False,
+        "delivery_fee_enabled": bool(delivery_fee_enabled)
+        if delivery_fee_enabled is not None
+        else False,
+        "delivery_tiers": list(delivery_tiers) if isinstance(delivery_tiers, list) else [],
+        "free_delivery_min_cents": int(free_delivery_min_cents)
+        if free_delivery_min_cents is not None and free_delivery_min_cents != ""
+        else None,
         "created_at": now,
         "updated_at": now,
     }
@@ -3330,10 +3340,19 @@ def create_local_order(
     adjustment_authorization_id: str | None = None,
     idempotency_key: str | None = None,
     customer_phone: str | None = None,
+    delivery_fee_cents: int = 0,
 ) -> dict[str, Any]:
     _begin_cash_shift_serialization(session)
     if not lines:
         raise BusinessError("invalid_quantity", "Order must have at least one line")
+
+    fee_cents = int(delivery_fee_cents or 0)
+    if fee_cents < 0:
+        raise BusinessError("delivery_fee_invalid", "Delivery fee must be non-negative")
+    if order_type != "delivery" and fee_cents > 0:
+        raise BusinessError(
+            "delivery_fee_not_allowed", "Delivery fee is only allowed for delivery orders"
+        )
 
     register_code = register_id or DEFAULT_REGISTER
     actual_branch_id = branch_id or BRANCH_ID
@@ -3362,6 +3381,7 @@ def create_local_order(
                     "driver_id": str(driver_id or "").strip() or None,
                     "adjustment_authorization_id": adjustment_authorization_id,
                     "lines": lines,
+                    "delivery_fee_cents": fee_cents,
                 }
             ),
             sort_keys=True,
@@ -3534,6 +3554,7 @@ def create_local_order(
                 "Order subtotal changed after supervisor authorization",
             )
         total_cents -= adjustment_cents
+    total_cents += fee_cents
 
     order = {
         "id": order_id,
@@ -3547,6 +3568,7 @@ def create_local_order(
         "channel": "POS",
         "status": "ACCEPTED",
         "total_cents": total_cents,
+        "delivery_fee_cents": fee_cents,
         "currency": "MXN",
         "owner_name": owner_name,
         "order_type": order_type,
@@ -11452,6 +11474,9 @@ def update_branch(
     phone: str | None = None,
     google_review_url: str | None = None,
     whatsapp_ordering_enabled: bool | None = None,
+    delivery_fee_enabled: bool | None = None,
+    delivery_tiers: list[dict[str, Any]] | None = None,
+    free_delivery_min_cents: int | None = None,
     extra_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
@@ -11504,6 +11529,14 @@ def update_branch(
         update_data["google_review_url"] = str(google_review_url).strip() or None
     if whatsapp_ordering_enabled is not None:
         update_data["whatsapp_ordering_enabled"] = bool(whatsapp_ordering_enabled)
+    if delivery_fee_enabled is not None:
+        update_data["delivery_fee_enabled"] = bool(delivery_fee_enabled)
+    if delivery_tiers is not None:
+        update_data["delivery_tiers"] = list(delivery_tiers) if isinstance(delivery_tiers, list) else []
+    if free_delivery_min_cents is not None:
+        update_data["free_delivery_min_cents"] = (
+            int(free_delivery_min_cents) if free_delivery_min_cents != "" and free_delivery_min_cents is not None else None
+        )
 
     if extra_payload:
         for k in (
@@ -11529,6 +11562,16 @@ def update_branch(
             update_data["longitude"] = float(v_lng) if v_lng != "" and v_lng is not None else None
         if "whatsapp_ordering_enabled" in extra_payload and "whatsapp_ordering_enabled" not in update_data:
             update_data["whatsapp_ordering_enabled"] = bool(extra_payload["whatsapp_ordering_enabled"])
+        if "delivery_fee_enabled" in extra_payload and "delivery_fee_enabled" not in update_data:
+            update_data["delivery_fee_enabled"] = bool(extra_payload["delivery_fee_enabled"])
+        if "delivery_tiers" in extra_payload and "delivery_tiers" not in update_data:
+            t_val = extra_payload["delivery_tiers"]
+            update_data["delivery_tiers"] = list(t_val) if isinstance(t_val, list) else []
+        if "free_delivery_min_cents" in extra_payload and "free_delivery_min_cents" not in update_data:
+            v_free = extra_payload["free_delivery_min_cents"]
+            update_data["free_delivery_min_cents"] = (
+                int(v_free) if v_free is not None and v_free != "" else None
+            )
 
 
     if update_data:
@@ -11646,6 +11689,9 @@ def list_public_branches(
             models.branches.c.phone,
             models.branches.c.google_review_url,
             models.branches.c.whatsapp_ordering_enabled,
+            models.branches.c.delivery_fee_enabled,
+            models.branches.c.delivery_tiers,
+            models.branches.c.free_delivery_min_cents,
             models.branches.c.status,
             models.public_order_keys.c.public_key,
         )
@@ -25601,6 +25647,9 @@ def _branch_detail(
                 models.branches.c.code,
                 models.branches.c.timezone,
                 models.branches.c.status,
+                models.branches.c.delivery_fee_enabled,
+                models.branches.c.delivery_tiers,
+                models.branches.c.free_delivery_min_cents,
                 models.business_units.c.id.label("bu_id"),
                 models.business_units.c.name.label("bu_name"),
                 models.business_units.c.code.label("bu_code"),
@@ -25641,6 +25690,9 @@ def _branch_detail(
         "code": row["code"],
         "timezone": row["timezone"],
         "status": row["status"],
+        "delivery_fee_enabled": bool(row["delivery_fee_enabled"]) if row["delivery_fee_enabled"] is not None else False,
+        "delivery_tiers": list(row["delivery_tiers"]) if isinstance(row["delivery_tiers"], list) else [],
+        "free_delivery_min_cents": row["free_delivery_min_cents"],
         "business_unit": {
             "id": row["bu_id"],
             "name": row["bu_name"],
@@ -26029,6 +26081,7 @@ def _public_intent_response(intent: dict[str, Any]) -> dict[str, Any]:
         "status": intent["status"],
         "version": int(intent["version"]),
         "total_cents": int(intent["total_cents"]),
+        "delivery_fee_cents": int(intent.get("delivery_fee_cents") or 0),
     }
 
 
@@ -26071,7 +26124,13 @@ def create_public_order_intent(
         raise BusinessError("public_order_schema_invalid", "Idempotency-Key is invalid")
     configured = (
         session.execute(
-            sa.select(models.public_order_keys, models.branches.c.organization_id)
+            sa.select(
+                models.public_order_keys,
+                models.branches.c.organization_id,
+                models.branches.c.delivery_fee_enabled,
+                models.branches.c.delivery_tiers,
+                models.branches.c.free_delivery_min_cents,
+            )
             .join(models.branches, models.branches.c.id == models.public_order_keys.c.branch_id)
             .where(
                 models.public_order_keys.c.public_key == public_key,
@@ -26177,11 +26236,30 @@ def create_public_order_intent(
                 "created_at": now,
             }
         )
+
+    delivery_fee = 0
+    if normalized["order_type"] == "delivery" and bool(configured.get("delivery_fee_enabled")):
+        free_min = configured.get("free_delivery_min_cents")
+        if free_min is not None and total_cents >= int(free_min):
+            delivery_fee = 0
+        else:
+            tiers = configured.get("delivery_tiers") or []
+            default_tier = next(
+                (t for t in tiers if isinstance(t, dict) and t.get("is_default_web")),
+                None,
+            )
+            if default_tier:
+                delivery_fee = max(0, int(default_tier.get("fee_cents") or 0))
+            else:
+                delivery_fee = 0
+
+    grand_total_cents = total_cents + delivery_fee
     result = {
         "public_reference": f"PI-{intent_id.replace('-', '').upper()}",
         "status": "PENDING_REVIEW",
         "version": 1,
-        "total_cents": total_cents,
+        "total_cents": grand_total_cents,
+        "delivery_fee_cents": delivery_fee,
     }
     session.execute(
         models.public_order_intents.insert().values(
@@ -26203,7 +26281,8 @@ def create_public_order_intent(
             delivery_address_snapshot=normalized["delivery_address"],
             order_type=normalized["order_type"],
             order_notes=normalized["order_notes"],
-            total_cents=total_cents,
+            total_cents=grand_total_cents,
+            delivery_fee_cents=delivery_fee,
             currency="MXN",
             version=1,
             created_at=now,
@@ -26481,6 +26560,7 @@ def accept_public_order_intent(
         "channel": "PUBLIC_INTENT",
         "status": "ACCEPTED",
         "total_cents": int(intent["total_cents"]),
+        "delivery_fee_cents": int(intent.get("delivery_fee_cents") or 0),
         "currency": "MXN",
         "owner_name": (cust_snap or {}).get("name"),
         "order_type": intent["order_type"],
@@ -26605,6 +26685,7 @@ def accept_public_order_intent(
         "cash_shift_id": None,
         "status": "ACCEPTED",
         "total_cents": int(intent["total_cents"]),
+        "delivery_fee_cents": int(intent.get("delivery_fee_cents") or 0),
     }
     try:
         session.execute(

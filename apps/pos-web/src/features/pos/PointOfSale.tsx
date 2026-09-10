@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Button, Modal } from '@restaurantos/ui';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
 import { ShoppingBag, Search, Plus, Minus, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Utensils, Users, UserRound, X, Check, Banknote, CreditCard, Landmark, Trash2, Bike, Mic, Send, Sparkles, LayoutGrid, Star } from 'lucide-react';
-import { usePosSession } from '../../session';
+import { usePosSession, type DeliveryTier } from '../../session';
 import { formatMxnCents } from './cartMoney';
 import {
   resolveEditableLineProduct,
@@ -351,6 +351,8 @@ const PointOfSale = () => {
   const [driverPickerOpen, setDriverPickerOpen] = useState(false);
   const [driversLoading, setDriversLoading] = useState(false);
   const [driversError, setDriversError] = useState('');
+  const [selectedDeliveryTierId, setSelectedDeliveryTierId] = useState<string | null>(null);
+  const [deliveryFeeCents, setDeliveryFeeCents] = useState<number>(0);
   const searchControllerRef = useRef<AbortController | null>(null);
   const checkoutIntentRef = useRef<{ fingerprint: string; key: string; paymentKey: string } | null>(null);
   const checkoutRecoveryStartedRef = useRef(false);
@@ -627,13 +629,51 @@ const PointOfSale = () => {
     return () => { cancelled = true; };
   }, [editOrderId, products]);
 
+  const availableDeliveryTiers = useMemo<DeliveryTier[]>(() => {
+    const branchTiers = session?.active_branch?.delivery_tiers;
+    if (branchTiers && branchTiers.length > 0) {
+      return branchTiers;
+    }
+    return [
+      { id: 'tier-corta', name: 'Corta ($20)', fee_cents: 2000, is_default_web: true },
+      { id: 'tier-media', name: 'Media ($30)', fee_cents: 3000, is_default_web: false },
+      { id: 'tier-lejana', name: 'Lejana ($40)', fee_cents: 4000, is_default_web: false },
+      { id: 'tier-gratis', name: 'Gratis ($0)', fee_cents: 0, is_default_web: false },
+    ];
+  }, [session?.active_branch?.delivery_tiers]);
+
   useEffect(() => {
     if (orderType !== 'delivery') {
       setSelectedDriverId('');
       setDriverPickerOpen(false);
       setDriversError('');
+      setDeliveryFeeCents(0);
+      setSelectedDeliveryTierId(null);
+      return;
     }
-  }, [orderType]);
+    if (session?.active_branch?.delivery_fee_enabled === false) {
+      setDeliveryFeeCents(0);
+      setSelectedDeliveryTierId(null);
+      return;
+    }
+    const freeMin = session?.active_branch?.free_delivery_min_cents;
+    const subtotal = orderQuote?.subtotal_cents ?? 0;
+    if (freeMin != null && freeMin > 0 && subtotal >= freeMin) {
+      const gratisTier = availableDeliveryTiers.find((t: DeliveryTier) => t.fee_cents === 0);
+      if (gratisTier) {
+        setSelectedDeliveryTierId(gratisTier.id);
+        setDeliveryFeeCents(0);
+        return;
+      }
+    }
+    if (!selectedDeliveryTierId) {
+      const defaultTier = availableDeliveryTiers.find((t: DeliveryTier) => t.is_default_web) || availableDeliveryTiers[0];
+      if (defaultTier) {
+        setSelectedDeliveryTierId(defaultTier.id);
+        setDeliveryFeeCents(defaultTier.fee_cents);
+      }
+    }
+  }, [orderType, session?.active_branch, availableDeliveryTiers, orderQuote?.subtotal_cents, selectedDeliveryTierId]);
 
   // Búsqueda exacta por teléfono con debounce y AbortController
   useEffect(() => {
@@ -1204,6 +1244,7 @@ const PointOfSale = () => {
       branch_id: branchId || undefined,
       register_id: registerId,
       adjustment_authorization_id: adjustmentAuthorizationId || undefined,
+      delivery_fee_cents: orderType === 'delivery' ? deliveryFeeCents : 0,
       lines: buildOrderLines(cart),
     };
     const fingerprint = JSON.stringify(payload);
@@ -1309,7 +1350,7 @@ const PointOfSale = () => {
     }
   };
 
-  const totalCents = orderQuote?.total_cents ?? 0;
+  const totalCents = (orderQuote?.total_cents ?? 0) + (orderType === 'delivery' ? deliveryFeeCents : 0);
   const subtotalCents = orderQuote?.subtotal_cents ?? 0;
   const effectiveCourtesyCents = orderQuote?.adjustment_cents ?? 0;
 
@@ -1568,6 +1609,50 @@ const PointOfSale = () => {
             ))}
           </div>
 
+          {orderType === 'delivery' && (
+            <div style={{ margin: '8px 12px 0', padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>🛵 Tarifa de envío:</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: deliveryFeeCents === 0 ? '#16a34a' : '#0f172a' }}>
+                  {deliveryFeeCents === 0 ? '¡GRATIS!' : formatMxnCents(deliveryFeeCents)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {availableDeliveryTiers.map((tier: DeliveryTier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDeliveryTierId(tier.id);
+                      setDeliveryFeeCents(tier.fee_cents);
+                    }}
+                    style={{
+                      flex: '1 1 auto',
+                      padding: '5px 8px',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      border: `1px solid ${selectedDeliveryTierId === tier.id ? '#10b981' : '#cbd5e1'}`,
+                      background: selectedDeliveryTierId === tier.id ? '#ecfdf5' : '#ffffff',
+                      color: selectedDeliveryTierId === tier.id ? '#047857' : '#475569',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {tier.name}
+                  </button>
+                ))}
+              </div>
+              {session?.active_branch?.free_delivery_min_cents != null && session.active_branch.free_delivery_min_cents > 0 && (
+                <div style={{ marginTop: '6px', fontSize: '0.75rem', color: (orderQuote?.subtotal_cents ?? 0) >= session.active_branch.free_delivery_min_cents ? '#15803d' : '#64748b' }}>
+                  {(orderQuote?.subtotal_cents ?? 0) >= session.active_branch.free_delivery_min_cents
+                    ? '🎉 Subtotal califica para envío gratis'
+                    : `Envío gratis a partir de ${formatMxnCents(session.active_branch.free_delivery_min_cents)}`}
+                </div>
+              )}
+            </div>
+          )}
+
           {selectedCustomer && upsellRecs.length > 0 && (
             <div style={{ margin: '8px 12px 0', padding: '10px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', fontSize: '0.82rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#15803d', fontWeight: 700, marginBottom: '6px' }}>
@@ -1643,6 +1728,12 @@ const PointOfSale = () => {
               <div style={{ color: '#059669', fontWeight: 600 }}>
                 <span>Cortesía / Descuento ({courtesyReason})</span>
                 <span>-{formatMxnCents(effectiveCourtesyCents)}</span>
+              </div>
+            )}
+            {orderType === 'delivery' && (
+              <div style={{ color: deliveryFeeCents === 0 ? '#16a34a' : 'inherit', fontWeight: 600 }}>
+                <span>Costo de envío</span>
+                <span>{deliveryFeeCents === 0 ? 'Gratis' : formatMxnCents(deliveryFeeCents)}</span>
               </div>
             )}
             <div><span>Impuesto</span><span>{orderQuote?.tax_cents == null ? 'No determinado' : formatMxnCents(orderQuote.tax_cents)}</span></div>
@@ -2118,6 +2209,41 @@ const PointOfSale = () => {
               </div>
             )}
           </section>
+        )}
+        {orderType === 'delivery' && (
+          <div style={{ marginBottom: 16, padding: 12, border: '1px solid #e2e8f0', borderRadius: 10, background: '#f8fafc' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong style={{ fontSize: '0.88rem', color: '#334155' }}>🛵 Tarifa de Envío:</strong>
+              <strong style={{ fontSize: '0.92rem', color: deliveryFeeCents === 0 ? '#16a34a' : '#0f172a' }}>
+                {deliveryFeeCents === 0 ? '¡GRATIS!' : formatMxnCents(deliveryFeeCents)}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {availableDeliveryTiers.map((tier: DeliveryTier) => (
+                <button
+                  key={tier.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDeliveryTierId(tier.id);
+                    setDeliveryFeeCents(tier.fee_cents);
+                  }}
+                  style={{
+                    flex: '1 1 auto',
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: `1px solid ${selectedDeliveryTierId === tier.id ? '#10b981' : '#cbd5e1'}`,
+                    background: selectedDeliveryTierId === tier.id ? '#ecfdf5' : '#ffffff',
+                    color: selectedDeliveryTierId === tier.id ? '#047857' : '#475569',
+                  }}
+                >
+                  {tier.name}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Validación delivery */}

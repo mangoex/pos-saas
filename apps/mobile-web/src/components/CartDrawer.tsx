@@ -88,6 +88,29 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const totalCents = items.reduce((acc, item) => acc + item.line_total_cents, 0);
 
+  // Delivery fee & Free Delivery threshold calculation
+  const deliveryFeeCents = useMemo(() => {
+    if (orderType !== 'delivery') return 0;
+    if (selectedBranch?.delivery_fee_enabled === false) return 0;
+
+    const threshold = selectedBranch?.free_delivery_min_cents;
+    if (threshold != null && threshold > 0 && totalCents >= threshold) {
+      return 0;
+    }
+
+    const tiers = selectedBranch?.delivery_tiers || [];
+    if (tiers.length === 0) return 0;
+    const defaultTier = tiers.find((t) => t.is_default_web) || tiers[0];
+    return defaultTier ? Math.max(0, defaultTier.fee_cents) : 0;
+  }, [orderType, selectedBranch, totalCents]);
+
+  const grandTotalCents = totalCents + deliveryFeeCents;
+
+  const freeDeliveryThreshold = selectedBranch?.free_delivery_min_cents;
+  const isFreeDeliveryConfigured = selectedBranch?.delivery_fee_enabled !== false && freeDeliveryThreshold != null && freeDeliveryThreshold > 0;
+  const hasFreeDelivery = isFreeDeliveryConfigured && totalCents >= freeDeliveryThreshold;
+  const freeDeliveryRemaining = isFreeDeliveryConfigured && !hasFreeDelivery ? freeDeliveryThreshold - totalCents : 0;
+
   const cartProductIdsKey = items.map((i) => i.product.id).sort().join(',');
   const selectedBranchId = selectedBranch?.id;
 
@@ -207,6 +230,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       payment_method: paymentMethod,
       cash_amount: paymentMethod === 'cash' ? cashAmount.trim() : undefined,
       order_notes: orderNotes.trim(),
+      delivery_fee_cents: deliveryFeeCents,
     };
 
     onSubmitOrder(orderInfo);
@@ -562,6 +586,44 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       value={addressNotes}
                       onChange={(e) => setAddressNotes(e.target.value)}
                     />
+
+                    {isFreeDeliveryConfigured && (
+                      hasFreeDelivery ? (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          backgroundColor: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          color: '#15803d',
+                          padding: '10px 14px',
+                          borderRadius: '12px',
+                          fontSize: '0.86rem',
+                          fontWeight: 600,
+                          marginTop: '4px',
+                        }}>
+                          <span style={{ fontSize: '1.2rem' }}>🎉</span>
+                          <span>¡Felicidades! Calificas para <strong>Envío GRATIS</strong></span>
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          backgroundColor: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          color: '#1d4ed8',
+                          padding: '10px 14px',
+                          borderRadius: '12px',
+                          fontSize: '0.86rem',
+                          fontWeight: 500,
+                          marginTop: '4px',
+                        }}>
+                          <span style={{ fontSize: '1.2rem' }}>🛵</span>
+                          <span>Agrega <strong>{formatMoney(freeDeliveryRemaining)}</strong> más para obtener <strong>Envío GRATIS</strong></span>
+                        </div>
+                      )
+                    )}
                   </div>
                 </div>
               )}
@@ -635,15 +697,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <span>Subtotal de productos</span>
                   <span>{formatMoney(totalCents)}</span>
                 </div>
-                <div className="cart-summary-line">
-                  <span>Costo de envío</span>
-                  <span style={{ color: '#16a34a', fontWeight: 700 }}>
-                    {orderType === 'takeaway' ? 'No aplica' : 'Gratis'}
-                  </span>
-                </div>
+                {orderType === 'delivery' && (
+                  <div className="cart-summary-line">
+                    <span>Costo de envío</span>
+                    <span style={{ color: deliveryFeeCents === 0 ? '#16a34a' : '#0f172a', fontWeight: 700 }}>
+                      {deliveryFeeCents === 0 ? '¡GRATIS!' : formatMoney(deliveryFeeCents)}
+                    </span>
+                  </div>
+                )}
+                {orderType !== 'delivery' && (
+                  <div className="cart-summary-line">
+                    <span>Costo de envío</span>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>No aplica</span>
+                  </div>
+                )}
                 <div className="cart-summary-total-line">
                   <strong>Total a Pagar</strong>
-                  <strong className="cart-total-value">{formatMoney(totalCents)}</strong>
+                  <strong className="cart-total-value">{formatMoney(grandTotalCents)}</strong>
                 </div>
               </div>
 
@@ -685,7 +755,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       ? 'Abriremos pronto'
                       : isSubmitting
                       ? 'Enviando pedido…'
-                      : `Enviar Pedido • ${formatMoney(totalCents)}`}
+                      : `Enviar Pedido • ${formatMoney(grandTotalCents)}`}
                   </span>
                 </button>
               </div>
