@@ -212,3 +212,42 @@ def test_category_image_audit_preserves_previous_values(tenants):
         ("https://example.test/a.jpg", "https://example.test/b.jpg"),
         ("https://example.test/b.jpg", None),
     ]
+
+
+def test_category_and_product_base64_image_url(tenants):
+    client, accounts = tenants
+    headers, data = accounts[0]
+    base64_sample = (
+        "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP////////////////////////"
+        "//////////////////////////////////////////////////////////////wgALCAABAAEBAREA"
+        "/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
+    )
+
+    # Category with Base64 image
+    created = client.post(
+        "/api/v1/categories",
+        headers=headers,
+        json={"name": "Papas Base64", "image_url": base64_sample},
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["image_url"] == base64_sample
+    cat_id = created.json()["id"]
+
+    # Update category image with another base64
+    base64_png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    updated = client.put(
+        f"/api/v1/categories/{cat_id}",
+        headers=headers,
+        json={"image_url": base64_png},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["image_url"] == base64_png
+
+    # Test reject invalid base64 / non-image
+    invalid_data = "data:text/plain;base64,aGVsbG8="
+    bad = client.put(
+        f"/api/v1/categories/{cat_id}",
+        headers=headers,
+        json={"image_url": invalid_data},
+    )
+    assert bad.status_code == 409

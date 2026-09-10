@@ -299,7 +299,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         img.src = dataUrl;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const maxDim = target === 'category' ? 800 : 600;
+          const maxDim = 600;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -318,7 +318,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            const compressed = canvas.toDataURL('image/jpeg', 0.7);
             if (target === 'category') {
               setCategoryForm((prev) => ({ ...prev, image_url: compressed }));
             } else {

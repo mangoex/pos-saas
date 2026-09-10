@@ -26,6 +26,14 @@ def normalize_image_url(value: object) -> str | None:
     value = value.strip()
     if not value:
         return None
+    if value.startswith("data:"):
+        if not value.startswith("data:image/"):
+            raise BusinessError("invalid_image_url", "Usa una imagen en formato JPG, PNG, WEBP o GIF válida, de hasta 2MB.")
+        if len(value) > 2 * 1024 * 1024:
+            raise BusinessError("invalid_image_url", "La imagen no debe exceder 2MB.")
+        if not re.fullmatch(r"data:image/(?:jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}", value):
+            raise BusinessError("invalid_image_url", "Usa una imagen en formato JPG, PNG, WEBP o GIF válida, de hasta 2MB.")
+        return value
     try:
         url = urlsplit(value)
         valid = (

@@ -2,14 +2,12 @@
 
 ## Imágenes de categoría y portada (FR-086)
 
-Migración aditiva 0082: `product_categories.image_url` (512, nullable),
-`organizations.menu_home_name` (120, default Todos) y `menu_home_image_url` (512, nullable).
+Migración aditiva 0082: `product_categories.image_url`, `organizations.menu_home_name` (120, default Todos) y `menu_home_image_url`.
+Migración 0087 amplía las columnas `image_url` en `products`, `product_categories` y `menu_home_image_url` en `organizations` a `Text` para admitir imágenes capturadas directamente desde la cámara o seleccionadas desde la galería móvil en formato Data URL Base64 (`data:image/(jpeg|jpg|png|webp|gif);base64,...` hasta 2MB), sin truncamientos `VARCHAR(512)`.
 GET/PUT `/api/v1/catalog/menu-home` usa actor vigente con catalog.manage y su organización;
 no acepta un tenant destino del cliente. Las categorías mantienen sus guardas existentes.
 En PUT de categoría, omitir image_url conserva la imagen; null/vacío la retira.
-Portada PUT reemplaza nombre e imagen. Nombres se recortan (1..120), ligas HTTP/HTTPS
-absolutas sin credenciales ni controles (máx.512), rechazando IP locales/privadas y
-nombres localhost/local/internal evidentes; el servidor no descarga ni resuelve DNS.
+Portada PUT reemplaza nombre e imagen. Nombres se recortan (1..120). Para enlaces HTTP/HTTPS externos se preserva la validación sin credenciales ni controles (máx. 512 caracteres), rechazando IP locales/privadas y nombres localhost/local/internal evidentes; el servidor no descarga ni resuelve DNS. Para imágenes locales en Base64 se validan cabecera MIME y longitud máxima de 2MB.
 Un hostname externo puede resolver distinto según la red; no se certifica el alojamiento.
 El catálogo público resuelto por sucursal incluye `menu_home: {name, image_url}` y la
 imagen de cada categoría.

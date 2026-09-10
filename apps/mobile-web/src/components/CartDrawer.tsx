@@ -183,8 +183,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       setFormError('Por favor ingresa tu nombre completo.');
       return;
     }
-    if (!phone.trim() || phone.trim().length < 8) {
-      setFormError('Por favor ingresa un número de teléfono celular válido.');
+    const rawDigits = phone.replace(/\D/g, '');
+    if (!phone.trim() || rawDigits.length < 10) {
+      setFormError('Por favor ingresa un número de teléfono celular válido a 10 dígitos.');
       return;
     }
     if (orderType === 'delivery') {

@@ -341,24 +341,43 @@ export async function submitMobileOrder(
     }),
   });
   if (!response.ok) {
-    if (useIntent && response.status === 409) {
-      try {
-        const errorBody = await response.json() as { detail?: { code?: unknown } };
-        if (errorBody.detail?.code === 'idempotency_conflict') {
-          localStorage.removeItem(storageKey);
-          if (legacyStorageKey) localStorage.removeItem(legacyStorageKey);
-        }
-      } catch { /* retain the key when the rejection cannot be classified */ }
-    }
-    let errorDetail = '';
+    let errorDetail: any = null;
     try {
-      const errJson = await response.json();
-      errorDetail = JSON.stringify(errJson);
+      errorDetail = await response.json();
     } catch {
       // ignore
     }
+
+    const detailCode = errorDetail?.detail?.code || errorDetail?.code;
+    const detailMsg = errorDetail?.detail?.message || errorDetail?.message;
+
+    if (useIntent && (response.status === 409 || detailCode === 'idempotency_conflict')) {
+      localStorage.removeItem(storageKey);
+      if (legacyStorageKey) localStorage.removeItem(legacyStorageKey);
+    }
+
+    let userMessage = 'No fue posible confirmar el pedido en este momento.';
+    if (response.status === 422 || detailCode === 'public_order_schema_invalid') {
+      userMessage = 'Los datos del pedido o el número de teléfono no son válidos. Verifica la información.';
+    } else if (response.status === 429 || detailCode === 'public_order_rate_limited') {
+      userMessage = 'Demasiadas solicitudes. Por favor espera un momento antes de volver a intentar.';
+    } else if (response.status === 409 || detailCode === 'idempotency_conflict') {
+      userMessage = 'El pedido ya fue enviado o hubo un cambio en el carrito. Intenta confirmar nuevamente.';
+    } else if (detailCode === 'public_order_unavailable') {
+      userMessage = 'El servicio de pedidos en línea no está disponible temporalmente para esta sucursal.';
+    } else if (detailCode === 'product_unavailable') {
+      userMessage = 'Uno o más productos del carrito ya no están disponibles. Revisa tu pedido.';
+    } else if (detailCode === 'database_unavailable' || response.status === 503) {
+      userMessage = 'El sistema se encuentra temporalmente ocupado. Por favor intenta de nuevo en unos momentos.';
+    } else if (detailMsg && typeof detailMsg === 'string') {
+      userMessage = detailMsg;
+    }
+
     console.error('Order submission error:', response.status, errorDetail);
-    throw new Error(`public_order_rejected_${response.status}`);
+    const err = new Error(userMessage);
+    (err as any).code = detailCode;
+    (err as any).status = response.status;
+    throw err;
   }
 
   let data: unknown;

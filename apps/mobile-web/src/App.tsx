@@ -335,8 +335,8 @@ export const App: React.FC = () => {
       setCreatedOrderResult(result);
       setCart([]);
       setIsCartOpen(false);
-    } catch {
-      setOrderSubmitError('No fue posible confirmar el pedido. Conservamos tu carrito para que puedas reintentar.');
+    } catch (err: any) {
+      setOrderSubmitError(err?.message || 'No fue posible confirmar el pedido. Conservamos tu carrito para que puedas reintentar.');
     } finally {
       setIsSubmittingOrder(false);
     }

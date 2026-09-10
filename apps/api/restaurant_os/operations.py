@@ -9515,10 +9515,6 @@ def _ensure_product_default_recipe(
         )
     ).scalar_one_or_none()
     if not unit_id:
-        unit_id = session.execute(
-            sa.select(models.inventory_units.c.id).where(models.inventory_units.c.code == "PZA")
-        ).scalar_one_or_none()
-    if not unit_id:
         unit_id = _id()
         session.execute(
             models.inventory_units.insert().values(
@@ -9559,41 +9555,73 @@ def _ensure_product_default_recipe(
             )
         )
 
-    # 3. Create default 1:1 recipe
-    recipe_id = _id()
-    session.execute(
-        models.recipes.insert().values(
-            id=recipe_id,
-            organization_id=org_id,
-            product_id=product_id,
-            output_item_id=None,
-            branch_id=None,
-            recipe_type="sale",
-            version=1,
-            status="active",
-            yield_quantity=Decimal("1"),
-            yield_unit_id=unit_id,
-            valid_from=now,
-            valid_to=None,
-            created_at=now,
-            updated_at=now,
-        )
-    )
+    # 3. Check if any recipe already exists for this product
+    existing_recipe = session.execute(
+        sa.select(models.recipes.c.id, models.recipes.c.version).where(
+            models.recipes.c.organization_id == org_id,
+            models.recipes.c.product_id == product_id,
+        ).order_by(models.recipes.c.version.desc())
+    ).mappings().first()
 
-    # 4. Create default 1:1 recipe component
-    session.execute(
-        models.recipe_components.insert().values(
-            recipe_id=recipe_id,
-            item_id=item_id,
-            quantity_base_units=Decimal("1"),
-            unit_id=unit_id,
-            net_quantity=Decimal("1"),
-            waste_rate=Decimal("0"),
-            gross_quantity=Decimal("1"),
-            sort_order=1,
-            notes="SaaS Lite direct sale recipe",
+    if existing_recipe:
+        recipe_id = existing_recipe["id"]
+        session.execute(
+            sa.update(models.recipes)
+            .where(models.recipes.c.id == recipe_id)
+            .values(status="active", valid_to=None, updated_at=now)
         )
-    )
+        comp_exists = session.execute(
+            sa.select(models.recipe_components.c.id).where(
+                models.recipe_components.c.recipe_id == recipe_id
+            )
+        ).first()
+        if not comp_exists:
+            session.execute(
+                models.recipe_components.insert().values(
+                    recipe_id=recipe_id,
+                    item_id=item_id,
+                    quantity_base_units=Decimal("1"),
+                    unit_id=unit_id,
+                    net_quantity=Decimal("1"),
+                    waste_rate=Decimal("0"),
+                    gross_quantity=Decimal("1"),
+                    sort_order=1,
+                    notes="SaaS Lite direct sale recipe",
+                )
+            )
+    else:
+        recipe_id = _id()
+        session.execute(
+            models.recipes.insert().values(
+                id=recipe_id,
+                organization_id=org_id,
+                product_id=product_id,
+                output_item_id=None,
+                branch_id=None,
+                recipe_type="sale",
+                version=1,
+                status="active",
+                yield_quantity=Decimal("1"),
+                yield_unit_id=unit_id,
+                valid_from=now,
+                valid_to=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.execute(
+            models.recipe_components.insert().values(
+                recipe_id=recipe_id,
+                item_id=item_id,
+                quantity_base_units=Decimal("1"),
+                unit_id=unit_id,
+                net_quantity=Decimal("1"),
+                waste_rate=Decimal("0"),
+                gross_quantity=Decimal("1"),
+                sort_order=1,
+                notes="SaaS Lite direct sale recipe",
+            )
+        )
     session.flush()
 
     return _active_recipe_components(session, product_id, branch_id)
@@ -10017,16 +10045,42 @@ def _add_modifier_component(
 
 
 def _branch_warehouse_id(session: Session, branch_id: str = BRANCH_ID) -> str:
-    return str(
-        session.execute(
+    wh_id = session.execute(
+        sa.select(models.warehouses.c.id)
+        .where(
+            models.warehouses.c.branch_id == branch_id,
+            models.warehouses.c.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if not wh_id:
+        wh_id = session.execute(
             sa.select(models.warehouses.c.id)
-            .where(
-                models.warehouses.c.branch_id == branch_id,
-                models.warehouses.c.status == "active",
-            )
+            .where(models.warehouses.c.branch_id == branch_id)
             .limit(1)
-        ).scalar_one()
-    )
+        ).scalar_one_or_none()
+    if not wh_id:
+        branch_row = session.execute(
+            sa.select(models.branches.c.organization_id, models.branches.c.name)
+            .where(models.branches.c.id == branch_id)
+        ).mappings().first()
+        org_id = branch_row["organization_id"] if branch_row else ORGANIZATION_ID
+        name = branch_row["name"] if branch_row else "Principal"
+        now = _now()
+        wh_id = _id()
+        session.execute(
+            models.warehouses.insert().values(
+                id=wh_id,
+                organization_id=org_id,
+                branch_id=branch_id,
+                name=f"Almacen {name}",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.flush()
+    return str(wh_id)
 
 
 def _actor_user_id(actor_user_id: str | None) -> str:

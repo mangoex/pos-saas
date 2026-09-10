@@ -175,3 +175,38 @@ def test_accept_public_intent_reserves_inventory_and_creates_tasks(session: Any)
         and Decimal(str(res["quantity_delta"])) == Decimal("-240.000000")
         for res in reservations
     )
+
+
+def test_public_order_auto_heals_missing_branch_warehouse(session: Any) -> None:
+    _enable_public_key(session)
+    # Delete existing warehouses for this branch to simulate a branch without configured warehouse
+    session.execute(
+        sa.delete(models.warehouses).where(models.warehouses.c.branch_id == BRANCH_ID)
+    )
+    session.commit()
+
+    # Verify no warehouses exist
+    wh_count = session.scalar(
+        sa.select(sa.func.count()).where(models.warehouses.c.branch_id == BRANCH_ID)
+    )
+    assert wh_count == 0
+
+    # Submit order intent - must auto-heal instead of throwing NoResultFound / database_unavailable
+    intent, created = create_public_order_intent(
+        session,
+        PUBLIC_KEY,
+        _payload(phone="5577665544", quantity=1, name="Auto Heal"),
+        "mobile-auto-heal-warehouse-001",
+    )
+    assert created is True
+    assert intent["status"] == "PENDING_REVIEW"
+
+    # Verify warehouse was auto-created
+    wh = session.execute(
+        sa.select(models.warehouses).where(
+            models.warehouses.c.branch_id == BRANCH_ID,
+            models.warehouses.c.status == "active",
+        )
+    ).mappings().first()
+    assert wh is not None
+    assert "Almacen" in wh["name"]
