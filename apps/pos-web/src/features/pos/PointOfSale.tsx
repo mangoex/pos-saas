@@ -352,7 +352,6 @@ const PointOfSale = () => {
   const [driversLoading, setDriversLoading] = useState(false);
   const [driversError, setDriversError] = useState('');
   const [selectedDeliveryTierId, setSelectedDeliveryTierId] = useState<string | null>(null);
-  const [deliveryFeeCents, setDeliveryFeeCents] = useState<number>(0);
   const searchControllerRef = useRef<AbortController | null>(null);
   const checkoutIntentRef = useRef<{ fingerprint: string; key: string; paymentKey: string } | null>(null);
   const checkoutRecoveryStartedRef = useRef(false);
@@ -642,38 +641,45 @@ const PointOfSale = () => {
     ];
   }, [session?.active_branch?.delivery_tiers]);
 
+  const activeDeliveryTier = useMemo<DeliveryTier | null>(() => {
+    if (availableDeliveryTiers.length === 0) return null;
+    if (selectedDeliveryTierId) {
+      const found = availableDeliveryTiers.find((t: DeliveryTier) => t.id === selectedDeliveryTierId);
+      if (found) return found;
+    }
+    return availableDeliveryTiers.find((t: DeliveryTier) => t.is_default_web) || availableDeliveryTiers[0] || null;
+  }, [availableDeliveryTiers, selectedDeliveryTierId]);
+
+  const isFreeDeliveryQualified = useMemo<boolean>(() => {
+    const minCents = session?.active_branch?.free_delivery_min_cents;
+    if (minCents == null || minCents <= 0) return false;
+    return (orderQuote?.subtotal_cents ?? 0) >= minCents;
+  }, [session?.active_branch?.free_delivery_min_cents, orderQuote?.subtotal_cents]);
+
+  const deliveryFeeCents = useMemo<number>(() => {
+    if (orderType !== 'delivery') return 0;
+    // Sucursal con cobro de envío deshabilitado explícitamente
+    if (session?.active_branch?.delivery_fee_enabled === false) return 0;
+    // Si califica para envío gratis por monto mínimo de compra
+    if (isFreeDeliveryQualified) return 0;
+    return activeDeliveryTier?.fee_cents ?? 0;
+  }, [orderType, session?.active_branch?.delivery_fee_enabled, isFreeDeliveryQualified, activeDeliveryTier]);
+
+  const formatTierLabel = useCallback((tier: DeliveryTier) => {
+    if (tier.name.includes('$') || tier.name.includes('(')) {
+      return tier.name;
+    }
+    return tier.fee_cents === 0 ? `${tier.name} ($0)` : `${tier.name} (${formatMxnCents(tier.fee_cents)})`;
+  }, []);
+
   useEffect(() => {
     if (orderType !== 'delivery') {
       setSelectedDriverId('');
       setDriverPickerOpen(false);
       setDriversError('');
-      setDeliveryFeeCents(0);
       setSelectedDeliveryTierId(null);
-      return;
     }
-    if (session?.active_branch?.delivery_fee_enabled === false) {
-      setDeliveryFeeCents(0);
-      setSelectedDeliveryTierId(null);
-      return;
-    }
-    const freeMin = session?.active_branch?.free_delivery_min_cents;
-    const subtotal = orderQuote?.subtotal_cents ?? 0;
-    if (freeMin != null && freeMin > 0 && subtotal >= freeMin) {
-      const gratisTier = availableDeliveryTiers.find((t: DeliveryTier) => t.fee_cents === 0);
-      if (gratisTier) {
-        setSelectedDeliveryTierId(gratisTier.id);
-        setDeliveryFeeCents(0);
-        return;
-      }
-    }
-    if (!selectedDeliveryTierId) {
-      const defaultTier = availableDeliveryTiers.find((t: DeliveryTier) => t.is_default_web) || availableDeliveryTiers[0];
-      if (defaultTier) {
-        setSelectedDeliveryTierId(defaultTier.id);
-        setDeliveryFeeCents(defaultTier.fee_cents);
-      }
-    }
-  }, [orderType, session?.active_branch, availableDeliveryTiers, orderQuote?.subtotal_cents, selectedDeliveryTierId]);
+  }, [orderType]);
 
   // Búsqueda exacta por teléfono con debounce y AbortController
   useEffect(() => {
@@ -1618,34 +1624,34 @@ const PointOfSale = () => {
                 </span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {availableDeliveryTiers.map((tier: DeliveryTier) => (
-                  <button
-                    key={tier.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDeliveryTierId(tier.id);
-                      setDeliveryFeeCents(tier.fee_cents);
-                    }}
-                    style={{
-                      flex: '1 1 auto',
-                      padding: '5px 8px',
-                      borderRadius: '8px',
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      border: `1px solid ${selectedDeliveryTierId === tier.id ? '#10b981' : '#cbd5e1'}`,
-                      background: selectedDeliveryTierId === tier.id ? '#ecfdf5' : '#ffffff',
-                      color: selectedDeliveryTierId === tier.id ? '#047857' : '#475569',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {tier.name}
-                  </button>
-                ))}
+                {availableDeliveryTiers.map((tier: DeliveryTier) => {
+                  const isSelected = (activeDeliveryTier?.id === tier.id) || (selectedDeliveryTierId === tier.id);
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => setSelectedDeliveryTierId(tier.id)}
+                      style={{
+                        flex: '1 1 auto',
+                        padding: '5px 8px',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        border: `1px solid ${isSelected ? '#10b981' : '#cbd5e1'}`,
+                        background: isSelected ? '#ecfdf5' : '#ffffff',
+                        color: isSelected ? '#047857' : '#475569',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {formatTierLabel(tier)}
+                    </button>
+                  );
+                })}
               </div>
               {session?.active_branch?.free_delivery_min_cents != null && session.active_branch.free_delivery_min_cents > 0 && (
-                <div style={{ marginTop: '6px', fontSize: '0.75rem', color: (orderQuote?.subtotal_cents ?? 0) >= session.active_branch.free_delivery_min_cents ? '#15803d' : '#64748b' }}>
-                  {(orderQuote?.subtotal_cents ?? 0) >= session.active_branch.free_delivery_min_cents
+                <div style={{ marginTop: '6px', fontSize: '0.75rem', color: isFreeDeliveryQualified ? '#15803d' : '#64748b' }}>
+                  {isFreeDeliveryQualified
                     ? '🎉 Subtotal califica para envío gratis'
                     : `Envío gratis a partir de ${formatMxnCents(session.active_branch.free_delivery_min_cents)}`}
                 </div>
@@ -2219,29 +2225,29 @@ const PointOfSale = () => {
               </strong>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {availableDeliveryTiers.map((tier: DeliveryTier) => (
-                <button
-                  key={tier.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDeliveryTierId(tier.id);
-                    setDeliveryFeeCents(tier.fee_cents);
-                  }}
-                  style={{
-                    flex: '1 1 auto',
-                    padding: '6px 10px',
-                    borderRadius: 8,
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    border: `1px solid ${selectedDeliveryTierId === tier.id ? '#10b981' : '#cbd5e1'}`,
-                    background: selectedDeliveryTierId === tier.id ? '#ecfdf5' : '#ffffff',
-                    color: selectedDeliveryTierId === tier.id ? '#047857' : '#475569',
-                  }}
-                >
-                  {tier.name}
-                </button>
-              ))}
+              {availableDeliveryTiers.map((tier: DeliveryTier) => {
+                const isSelected = (activeDeliveryTier?.id === tier.id) || (selectedDeliveryTierId === tier.id);
+                return (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => setSelectedDeliveryTierId(tier.id)}
+                    style={{
+                      flex: '1 1 auto',
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      border: `1px solid ${isSelected ? '#10b981' : '#cbd5e1'}`,
+                      background: isSelected ? '#ecfdf5' : '#ffffff',
+                      color: isSelected ? '#047857' : '#475569',
+                    }}
+                  >
+                    {formatTierLabel(tier)}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

@@ -11482,23 +11482,26 @@ def update_branch(
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "admin.manage")
     organization_id = _modifier_actor_organization(session, actor_id)
-    branch_exists = session.scalar(
-        sa.select(models.branches.c.id).where(
+    branch_record = session.execute(
+        sa.select(models.branches.c.id, models.branches.c.code).where(
             models.branches.c.id == branch_id,
             models.branches.c.organization_id == organization_id,
         )
-    )
-    if not branch_exists:
+    ).mappings().first()
+    if not branch_record:
         raise BusinessError("branch_not_found", "Branch was not found")
 
     update_data: dict[str, Any] = {}
     if name is not None:
         update_data["name"] = name.strip()
     if code is not None:
-        from restaurant_os.public_names import guard_branch_code
+        new_code = code.strip().upper()
+        current_code = (branch_record["code"] or "").strip().upper()
+        if new_code != current_code:
+            from restaurant_os.public_names import guard_branch_code
 
-        guard_branch_code(session, code)
-        update_data["code"] = code.strip()
+            guard_branch_code(session, new_code)
+        update_data["code"] = new_code
     if street is not None:
         update_data["street"] = str(street).strip() or None
     if exterior_number is not None:
@@ -25690,7 +25693,7 @@ def _branch_detail(
         "code": row["code"],
         "timezone": row["timezone"],
         "status": row["status"],
-        "delivery_fee_enabled": bool(row["delivery_fee_enabled"]) if row["delivery_fee_enabled"] is not None else False,
+        "delivery_fee_enabled": bool(row["delivery_fee_enabled"]) if row["delivery_fee_enabled"] is not None else True,
         "delivery_tiers": list(row["delivery_tiers"]) if isinstance(row["delivery_tiers"], list) else [],
         "free_delivery_min_cents": row["free_delivery_min_cents"],
         "business_unit": {

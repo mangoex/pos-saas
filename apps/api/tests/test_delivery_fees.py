@@ -257,3 +257,43 @@ def test_create_local_order_with_delivery_fee(session: Any) -> None:
             idempotency_key="local-delivery-fee-invalid-001",
         )
     assert exc_info.value.code == "delivery_fee_not_allowed"
+
+
+def test_update_branch_matriz_code_and_delivery_fee(session: Any) -> None:
+    # 1. Update branch code to "MATRIZ" (must succeed, "matriz" is valid and unreserved)
+    update_branch(
+        session,
+        actor_user_id=ADMIN_USER_ID,
+        branch_id=BRANCH_ID,
+        code="MATRIZ",
+        name="Sucursal Matriz",
+        delivery_fee_enabled=True,
+        delivery_tiers=[
+            {"id": "tier-corta", "name": "Corta", "fee_cents": 2000, "is_default_web": True},
+            {"id": "tier-media", "name": "Media", "fee_cents": 3000, "is_default_web": False},
+        ],
+        free_delivery_min_cents=25000,
+    )
+
+    # 2. Update branch again with the SAME code "MATRIZ" (idempotent, no code conflict)
+    updated = update_branch(
+        session,
+        actor_user_id=ADMIN_USER_ID,
+        branch_id=BRANCH_ID,
+        code="MATRIZ",
+        name="Sucursal Matriz Principal",
+    )
+    assert updated["code"] == "MATRIZ"
+    assert updated["name"] == "Sucursal Matriz Principal"
+
+    # 3. Verify database row preserved all delivery fee configuration
+    row = (
+        session.execute(sa.select(models.branches).where(models.branches.c.id == BRANCH_ID))
+        .mappings()
+        .first()
+    )
+    assert row["code"] == "MATRIZ"
+    assert row["name"] == "Sucursal Matriz Principal"
+    assert row["delivery_fee_enabled"] is True
+    assert row["free_delivery_min_cents"] == 25000
+    assert len(row["delivery_tiers"]) == 2

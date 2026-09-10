@@ -72,7 +72,7 @@ interface SessionContextValue {
   state: SessionState;
   session: PosSession | null;
   hasPermission: (code: string) => boolean;
-  reload: () => void;
+  reload: (silent?: boolean) => void;
   selectBranch: (branchId: string) => Promise<void>;
 }
 
@@ -122,8 +122,9 @@ export function resolvePosBranchId(): string {
 }
 
 async function fetchCanonicalSession(branchId?: string): Promise<PosSession> {
-  const endpoint = branchId
-    ? `/auth/session?branch_id=${encodeURIComponent(branchId)}`
+  const targetBranchId = branchId || resolvePosBranchId();
+  const endpoint = targetBranchId
+    ? `/auth/session?branch_id=${encodeURIComponent(targetBranchId)}`
     : '/auth/session';
   return fetchApi<PosSession>(endpoint);
 }
@@ -140,8 +141,10 @@ export function PosSessionProvider({ children }: { children: React.ReactNode }) 
     setState({ status: 'ok', session });
   }, []);
 
-  const loadSession = useCallback(async () => {
-    setState({ status: 'loading' });
+  const loadSession = useCallback(async (silent = false) => {
+    if (!silent) {
+      setState({ status: 'loading' });
+    }
     try {
       applySession(await fetchCanonicalSession());
     } catch (err) {
@@ -151,21 +154,25 @@ export function PosSessionProvider({ children }: { children: React.ReactNode }) 
           redirectToLogin();
           return;
         }
-        setState({
-          status: 'error',
-          message:
-            err.status === 403
-              ? 'Tu cuenta no tiene acceso a esta operación.'
-              : err.message,
-          statusCode: err.status,
-        });
+        if (!silent) {
+          setState({
+            status: 'error',
+            message:
+              err.status === 403
+                ? 'Tu cuenta no tiene acceso a esta operación.'
+                : err.message,
+            statusCode: err.status,
+          });
+        }
         return;
       }
-      setState({
-        status: 'error',
-        message: 'No se pudo conectar con el servidor.',
-        statusCode: 0,
-      });
+      if (!silent) {
+        setState({
+          status: 'error',
+          message: 'No se pudo conectar con el servidor.',
+          statusCode: 0,
+        });
+      }
     }
   }, [applySession]);
 
@@ -203,6 +210,13 @@ export function PosSessionProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     void loadSession();
+    const handleFocus = () => {
+      void loadSession(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [loadSession]);
 
   const session = state.status === 'ok' ? state.session : null;
@@ -219,7 +233,7 @@ export function PosSessionProvider({ children }: { children: React.ReactNode }) 
     state,
     session,
     hasPermission,
-    reload: () => void loadSession(),
+    reload: (silent?: boolean) => void loadSession(silent),
     selectBranch,
   };
   return React.createElement(SessionContext.Provider, { value }, children);

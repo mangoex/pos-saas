@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   MessageSquare,
   Bike,
+  AlertCircle,
 } from 'lucide-react';
 
 import '../../premium-catalogs.css';
@@ -99,6 +100,8 @@ const BranchesList = () => {
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [formData, setFormData] = useState(emptyForm);
   const [locatingGps, setLocatingGps] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   const { data: branches, isLoading, error } = useQuery<Branch[]>({
     queryKey: ['branches'],
@@ -116,13 +119,18 @@ const BranchesList = () => {
   const showBusinessUnitColumn = businessUnits.length > 1;
 
   const saveMutation = useMutation({
-    mutationFn: (data: typeof formData) => {
+    mutationFn: async (data: typeof formData) => {
+      setSaveError(null);
       const payload: any = {
         ...data,
-        latitude: data.latitude.trim() ? parseFloat(data.latitude) : null,
-        longitude: data.longitude.trim() ? parseFloat(data.longitude) : null,
-        free_delivery_min_cents: data.free_delivery_min_pesos && data.free_delivery_min_pesos.trim()
-          ? Math.round(parseFloat(data.free_delivery_min_pesos) * 100)
+        latitude: typeof data.latitude === 'string'
+          ? (data.latitude.trim() ? parseFloat(data.latitude) : null)
+          : (data.latitude ?? null),
+        longitude: typeof data.longitude === 'string'
+          ? (data.longitude.trim() ? parseFloat(data.longitude) : null)
+          : (data.longitude ?? null),
+        free_delivery_min_cents: data.free_delivery_min_pesos && String(data.free_delivery_min_pesos).trim()
+          ? Math.round(parseFloat(String(data.free_delivery_min_pesos)) * 100)
           : null,
       };
       delete payload.free_delivery_min_pesos;
@@ -139,7 +147,22 @@ const BranchesList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
-      setIsModalOpen(false);
+      setSaveSuccess('¡Sucursal y costos de envío guardados correctamente!');
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setSaveSuccess(null);
+      }, 700);
+    },
+    onError: (err: any) => {
+      const code = err?.detail?.code || err?.code;
+      const msg = err?.detail?.message || err?.message;
+      if (code === 'public_name_reserved') {
+        setSaveError('El código o nombre corto está reservado como enlace público. Elige otro código.');
+      } else if (code === 'branch_already_exists') {
+        setSaveError('Ya existe otra sucursal registrada con este código.');
+      } else {
+        setSaveError(msg || 'No fue posible guardar los cambios de la sucursal. Revisa los datos.');
+      }
     },
   });
 
@@ -149,6 +172,8 @@ const BranchesList = () => {
   });
 
   const openModal = (branch?: Branch) => {
+    setSaveError(null);
+    setSaveSuccess(null);
     if (branch) {
       setEditingBranch(branch);
       setFormData({
@@ -811,6 +836,49 @@ const BranchesList = () => {
               </>
             )}
           </section>
+
+          {/* Alertas de Error y Éxito */}
+          {saveError && (
+            <div
+              style={{
+                margin: '12px 0 4px',
+                padding: '10px 14px',
+                borderRadius: 8,
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fca5a5',
+                color: '#b91c1c',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>{saveError}</span>
+            </div>
+          )}
+
+          {saveSuccess && (
+            <div
+              style={{
+                margin: '12px 0 4px',
+                padding: '10px 14px',
+                borderRadius: 8,
+                backgroundColor: '#f0fdf4',
+                border: '1px solid #86efac',
+                color: '#15803d',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+              <span>{saveSuccess}</span>
+            </div>
+          )}
 
           {/* Footer de Acciones */}
           <div className="branch-modal-footer">

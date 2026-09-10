@@ -17,7 +17,6 @@ RESERVED_PUBLIC_NAMES = frozenset(
         "app",
         "kds",
         "login",
-        "matriz",
         "menu",
         "pos",
         "register",
