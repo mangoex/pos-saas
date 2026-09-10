@@ -39,4 +39,13 @@ assert.match(wizardCode, /!isMobile\s*&&/, 'OnboardingWizardModal must suppress 
 assert.match(wizardCode, /isMobile\s*\?\s*['"]Ir al Administrador Móvil['"]/, 'OnboardingWizardModal must offer Ir al Administrador Móvil button on mobile');
 assert.match(wizardCode, /isMobile\s*\?\s*['"]Panel de Administrador Móvil listo['"]/, 'OnboardingWizardModal must adjust checklist for mobile');
 
+// 5. MobileBranchSettingsTab public link alias customization
+assert.match(settingsCode, /Nombre de tu enlace público/, 'MobileBranchSettingsTab must feature Nombre de tu enlace público card');
+assert.match(settingsCode, /Nombre personalizado/, 'MobileBranchSettingsTab must have Nombre personalizado input');
+assert.match(settingsCode, /Guardar nombre/, 'MobileBranchSettingsTab must have Guardar nombre button');
+assert.match(settingsCode, /\/saas\/links\/alias/, 'MobileBranchSettingsTab must call /saas/links/alias endpoint');
+assert.match(settingsCode, /alias_unavailable/, 'MobileBranchSettingsTab must handle alias_unavailable');
+assert.match(settingsCode, /no está disponible/, 'MobileBranchSettingsTab must display message when link is not available');
+assert.match(settingsCode, /Enlace permanente:/, 'MobileBranchSettingsTab must display permanent link');
+
 console.log('✓ All Mobile Admin Onboarding semantic tests PASSED!');

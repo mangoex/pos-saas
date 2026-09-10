@@ -14,6 +14,7 @@ import {
   Phone,
   Power,
   Sparkles,
+  Globe,
 } from 'lucide-react';
 
 interface MobileBranchSettingsTabProps {
@@ -37,6 +38,7 @@ interface Branch {
 interface LinksResponse {
   name: string;
   canonical_slug: string;
+  preferred_slug?: string;
   canonical_menu_url: string;
   links: {
     menu: string;
@@ -81,6 +83,12 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [googleReviewUrl, setGoogleReviewUrl] = useState('');
   const [isOpenForOrders, setIsOpenForOrders] = useState(true);
 
+  // Alias / Public link customization state
+  const [aliasInput, setAliasInput] = useState('');
+  const [aliasError, setAliasError] = useState<string | null>(null);
+  const [aliasSuccess, setAliasSuccess] = useState<string | null>(null);
+  const [isSavingAlias, setIsSavingAlias] = useState(false);
+
   useEffect(() => {
     if (currentBranch) {
       setBranchPhone(currentBranch.phone || '');
@@ -89,6 +97,60 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       setIsOpenForOrders(currentBranch.status !== 'inactive');
     }
   }, [currentBranch]);
+
+  useEffect(() => {
+    if (linksData) {
+      setAliasInput(linksData.preferred_slug || linksData.canonical_slug || '');
+    }
+  }, [linksData]);
+
+  const handleSaveAlias = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAliasError(null);
+    setAliasSuccess(null);
+
+    const cleanAlias = aliasInput
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    if (!cleanAlias || cleanAlias.length < 3) {
+      setAliasError('El nombre debe tener al menos 3 caracteres.');
+      return;
+    }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleanAlias)) {
+      setAliasError('Usa letras minúsculas, números y guiones.');
+      return;
+    }
+
+    setIsSavingAlias(true);
+    try {
+      await fetchApi('/saas/links/alias', {
+        method: 'PUT',
+        body: JSON.stringify({ alias: cleanAlias }),
+      });
+      setAliasSuccess('Enlace actualizado. Los enlaces anteriores se conservan.');
+      setAliasInput(cleanAlias);
+      await queryClient.invalidateQueries({ queryKey: ['saas-links'] });
+      setTimeout(() => setAliasSuccess(null), 4000);
+    } catch (err: any) {
+      const code = err?.detail?.code || err?.code;
+      const msg = err?.detail?.message || err?.message;
+      if (code === 'alias_unavailable' || err?.status === 409) {
+        setAliasError(`El nombre "${cleanAlias}" no está disponible. Ya está ocupado.`);
+      } else if (code === 'alias_reserved') {
+        setAliasError(`El nombre "${cleanAlias}" está reservado. Elige otro.`);
+      } else if (code === 'alias_invalid') {
+        setAliasError(`El nombre "${cleanAlias}" no puede usarse como subdominio. Elige otro.`);
+      } else {
+        setAliasError(msg || 'No se pudo guardar el nombre del enlace. Inténtalo de nuevo.');
+      }
+    } finally {
+      setIsSavingAlias(false);
+    }
+  };
 
   // Update Branch Mutation
   const updateBranchMutation = useMutation({
@@ -394,6 +456,148 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   <ExternalLink size={14} /> Abrir menú en una pestaña nueva
                 </a>
               </div>
+            </div>
+
+            {/* Card: Nombre de tu enlace público */}
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: 16,
+                padding: 16,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Globe size={20} color="#059669" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                  Nombre de tu enlace público
+                </h3>
+              </div>
+              <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: '#64748b', lineHeight: 1.4 }}>
+                Usa letras minúsculas, números y guiones. Tus enlaces anteriores seguirán funcionando.
+              </p>
+
+              <form onSubmit={handleSaveAlias}>
+                <label
+                  htmlFor="mobile-restaurant-alias"
+                  style={{
+                    display: 'block',
+                    fontSize: '0.825rem',
+                    fontWeight: 700,
+                    color: '#334155',
+                    marginBottom: 6,
+                  }}
+                >
+                  Nombre personalizado
+                </label>
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input
+                    id="mobile-restaurant-alias"
+                    type="text"
+                    value={aliasInput}
+                    onChange={(e) => {
+                      setAliasInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                      setAliasError(null);
+                    }}
+                    placeholder="hamburgueria"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      padding: '10px 12px',
+                      fontSize: '0.95rem',
+                      borderRadius: 10,
+                      border: aliasError ? '2px solid #ef4444' : '1px solid #cbd5e1',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSavingAlias || !aliasInput.trim()}
+                    style={{
+                      padding: '10px 16px',
+                      backgroundColor: '#047857',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 10,
+                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      cursor: isSavingAlias || !aliasInput.trim() ? 'not-allowed' : 'pointer',
+                      opacity: isSavingAlias || !aliasInput.trim() ? 0.65 : 1,
+                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    {isSavingAlias ? 'Guardando...' : 'Guardar nombre'}
+                  </button>
+                </div>
+
+                {/* Error message when not available or invalid */}
+                {aliasError && (
+                  <div
+                    role="alert"
+                    style={{
+                      backgroundColor: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      color: '#dc2626',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      marginBottom: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                    <span>{aliasError}</span>
+                  </div>
+                )}
+
+                {/* Success feedback */}
+                {aliasSuccess && (
+                  <div
+                    role="status"
+                    style={{
+                      backgroundColor: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      color: '#16a34a',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      marginBottom: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <CheckCircle2 size={15} style={{ flexShrink: 0 }} />
+                    <span>{aliasSuccess}</span>
+                  </div>
+                )}
+
+                {/* Permanent link reference */}
+                {linksData?.canonical_menu_url && (
+                  <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                    Enlace permanente:{' '}
+                    <a
+                      href={linksData.canonical_menu_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#047857', textDecoration: 'underline', wordBreak: 'break-all' }}
+                    >
+                      {linksData.canonical_menu_url}
+                    </a>
+                  </p>
+                )}
+              </form>
             </div>
 
             {/* Form Settings */}
