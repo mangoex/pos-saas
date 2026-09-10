@@ -613,6 +613,7 @@ const AdminLayout = () => {
       {proposalId && <AdminProposalReview proposalId={proposalId} onClose={() => navigate(`${location.pathname}${location.search.replace(/([?&])admin_ai_proposal=[^&]*&?/, '$1').replace(/[?&]$/, '')}`)} />}
       <OnboardingWizardModal
         isOpen={isOnboardingWizardOpen}
+        isMobileView={isMobile}
         onClose={() => setIsOnboardingWizardOpen(false)}
         onCompleted={() => {
           setIsOnboardingWizardOpen(false);

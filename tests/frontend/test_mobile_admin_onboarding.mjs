@@ -33,4 +33,10 @@ assert.doesNotMatch(wizardCode, /capture="environment"/, 'OnboardingWizardModal 
 assert.match(wizardCode, />\s*Manual\s*</, 'OnboardingWizardModal must offer Manual option');
 assert.match(wizardCode, /Continuar con catálogo en blanco/, 'OnboardingWizardModal must provide Continuar con catálogo en blanco');
 
+// 4. Mobile step 4 does not expose POS button and routes to Mobile Admin
+assert.match(shellCode, /isMobileView=\{true\}/, 'MobileAdminShell must set isMobileView={true}');
+assert.match(wizardCode, /!isMobile\s*&&/, 'OnboardingWizardModal must suppress Abrir Punto de Venta on mobile');
+assert.match(wizardCode, /isMobile\s*\?\s*['"]Ir al Administrador Móvil['"]/, 'OnboardingWizardModal must offer Ir al Administrador Móvil button on mobile');
+assert.match(wizardCode, /isMobile\s*\?\s*['"]Panel de Administrador Móvil listo['"]/, 'OnboardingWizardModal must adjust checklist for mobile');
+
 console.log('✓ All Mobile Admin Onboarding semantic tests PASSED!');

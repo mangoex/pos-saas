@@ -50,6 +50,7 @@ interface OnboardingWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCompleted?: () => void;
+  isMobileView?: boolean;
 }
 
 type OnboardingStatus = { step: 'business' | 'menu' | 'register' | 'complete'; branch: { name: string }; register_name: string | null };
@@ -61,10 +62,28 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   isOpen,
   onClose,
   onCompleted,
+  isMobileView,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<OrganizationProfile | null>(null);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (isMobileView !== undefined) return isMobileView;
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  });
+
+  useEffect(() => {
+    if (isMobileView !== undefined) {
+      setIsMobile(isMobileView);
+      return;
+    }
+    const media = window.matchMedia('(max-width: 768px)');
+    const adapt = () => setIsMobile(media.matches);
+    adapt();
+    media.addEventListener('change', adapt);
+    return () => media.removeEventListener('change', adapt);
+  }, [isMobileView]);
 
   // Form State Step 1
   const [restaurantName, setRestaurantName] = useState('');
@@ -829,16 +848,37 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                   <Check size={18} color="#10b981" /> Pedidos directos a WhatsApp conectados
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Check size={18} color="#10b981" /> Terminal Punto de Venta (POS) y Cocina (KDS) listos
+                  <Check size={18} color="#10b981" /> {isMobile ? 'Panel de Administrador Móvil listo' : 'Terminal Punto de Venta (POS) y Cocina (KDS) listos'}
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+                {!isMobile && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleOpenPos}
+                    style={{
+                      padding: '14px 20px',
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      background: '#10b981',
+                      borderColor: '#10b981',
+                    }}
+                  >
+                    <Laptop size={18} /> Abrir Punto de Venta (POS)
+                  </Button>
+                )}
+
                 <Button
                   type="button"
-                  variant="primary"
-                  onClick={handleOpenPos}
+                  variant={isMobile ? 'primary' : 'secondary'}
+                  onClick={handleFinishOnboarding}
                   style={{
                     padding: '14px 20px',
                     fontSize: '1rem',
@@ -847,20 +887,16 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    background: '#10b981',
-                    borderColor: '#10b981',
+                    ...(isMobile
+                      ? {
+                          background: '#10b981',
+                          borderColor: '#10b981',
+                          color: '#ffffff',
+                        }
+                      : {}),
                   }}
                 >
-                  <Laptop size={18} /> Abrir Punto de Venta (POS)
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleFinishOnboarding}
-                  style={{ padding: '12px 20px', fontSize: '0.95rem', fontWeight: 600 }}
-                >
-                  Explorar Panel de Administración
+                  <Check size={18} /> {isMobile ? 'Ir al Administrador Móvil' : 'Explorar Panel de Administración'}
                 </Button>
               </div>
             </div>

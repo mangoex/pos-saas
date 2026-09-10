@@ -150,6 +150,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
       {/* Onboarding Wizard Modal for Mobile */}
       <OnboardingWizardModal
         isOpen={isOnboardingModalOpen}
+        isMobileView={true}
         onClose={() => setIsOnboardingModalOpen(false)}
         onCompleted={() => {
           setIsOnboardingModalOpen(false);
