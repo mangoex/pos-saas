@@ -41,6 +41,22 @@ interface Category {
   image_url?: string | null;
 }
 
+interface MenuHome {
+  name: string;
+  image_url: string | null;
+}
+
+const MENU_COVER_PRESET_IMAGES = [
+  { label: 'Tacos & Parrilla', url: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80', emoji: '🌮' },
+  { label: 'Hamburguesas & Grill', url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80', emoji: '🍔' },
+  { label: 'Sushi & Oriental', url: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=800&q=80', emoji: '🍣' },
+  { label: 'Pizzería Artesanal', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80', emoji: '🍕' },
+  { label: 'Cortes & Asados', url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80', emoji: '🥩' },
+  { label: 'Cafetería & Brunch', url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80', emoji: '☕' },
+  { label: 'Bebidas & Bar', url: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80', emoji: '🍺' },
+  { label: 'Postres & Dulces', url: 'https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=800&q=80', emoji: '🍰' },
+];
+
 const FOOD_PRESET_IMAGES = [
   { label: 'Tacos', url: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=400&q=80', emoji: '🌮' },
   { label: 'Hamburguesa', url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80', emoji: '🍔' },
@@ -103,6 +119,14 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   });
   const [categoryModalError, setCategoryModalError] = useState<string | null>(null);
 
+  // Menu Home ("Todos") Portada Modal State
+  const [isMenuHomeModalOpen, setIsMenuHomeModalOpen] = useState(false);
+  const [menuHomeForm, setMenuHomeForm] = useState({
+    name: 'Todos',
+    image_url: '',
+  });
+  const [menuHomeModalError, setMenuHomeModalError] = useState<string | null>(null);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -111,6 +135,11 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   };
 
   // Queries
+  const { data: menuHome, isLoading: menuHomeLoading } = useQuery<MenuHome>({
+    queryKey: ['menu-home'],
+    queryFn: () => fetchApi('/catalog/menu-home'),
+  });
+
   const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: () => fetchApi('/catalog/products'),
@@ -230,6 +259,35 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     },
   });
 
+  const saveMenuHomeMutation = useMutation({
+    mutationFn: async (form: typeof menuHomeForm) => {
+      return fetchApi('/catalog/menu-home', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: form.name.trim(),
+          image_url: form.image_url.trim() || undefined,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-home'] });
+      setIsMenuHomeModalOpen(false);
+      showToast('Portada principal actualizada con éxito');
+    },
+    onError: (err: any) => {
+      setMenuHomeModalError(err?.message || err?.detail?.message || 'Error al guardar la portada principal');
+    },
+  });
+
+  const openMenuHomeModal = () => {
+    setMenuHomeModalError(null);
+    setMenuHomeForm({
+      name: menuHome?.name || 'Todos',
+      image_url: menuHome?.image_url || '',
+    });
+    setIsMenuHomeModalOpen(true);
+  };
+
   // Open Product Modal
   const openProductModal = (product?: Product) => {
     setProductModalError(null);
@@ -282,10 +340,10 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     setIsCategoryModalOpen(true);
   };
 
-  // File to base64 for camera/gallery (product & category)
+  // File to base64 for camera/gallery (product & category & menu-home)
   const handlePhotoUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
-    target: 'product' | 'category' = 'product'
+    target: 'product' | 'category' | 'menu-home' = 'product'
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -299,7 +357,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         img.src = dataUrl;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const maxDim = 600;
+          const maxDim = target === 'menu-home' ? 900 : 600;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -318,9 +376,11 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const compressed = canvas.toDataURL('image/jpeg', 0.7);
+            const compressed = canvas.toDataURL('image/jpeg', target === 'menu-home' ? 0.78 : 0.7);
             if (target === 'category') {
               setCategoryForm((prev) => ({ ...prev, image_url: compressed }));
+            } else if (target === 'menu-home') {
+              setMenuHomeForm((prev) => ({ ...prev, image_url: compressed }));
             } else {
               setProductForm((prev) => ({ ...prev, image_url: compressed }));
             }
@@ -520,7 +580,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 cursor: 'pointer',
               }}
             >
-              Todos ({products.length})
+              {menuHome?.name || 'Todos'} ({products.length})
             </button>
             {sortedCategories.map((cat) => {
               const count = products.filter((p) => p.category_name === cat.name).length;
@@ -713,23 +773,149 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
 
       {/* Categories Subtab */}
       {activeSubTab === 'categories' && (
-        <main style={{ padding: '0 14px', maxWidth: 640, margin: '0 auto' }}>
+        <main style={{ padding: '0 14px', maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Card de la Portada Principal ("Todos") */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 14,
+              padding: '14px',
+              border: '2px solid #3b82f6',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    backgroundColor: '#eff6ff',
+                    color: '#1d4ed8',
+                    borderRadius: 6,
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    letterSpacing: '0.02em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  <Sparkles size={12} /> Categoría Principal
+                </span>
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  • Portada del Menú
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={openMenuHomeModal}
+                style={{
+                  border: 'none',
+                  background: '#eff6ff',
+                  color: '#1d4ed8',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Edit2 size={13} /> Editar portada
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              {/* Cover / Header photo preview thumbnail */}
+              <div
+                onClick={openMenuHomeModal}
+                style={{
+                  width: 76,
+                  height: 54,
+                  borderRadius: 10,
+                  backgroundColor: '#f1f5f9',
+                  border: '1px solid #e2e8f0',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                }}
+                title="Toca para cambiar foto de cabecera"
+              >
+                {menuHome?.image_url ? (
+                  <img
+                    src={menuHome.image_url}
+                    alt={menuHome.name || 'Portada'}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#94a3b8' }}>
+                    <Camera size={18} />
+                    <span style={{ fontSize: '0.6rem', fontWeight: 700, marginTop: 2 }}>Sin foto</span>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                  {menuHome?.name || 'Todos'}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2, lineHeight: 1.35 }}>
+                  Muestra todos los platillos ({products.length}) en la cabecera principal del menú web.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+            <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+              Otras Categorías ({sortedCategories.length})
+            </h3>
+            <button
+              onClick={() => openCategoryModal()}
+              style={{
+                border: 'none',
+                background: '#f1f5f9',
+                color: '#2563eb',
+                borderRadius: 8,
+                padding: '5px 10px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Plus size={14} /> Nueva categoría
+            </button>
+          </div>
+
           {categoriesLoading ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Cargando categorías...</div>
+            <div style={{ padding: 30, textAlign: 'center', color: '#64748b' }}>Cargando categorías...</div>
           ) : categories.length === 0 ? (
             <div
               style={{
                 textAlign: 'center',
-                padding: 40,
+                padding: 30,
                 backgroundColor: '#ffffff',
                 borderRadius: 14,
                 border: '1px dashed #cbd5e1',
               }}
             >
-              <Tag size={36} color="#94a3b8" style={{ margin: '0 auto 8px' }} />
-              <div style={{ fontWeight: 700, color: '#334155' }}>No hay categorías</div>
-              <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 14px' }}>
-                Crea categorías para organizar tus platillos en el menú y punto de venta.
+              <Tag size={32} color="#94a3b8" style={{ margin: '0 auto 8px' }} />
+              <div style={{ fontWeight: 700, color: '#334155' }}>No hay categorías adicionales</div>
+              <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '4px 0 12px' }}>
+                Crea categorías para clasificar tus platillos en secciones como Tacos, Bebidas o Postres.
               </p>
               <button
                 onClick={() => openCategoryModal()}
@@ -762,14 +948,40 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
+                      gap: 10,
                     }}
                   >
-                    <div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
-                        {cat.name}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 8,
+                          backgroundColor: '#f1f5f9',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {cat.image_url ? (
+                          <img
+                            src={cat.image_url}
+                            alt={cat.name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <Tag size={18} color="#94a3b8" />
+                        )}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
-                        {count} platillos asociados • Orden: {cat.display_order ?? 0}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {cat.name}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
+                          {count} platillos • Orden: {cat.display_order ?? 0}
+                        </div>
                       </div>
                     </div>
 
@@ -787,6 +999,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                         fontSize: '0.75rem',
                         fontWeight: 600,
                         cursor: 'pointer',
+                        flexShrink: 0,
                       }}
                     >
                       <Edit2 size={13} /> Editar
@@ -1346,6 +1559,273 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 }}
               >
                 {saveCategoryMutation.isPending ? 'Guardando...' : editingCategory ? 'Guardar Cambios' : 'Crear Categoría'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Menu Home Modal ("Todos" Portada & Nombre) */}
+      {isMenuHomeModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            zIndex: 60,
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              width: '100%',
+              maxWidth: 520,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: '20px 18px 28px',
+              boxShadow: '0 -4px 10px rgba(0, 0, 0, 0.15)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
+                    Portada Principal («{menuHomeForm.name || 'Todos'}»)
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+                    Cabecera del menú web para todos tus platillos
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMenuHomeModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {menuHomeModalError && (
+              <div
+                style={{
+                  backgroundColor: '#fee2e2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 10,
+                  padding: '8px 12px',
+                  color: '#b91c1c',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  marginBottom: 12,
+                }}
+              >
+                {menuHomeModalError}
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveMenuHomeMutation.mutate(menuHomeForm);
+              }}
+            >
+              {/* Name */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                  Nombre de la pestaña principal *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={120}
+                  placeholder="Todos"
+                  value={menuHomeForm.name}
+                  onChange={(e) => setMenuHomeForm({ ...menuHomeForm, name: e.target.value })}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '10px 12px',
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    borderRadius: 10,
+                    border: '1px solid #cbd5e1',
+                    outline: 'none',
+                  }}
+                />
+                <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4, display: 'block' }}>
+                  Por defecto es «Todos». Muestra el catálogo general de tu restaurante en el menú web.
+                </span>
+              </div>
+
+              {/* Cover Photo */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Foto de cabecera / Portada
+                </label>
+
+                {/* Preview if any */}
+                {menuHomeForm.image_url ? (
+                  <div style={{ position: 'relative', marginBottom: 10, borderRadius: 12, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                    <img
+                      src={menuHomeForm.image_url}
+                      alt="Vista previa portada"
+                      style={{ width: '100%', height: 150, objectFit: 'cover' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMenuHomeForm({ ...menuHomeForm, image_url: '' })}
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        backgroundColor: 'rgba(0,0,0,0.65)',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: 6,
+                        padding: '4px 8px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Quitar foto
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      height: 76,
+                      borderRadius: 10,
+                      backgroundColor: '#f8fafc',
+                      border: '1px dashed #cbd5e1',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      marginBottom: 10,
+                      color: '#94a3b8',
+                      fontSize: '0.78rem',
+                    }}
+                  >
+                    <ImageIcon size={22} />
+                    <span>Sin foto de portada (se mostrará la ilustración predeterminada)</span>
+                  </div>
+                )}
+
+                {/* Camera / Gallery Upload */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <label
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      backgroundColor: '#eff6ff',
+                      border: '1px dashed #3b82f6',
+                      borderRadius: 10,
+                      color: '#1d4ed8',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Camera size={20} />
+                    Tomar foto con cámara / Cargar imagen
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePhotoUpload(e, 'menu-home')}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+
+                {/* Preset Suggestions */}
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Sparkles size={14} color="#f59e0b" /> Portadas sugeridas de alta calidad:
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    overflowX: 'auto',
+                    paddingBottom: 6,
+                    scrollbarWidth: 'none',
+                  }}
+                >
+                  {MENU_COVER_PRESET_IMAGES.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setMenuHomeForm({ ...menuHomeForm, image_url: preset.url })}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 8,
+                        border: menuHomeForm.image_url === preset.url ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                        backgroundColor: '#ffffff',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>{preset.emoji}</span>
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* URL Input */}
+                <div style={{ marginTop: 8 }}>
+                  <input
+                    type="url"
+                    placeholder="O pega enlace público https://... (opcional)"
+                    value={menuHomeForm.image_url.startsWith('data:') ? '' : menuHomeForm.image_url}
+                    onChange={(e) => setMenuHomeForm({ ...menuHomeForm, image_url: e.target.value })}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '8px 10px',
+                      fontSize: '0.8rem',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      outline: 'none',
+                      color: '#475569',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={saveMenuHomeMutation.isPending || !menuHomeForm.name.trim()}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 12,
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.25)',
+                }}
+              >
+                {saveMenuHomeMutation.isPending ? 'Guardando...' : 'Guardar Portada Principal'}
               </button>
             </form>
           </div>
