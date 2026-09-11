@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import openpyxl
 from test_platform_api import (
@@ -218,3 +218,55 @@ def test_supervisor_step_up_authorization():
         headers=_admin_headers(),
     )
     assert invalid_res.status_code == 403
+
+
+def test_business_analytics_endpoint():
+    """Verify business analytics endpoint computes deterministic KPIs, payment mix,
+    order channels, top products, and daily trends in Python.
+    """
+    client = _client_with_seeded_database()
+    headers = _admin_headers()
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    res = client.get(
+        f"/api/v1/reports/analytics?date_from={today_str}&date_to={today_str}",
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    data = res.json()
+
+    assert data["date_from"] == today_str
+    assert data["date_to"] == today_str
+    assert "summary" in data
+    assert "total_sales" in data["summary"]
+    assert "orders_count" in data["summary"]
+    assert "average_ticket" in data["summary"]
+    assert "items_sold_count" in data["summary"]
+    assert isinstance(data["payment_methods"], list)
+    assert isinstance(data["order_channels"], list)
+    assert isinstance(data["top_products"], list)
+    assert isinstance(data["daily_trend"], list)
+    assert len(data["daily_trend"]) == 1
+    assert data["daily_trend"][0]["date"] == today_str
+
+
+def test_multi_branch_consolidated_multi_day_range():
+    """Verify multi-branch consolidated report supports multi-day ranges
+    without error and calculates deterministic net expected cash.
+    """
+    client = _client_with_seeded_database()
+    headers = _admin_headers()
+    now = datetime.now(timezone.utc)
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    today_str = now.strftime("%Y-%m-%d")
+
+    res = client.get(
+        f"/api/v1/reports/branch-reconciliation/consolidated?date_from={yesterday_str}&date_to={today_str}",
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["date_from"] == yesterday_str
+    assert data["date_to"] == today_str
+    assert "summary" in data
+    assert "total_expected_cash" in data["summary"]

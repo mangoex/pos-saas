@@ -59,7 +59,7 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     categoryTitle: 'Cajas y Reportes',
     items: [
       { path: '/reports', label: 'Cortes X/Z y Ventas' },
-      // Catálogo 'Conceptos de Caja' desvinculado de la operación según requerimiento de simplificación
+      { path: '/analytics', label: 'Métricas y Rendimiento' },
     ],
   },
   {

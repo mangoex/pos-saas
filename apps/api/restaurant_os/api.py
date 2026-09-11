@@ -2380,6 +2380,25 @@ def branch_reconciliation_consolidated_endpoint(
     )
 
 
+@router.get("/reports/analytics")
+def business_analytics_endpoint(
+    date_from: str,
+    date_to: str,
+    session: SessionDep,
+    branch_id: str | None = None,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    from restaurant_os.reconciliation_reports import get_business_analytics
+
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return _business_response(
+        lambda: get_business_analytics(
+            session, date_from, date_to, branch_id, actor_id
+        )
+    )
+
+
 @router.post("/reports/branch-reconciliation/audit")
 def branch_reconciliation_audit_endpoint(
     payload: ReconciliationAuditRequest,

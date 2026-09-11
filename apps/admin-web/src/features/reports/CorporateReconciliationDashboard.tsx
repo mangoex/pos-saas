@@ -86,6 +86,70 @@ export default function CorporateReconciliationDashboard() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 2, gap: 2 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom(today);
+                setDateTo(today);
+              }}
+              style={{
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                backgroundColor: dateFrom === today && dateTo === today ? '#ffffff' : 'transparent',
+                color: dateFrom === today && dateTo === today ? '#0f172a' : '#64748b',
+                boxShadow: dateFrom === today && dateTo === today ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const d = new Date();
+                d.setDate(d.getDate() - 6);
+                setDateFrom(d.toLocaleDateString('en-CA'));
+                setDateTo(today);
+              }}
+              style={{
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                backgroundColor: 'transparent',
+                color: '#64748b',
+              }}
+            >
+              Esta Semana
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom(firstDay);
+                setDateTo(today);
+              }}
+              style={{
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                backgroundColor: dateFrom === firstDay && dateTo === today ? '#ffffff' : 'transparent',
+                color: dateFrom === firstDay && dateTo === today ? '#0f172a' : '#64748b',
+                boxShadow: dateFrom === firstDay && dateTo === today ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}
+            >
+              Este Mes
+            </button>
+          </div>
+
           <select
             value={selectedBranchId}
             onChange={(e) => setSelectedBranchId(e.target.value)}
@@ -130,6 +194,15 @@ export default function CorporateReconciliationDashboard() {
 
       {summary && data && (
         <div style={{ display: 'grid', gap: 24 }}>
+          {summary.total_sales === 0 && summary.total_suppliers === 0 && summary.total_fixed === 0 && (
+            <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10, padding: 20, textAlign: 'center', color: '#64748b' }}>
+              <strong>Sin movimientos en este periodo</strong>
+              <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+                No se registraron ventas, gastos de proveedores ni gastos fijos entre el {dateFrom} y el {dateTo}.
+              </div>
+            </div>
+          )}
+
           {/* Summary KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
             <div style={{ background: '#fff', padding: 16, borderRadius: 10, border: '1px solid #e2e8f0' }}>

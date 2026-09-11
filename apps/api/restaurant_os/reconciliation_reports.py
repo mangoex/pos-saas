@@ -14,6 +14,7 @@ from . import models
 from .operations import (
     ORGANIZATION_ID,
     AuthorizationError,
+    _actor_user_info,
     _id,
     authorize_branch_scope,
     require_permission,
@@ -361,7 +362,7 @@ def get_multi_branch_consolidated_report(
     branch_id: str | None = None,
     actor_id: str | None = None,
 ) -> dict[str, Any]:
-    """Aggregates daily reconciliations across all or selected branches."""
+    """Aggregates daily reconciliations across all or selected branches for the active tenant."""
     if actor_id:
         if branch_id:
             authorize_branch_scope(session, actor_id, "dashboard.read", branch_id)
@@ -369,6 +370,13 @@ def get_multi_branch_consolidated_report(
             require_permission(session, actor_id, "dashboard.read", None)
 
     branches_query = sa.select(models.branches)
+    if actor_id:
+        actor = _actor_user_info(session, actor_id)
+        if actor and not actor.get("is_superadmin"):
+            branches_query = branches_query.where(
+                models.branches.c.organization_id == str(actor["organization_id"])
+            )
+    branches_query = branches_query.where(models.branches.c.status == "active")
     if branch_id:
         branches_query = branches_query.where(models.branches.c.id == branch_id)
     branches = session.execute(branches_query).mappings().all()
@@ -381,6 +389,8 @@ def get_multi_branch_consolidated_report(
     total_cards = 0.0
     total_transfers = 0.0
     total_credits = 0.0
+    total_cash_sales = 0.0
+    total_cash_deposits = 0.0
     total_suppliers = 0.0
     total_fixed = 0.0
     total_withdrawals = 0.0
@@ -390,10 +400,12 @@ def get_multi_branch_consolidated_report(
     dt_from = datetime.strptime(date_from_str, "%Y-%m-%d")
     dt_to = datetime.strptime(date_to_str, "%Y-%m-%d")
     curr = dt_from
-    days = []
+    days: list[str] = []
     while curr <= dt_to:
         days.append(curr.strftime("%Y-%m-%d"))
         curr += timedelta(days=1)
+
+    branch_initial_cash: dict[str, float] = {}
 
     for b in branches:
         b_id = b["id"]
@@ -401,7 +413,7 @@ def get_multi_branch_consolidated_report(
         b_sales = 0.0
         b_expenses = 0.0
         for day in days:
-            rep = get_branch_daily_reconciliation(session, b_id, day, actor_id)
+            rep = get_branch_daily_reconciliation(session, b_id, day, actor_id=None)
             bal = rep["balance"]
             b_sales += bal["total_sales_with_tax"]
             b_expenses += bal["supplier_expenses"] + bal["fixed_expenses"]
@@ -409,10 +421,17 @@ def get_multi_branch_consolidated_report(
             total_cards += bal["card_payments"]
             total_transfers += bal["transfer_payments"]
             total_credits += bal["credit_sales"]
+            total_cash_sales += bal.get("cash_sales", 0.0)
+            total_cash_deposits += bal.get("cash_deposits", 0.0)
             total_suppliers += bal["supplier_expenses"]
             total_fixed += bal["fixed_expenses"]
             total_withdrawals += bal["cash_withdrawals"]
-            total_expected += bal["expected_cash_in_register"]
+
+            if b_id not in branch_initial_cash and bal.get("initial_cash", 0.0) > 0:
+                branch_initial_cash[b_id] = bal["initial_cash"]
+
+            if len(days) == 1:
+                total_expected += bal["expected_cash_in_register"]
 
             for sup in rep["suppliers_breakdown"]:
                 sname = sup["provider_name"]
@@ -426,27 +445,293 @@ def get_multi_branch_consolidated_report(
             {
                 "branch_id": b_id,
                 "branch_name": b_name,
-                "total_sales": b_sales,
-                "total_expenses": b_expenses,
+                "total_sales": round(b_sales, 2),
+                "total_expenses": round(b_expenses, 2),
+            }
+        )
+
+    if len(days) > 1:
+        net_expected = (
+            sum(branch_initial_cash.values())
+            + total_cash_sales
+            + total_cash_deposits
+            - (total_suppliers + total_fixed + total_withdrawals)
+        )
+        total_expected = round(net_expected, 2)
+    else:
+        total_expected = round(total_expected, 2)
+
+    return {
+        "date_from": date_from_str,
+        "date_to": date_to_str,
+        "branches": branch_summaries,
+        "supplier_totals": {k: round(v, 2) for k, v in supplier_totals.items()},
+        "fixed_expense_totals": {k: round(v, 2) for k, v in fixed_expense_totals.items()},
+        "summary": {
+            "total_sales": round(total_sales, 2),
+            "total_cards": round(total_cards, 2),
+            "total_transfers": round(total_transfers, 2),
+            "total_credits": round(total_credits, 2),
+            "total_suppliers": round(total_suppliers, 2),
+            "total_fixed": round(total_fixed, 2),
+            "total_withdrawals": round(total_withdrawals, 2),
+            "total_expected_cash": total_expected,
+        },
+    }
+
+
+def get_business_analytics(
+    session: Session,
+    date_from_str: str,
+    date_to_str: str,
+    branch_id: str | None = None,
+    actor_id: str | None = None,
+) -> dict[str, Any]:
+    """Computes deterministic executive sales analytics, payment methods mix,
+    service channels, top products, and daily trends directly in Python.
+    """
+    if actor_id:
+        if branch_id:
+            authorize_branch_scope(session, actor_id, "dashboard.read", branch_id)
+        else:
+            require_permission(session, actor_id, "dashboard.read", None)
+
+    branches_query = sa.select(models.branches)
+    if actor_id:
+        actor = _actor_user_info(session, actor_id)
+        if actor and not actor.get("is_superadmin"):
+            branches_query = branches_query.where(
+                models.branches.c.organization_id == str(actor["organization_id"])
+            )
+    branches_query = branches_query.where(models.branches.c.status == "active")
+    if branch_id:
+        branches_query = branches_query.where(models.branches.c.id == branch_id)
+    branches = session.execute(branches_query).mappings().all()
+
+    empty_result = {
+        "date_from": date_from_str,
+        "date_to": date_to_str,
+        "summary": {
+            "total_sales": 0.0,
+            "orders_count": 0,
+            "average_ticket": 0.0,
+            "items_sold_count": 0,
+        },
+        "payment_methods": [],
+        "order_channels": [],
+        "top_products": [],
+        "daily_trend": [],
+    }
+
+    if not branches:
+        return empty_result
+
+    branch_ids = [str(b["id"]) for b in branches]
+    primary_branch_id = branch_ids[0]
+
+    # Calculate timezone-aware UTC bounds
+    start_utc, _ = _branch_day_bounds_utc(session, primary_branch_id, date_from_str)
+    _, end_utc = _branch_day_bounds_utc(session, primary_branch_id, date_to_str)
+
+    # 1. Query confirmed payments
+    payments_stmt = (
+        sa.select(
+            models.payments.c.id,
+            models.payments.c.order_id,
+            models.payments.c.branch_id,
+            models.payments.c.method,
+            models.payments.c.amount_cents,
+            models.payments.c.created_at,
+        )
+        .where(
+            models.payments.c.branch_id.in_(branch_ids),
+            models.payments.c.status == "confirmed",
+            models.payments.c.created_at >= start_utc,
+            models.payments.c.created_at <= end_utc,
+        )
+    )
+    payments = session.execute(payments_stmt).mappings().all()
+
+    total_sales_cents = sum(p["amount_cents"] for p in payments)
+    paid_order_ids = list({p["order_id"] for p in payments if p.get("order_id")})
+    orders_count = len(paid_order_ids)
+    avg_ticket_cents = (total_sales_cents // orders_count) if orders_count > 0 else 0
+
+    # 2. Payment methods breakdown
+    method_cents_map: dict[str, int] = {}
+    method_labels = {
+        "cash": "Efectivo",
+        "card": "Tarjeta de Débito/Crédito",
+        "transfer": "Transferencia SPEI",
+        "credit": "Crédito a Clientes",
+        "other": "Otro",
+    }
+    for p in payments:
+        raw_m = (p["method"] or "cash").lower()
+        if raw_m in ("card", "credit_card", "debit_card"):
+            m_key = "card"
+        elif raw_m in ("transfer", "bank_transfer", "spei"):
+            m_key = "transfer"
+        elif raw_m in ("credit", "customer_credit"):
+            m_key = "credit"
+        elif raw_m in ("cash", "efectivo"):
+            m_key = "cash"
+        else:
+            m_key = "other"
+        method_cents_map[m_key] = method_cents_map.get(m_key, 0) + p["amount_cents"]
+
+    payment_methods: list[dict[str, Any]] = []
+    for m_key, cents in sorted(method_cents_map.items(), key=lambda x: x[1], reverse=True):
+        pct = round((cents / total_sales_cents * 100.0), 1) if total_sales_cents > 0 else 0.0
+        payment_methods.append(
+            {
+                "method_key": m_key,
+                "label": method_labels.get(m_key, m_key.capitalize()),
+                "total": round(float(cents) / 100.0, 2),
+                "percentage": pct,
+            }
+        )
+
+    # 3. Orders Channels / Types
+    channel_cents_map: dict[str, int] = {}
+    channel_count_map: dict[str, int] = {}
+    channel_labels = {
+        "dine-in": "Comedor",
+        "takeout": "Para Llevar",
+        "delivery": "A Domicilio",
+        "UBER_EATS": "Uber Eats",
+        "DIDI_FOOD": "DiDi Food",
+        "RAPPI": "Rappi",
+    }
+
+    if paid_order_ids:
+        orders_stmt = (
+            sa.select(
+                models.orders.c.id,
+                models.orders.c.order_type,
+                models.orders.c.channel,
+                models.orders.c.total_cents,
+            )
+            .where(models.orders.c.id.in_(paid_order_ids))
+        )
+        order_rows = session.execute(orders_stmt).mappings().all()
+        for ord_r in order_rows:
+            ch_key = ord_r["channel"] or ord_r["order_type"] or "dine-in"
+            label_key = ch_key
+            t_cents = ord_r["total_cents"]
+            channel_cents_map[label_key] = channel_cents_map.get(label_key, 0) + t_cents
+            channel_count_map[label_key] = channel_count_map.get(label_key, 0) + 1
+
+    order_channels: list[dict[str, Any]] = []
+    total_channel_cents = sum(channel_cents_map.values()) or total_sales_cents
+    for ch_key, cents in sorted(channel_cents_map.items(), key=lambda x: x[1], reverse=True):
+        pct = round((cents / total_channel_cents * 100.0), 1) if total_channel_cents > 0 else 0.0
+        order_channels.append(
+            {
+                "channel_key": ch_key,
+                "label": channel_labels.get(ch_key, ch_key.capitalize()),
+                "orders_count": channel_count_map.get(ch_key, 0),
+                "total": round(float(cents) / 100.0, 2),
+                "percentage": pct,
+            }
+        )
+
+    # 4. Top Products from order_lines
+    items_sold_count = 0
+    top_products: list[dict[str, Any]] = []
+    if paid_order_ids:
+        lines_stmt = (
+            sa.select(
+                models.order_lines.c.product_id,
+                models.order_lines.c.product_name,
+                models.order_lines.c.quantity,
+                models.order_lines.c.line_total_cents,
+            )
+            .where(
+                models.order_lines.c.order_id.in_(paid_order_ids),
+                models.order_lines.c.status == "active",
+            )
+        )
+        lines = session.execute(lines_stmt).mappings().all()
+        product_map: dict[str, dict[str, Any]] = {}
+        for line in lines:
+            p_name = line["product_name"] or "Producto"
+            qty = line["quantity"] or 0
+            l_cents = line["line_total_cents"] or 0
+            items_sold_count += qty
+            if p_name not in product_map:
+                product_map[p_name] = {"product_name": p_name, "quantity": 0, "cents": 0}
+            product_map[p_name]["quantity"] += qty
+            product_map[p_name]["cents"] += l_cents
+
+        sorted_prods = sorted(product_map.values(), key=lambda x: x["cents"], reverse=True)[:10]
+        for p in sorted_prods:
+            top_products.append(
+                {
+                    "product_name": p["product_name"],
+                    "quantity": p["quantity"],
+                    "total": round(float(p["cents"]) / 100.0, 2),
+                }
+            )
+
+    # 5. Daily Trend
+    branch_row = (
+        session.execute(
+            sa.select(models.branches.c.timezone).where(models.branches.c.id == primary_branch_id)
+        )
+        .mappings()
+        .first()
+    )
+    tz_name = (
+        branch_row["timezone"]
+        if branch_row and branch_row.get("timezone")
+        else "America/Mazatlan"
+    )
+    try:
+        local_tz = ZoneInfo(str(tz_name))
+    except Exception:
+        local_tz = ZoneInfo("America/Mazatlan")
+
+    daily_map: dict[str, dict[str, Any]] = {}
+    dt_curr = datetime.strptime(date_from_str, "%Y-%m-%d")
+    dt_end = datetime.strptime(date_to_str, "%Y-%m-%d")
+    while dt_curr <= dt_end:
+        d_str = dt_curr.strftime("%Y-%m-%d")
+        daily_map[d_str] = {"date": d_str, "total_cents": 0, "order_ids": set()}
+        dt_curr += timedelta(days=1)
+
+    for p in payments:
+        if p["created_at"]:
+            p_local = p["created_at"].astimezone(local_tz)
+            d_key = p_local.strftime("%Y-%m-%d")
+            if d_key in daily_map:
+                daily_map[d_key]["total_cents"] += p["amount_cents"]
+                if p.get("order_id"):
+                    daily_map[d_key]["order_ids"].add(p["order_id"])
+
+    daily_trend: list[dict[str, Any]] = []
+    for d_key, info in sorted(daily_map.items()):
+        daily_trend.append(
+            {
+                "date": d_key,
+                "total_sales": round(float(info["total_cents"]) / 100.0, 2),
+                "orders_count": len(info["order_ids"]),
             }
         )
 
     return {
         "date_from": date_from_str,
         "date_to": date_to_str,
-        "branches": branch_summaries,
-        "supplier_totals": supplier_totals,
-        "fixed_expense_totals": fixed_expense_totals,
         "summary": {
-            "total_sales": total_sales,
-            "total_cards": total_cards,
-            "total_transfers": total_transfers,
-            "total_credits": total_credits,
-            "total_suppliers": total_suppliers,
-            "total_fixed": total_fixed,
-            "total_withdrawals": total_withdrawals,
-            "total_expected_cash": total_expected,
+            "total_sales": round(float(total_sales_cents) / 100.0, 2),
+            "orders_count": orders_count,
+            "average_ticket": round(float(avg_ticket_cents) / 100.0, 2),
+            "items_sold_count": items_sold_count,
         },
+        "payment_methods": payment_methods,
+        "order_channels": order_channels,
+        "top_products": top_products,
+        "daily_trend": daily_trend,
     }
 
 

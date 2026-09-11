@@ -12,6 +12,14 @@ import {
   RefreshCw,
   CheckCircle2,
   X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  DollarSign,
+  ArrowDownRight,
+  ArrowUpRight,
 } from 'lucide-react';
 
 interface MobileCashShiftTabProps {
@@ -89,9 +97,41 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
     }
   }, [branchId]);
 
+  // Daily cash report state
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const [reportDate, setReportDate] = useState(todayStr);
+  const [reportData, setReportData] = useState<any | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+
+  const loadReport = useCallback(async (date: string) => {
+    if (!branchId) return;
+    setReportLoading(true);
+    try {
+      const res = await fetchApi<any>(
+        `/reports/branch-reconciliation/daily?branch_id=${encodeURIComponent(branchId)}&date=${encodeURIComponent(date)}`
+      );
+      setReportData(res);
+    } catch {
+      setReportData(null);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [branchId]);
+
   useEffect(() => {
     void loadShift();
   }, [loadShift]);
+
+  useEffect(() => {
+    void loadReport(reportDate);
+  }, [loadReport, reportDate]);
+
+  const navigateDay = (offset: number) => {
+    const d = new Date(reportDate + 'T12:00:00');
+    d.setDate(d.getDate() + offset);
+    setReportDate(d.toLocaleDateString('en-CA'));
+  };
 
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -629,6 +669,387 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
             </div>
           </div>
         )}
+
+        {/* Reporte de Caja Diario / Histórico */}
+        <section
+          style={{
+            marginTop: 20,
+            backgroundColor: '#ffffff',
+            borderRadius: 16,
+            border: '1px solid #e2e8f0',
+            padding: '16px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+          }}
+        >
+          {/* Header & Date Controls */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+              marginBottom: 14,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FileText size={18} color="#2563eb" />
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                Reporte de Caja
+              </h3>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                type="button"
+                onClick={() => navigateDay(-1)}
+                style={{
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  borderRadius: 6,
+                  padding: '4px 6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title="Día anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <input
+                type="date"
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+                style={{
+                  padding: '4px 6px',
+                  borderRadius: 6,
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: '#1e293b',
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() => navigateDay(1)}
+                style={{
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  borderRadius: 6,
+                  padding: '4px 6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title="Día siguiente"
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              {reportDate !== todayStr && (
+                <button
+                  type="button"
+                  onClick={() => setReportDate(todayStr)}
+                  style={{
+                    border: 'none',
+                    background: '#eff6ff',
+                    color: '#2563eb',
+                    borderRadius: 6,
+                    padding: '4px 8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Hoy
+                </button>
+              )}
+            </div>
+          </div>
+
+          {reportLoading ? (
+            <div style={{ padding: 20, textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+              <RefreshCw size={18} className="animate-spin" style={{ margin: '0 auto 6px' }} />
+              <div>Cargando reporte de caja...</div>
+            </div>
+          ) : !reportData || !reportData.balance ? (
+            <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+              No se pudo obtener el reporte para esta fecha.
+            </div>
+          ) : (
+            (() => {
+              const b = reportData.balance;
+              const totalExpenses = (b.supplier_expenses || 0) + (b.fixed_expenses || 0) + (b.cash_withdrawals || 0);
+              const hasActivity =
+                b.initial_cash > 0 ||
+                b.total_sales_with_tax > 0 ||
+                b.cash_deposits > 0 ||
+                totalExpenses > 0;
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {!hasActivity && (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        backgroundColor: '#f8fafc',
+                        border: '1px dashed #cbd5e1',
+                        borderRadius: 8,
+                        textAlign: 'center',
+                        fontSize: '0.8rem',
+                        color: '#64748b',
+                      }}
+                    >
+                      Sin movimientos ni ventas en esta fecha.
+                    </div>
+                  )}
+
+                  {/* Top: Fondo Inicial */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 12px',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: 10,
+                      border: '1px solid #f1f5f9',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+                        FONDO INICIAL (APERTURA)
+                      </div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                        ${b.initial_cash.toFixed(2)}{' '}
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>MXN</span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Efectivo base</span>
+                  </div>
+
+                  {/* 2-Column: Ingresos vs Gastos */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {/* Ingresos */}
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#15803d', fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>
+                        <ArrowDownRight size={14} /> INGRESOS
+                      </div>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#166534' }}>
+                        ${(b.total_sales_with_tax + (b.cash_deposits || 0)).toFixed(2)}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#15803d', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div>• Efvo: ${b.cash_sales.toFixed(2)}</div>
+                        <div>• Tarjeta: ${b.card_payments.toFixed(2)}</div>
+                        <div>• Transf: ${b.transfer_payments.toFixed(2)}</div>
+                        {b.cash_deposits > 0 && <div>• Entradas: ${b.cash_deposits.toFixed(2)}</div>}
+                      </div>
+                    </div>
+
+                    {/* Gastos / Salidas */}
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        backgroundColor: '#fff1f2',
+                        border: '1px solid #fecdd3',
+                        borderRadius: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#be123c', fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>
+                        <ArrowUpRight size={14} /> GASTOS
+                      </div>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#9f1239' }}>
+                        ${totalExpenses.toFixed(2)}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#be123c', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div>• Prov: ${b.supplier_expenses.toFixed(2)}</div>
+                        <div>• Gastos: ${b.fixed_expenses.toFixed(2)}</div>
+                        <div>• Retiros: ${b.cash_withdrawals.toFixed(2)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Consolidado: Efectivo Esperado en Caja */}
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      backgroundColor: '#ecfdf5',
+                      border: '1.5px solid #10b981',
+                      borderRadius: 12,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: '#065f46', fontWeight: 700, textTransform: 'uppercase' }}>
+                        EFECTIVO ESPERADO EN CAJA
+                      </div>
+                      <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#047857', marginTop: 2 }}>
+                        ${b.expected_cash_in_register.toFixed(2)}{' '}
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#065f46' }}>MXN</span>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#047857', marginTop: 2 }}>
+                        Fondo + Ventas Efvo + Entradas - Egresos
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 19,
+                        backgroundColor: '#d1fae5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#059669',
+                      }}
+                    >
+                      <DollarSign size={22} />
+                    </div>
+                  </div>
+
+                  {/* Arqueo y Cierre (si hay datos de corte físico) */}
+                  {(b.physical_cash_count > 0 || b.difference !== 0) && (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 10,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: '#64748b' }}>Conteo Físico: </span>
+                        <strong style={{ color: '#0f172a' }}>${b.physical_cash_count.toFixed(2)}</strong>
+                      </div>
+                      <div>
+                        {b.difference === 0 ? (
+                          <span style={{ color: '#15803d', fontWeight: 700 }}>✅ Cuadre Exacto ($0.00)</span>
+                        ) : b.difference > 0 ? (
+                          <span style={{ color: '#15803d', fontWeight: 700 }}>
+                            🟢 Sobrante: +${b.difference.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#b91c1c', fontWeight: 700 }}>
+                            🔴 Faltante: -${Math.abs(b.difference).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Desglose Acordeón */}
+                  {((reportData.suppliers_breakdown?.length || 0) > 0 ||
+                    (reportData.fixed_expenses_breakdown?.length || 0) > 0 ||
+                    (reportData.withdrawals_breakdown?.length || 0) > 0 ||
+                    (reportData.transfers_breakdown?.length || 0) > 0) && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowBreakdown((prev) => !prev)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 8,
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          color: '#475569',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span>Detalle de Movimientos del Día</span>
+                        {showBreakdown ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+
+                      {showBreakdown && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            padding: '10px 12px',
+                            backgroundColor: '#f8fafc',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            fontSize: '0.75rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                          }}
+                        >
+                          {reportData.suppliers_breakdown?.length > 0 && (
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>📦 Pagos a Proveedores:</strong>
+                              {reportData.suppliers_breakdown.map((s: any, idx: number) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                  <span>{s.provider_name} ({s.observations || 'Insumos'})</span>
+                                  <strong style={{ color: '#dc2626' }}>-${Number(s.amount).toFixed(2)}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {reportData.fixed_expenses_breakdown?.length > 0 && (
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>🏢 Gastos Operativos / Menores:</strong>
+                              {reportData.fixed_expenses_breakdown.map((f: any, idx: number) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                  <span>{f.expense_type} ({f.observations || 'Gasto'})</span>
+                                  <strong style={{ color: '#dc2626' }}>-${Number(f.amount).toFixed(2)}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {reportData.withdrawals_breakdown?.length > 0 && (
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>🏧 Retiros a Bóveda / Caja Fuerte:</strong>
+                              {reportData.withdrawals_breakdown.map((w: any, idx: number) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                  <span>{w.folio} ({w.recipient_name})</span>
+                                  <strong style={{ color: '#dc2626' }}>-${Number(w.amount).toFixed(2)}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {reportData.transfers_breakdown?.length > 0 && (
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>📲 Transferencias Bancarias (SPEI):</strong>
+                              {reportData.transfers_breakdown.map((t: any, idx: number) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                  <span>Ticket {t.ticket_folio} ({t.customer_name})</span>
+                                  <strong style={{ color: '#2563eb' }}>+${Number(t.amount).toFixed(2)}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
+        </section>
       </main>
 
       {/* Movement Modal */}
