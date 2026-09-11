@@ -36,10 +36,11 @@ export interface BranchCoupon {
   code: string;
   discount_percentage: number;
   is_active: boolean;
+  show_in_checkout?: boolean;
 }
 
 const defaultBranchCoupons: BranchCoupon[] = [
-  { code: 'MIMENU-GRACIAS10', discount_percentage: 10, is_active: true },
+  { code: 'MIMENU-GRACIAS10', discount_percentage: 10, is_active: true, show_in_checkout: true },
 ];
 
 interface Branch {
@@ -221,7 +222,7 @@ const BranchesList = () => {
         delivery_tiers: branch.delivery_tiers && branch.delivery_tiers.length > 0
           ? branch.delivery_tiers
           : defaultDeliveryTiers,
-        coupons: branch.coupons && branch.coupons.length > 0
+        coupons: Array.isArray(branch.coupons)
           ? branch.coupons
           : defaultBranchCoupons,
       });
@@ -875,7 +876,7 @@ const BranchesList = () => {
                     ...formData,
                     coupons: [
                       ...formData.coupons,
-                      { code: '', discount_percentage: 10, is_active: true },
+                      { code: '', discount_percentage: 10, is_active: true, show_in_checkout: false },
                     ],
                   });
                 }}
@@ -897,7 +898,7 @@ const BranchesList = () => {
               </button>
             </div>
             <span className="branch-input-helper" style={{ marginBottom: 12, display: 'block' }}>
-              Configura los códigos promocionales y porcentaje de descuento que tus clientes pueden aplicar al ordenar desde el Menú Web Móvil.
+              Configura los códigos promocionales y porcentaje de descuento que tus clientes pueden aplicar al ordenar desde el Menú Web Móvil. Puedes seleccionar cuál cupón ofrecer sugerido en el checkout.
             </span>
 
             {formData.coupons.length === 0 ? (
@@ -911,99 +912,170 @@ const BranchesList = () => {
                     key={idx}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
+                      flexDirection: 'column',
+                      gap: 8,
                       padding: '10px 12px',
                       backgroundColor: coupon.is_active ? '#ffffff' : '#f8fafc',
                       border: `1px solid ${coupon.is_active ? '#cbd5e1' : '#e2e8f0'}`,
                       borderRadius: 8,
-                      opacity: coupon.is_active ? 1 : 0.7,
+                      opacity: coupon.is_active ? 1 : 0.75,
                     }}
                   >
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0 }} title="Activar/Desactivar cupón">
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        width: '100%',
+                      }}
+                    >
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0 }} title="Activar/Desactivar cupón">
+                        <input
+                          type="checkbox"
+                          checked={coupon.is_active}
+                          onChange={(e) => {
+                            const active = e.target.checked;
+                            const updated = [...formData.coupons];
+                            updated[idx] = {
+                              ...updated[idx],
+                              is_active: active,
+                              show_in_checkout: active ? updated[idx].show_in_checkout : false,
+                            };
+                            setFormData({ ...formData, coupons: updated });
+                          }}
+                          style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#10b981' }}
+                        />
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: coupon.is_active ? '#059669' : '#94a3b8', whiteSpace: 'nowrap' }}>
+                          {coupon.is_active ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </label>
+
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <input
+                          type="text"
+                          value={coupon.code}
+                          onChange={(e) => {
+                            const updated = [...formData.coupons];
+                            updated[idx] = { ...updated[idx], code: e.target.value.toUpperCase() };
+                            setFormData({ ...formData, coupons: updated });
+                          }}
+                          placeholder="CÓDIGO (ej. MIMENU-GRACIAS10)"
+                          style={{
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: '6px 10px',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            outline: 'none',
+                            textTransform: 'uppercase',
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          step="1"
+                          value={coupon.discount_percentage}
+                          onChange={(e) => {
+                            const updated = [...formData.coupons];
+                            const val = parseInt(e.target.value, 10) || 0;
+                            updated[idx] = { ...updated[idx], discount_percentage: Math.max(1, Math.min(100, val)) };
+                            setFormData({ ...formData, coupons: updated });
+                          }}
+                          style={{
+                            width: 55,
+                            padding: '6px 8px',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            outline: 'none',
+                            textAlign: 'center',
+                          }}
+                        />
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}>% OFF</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = formData.coupons.filter((_, i) => i !== idx);
+                          setFormData({ ...formData, coupons: updated });
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#94a3b8',
+                          cursor: 'pointer',
+                          padding: 4,
+                        }}
+                        title="Eliminar cupón"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+
+                    {/* Fila de sugerencia en checkout */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 10px',
+                        backgroundColor: coupon.show_in_checkout ? '#ecfdf5' : '#f8fafc',
+                        border: `1px solid ${coupon.show_in_checkout ? '#86efac' : '#e2e8f0'}`,
+                        borderRadius: 6,
+                        boxSizing: 'border-box',
+                        width: '100%',
+                      }}
+                    >
                       <input
                         type="checkbox"
-                        checked={coupon.is_active}
+                        id={`branch-list-checkout-promo-${idx}`}
+                        checked={Boolean(coupon.show_in_checkout)}
+                        disabled={!coupon.is_active}
                         onChange={(e) => {
-                          const updated = [...formData.coupons];
-                          updated[idx] = { ...updated[idx], is_active: e.target.checked };
-                          setFormData({ ...formData, coupons: updated });
-                        }}
-                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#10b981' }}
-                      />
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: coupon.is_active ? '#059669' : '#94a3b8', whiteSpace: 'nowrap' }}>
-                        {coupon.is_active ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </label>
-
-                    <div style={{ flex: 1, minWidth: 140 }}>
-                      <input
-                        type="text"
-                        value={coupon.code}
-                        onChange={(e) => {
-                          const updated = [...formData.coupons];
-                          updated[idx] = { ...updated[idx], code: e.target.value.toUpperCase() };
-                          setFormData({ ...formData, coupons: updated });
-                        }}
-                        placeholder="CÓDIGO (ej. MIMENU-GRACIAS10)"
-                        style={{
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          padding: '6px 10px',
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          borderRadius: 6,
-                          border: '1px solid #cbd5e1',
-                          outline: 'none',
-                          textTransform: 'uppercase',
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        step="1"
-                        value={coupon.discount_percentage}
-                        onChange={(e) => {
-                          const updated = [...formData.coupons];
-                          const val = parseInt(e.target.value, 10) || 0;
-                          updated[idx] = { ...updated[idx], discount_percentage: Math.max(1, Math.min(100, val)) };
+                          const isChecked = e.target.checked;
+                          const updated = formData.coupons.map((c, i) => ({
+                            ...c,
+                            show_in_checkout: i === idx ? isChecked : false,
+                          }));
                           setFormData({ ...formData, coupons: updated });
                         }}
                         style={{
-                          width: 55,
-                          padding: '6px 8px',
-                          fontSize: '0.85rem',
+                          width: 15,
+                          height: 15,
+                          cursor: coupon.is_active ? 'pointer' : 'not-allowed',
+                          accentColor: '#10b981',
+                          flexShrink: 0,
+                        }}
+                      />
+                      <label
+                        htmlFor={`branch-list-checkout-promo-${idx}`}
+                        style={{
+                          fontSize: '0.78rem',
                           fontWeight: 600,
-                          borderRadius: 6,
-                          border: '1px solid #cbd5e1',
-                          outline: 'none',
-                          textAlign: 'center',
+                          color: coupon.show_in_checkout
+                            ? '#047857'
+                            : coupon.is_active
+                            ? '#334155'
+                            : '#94a3b8',
+                          cursor: coupon.is_active ? 'pointer' : 'not-allowed',
+                          margin: 0,
+                          flex: 1,
+                          userSelect: 'none',
                         }}
-                      />
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#475569' }}>% OFF</span>
+                      >
+                        {coupon.show_in_checkout
+                          ? '⭐ Ofrecida como sugerencia en el checkout del menú'
+                          : 'Ofrecer esta promoción en el checkout del menú'}
+                      </label>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = formData.coupons.filter((_, i) => i !== idx);
-                        setFormData({ ...formData, coupons: updated });
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#94a3b8',
-                        cursor: 'pointer',
-                        padding: 4,
-                      }}
-                      title="Eliminar cupón"
-                    >
-                      <Trash2 size={16} />
-                    </button>
                   </div>
                 ))}
               </div>

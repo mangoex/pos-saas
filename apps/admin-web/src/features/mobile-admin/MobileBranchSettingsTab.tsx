@@ -51,10 +51,11 @@ export interface BranchCoupon {
   code: string;
   discount_percentage: number;
   is_active: boolean;
+  show_in_checkout?: boolean;
 }
 
 const defaultBranchCoupons: BranchCoupon[] = [
-  { code: 'MIMENU-GRACIAS10', discount_percentage: 10, is_active: true },
+  { code: 'MIMENU-GRACIAS10', discount_percentage: 10, is_active: true, show_in_checkout: true },
 ];
 
 interface Branch {
@@ -157,7 +158,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
             ]
       );
       setCoupons(
-        currentBranch.coupons && currentBranch.coupons.length > 0
+        Array.isArray(currentBranch.coupons)
           ? currentBranch.coupons
           : defaultBranchCoupons
       );
@@ -1189,7 +1190,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                     onClick={() => {
                       setCoupons([
                         ...coupons,
-                        { code: '', discount_percentage: 10, is_active: true },
+                        { code: '', discount_percentage: 10, is_active: true, show_in_checkout: false },
                       ]);
                     }}
                     style={{
@@ -1259,8 +1260,13 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                               type="checkbox"
                               checked={coupon.is_active}
                               onChange={(e) => {
+                                const active = e.target.checked;
                                 const updated = [...coupons];
-                                updated[idx] = { ...updated[idx], is_active: e.target.checked };
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  is_active: active,
+                                  show_in_checkout: active ? updated[idx].show_in_checkout : false,
+                                };
                                 setCoupons(updated);
                               }}
                               style={{
@@ -1387,6 +1393,64 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                               % OFF
                             </span>
                           </div>
+                        </div>
+
+                        {/* Fila 3: Ofrecer en checkout de menú web */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '8px 10px',
+                            backgroundColor: coupon.show_in_checkout ? '#ecfdf5' : '#ffffff',
+                            border: `1px solid ${coupon.show_in_checkout ? '#86efac' : '#e2e8f0'}`,
+                            borderRadius: 8,
+                            boxSizing: 'border-box',
+                            width: '100%',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            id={`checkout-promo-${idx}`}
+                            checked={Boolean(coupon.show_in_checkout)}
+                            disabled={!coupon.is_active}
+                            onChange={(e) => {
+                              const isChecked = e.target.checked;
+                              setCoupons(
+                                coupons.map((c, i) => ({
+                                  ...c,
+                                  show_in_checkout: i === idx ? isChecked : false,
+                                }))
+                              );
+                            }}
+                            style={{
+                              width: 16,
+                              height: 16,
+                              cursor: coupon.is_active ? 'pointer' : 'not-allowed',
+                              accentColor: '#059669',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <label
+                            htmlFor={`checkout-promo-${idx}`}
+                            style={{
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              color: coupon.show_in_checkout
+                                ? '#047857'
+                                : coupon.is_active
+                                ? '#334155'
+                                : '#94a3b8',
+                              cursor: coupon.is_active ? 'pointer' : 'not-allowed',
+                              margin: 0,
+                              flex: 1,
+                              userSelect: 'none',
+                            }}
+                          >
+                            {coupon.show_in_checkout
+                              ? '⭐ Ofrecida como sugerencia en el checkout'
+                              : 'Ofrecer esta promoción en el checkout del menú'}
+                          </label>
                         </div>
                       </div>
                     ))}

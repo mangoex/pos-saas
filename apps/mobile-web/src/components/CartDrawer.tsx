@@ -149,6 +149,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const totalCents = items.reduce((acc, item) => acc + item.line_total_cents, 0);
 
+  // Suggested checkout coupon (only if active and specifically marked for checkout)
+  const suggestedCheckoutCoupon = useMemo(() => {
+    if (!selectedBranch?.coupons || !Array.isArray(selectedBranch.coupons)) return null;
+    return selectedBranch.coupons.find((c) => c.is_active && c.show_in_checkout) || null;
+  }, [selectedBranch?.coupons]);
+
   // Deterministic discount calculation: (total_cents * discount_percentage) // 100
   const discountCents = useMemo(() => {
     if (!appliedCoupon || appliedCoupon.discount_percentage <= 0) return 0;
@@ -173,10 +179,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const grandTotalCents = Math.max(0, totalCents - discountCents) + deliveryFeeCents;
 
-  const handleApplyCoupon = async (e?: React.FormEvent) => {
+  const handleApplyCoupon = async (e?: React.FormEvent, explicitCode?: string) => {
     if (e) e.preventDefault();
     setCouponError('');
-    const code = couponInput.trim().toUpperCase();
+    const code = (explicitCode || couponInput).trim().toUpperCase();
     if (!code) {
       setCouponError('Ingresa un código de cupón');
       return;
@@ -1037,10 +1043,60 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </div>
                 ) : (
                   <div>
+                    {suggestedCheckoutCoupon && (
+                      <div
+                        style={{
+                          marginBottom: 10,
+                          padding: '10px 12px',
+                          backgroundColor: '#ecfdf5',
+                          border: '1px dashed #86efac',
+                          borderRadius: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🏷️</span>
+                          <div style={{ fontSize: '0.8rem', color: '#166534', minWidth: 0 }}>
+                            <span>Promoción sugerida: </span>
+                            <strong style={{ letterSpacing: '0.04em' }}>{suggestedCheckoutCoupon.code}</strong>
+                            <span> ({suggestedCheckoutCoupon.discount_percentage}% OFF)</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCouponInput(suggestedCheckoutCoupon.code);
+                            handleApplyCoupon(undefined, suggestedCheckoutCoupon.code);
+                          }}
+                          disabled={isValidatingCoupon}
+                          style={{
+                            padding: '5px 12px',
+                            backgroundColor: '#059669',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: 8,
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: isValidatingCoupon ? 'not-allowed' : 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                          }}
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input
                         type="text"
-                        placeholder="Ingresa tu cupón (ej. MIMENU-GRACIAS10)"
+                        placeholder={
+                          suggestedCheckoutCoupon
+                            ? `Ingresa cupón (ej. ${suggestedCheckoutCoupon.code})`
+                            : 'Ingresa tu cupón'
+                        }
                         value={couponInput}
                         onChange={(e) => {
                           setCouponInput(e.target.value.toUpperCase());

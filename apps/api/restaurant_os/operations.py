@@ -947,7 +947,12 @@ def authorize_supervisor_step_up(
 
 
 DEFAULT_BRANCH_COUPONS: list[dict[str, Any]] = [
-    {"code": "MIMENU-GRACIAS10", "discount_percentage": 10, "is_active": True}
+    {
+        "code": "MIMENU-GRACIAS10",
+        "discount_percentage": 10,
+        "is_active": True,
+        "show_in_checkout": True,
+    }
 ]
 
 
@@ -956,7 +961,10 @@ def _normalize_branch_coupons(coupons: Any) -> list[dict[str, Any]]:
         return []
     normalized: list[dict[str, Any]] = []
     seen_codes: set[str] = set()
-    for item in coupons:
+    has_checkout_coupon = False
+
+    # Process in reverse so the latest selected checkout coupon wins
+    for item in reversed(coupons):
         if not isinstance(item, dict):
             continue
         code = str(item.get("code") or "").strip().upper()
@@ -969,11 +977,22 @@ def _normalize_branch_coupons(coupons: Any) -> list[dict[str, Any]]:
             pct = 0
         pct = max(1, min(100, pct))
         is_active = bool(item.get("is_active", True))
+        raw_show = bool(item.get("show_in_checkout", False))
+        show_in_checkout = raw_show and is_active
+
+        if show_in_checkout:
+            if not has_checkout_coupon:
+                has_checkout_coupon = True
+            else:
+                show_in_checkout = False
+
         normalized.append({
             "code": code,
             "discount_percentage": pct,
             "is_active": is_active,
+            "show_in_checkout": show_in_checkout,
         })
+    normalized.reverse()
     return normalized
 
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CheckCircle2, X, ShoppingBag, ArrowLeft, Clock, ChefHat, Star, Send, ExternalLink, Sparkles, Share2, Gift, Copy, Check } from 'lucide-react';
 import { CreatedOrderResult, BranchInfo } from '../types';
 import { formatMoney, submitCustomerFeedback } from '../api';
@@ -18,6 +18,12 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
 }) => {
   const pendingReview = orderResult.kind === 'public_order_intent';
   const orderFolio = pendingReview ? orderResult.public_reference : orderResult.folio;
+
+  // Active coupon marked for checkout promotion (if any)
+  const rewardCoupon = useMemo(() => {
+    if (!branch?.coupons || !Array.isArray(branch.coupons)) return null;
+    return branch.coupons.find((c) => c.is_active && c.show_in_checkout) || null;
+  }, [branch?.coupons]);
 
   // Smart Rating State
   const [rating, setRating] = useState<number | null>(null);
@@ -407,96 +413,98 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
           </div>
 
           {/* Verified UGC Incentive Campaign */}
-          {/* Viral Share & Instant Reward Campaign (Zero Friction) */}
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
-              border: '1px solid #fcd34d',
-              borderRadius: '16px',
-              padding: '16px',
-              textAlign: 'left',
-              marginBottom: '16px',
-              boxSizing: 'border-box',
-              width: '100%',
-              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Gift size={20} color="#b45309" />
-              <strong style={{ fontSize: '14px', color: '#92400e', fontWeight: 800 }}>
-                🎁 ¡10% de descuento en tu próxima visita!
-              </strong>
-            </div>
-
-            {!hasShared ? (
-              <div>
-                <p style={{ fontSize: '13px', color: '#78350f', margin: '0 0 12px', lineHeight: 1.45 }}>
-                  Comparte tu recomendación con amigos por WhatsApp o redes sociales y desbloquea al instante tu cupón de regalo.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleShareOrder}
-                  style={{
-                    width: '100%',
-                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '12px 18px',
-                    borderRadius: '9999px',
-                    fontSize: '14px',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 12px rgba(217, 119, 6, 0.25)',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <Share2 size={16} />
-                  <span>Compartir con amigos y desbloquear cupón</span>
-                </button>
-                {shareFeedbackToast && (
-                  <span style={{ fontSize: '12px', color: '#16a34a', display: 'block', marginTop: '6px', textAlign: 'center', fontWeight: 600 }}>
-                    {shareFeedbackToast}
-                  </span>
-                )}
+          {/* Viral Share & Instant Reward Campaign (Zero Friction) - Only if coupon configured */}
+          {rewardCoupon && (
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                border: '1px solid #fcd34d',
+                borderRadius: '16px',
+                padding: '16px',
+                textAlign: 'left',
+                marginBottom: '16px',
+                boxSizing: 'border-box',
+                width: '100%',
+                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <Gift size={20} color="#b45309" />
+                <strong style={{ fontSize: '14px', color: '#92400e', fontWeight: 800 }}>
+                  🎁 ¡{rewardCoupon.discount_percentage}% de descuento en tu próxima visita!
+                </strong>
               </div>
-            ) : (
-              <div style={{ background: '#ffffff', borderRadius: '12px', padding: '14px', border: '1px solid #fde68a', textAlign: 'center' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#16a34a', fontSize: '13px', fontWeight: 800, marginBottom: '6px' }}>
-                  <Sparkles size={16} />
-                  <span>¡Cupón Desbloqueado con Éxito!</span>
-                </div>
-                <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 10px', lineHeight: 1.4 }}>
-                  Gracias por recomendarnos. Presenta o ingresa este cupón en tu próxima orden:
-                </p>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', background: '#fef3c7', padding: '8px 16px', borderRadius: '10px', border: '2px dashed #f59e0b', marginBottom: '8px' }}>
-                  <strong style={{ fontSize: '16px', color: '#b45309', letterSpacing: '0.06em' }}>
-                    MIMENU-GRACIAS10
-                  </strong>
+
+              {!hasShared ? (
+                <div>
+                  <p style={{ fontSize: '13px', color: '#78350f', margin: '0 0 12px', lineHeight: 1.45 }}>
+                    Comparte tu recomendación con amigos por WhatsApp o redes sociales y desbloquea al instante tu cupón de regalo.
+                  </p>
                   <button
                     type="button"
-                    onClick={() => handleCopyCode('MIMENU-GRACIAS10')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex' }}
-                    aria-label="Copiar código"
+                    onClick={handleShareOrder}
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '12px 18px',
+                      borderRadius: '9999px',
+                      fontSize: '14px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 12px rgba(217, 119, 6, 0.25)',
+                      fontFamily: 'inherit',
+                    }}
                   >
-                    {copiedCode ? <Check size={18} color="#16a34a" /> : <Copy size={18} color="#b45309" />}
+                    <Share2 size={16} />
+                    <span>Compartir con amigos y desbloquear cupón</span>
                   </button>
+                  {shareFeedbackToast && (
+                    <span style={{ fontSize: '12px', color: '#16a34a', display: 'block', marginTop: '6px', textAlign: 'center', fontWeight: 600 }}>
+                      {shareFeedbackToast}
+                    </span>
+                  )}
                 </div>
-                {copiedCode ? (
-                  <span style={{ fontSize: '12px', color: '#16a34a', display: 'block', fontWeight: 700 }}>
-                    ¡Código copiado al portapapeles!
-                  </span>
-                ) : (
-                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>
-                    Toca el icono para copiar
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+              ) : (
+                <div style={{ background: '#ffffff', borderRadius: '12px', padding: '14px', border: '1px solid #fde68a', textAlign: 'center' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#16a34a', fontSize: '13px', fontWeight: 800, marginBottom: '6px' }}>
+                    <Sparkles size={16} />
+                    <span>¡Cupón Desbloqueado con Éxito!</span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 10px', lineHeight: 1.4 }}>
+                    Gracias por recomendarnos. Presenta o ingresa este cupón en tu próxima orden:
+                  </p>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', background: '#fef3c7', padding: '8px 16px', borderRadius: '10px', border: '2px dashed #f59e0b', marginBottom: '8px' }}>
+                    <strong style={{ fontSize: '16px', color: '#b45309', letterSpacing: '0.06em' }}>
+                      {rewardCoupon.code}
+                    </strong>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(rewardCoupon.code)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex' }}
+                      aria-label="Copiar código"
+                    >
+                      {copiedCode ? <Check size={18} color="#16a34a" /> : <Copy size={18} color="#b45309" />}
+                    </button>
+                  </div>
+                  {copiedCode ? (
+                    <span style={{ fontSize: '12px', color: '#16a34a', display: 'block', fontWeight: 700 }}>
+                      ¡Código copiado al portapapeles!
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>
+                      Toca el icono para copiar
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Persistent Profile & Loyalty Info */}
           <div className="order-success-profile-card">

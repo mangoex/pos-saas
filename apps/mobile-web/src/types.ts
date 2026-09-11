@@ -75,6 +75,7 @@ export interface BranchCoupon {
   code: string;
   discount_percentage: number;
   is_active: boolean;
+  show_in_checkout?: boolean;
 }
 
 export interface BranchInfo {
