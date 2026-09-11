@@ -19255,9 +19255,13 @@ def list_customers(
     phone: str | None = None,
     branch_id: str | None = None,
     organization_id: str | None = None,
+    allow_all_organizations: bool = False,
 ) -> list[dict[str, Any]]:
-    organization_id = _customer_scope_organization(session, branch_id, organization_id)
-    query = sa.select(models.customers).where(models.customers.c.organization_id == organization_id)
+    if not (allow_all_organizations and organization_id is None):
+        organization_id = _customer_scope_organization(session, branch_id, organization_id)
+    query = sa.select(models.customers)
+    if organization_id:
+        query = query.where(models.customers.c.organization_id == organization_id)
     if branch_id:
         query = query.where(
             sa.or_(
@@ -19275,10 +19279,33 @@ def list_customers(
                 )
             )
         )
-    rows = session.execute(query.order_by(models.customers.c.name)).mappings()
+    rows = list(session.execute(query.order_by(models.customers.c.name)).mappings())
+
+    org_ids = {str(r["organization_id"]) for r in rows if r.get("organization_id")}
+    org_names: dict[str, str] = {}
+    if org_ids:
+        org_rows = session.execute(
+            sa.select(models.organizations.c.id, models.organizations.c.name).where(
+                models.organizations.c.id.in_(list(org_ids))
+            )
+        ).mappings()
+        org_names = {str(r["id"]): str(r["name"]) for r in org_rows}
+
+    origin_branch_ids = {str(r["origin_branch_id"]) for r in rows if r.get("origin_branch_id")}
+    origin_branch_names: dict[str, str] = {}
+    if origin_branch_ids:
+        b_rows = session.execute(
+            sa.select(models.branches.c.id, models.branches.c.name).where(
+                models.branches.c.id.in_(list(origin_branch_ids))
+            )
+        ).mappings()
+        origin_branch_names = {str(r["id"]): str(r["name"]) for r in b_rows}
+
     result = []
     for row in rows:
         customer = dict(row)
+        customer["organization_name"] = org_names.get(str(row.get("organization_id") or ""))
+        customer["origin_branch_name"] = origin_branch_names.get(str(row.get("origin_branch_id") or ""))
         customer["phones"] = [
             dict(item)
             for item in session.execute(
@@ -19314,8 +19341,9 @@ def list_customers(
         )
         customer["tax_profile"] = dict(tax_profile) if tax_profile else None
         customer["order_summary"] = get_customer_order_summary(session, str(row["id"]))
+        effective_org = organization_id or str(row.get("organization_id") or "")
         customer["rating_summary"] = get_customer_rating_summary(
-            session, str(row["id"]), organization_id
+            session, str(row["id"]), effective_org
         )
         result.append(customer)
     return result
@@ -19329,11 +19357,15 @@ def list_customers_page(
     limit: int = 50,
     offset: int = 0,
     organization_id: str | None = None,
+    allow_all_organizations: bool = False,
 ) -> dict[str, Any]:
-    organization_id = _customer_scope_organization(session, branch_id, organization_id)
+    if not (allow_all_organizations and organization_id is None):
+        organization_id = _customer_scope_organization(session, branch_id, organization_id)
     bounded_limit = min(max(limit, 1), 100)
     bounded_offset = max(offset, 0)
-    criteria = [models.customers.c.organization_id == organization_id]
+    criteria = []
+    if organization_id:
+        criteria.append(models.customers.c.organization_id == organization_id)
     if branch_id:
         criteria.append(
             sa.or_(
@@ -19370,16 +19402,17 @@ def list_customers_page(
             )
         )
 
-    total = int(
-        session.execute(
-            sa.select(sa.func.count(models.customers.c.id)).where(*criteria)
-        ).scalar_one()
-    )
+    count_query = sa.select(sa.func.count(models.customers.c.id))
+    if criteria:
+        count_query = count_query.where(*criteria)
+    total = int(session.execute(count_query).scalar_one())
+
+    data_query = sa.select(models.customers)
+    if criteria:
+        data_query = data_query.where(*criteria)
     customer_rows = list(
         session.execute(
-            sa.select(models.customers)
-            .where(*criteria)
-            .order_by(models.customers.c.name, models.customers.c.id)
+            data_query.order_by(models.customers.c.name, models.customers.c.id)
             .limit(bounded_limit)
             .offset(bounded_offset)
         ).mappings()
@@ -19475,13 +19508,13 @@ def list_customers_page(
         cid: {"average_rating": None, "rating_count": 0, "recent_feedbacks": []}
         for cid in customer_ids
     }
+    feedback_criteria = [models.customer_feedbacks.c.customer_id.in_(customer_ids)]
+    if organization_id:
+        feedback_criteria.append(models.customer_feedbacks.c.organization_id == organization_id)
     feedback_rows = list(
         session.execute(
             sa.select(models.customer_feedbacks)
-            .where(
-                models.customer_feedbacks.c.organization_id == organization_id,
-                models.customer_feedbacks.c.customer_id.in_(customer_ids),
-            )
+            .where(*feedback_criteria)
             .order_by(models.customer_feedbacks.c.created_at.desc())
         ).mappings()
     )
@@ -19498,10 +19531,32 @@ def list_customers_page(
             data["rating_count"] = len(ratings)
             data["recent_feedbacks"] = fbs[:5]
 
+    org_ids = {str(row["organization_id"]) for row in customer_rows if row.get("organization_id")}
+    org_names: dict[str, str] = {}
+    if org_ids:
+        org_rows = session.execute(
+            sa.select(models.organizations.c.id, models.organizations.c.name).where(
+                models.organizations.c.id.in_(list(org_ids))
+            )
+        ).mappings()
+        org_names = {str(r["id"]): str(r["name"]) for r in org_rows}
+
+    origin_branch_ids = {str(row["origin_branch_id"]) for row in customer_rows if row.get("origin_branch_id")}
+    origin_branch_names: dict[str, str] = {}
+    if origin_branch_ids:
+        b_rows = session.execute(
+            sa.select(models.branches.c.id, models.branches.c.name).where(
+                models.branches.c.id.in_(list(origin_branch_ids))
+            )
+        ).mappings()
+        origin_branch_names = {str(r["id"]): str(r["name"]) for r in b_rows}
+
     items = []
     for row in customer_rows:
         customer = dict(row)
         customer_id = str(row["id"])
+        customer["organization_name"] = org_names.get(str(row.get("organization_id") or ""))
+        customer["origin_branch_name"] = origin_branch_names.get(str(row.get("origin_branch_id") or ""))
         customer["phones"] = phones_by_customer[customer_id]
         customer["addresses"] = addresses_by_customer[customer_id]
         customer["legacy_address_reference"] = legacy_by_customer.get(customer_id)
@@ -19531,14 +19586,12 @@ def list_customers_page(
 def get_customer_feedbacks(
     session: Session,
     customer_id: str,
-    organization_id: str,
+    organization_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    customer_exists = session.scalar(
-        sa.select(models.customers.c.id).where(
-            models.customers.c.id == customer_id,
-            models.customers.c.organization_id == organization_id,
-        )
-    )
+    cust_query = sa.select(models.customers.c.id).where(models.customers.c.id == customer_id)
+    if organization_id:
+        cust_query = cust_query.where(models.customers.c.organization_id == organization_id)
+    customer_exists = session.scalar(cust_query)
     if not customer_exists:
         raise NotFoundError("customer_not_found", "Customer was not found")
 
@@ -19563,11 +19616,12 @@ def get_customer_feedbacks(
             )
         )
         .where(
-            models.customer_feedbacks.c.organization_id == organization_id,
             models.customer_feedbacks.c.customer_id == customer_id,
         )
-        .order_by(models.customer_feedbacks.c.created_at.desc())
     )
+    if organization_id:
+        query = query.where(models.customer_feedbacks.c.organization_id == organization_id)
+    query = query.order_by(models.customer_feedbacks.c.created_at.desc())
     return [dict(r) for r in session.execute(query).mappings()]
 
 

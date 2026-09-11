@@ -68,6 +68,7 @@ from restaurant_os.operations import (
     get_organization_profile,
     update_organization_profile,
     get_organization_qr_info,
+    _actor_user_info,
     AuthorizationError,
     BusinessError,
     NotFoundError,
@@ -5369,6 +5370,8 @@ def get_customers(
     session: SessionDep,
     phone: str | None = None,
     branch_id: str | None = None,
+    organization_id: str | None = None,
+    all_organizations: bool = False,
     q: str | None = None,
     limit: int | None = None,
     offset: int = 0,
@@ -5377,7 +5380,38 @@ def get_customers(
 ) -> Any:
     def operation() -> Any:
         actor_id = _required_actor_from_request(actor_user_id, authorization)
-        authorized_branch = authorize_branch_scope(session, actor_id, "orders.read", branch_id)
+        actor_info = _actor_user_info(session, actor_id)
+        is_super = bool(actor_info and actor_info.get("is_superadmin"))
+        actor_org = _actor_org_from_request(session, actor_id)
+
+        target_org: str | None = actor_org
+        allow_all = False
+
+        if is_super:
+            if all_organizations or organization_id in ("all", "ALL", "*"):
+                target_org = None
+                allow_all = True
+            elif organization_id:
+                target_org = organization_id
+            elif branch_id:
+                target_org = None
+            else:
+                target_org = None
+                allow_all = True
+        else:
+            if all_organizations or (organization_id and organization_id != actor_org):
+                raise AuthorizationError(
+                    "permission_denied",
+                    "Cross-organization customer access requires superadmin authority",
+                )
+            target_org = actor_org
+
+        authorized_branch = None
+        if branch_id:
+            authorized_branch = authorize_branch_scope(session, actor_id, "orders.read", branch_id)
+        elif not is_super:
+            authorized_branch = authorize_branch_scope(session, actor_id, "orders.read", None)
+
         if limit is not None or q is not None:
             return list_customers_page(
                 session,
@@ -5386,13 +5420,15 @@ def get_customers(
                 phone,
                 limit or 50,
                 offset,
-                organization_id=_actor_org_from_request(session, actor_id),
+                organization_id=target_org,
+                allow_all_organizations=allow_all,
             )
         return list_customers(
             session,
             phone,
             authorized_branch,
-            organization_id=_actor_org_from_request(session, actor_id),
+            organization_id=target_org,
+            allow_all_organizations=allow_all,
         )
 
     return _business_response(operation)
@@ -5406,6 +5442,10 @@ def get_customer_feedbacks_endpoint(
     authorization: AuthorizationDep = None,
 ) -> list[dict[str, Any]]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
+    actor_info = _actor_user_info(session, actor_id)
+    is_super = bool(actor_info and actor_info.get("is_superadmin"))
+    if is_super:
+        return get_customer_feedbacks(session, customer_id, organization_id=None)
     authorize_branch_scope(session, actor_id, "orders.read", None)
     organization_id = _actor_org_from_request(session, actor_id)
     return get_customer_feedbacks(session, customer_id, organization_id)

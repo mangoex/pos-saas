@@ -486,6 +486,29 @@ export const SaaSConsoleView: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <a
+            href="/customers"
+            style={{
+              background: 'rgba(255, 255, 255, 0.14)',
+              color: '#fff',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '12px',
+              padding: '13px 18px',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              textDecoration: 'none',
+              backdropFilter: 'blur(8px)',
+              transition: 'background 0.2s',
+            }}
+          >
+            <Users size={16} color="#38bdf8" />
+            <span>Directorio Global de Clientes</span>
+          </a>
+
           <button
             type="button"
             onClick={() => {

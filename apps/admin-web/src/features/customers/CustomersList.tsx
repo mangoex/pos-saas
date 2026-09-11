@@ -5,8 +5,9 @@ import { fetchApi } from '@restaurantos/api-client';
 import {
   Users, Search, Plus, MapPin, ReceiptText, Phone, Mail,
   Store, ShoppingBag, MessageCircle, ChevronLeft, ChevronRight,
-  Star, MessageSquare
+  Star, MessageSquare, Crown, Building, Globe
 } from 'lucide-react';
+import { getSessionUser } from '../../lib/branchContext';
 
 interface CustomerPhone {
   id?: string;
@@ -64,6 +65,9 @@ interface Customer {
   name: string;
   email?: string | null;
   origin_branch_id?: string | null;
+  origin_branch_name?: string | null;
+  organization_id?: string | null;
+  organization_name?: string | null;
   phones: CustomerPhone[];
   addresses: CustomerAddress[];
   tax_profile?: TaxProfile | null;
@@ -74,6 +78,13 @@ interface Customer {
   };
   rating_summary?: CustomerRatingSummary;
   created_at: string;
+}
+
+interface TenantOption {
+  id: string;
+  name: string;
+  business_type?: string | null;
+  status?: string;
 }
 
 interface CustomerPage {
@@ -126,11 +137,20 @@ const emptyTaxForm = {
 
 export const CustomersList: React.FC = () => {
   const queryClient = useQueryClient();
+  const currentUser = getSessionUser();
+  const isSuperadmin = Boolean(currentUser.is_superadmin && !localStorage.getItem('impersonation_info'));
+  const [selectedTenantId, setSelectedTenantId] = useState<string>('all');
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [search, setSearch] = useState<string>('');
   const [filterTab, setFilterTab] = useState<'all' | 'vip' | 'churn_risk' | 'new' | 'with_orders' | 'with_addresses' | 'with_tax'>('all');
   const [offset, setOffset] = useState<number>(0);
   const pageSize = 50;
+
+  const { data: tenants = [] } = useQuery<TenantOption[]>({
+    queryKey: ['saas-tenants-list'],
+    queryFn: () => fetchApi<TenantOption[]>('/superadmin/tenants'),
+    enabled: isSuperadmin,
+  });
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -181,12 +201,19 @@ export const CustomersList: React.FC = () => {
     error,
     refetch,
   } = useQuery<CustomerPage>({
-    queryKey: ['admin_customers', selectedBranchId, search, offset, pageSize],
+    queryKey: ['admin_customers', isSuperadmin, selectedTenantId, selectedBranchId, search, offset, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         limit: String(pageSize),
         offset: String(offset),
       });
+      if (isSuperadmin) {
+        if (selectedTenantId === 'all') {
+          params.set('all_organizations', 'true');
+        } else if (selectedTenantId) {
+          params.set('organization_id', selectedTenantId);
+        }
+      }
       if (selectedBranchId) params.set('branch_id', selectedBranchId);
       if (search.trim()) params.set('q', search.trim());
       return fetchApi<CustomerPage>(`/customers?${params.toString()}`);
@@ -407,6 +434,80 @@ export const CustomersList: React.FC = () => {
         </Button>
       </div>
 
+      {isSuperadmin && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+            border: '1.5px solid #fde68a',
+            borderRadius: '16px',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '16px',
+            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                background: '#f59e0b',
+                color: '#ffffff',
+                borderRadius: '12px',
+                padding: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)',
+              }}
+            >
+              <Crown size={22} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, color: '#92400e', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>Vista Super Administrador (Red Global mimenu)</span>
+                <span style={{ background: '#f59e0b', color: '#fff', fontSize: '10px', padding: '2px 8px', borderRadius: '9999px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Cross-Tenant
+                </span>
+              </div>
+              <div style={{ color: '#b45309', fontSize: '0.86rem', marginTop: '2px' }}>
+                Estás visualizando los clientes de todos los restaurantes de la red. Puedes filtrar por restaurante individual o ver toda la base consolidada.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#ffffff', padding: '6px 14px', borderRadius: '12px', border: '1.5px solid #fcd34d' }}>
+            <Building size={18} style={{ color: '#d97706' }} />
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#92400e' }}>Restaurante:</span>
+            <select
+              value={selectedTenantId}
+              onChange={(e) => {
+                setSelectedTenantId(e.target.value);
+                setOffset(0);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                color: '#0f172a',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="all">🌐 Toda la red (Todos los restaurantes)</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px 20px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
           <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -596,7 +697,7 @@ export const CustomersList: React.FC = () => {
                 {filteredCustomers.map((customer) => {
                   const primaryPhone = customer.phones.find((p) => p.is_primary) || customer.phones[0];
                   const cleanPhoneDigits = primaryPhone?.captured_number?.replace(/[^\d]/g, '') || '';
-                  const branchName = customer.origin_branch_id ? branchNameMap.get(customer.origin_branch_id) || 'Sucursal Registrada' : 'Corporativo / Todas';
+                  const branchName = customer.origin_branch_name || (customer.origin_branch_id ? branchNameMap.get(customer.origin_branch_id) || 'Sucursal Registrada' : 'Corporativo / Todas');
                   const defaultAddress = customer.addresses.find((a) => a.is_default) || customer.addresses[0];
 
                   return (
@@ -629,9 +730,30 @@ export const CustomersList: React.FC = () => {
                             <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>
                               {customer.name}
                             </div>
-                            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                              ID: {customer.id.slice(0, 8)}...
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
+                              {customer.organization_name && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    background: '#eff6ff',
+                                    color: '#1d4ed8',
+                                    border: '1px solid #bfdbfe',
+                                    padding: '1px 6px',
+                                    borderRadius: '6px',
+                                    fontWeight: 600,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                  }}
+                                >
+                                  <Building size={11} />
+                                  <span>{customer.organization_name}</span>
+                                </span>
+                              )}
+                              <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                                ID: {customer.id.slice(0, 8)}...
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -670,23 +792,41 @@ export const CustomersList: React.FC = () => {
                       </td>
 
                       <td style={{ padding: '16px 20px' }}>
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            background: customer.origin_branch_id ? '#eff6ff' : '#f8fafc',
-                            color: customer.origin_branch_id ? '#1e40af' : '#64748b',
-                            border: `1px solid ${customer.origin_branch_id ? '#bfdbfe' : '#e2e8f0'}`,
-                            padding: '4px 10px',
-                            borderRadius: '9999px',
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                          }}
-                        >
-                          <Store size={13} />
-                          <span>{branchName}</span>
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              background: customer.origin_branch_id ? '#eff6ff' : '#f8fafc',
+                              color: customer.origin_branch_id ? '#1e40af' : '#64748b',
+                              border: `1px solid ${customer.origin_branch_id ? '#bfdbfe' : '#e2e8f0'}`,
+                              padding: '4px 10px',
+                              borderRadius: '9999px',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              width: 'fit-content',
+                            }}
+                          >
+                            <Store size={13} />
+                            <span>{branchName}</span>
+                          </span>
+                          {customer.organization_name && (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.75rem',
+                                color: '#6366f1',
+                                fontWeight: 600,
+                              }}
+                            >
+                              <Building size={12} />
+                              <span>{customer.organization_name}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td style={{ padding: '16px 20px' }}>
