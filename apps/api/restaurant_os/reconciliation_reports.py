@@ -123,7 +123,7 @@ def get_branch_daily_reconciliation(
             )
             .where(
                 models.payments.c.branch_id == branch_id,
-                models.payments.c.status == "confirmed",
+                models.payments.c.status == "CONFIRMED",
                 models.payments.c.created_at >= start_utc,
                 models.payments.c.created_at <= end_utc,
             )
@@ -545,7 +545,7 @@ def get_business_analytics(
         )
         .where(
             models.payments.c.branch_id.in_(branch_ids),
-            models.payments.c.status == "confirmed",
+            models.payments.c.status == "CONFIRMED",
             models.payments.c.created_at >= start_utc,
             models.payments.c.created_at <= end_utc,
         )
