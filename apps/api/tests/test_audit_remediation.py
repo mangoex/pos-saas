@@ -38,7 +38,7 @@ def session() -> Any:
     models.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     with factory() as database_session:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         database_session.execute(
             models.cash_shifts.insert().values(
                 id=CASH_SHIFT_ID,
@@ -85,7 +85,7 @@ def test_production_environment_is_normalized_before_secret_validation() -> None
 def test_retry_print_job_resets_to_pending(session: Any) -> None:
     job_id = str(uuid.uuid4())
     order_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Insert an order for foreign key constraint
     session.execute(
@@ -131,7 +131,7 @@ def test_retry_print_job_resets_to_pending(session: Any) -> None:
 
 
 def test_sync_command_fails_closed_without_an_atomic_domain_executor(session: Any) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     envelope1 = {
         "schema_version": "1.0",
         "organization_id": ORGANIZATION_ID,
@@ -152,7 +152,7 @@ def test_sync_command_fails_closed_without_an_atomic_domain_executor(session: An
 
 
 def test_sync_command_rejects_unsupported_command_type(session: Any) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     invalid_envelope = {
         "schema_version": "1.0",
         "organization_id": ORGANIZATION_ID,
@@ -197,7 +197,7 @@ def test_order_state_machine_transitions() -> None:
 
 
 def test_dashboard_overview_revenue_only_counts_confirmed_payments(session: Any) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     order_id = str(uuid.uuid4())
     session.execute(
         models.orders.insert().values(

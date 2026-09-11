@@ -124,14 +124,14 @@ def test_owner_versions_archives_and_reads_effective_concept_without_erasing_his
         august = list_effective_cash_concepts(
             session,
             "withdrawal",
-            datetime(2026, 8, 20, tzinfo=timezone.utc),
+            datetime(2026, 8, 20, tzinfo=UTC),
             CASHIER_ID,
             BRANCH_A,
         )
         september = list_effective_cash_concepts(
             session,
             "withdrawal",
-            datetime(2026, 9, 2, tzinfo=timezone.utc),
+            datetime(2026, 9, 2, tzinfo=UTC),
             CASHIER_ID,
             BRANCH_A,
         )
@@ -144,7 +144,7 @@ def test_owner_versions_archives_and_reads_effective_concept_without_erasing_his
         assert list_effective_cash_concepts(
             session,
             "deposit",
-            datetime(2026, 9, 2, tzinfo=timezone.utc),
+            datetime(2026, 9, 2, tzinfo=UTC),
             CASHIER_ID,
             BRANCH_A,
         ) == []
@@ -185,7 +185,7 @@ def test_owner_versions_archives_and_reads_effective_concept_without_erasing_his
         assert list_effective_cash_concepts(
             session,
             "withdrawal",
-            datetime(2026, 9, 2, tzinfo=timezone.utc),
+            datetime(2026, 9, 2, tzinfo=UTC),
             CASHIER_ID,
             BRANCH_A,
         ) == []
@@ -246,7 +246,7 @@ def test_cash_concept_validation_and_persisted_permissions_fail_closed() -> None
             list_effective_cash_concepts(
                 session,
                 "withdrawal",
-                datetime(2026, 8, 20, tzinfo=timezone.utc),
+                datetime(2026, 8, 20, tzinfo=UTC),
                 CASHIER_ID,
                 BRANCH_B,
             )
@@ -273,8 +273,8 @@ def test_invalid_and_foreign_mutations_leave_history_and_success_audits_unchange
                 id="foreign-org",
                 name="Foreign",
                 status="active",
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
         )
         session.execute(
@@ -284,7 +284,7 @@ def test_invalid_and_foreign_mutations_leave_history_and_success_audits_unchange
                 code="FOREIGN_CONCEPT",
                 status="active",
                 created_by_user_id=OWNER_ID,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 archived_at=None,
             )
         )
@@ -314,7 +314,7 @@ def test_permission_denial_audits_without_committing_pending_mutation() -> None:
                 code="PENDING_ONLY",
                 status="active",
                 created_by_user_id=OWNER_ID,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 archived_at=None,
             )
         )
@@ -577,7 +577,7 @@ def _cash_concept_counts(session: Session) -> dict[str, int]:
 
 
 def _seed_cash_concept_scope(session: Session) -> None:
-    now = datetime(2026, 8, 11, 17, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 11, 17, 0, tzinfo=UTC)
     session.execute(
         models.organizations.insert().values(
             id=ORG_ID,

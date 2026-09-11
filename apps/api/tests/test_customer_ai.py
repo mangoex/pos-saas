@@ -59,7 +59,7 @@ def client(test_db: Session) -> TestClient:
 
 @pytest.fixture
 def sample_crm_data(test_db: Session) -> dict[str, str]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # 1. Organization & Legal Entity & Business Unit & Branch
     test_db.execute(
@@ -415,7 +415,7 @@ def test_get_crm_segments_and_churn_risk(test_db: Session, sample_crm_data: dict
 def test_crm_ignores_customers_and_orders_from_another_organization(
     test_db: Session, sample_crm_data: dict[str, str]
 ) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     other_org_id = "018f6f73-2d0a-74f0-8f1c-000000000501"
     other_customer_id = "018f6f73-2d0a-74f0-8f1c-000000000502"
     other_branch_id = "018f6f73-2d0a-74f0-8f1c-000000000504"
@@ -510,7 +510,7 @@ def test_crm_ignores_customers_and_orders_from_another_organization(
 def test_customer_recommendations_rejects_another_tenant_branch(
     client: TestClient, test_db: Session, sample_crm_data: dict[str, str]
 ) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     other_org_id = "018f6f73-2d0a-74f0-8f1c-000000000511"
     other_entity_id = "018f6f73-2d0a-74f0-8f1c-000000000512"
     other_unit_id = "018f6f73-2d0a-74f0-8f1c-000000000513"

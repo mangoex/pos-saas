@@ -169,7 +169,7 @@ def test_tdd_tc_117_global_operation_association_is_one_winner_without_partial_r
             session.execute(models.user_cash_cuts.insert().values(
                 id="pco006-second-cut", organization_id=ORG_ID, branch_id=BRANCH_A,
                 cash_shift_id="pco006-shift-two", register_code_snapshot="CAJA-02",
-                cashier_user_id=CASHIER_ID, timezone="timezone.utc", period_start=NOW,
+                cashier_user_id=CASHIER_ID, timezone="UTC", period_start=NOW,
                 period_end=NOW + timedelta(hours=1), status="COUNTED", opening_cash_cents=0,
                 cash_payment_cents=None, deposit_cents=None, withdrawal_cents=None,
                 expected_cash_cents=None, counted_cash_cents=0, difference_cents=None,
@@ -228,7 +228,7 @@ def test_tdd_tc_117_finalize_maps_existing_operation_race_and_rolls_back() -> No
             session.execute(models.user_cash_cuts.insert().values(
                 id="pco006-race-other-cut", organization_id=ORG_ID, branch_id=BRANCH_A,
                 cash_shift_id="pco006-race-shift", register_code_snapshot="CAJA-02",
-                cashier_user_id=CASHIER_ID, timezone="timezone.utc", period_start=NOW,
+                cashier_user_id=CASHIER_ID, timezone="UTC", period_start=NOW,
                 period_end=NOW + timedelta(hours=1), status="FINALIZED", opening_cash_cents=0,
                 cash_payment_cents=0, deposit_cents=0, withdrawal_cents=0, expected_cash_cents=0,
                 counted_cash_cents=0, difference_cents=0, tolerance_cents=0,

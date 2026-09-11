@@ -56,7 +56,7 @@ def client(test_db: Session) -> TestClient:
 
 @pytest.fixture
 def sample_executive_data(test_db: Session) -> dict[str, str]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # 1. Organization
     org_row = (

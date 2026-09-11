@@ -100,7 +100,7 @@ def _postgres_engine() -> sa.Engine:
 
 def _seed_sync_scope(engine: sa.Engine) -> tuple[datetime, str]:
     concept_id = "018f6f73-2d0a-74f0-8f1c-000000009501"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with Session(engine) as session:
         _seed_cash_concept_scope(session)
         permission_id = "018f6f73-2d0a-74f0-8f1c-000000009502"

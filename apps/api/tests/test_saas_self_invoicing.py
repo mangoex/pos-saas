@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -256,7 +256,7 @@ def test_public_self_invoice_uses_uuid_sat_for_confirmed_and_existing_invoice(mo
                 total_cents=order["total_cents"],
                 currency="MXN",
                 status="issued",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
         )
         session.commit()
@@ -363,7 +363,7 @@ def test_self_invoice_respects_disabled_and_expired_window(monkeypatch):
         )
         if not disabled:
             session.execute(
-                models.orders.update().values(created_at=datetime.now(timezone.utc) - timedelta(days=60))
+                models.orders.update().values(created_at=datetime.now(UTC) - timedelta(days=60))
             )
         session.commit()
         session.close()
@@ -418,7 +418,7 @@ def test_self_invoice_blocks_suspended_and_expired_tenants(monkeypatch):
         session = next(gen)
         session.execute(
             models.organizations.update().values(
-                subscription_status=status, trial_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1)
+                subscription_status=status, trial_ends_at=datetime.now(UTC) - timedelta(seconds=1)
             )
         )
         session.commit()

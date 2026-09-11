@@ -75,7 +75,7 @@ def test_db():
             business_unit_id=bu_id,
             name="Sucursal Centro",
             code="SUC-01",
-            timezone="timezone.utc",
+            timezone="UTC",
             status="active",
             street="Av Central 123",
             created_at=now,

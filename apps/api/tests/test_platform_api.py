@@ -251,7 +251,7 @@ def test_admin_manages_driver_catalog_without_pii_in_audit() -> None:
 
 def test_drivers_and_attendance_are_isolated_by_actor_tenant() -> None:
     client = _client_with_seeded_database()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     tenant_b = "018f6f73-2d0a-74f0-8f1c-000000009001"
     legal_b = "018f6f73-2d0a-74f0-8f1c-000000009002"
     unit_b = "018f6f73-2d0a-74f0-8f1c-000000009003"
@@ -439,7 +439,7 @@ def test_administrative_reads_and_purchase_presentations_fail_closed() -> None:
 
 def test_administrative_lists_exclude_foreign_organization_rows() -> None:
     client = _client_with_seeded_database()
-    now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 24, tzinfo=UTC)
     with _test_session_factory(client)() as session:
         session.execute(organizations.insert().values(
             id="foreign-org", name="Foreign", status="active", created_at=now, updated_at=now,
@@ -456,13 +456,13 @@ def test_administrative_lists_exclude_foreign_organization_rows() -> None:
         session.execute(branches.insert().values(
             id="foreign-branch", organization_id="foreign-org", legal_entity_id="foreign-legal",
             business_unit_id="foreign-unit", name="Foreign branch", code="FOREIGN",
-            timezone="timezone.utc", status="active", created_at=now, updated_at=now,
+            timezone="UTC", status="active", created_at=now, updated_at=now,
         ))
         session.execute(branches.insert().values(
             id="foreign-branch-without-warehouse", organization_id="foreign-org",
             legal_entity_id="foreign-legal", business_unit_id="foreign-unit",
             name="Foreign branch without warehouse", code="FOREIGN-NO-WH",
-            timezone="timezone.utc", status="active", created_at=now, updated_at=now,
+            timezone="UTC", status="active", created_at=now, updated_at=now,
         ))
         session.execute(warehouses.insert().values(
             id="foreign-warehouse", organization_id="foreign-org", branch_id="foreign-branch",
@@ -508,7 +508,7 @@ def test_supervisor_purchase_permissions_read_and_create_presentations_only() ->
     )
     assert supplier_response.status_code == 200
     supplier = supplier_response.json()
-    now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 24, tzinfo=UTC)
     supervisor_id = "018f6f73-2d0a-74f0-8f1c-000000009971"
     supervisor_role_id = "018f6f73-2d0a-74f0-8f1c-000000009972"
     with _test_session_factory(client)() as session:
@@ -797,7 +797,7 @@ def test_permission_denial_rolls_back_pending_role_removal_before_audit() -> Non
 
 def test_branch_scoped_admin_permission_cannot_manage_corporate_identity() -> None:
     client = _client_with_seeded_database()
-    now = datetime(2026, 8, 30, 12, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 30, 12, 30, tzinfo=UTC)
     user_id = "018f6f73-2d0a-74f0-8f1c-000000009951"
     role_id = "018f6f73-2d0a-74f0-8f1c-000000009952"
 
@@ -1235,7 +1235,7 @@ def test_catalog_inherits_branch_availability_and_keeps_products_without_price_v
                 branch_id=BRANCH_ID,
                 product_id=product_id,
                 is_available=False,
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
         )
         session.commit()
@@ -1875,7 +1875,7 @@ def test_warehouse_listing_is_branch_scoped_and_active_branch_cannot_lose_wareho
 
 def test_warehouse_management_uses_catalog_authority_not_identity_administration() -> None:
     client = _client_with_seeded_database()
-    now = datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
     catalog_user_id = "018f6f73-2d0a-74f0-8f1c-000000009941"
     catalog_role_id = "018f6f73-2d0a-74f0-8f1c-000000009942"
     admin_user_id = "018f6f73-2d0a-74f0-8f1c-000000009943"
@@ -2498,7 +2498,7 @@ def test_direct_purchase_cash_reconciliation_average_cost_idempotency_and_revers
                 id="018f6f73-2d0a-74f0-8f1c-000000009983",
                 code="cash.movement.compensate",
                 description="Compensar movimientos de caja",
-                created_at=datetime(2026, 8, 12, tzinfo=timezone.utc),
+                created_at=datetime(2026, 8, 12, tzinfo=UTC),
             )
         )
         session.execute(
@@ -2545,7 +2545,7 @@ def test_direct_purchase_cash_reconciliation_average_cost_idempotency_and_revers
             models.role_authority_grants.insert().values(
                 role_id=ADMIN_ROLE_ID,
                 authority_kind="organization_all_permissions",
-                created_at=datetime(2026, 8, 12, tzinfo=timezone.utc),
+                created_at=datetime(2026, 8, 12, tzinfo=UTC),
             )
         )
         session.commit()
@@ -3340,7 +3340,7 @@ def test_modifier_option_archive_rejects_impossible_required_group() -> None:
         },
     ).json()
     other_organization_id = "018f6f73-2d0a-74f0-8f1c-999999999999"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     factory = _test_session_factory(client)
     with factory() as session:
         session.execute(
@@ -4165,7 +4165,7 @@ def test_next_folio_uses_max_existing_suffix_instead_of_row_count() -> None:
 
     with session_factory() as session:
         _seed(session)
-        now = datetime(2026, 7, 10, 19, 45, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 10, 19, 45, tzinfo=UTC)
         session.execute(
             cash_shifts.insert().values(
                 id="018f6f73-2d0a-74f0-8f1c-000000000701",
@@ -4762,9 +4762,9 @@ def test_payment_cut_and_print_flow() -> None:
                 capability="print.agent",
                 token_hash=hashlib.sha256(print_agent_token.encode()).hexdigest(),
                 key_version="v1",
-                expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+                expires_at=datetime.now(UTC) + timedelta(minutes=5),
                 revoked_at=None,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
         )
         session.commit()
@@ -5418,9 +5418,9 @@ def test_sync_command_without_domain_executor_is_rejected_without_writes() -> No
                 capability="gateway.sync",
                 token_hash=hashlib.sha256(device_token.encode()).hexdigest(),
                 key_version="v1",
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
                 revoked_at=None,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
         )
         session.commit()
@@ -5850,7 +5850,7 @@ def _test_session_factory(client: TestClient) -> Any:
 
 
 def _seed(session: Session) -> None:
-    now = datetime(2026, 7, 7, 17, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 7, 17, 30, tzinfo=UTC)
     organization_id = "018f6f73-2d0a-74f0-8f1c-000000000001"
     legal_entity_id = "018f6f73-2d0a-74f0-8f1c-000000000002"
     business_unit_id = "018f6f73-2d0a-74f0-8f1c-000000000015"
@@ -6750,7 +6750,7 @@ def test_pos_session_handoff_rejects_expired_code() -> None:
     with _test_session_factory(client)() as session:
         session.execute(
             pos_session_handoffs.update().values(
-                expires_at=datetime(2020, 1, 1, tzinfo=timezone.utc)
+                expires_at=datetime(2020, 1, 1, tzinfo=UTC)
             )
         )
         session.commit()
@@ -7013,7 +7013,7 @@ def test_branch_inventory_reads_do_not_leak_another_branch() -> None:
     client = _client_with_seeded_database()
     fixture = _branch_admin_fixture(client)
     headers = _login_headers(client, "supervisor.norte@kiwi.local", "Temporal123+")
-    now = datetime(2026, 7, 12, 22, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 12, 22, 0, tzinfo=UTC)
     beef_item_id = "018f6f73-2d0a-74f0-8f1c-000000000311"
     gram_unit_id = "018f6f73-2d0a-74f0-8f1c-000000000301"
 

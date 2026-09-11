@@ -31,7 +31,7 @@ from test_cash_concepts import (
     BRANCH_A,
     CASHIER_ID,
     OWNER_ID,
-    timezone.utc,
+    UTC,
     _concept_payload,
     _seed_cash_concept_scope,
     _version_payload,
@@ -90,7 +90,7 @@ def test_postgres_domain_and_api_preserve_catalog_history(
         )
         assert [version["version"] for version in versioned["versions"]] == [1, 2]
         assert [item["version"] for item in list_effective_cash_concepts(
-            session, "withdrawal", datetime(2026, 8, 20, tzinfo=timezone.utc), CASHIER_ID, BRANCH_A
+            session, "withdrawal", datetime(2026, 8, 20, tzinfo=UTC), CASHIER_ID, BRANCH_A
         )] == [1]
         archived = archive_cash_concept(session, created["id"], "pg-archive", OWNER_ID)
         assert archived["status"] == "archived"

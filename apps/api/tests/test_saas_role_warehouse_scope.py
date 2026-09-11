@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -53,8 +53,8 @@ def _add_branch_without_warehouse(session, tenant: dict, suffix: str) -> str:
             "id": branch_id,
             "name": f"Synthetic Branch {suffix}",
             "code": f"SYN-{suffix}",
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
         }
     )
     session.execute(models.branches.insert().values(**values))
@@ -89,7 +89,7 @@ def test_role_permissions_and_warehouses_reject_cross_tenant_mutations() -> None
                     id=permission_id,
                     code="synthetic.scope.permission",
                     description="Synthetic permission for tenant-scope regression",
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             )
             warehouse_ids = [
@@ -284,7 +284,7 @@ def test_role_and_warehouse_service_scope_in_sqlite_and_postgres(
                 id=permission_id,
                 code=f"synthetic.service.permission.{uuid4().hex}",
                 description="Synthetic permission for service scope regression",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
         )
         session.commit()

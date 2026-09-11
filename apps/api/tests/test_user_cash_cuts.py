@@ -382,7 +382,7 @@ def test_tdd_tc_118_list_cursor_scope_and_redaction() -> None:
                     cash_shift_id=f"shift-{index}",
                     register_code_snapshot="CAJA-01",
                     cashier_user_id=CASHIER_ID,
-                    timezone="timezone.utc",
+                    timezone="UTC",
                     period_start=NOW + timedelta(hours=index),
                     period_end=NOW + timedelta(hours=index + 1),
                     status="FINALIZED",

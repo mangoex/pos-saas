@@ -64,7 +64,7 @@ def _seed_org_and_multiple_branches(session: Session, now: datetime) -> None:
             business_unit_id=unit_id,
             name="Sucursal Matriz",
             code="01",
-            timezone="timezone.utc",
+            timezone="UTC",
             status="active",
             created_at=now,
             updated_at=now,
@@ -78,7 +78,7 @@ def _seed_org_and_multiple_branches(session: Session, now: datetime) -> None:
             business_unit_id=unit_id,
             name="Sucursal Piloto",
             code="02",
-            timezone="timezone.utc",
+            timezone="UTC",
             status="active",
             created_at=now,
             updated_at=now,
@@ -90,7 +90,7 @@ def _seed_org_and_multiple_branches(session: Session, now: datetime) -> None:
 def test_seed_starter_catalog_with_multiple_branches_does_not_raise_multiple_results() -> None:
     engine = sa.create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
-    now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 1, tzinfo=UTC)
 
     with Session(engine) as session:
         _seed_org_and_multiple_branches(session, now)
@@ -137,7 +137,7 @@ def test_seed_starter_catalog_with_multiple_branches_does_not_raise_multiple_res
 def test_import_custom_catalog_creates_products_and_prices() -> None:
     engine = sa.create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
-    now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 1, tzinfo=UTC)
 
     with Session(engine) as session:
         _seed_org_and_multiple_branches(session, now)

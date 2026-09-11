@@ -127,7 +127,7 @@ def test_full_migrations_signup_onboarding_and_identity_rollback():
             assert before["onboarding_step"] == "complete"
         url = f"/api/v1/public/storefronts/{before['slug']}"
         assert client.get(url).status_code == 200
-        from datetime import datetime, timezone
+        from datetime import UTC, datetime
 
         pending_id = str(uuid4())
         pending_handoff_id = str(uuid4())
@@ -136,7 +136,7 @@ def test_full_migrations_signup_onboarding_and_identity_rollback():
             product_id = session.scalar(
                 sa.select(models.products.c.id).where(models.products.c.organization_id == org_id)
             )
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             session.execute(
                 models.channel_availability_sync_jobs.insert().values(
                     id=pending_id,

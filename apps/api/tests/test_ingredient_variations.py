@@ -67,7 +67,7 @@ def _insert_legacy_ingredient_assignment(
     add_option_id = f"{prefix}-add-option"
     remove_option_id = f"{prefix}-remove-option"
     assignment_id = f"{prefix}-assignment"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with factory() as session:
         variation = session.execute(
             sa.select(models.ingredient_variations).where(
@@ -257,7 +257,7 @@ def test_unrelated_modifier_options_remain_visible() -> None:
     client = _client_with_seeded_database()
     factory = _test_session_factory(client)
     with factory() as session:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session.execute(
             models.modifier_groups.insert().values(
                 id="ordinary-modifier-group",
@@ -518,7 +518,7 @@ def test_universal_ingredient_additions_preserve_snapshot_cost_and_kitchen_histo
                 models.inventory_cost_states.c.item_id.in_([BEEF_ID, SYRUP_ID]),
             )
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session.execute(
             models.inventory_cost_states.insert(),
             [
@@ -711,7 +711,7 @@ def test_branch_ingredient_overrides_are_scoped_to_supervisor_branch_and_cashier
 def test_corporate_ingredient_variation_detail_update_and_archive_are_organization_scoped() -> None:
     client = _client_with_seeded_database()
     foreign_variation_id = "ingredient-variation-foreign-0001"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     factory = _test_session_factory(client)
     with factory() as session:
         session.execute(

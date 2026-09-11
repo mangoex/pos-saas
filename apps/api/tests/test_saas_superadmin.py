@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
@@ -320,7 +320,7 @@ def test_expired_or_missing_trial_end_denies_existing_token() -> None:
             .where(models.organizations.c.id == organization_id)
             .values(
                 subscription_status="trialing",
-                trial_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+                trial_ends_at=datetime.now(UTC) - timedelta(seconds=1),
             )
         )
         session.commit()
@@ -359,7 +359,7 @@ def test_trial_with_future_end_allows_existing_token() -> None:
             .where(models.organizations.c.id == signup.json()["organization"]["id"])
             .values(
                 subscription_status="trialing",
-                trial_ends_at=datetime.now(timezone.utc) + timedelta(days=14),
+                trial_ends_at=datetime.now(UTC) + timedelta(days=14),
             )
         )
         session.commit()
@@ -399,7 +399,7 @@ def test_trial_missing_end_and_exact_boundary_deny_existing_token(
     assert missing.status_code == 403
     assert missing.json()["detail"]["code"] == "tenant_trial_expired"
 
-    frozen_now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    frozen_now = datetime(2030, 1, 1, tzinfo=UTC)
     monkeypatch.setattr(operations, "_now", lambda: frozen_now)
     with client.app.state._test_session_factory() as session:
         session.execute(

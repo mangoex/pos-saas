@@ -110,7 +110,7 @@ def test_0041_allows_negative_expected_but_rejects_negative_counted(tmp_path) ->
             "WHERE id = 'shift-negative'"
         )
         values = (
-            "cut-negative", "o1", "b1", "shift-negative", "CAJA-01", "cashier-one", "timezone.utc",
+            "cut-negative", "o1", "b1", "shift-negative", "CAJA-01", "cashier-one", "UTC",
             "2026-08-15T00:00:00+00:00", "2026-08-15T01:00:00+00:00", "FINALIZED", 0,
             0, 0, 100, -100, 0, 0, 0, "cashier-one", "cashier-one", 1,
             "2026-08-15T00:00:00+00:00", None, "2026-08-15T01:00:00+00:00",
@@ -137,7 +137,7 @@ def test_0041_allows_negative_expected_but_rejects_negative_counted(tmp_path) ->
 @pytest.mark.parametrize(
     ("table", "statement"),
     (
-        ("user_cash_cuts", "INSERT INTO user_cash_cuts (id, organization_id, branch_id, cash_shift_id, register_code_snapshot, cashier_user_id, timezone, period_start, period_end, status, opening_cash_cents, tolerance_cents, created_by_user_id, version, created_at) VALUES ('cut-block', 'o1', 'b1', 'shift-block', 'CAJA-01', 'cashier-one', 'timezone.utc', '2026-08-15T00:00:00+00:00', '2026-08-15T01:00:00+00:00', 'DRAFT', 0, 0, 'cashier-one', 1, '2026-08-15T00:00:00+00:00')"),
+        ("user_cash_cuts", "INSERT INTO user_cash_cuts (id, organization_id, branch_id, cash_shift_id, register_code_snapshot, cashier_user_id, timezone, period_start, period_end, status, opening_cash_cents, tolerance_cents, created_by_user_id, version, created_at) VALUES ('cut-block', 'o1', 'b1', 'shift-block', 'CAJA-01', 'cashier-one', 'UTC', '2026-08-15T00:00:00+00:00', '2026-08-15T01:00:00+00:00', 'DRAFT', 0, 0, 'cashier-one', 1, '2026-08-15T00:00:00+00:00')"),
         ("user_cash_cut_operations", "INSERT INTO user_cash_cut_operations (id, organization_id, cash_cut_id, operation_type, operation_id, signed_amount_cents, occurred_at) VALUES ('op-block', 'o1', 'cut-block', 'PAYMENT', 'payment-block', 1, '2026-08-15T00:00:00+00:00')"),
         ("user_cash_cut_commands", "INSERT INTO user_cash_cut_commands (id, organization_id, actor_user_id, command_type, idempotency_key, request_hash, result, created_at) VALUES ('command-block', 'o1', 'cashier-one', 'create', 'block-command', '0000000000000000000000000000000000000000000000000000000000000000', '{}', '2026-08-15T00:00:00+00:00')"),
         ("user_cash_cut_reopen_requests", "INSERT INTO user_cash_cut_reopen_requests (id, organization_id, cash_cut_id, proposed_counted_cash_cents, reason, evidence_refs, status, requested_by_user_id, created_at) VALUES ('request-block', 'o1', 'cut-block', 0, 'reason', '[]', 'REQUESTED', 'cashier-one', '2026-08-15T00:00:00+00:00')"),
