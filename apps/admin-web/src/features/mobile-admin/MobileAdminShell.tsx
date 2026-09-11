@@ -14,6 +14,72 @@ interface MobileAdminShellProps {
   onSwitchToDesktop?: () => void;
 }
 
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  tabName: string;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class MobileTabErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error(`Error in MobileTab [${this.props.tabName}]:`, error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            padding: 24,
+            margin: '24px 16px',
+            backgroundColor: '#fff1f2',
+            border: '1px solid #fecdd3',
+            borderRadius: 14,
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: '1.8rem', marginBottom: 8 }}>⚠️</div>
+          <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#9f1239', margin: '0 0 8px' }}>
+            No pudimos cargar la pestaña de {this.props.tabName}
+          </h3>
+          <p style={{ fontSize: '0.8rem', color: '#be123c', margin: '0 0 16px', lineHeight: 1.4 }}>
+            Ocurrió un error inesperado al procesar los datos. Puedes intentar recargar la pestaña.
+          </p>
+          <button
+            type="button"
+            onClick={() => this.setState({ hasError: false })}
+            style={{
+              backgroundColor: '#be123c',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '8px 18px',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export type MobileTab = 'orders' | 'cash' | 'menu' | 'settings';
 
 export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
@@ -128,22 +194,30 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
       {/* Active Tab View */}
       <div style={{ minHeight: '100vh', paddingBottom: 72 }}>
         {currentTab === 'orders' && (
-          <MobileOrdersMonitor branchId={branchId} branchName={branchName} />
+          <MobileTabErrorBoundary tabName="Pedidos">
+            <MobileOrdersMonitor branchId={branchId} branchName={branchName} />
+          </MobileTabErrorBoundary>
         )}
         {currentTab === 'cash' && (
-          <MobileCashShiftTab branchId={branchId} branchName={branchName} />
+          <MobileTabErrorBoundary tabName="Caja">
+            <MobileCashShiftTab branchId={branchId} branchName={branchName} />
+          </MobileTabErrorBoundary>
         )}
         {currentTab === 'menu' && (
-          <MobileMenuManagerTab branchId={branchId} branchName={branchName} />
+          <MobileTabErrorBoundary tabName="Menú">
+            <MobileMenuManagerTab branchId={branchId} branchName={branchName} />
+          </MobileTabErrorBoundary>
         )}
         {currentTab === 'settings' && (
-          <MobileBranchSettingsTab
-            branchId={branchId}
-            branchName={branchName}
-            onSwitchToDesktop={onSwitchToDesktop}
-            onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
-            onboardingPending={onboardingStatus !== 'complete'}
-          />
+          <MobileTabErrorBoundary tabName="Ajustes">
+            <MobileBranchSettingsTab
+              branchId={branchId}
+              branchName={branchName}
+              onSwitchToDesktop={onSwitchToDesktop}
+              onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
+              onboardingPending={onboardingStatus !== 'complete'}
+            />
+          </MobileTabErrorBoundary>
         )}
       </div>
 

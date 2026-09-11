@@ -552,7 +552,7 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                     Fondo inicial en efectivo
                   </div>
                   <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
-                    ${(shift.opening_cash_cents / 100).toFixed(2)}{' '}
+                    ${(((shift?.opening_cash_cents ?? 0) / 100)).toFixed(2)}{' '}
                     <span style={{ fontSize: '0.8rem', fontWeight: 500, color: '#64748b' }}>MXN</span>
                   </div>
                 </div>
@@ -780,12 +780,50 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
             </div>
           ) : (
             (() => {
-              const b = reportData.balance;
-              const totalExpenses = (b.supplier_expenses || 0) + (b.fixed_expenses || 0) + (b.cash_withdrawals || 0);
+              const b = reportData?.balance;
+              if (!b) {
+                return (
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px dashed #cbd5e1',
+                      borderRadius: 8,
+                      textAlign: 'center',
+                      fontSize: '0.8rem',
+                      color: '#64748b',
+                    }}
+                  >
+                    Sin datos de balance disponibles para esta fecha.
+                  </div>
+                );
+              }
+
+              const num = (unit?: number, cents?: number): number => {
+                if (unit !== undefined && unit !== null && !isNaN(Number(unit))) return Number(unit);
+                if (cents !== undefined && cents !== null && !isNaN(Number(cents))) return Number(cents) / 100;
+                return 0;
+              };
+
+              const initialCash = num(b.initial_cash, b.initial_cash_cents);
+              const totalSales = num(b.total_sales_with_tax, b.total_sales_with_tax_cents);
+              const cashSales = num(b.cash_sales, b.cash_sales_cents);
+              const cardPayments = num(b.card_payments, b.card_payments_cents);
+              const transferPayments = num(b.transfer_payments, b.transfer_payments_cents);
+              const creditSales = num(b.credit_sales, b.credit_sales_cents);
+              const cashDeposits = num(b.cash_deposits, b.cash_deposits_cents);
+              const supplierExpenses = num(b.supplier_expenses, b.supplier_expenses_cents);
+              const fixedExpenses = num(b.fixed_expenses, b.fixed_expenses_cents);
+              const cashWithdrawals = num(b.cash_withdrawals, b.cash_withdrawals_cents);
+              const expectedCash = num(b.expected_cash_in_register, b.expected_cash_in_register_cents);
+              const physicalCash = num(b.physical_cash_count, b.physical_cash_count_cents);
+              const difference = num(b.difference, b.difference_cents);
+
+              const totalExpenses = supplierExpenses + fixedExpenses + cashWithdrawals;
               const hasActivity =
-                b.initial_cash > 0 ||
-                b.total_sales_with_tax > 0 ||
-                b.cash_deposits > 0 ||
+                initialCash > 0 ||
+                totalSales > 0 ||
+                cashDeposits > 0 ||
                 totalExpenses > 0;
 
               return (
@@ -823,7 +861,7 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                         FONDO INICIAL (APERTURA)
                       </div>
                       <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
-                        ${b.initial_cash.toFixed(2)}{' '}
+                        ${initialCash.toFixed(2)}{' '}
                         <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>MXN</span>
                       </div>
                     </div>
@@ -845,13 +883,13 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                         <ArrowDownRight size={14} /> INGRESOS
                       </div>
                       <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#166534' }}>
-                        ${(b.total_sales_with_tax + (b.cash_deposits || 0)).toFixed(2)}
+                        ${(totalSales + cashDeposits).toFixed(2)}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#15803d', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <div>• Efvo: ${b.cash_sales.toFixed(2)}</div>
-                        <div>• Tarjeta: ${b.card_payments.toFixed(2)}</div>
-                        <div>• Transf: ${b.transfer_payments.toFixed(2)}</div>
-                        {b.cash_deposits > 0 && <div>• Entradas: ${b.cash_deposits.toFixed(2)}</div>}
+                        <div>• Efvo: ${cashSales.toFixed(2)}</div>
+                        <div>• Tarjeta: ${cardPayments.toFixed(2)}</div>
+                        <div>• Transf: ${transferPayments.toFixed(2)}</div>
+                        {cashDeposits > 0 && <div>• Entradas: ${cashDeposits.toFixed(2)}</div>}
                       </div>
                     </div>
 
@@ -871,9 +909,9 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                         ${totalExpenses.toFixed(2)}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#be123c', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <div>• Prov: ${b.supplier_expenses.toFixed(2)}</div>
-                        <div>• Gastos: ${b.fixed_expenses.toFixed(2)}</div>
-                        <div>• Retiros: ${b.cash_withdrawals.toFixed(2)}</div>
+                        <div>• Prov: ${supplierExpenses.toFixed(2)}</div>
+                        <div>• Gastos: ${fixedExpenses.toFixed(2)}</div>
+                        <div>• Retiros: ${cashWithdrawals.toFixed(2)}</div>
                       </div>
                     </div>
                   </div>
@@ -895,7 +933,7 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                         EFECTIVO ESPERADO EN CAJA
                       </div>
                       <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#047857', marginTop: 2 }}>
-                        ${b.expected_cash_in_register.toFixed(2)}{' '}
+                        ${expectedCash.toFixed(2)}{' '}
                         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#065f46' }}>MXN</span>
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#047857', marginTop: 2 }}>
@@ -919,7 +957,7 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                   </div>
 
                   {/* Arqueo y Cierre (si hay datos de corte físico) */}
-                  {(b.physical_cash_count > 0 || b.difference !== 0) && (
+                  {(physicalCash > 0 || difference !== 0) && (
                     <div
                       style={{
                         padding: '10px 12px',
@@ -934,18 +972,18 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                     >
                       <div>
                         <span style={{ color: '#64748b' }}>Conteo Físico: </span>
-                        <strong style={{ color: '#0f172a' }}>${b.physical_cash_count.toFixed(2)}</strong>
+                        <strong style={{ color: '#0f172a' }}>${physicalCash.toFixed(2)}</strong>
                       </div>
                       <div>
-                        {b.difference === 0 ? (
+                        {difference === 0 ? (
                           <span style={{ color: '#15803d', fontWeight: 700 }}>✅ Cuadre Exacto ($0.00)</span>
-                        ) : b.difference > 0 ? (
+                        ) : difference > 0 ? (
                           <span style={{ color: '#15803d', fontWeight: 700 }}>
-                            🟢 Sobrante: +${b.difference.toFixed(2)}
+                            🟢 Sobrante: +${difference.toFixed(2)}
                           </span>
                         ) : (
                           <span style={{ color: '#b91c1c', fontWeight: 700 }}>
-                            🔴 Faltante: -${Math.abs(b.difference).toFixed(2)}
+                            🔴 Faltante: -${Math.abs(difference).toFixed(2)}
                           </span>
                         )}
                       </div>
@@ -997,48 +1035,60 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                           {reportData.suppliers_breakdown?.length > 0 && (
                             <div>
                               <strong style={{ color: '#0f172a' }}>📦 Pagos a Proveedores:</strong>
-                              {reportData.suppliers_breakdown.map((s: any, idx: number) => (
-                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
-                                  <span>{s.provider_name} ({s.observations || 'Insumos'})</span>
-                                  <strong style={{ color: '#dc2626' }}>-${Number(s.amount).toFixed(2)}</strong>
-                                </div>
-                              ))}
+                              {reportData.suppliers_breakdown.map((s: any, idx: number) => {
+                                const amt = num(s.amount, s.amount_cents);
+                                return (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                    <span>{s.provider_name} ({s.observations || 'Insumos'})</span>
+                                    <strong style={{ color: '#dc2626' }}>-${amt.toFixed(2)}</strong>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
 
                           {reportData.fixed_expenses_breakdown?.length > 0 && (
                             <div>
                               <strong style={{ color: '#0f172a' }}>🏢 Gastos Operativos / Menores:</strong>
-                              {reportData.fixed_expenses_breakdown.map((f: any, idx: number) => (
-                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
-                                  <span>{f.expense_type} ({f.observations || 'Gasto'})</span>
-                                  <strong style={{ color: '#dc2626' }}>-${Number(f.amount).toFixed(2)}</strong>
-                                </div>
-                              ))}
+                              {reportData.fixed_expenses_breakdown.map((f: any, idx: number) => {
+                                const amt = num(f.amount, f.amount_cents);
+                                return (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                    <span>{f.expense_type} ({f.observations || 'Gasto'})</span>
+                                    <strong style={{ color: '#dc2626' }}>-${amt.toFixed(2)}</strong>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
 
                           {reportData.withdrawals_breakdown?.length > 0 && (
                             <div>
                               <strong style={{ color: '#0f172a' }}>🏧 Retiros a Bóveda / Caja Fuerte:</strong>
-                              {reportData.withdrawals_breakdown.map((w: any, idx: number) => (
-                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
-                                  <span>{w.folio} ({w.recipient_name})</span>
-                                  <strong style={{ color: '#dc2626' }}>-${Number(w.amount).toFixed(2)}</strong>
-                                </div>
-                              ))}
+                              {reportData.withdrawals_breakdown.map((w: any, idx: number) => {
+                                const amt = num(w.amount, w.amount_cents);
+                                return (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                    <span>{w.folio} ({w.recipient_name})</span>
+                                    <strong style={{ color: '#dc2626' }}>-${amt.toFixed(2)}</strong>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
 
                           {reportData.transfers_breakdown?.length > 0 && (
                             <div>
                               <strong style={{ color: '#0f172a' }}>📲 Transferencias Bancarias (SPEI):</strong>
-                              {reportData.transfers_breakdown.map((t: any, idx: number) => (
-                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
-                                  <span>Ticket {t.ticket_folio} ({t.customer_name})</span>
-                                  <strong style={{ color: '#2563eb' }}>+${Number(t.amount).toFixed(2)}</strong>
-                                </div>
-                              ))}
+                              {reportData.transfers_breakdown.map((t: any, idx: number) => {
+                                const amt = num(t.amount, t.amount_cents);
+                                return (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', padding: '2px 0' }}>
+                                    <span>Ticket {t.ticket_folio} ({t.customer_name})</span>
+                                    <strong style={{ color: '#2563eb' }}>+${amt.toFixed(2)}</strong>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>

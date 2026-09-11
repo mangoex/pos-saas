@@ -156,6 +156,7 @@ def get_branch_daily_reconciliation(
                     "ticket_folio": folio,
                     "customer_name": cust_name,
                     "customer_phone": cust_phone,
+                    "amount": float(amount) / 100.0,
                     "amount_cents": amount,
                 }
             )
@@ -166,6 +167,7 @@ def get_branch_daily_reconciliation(
                     "ticket_folio": folio,
                     "customer_name": cust_name,
                     "customer_phone": cust_phone,
+                    "amount": float(amount) / 100.0,
                     "amount_cents": amount,
                 }
             )
@@ -272,6 +274,7 @@ def get_branch_daily_reconciliation(
                     {
                         "no": w_idx,
                         "folio": f"RET-{m['id'][:6].upper()}",
+                        "amount": float(amt) / 100.0,
                         "amount_cents": amt,
                         "recipient_name": m["reference"] or m["reason"] or "Encargado / Bóveda",
                     }
@@ -283,6 +286,7 @@ def get_branch_daily_reconciliation(
                     {
                         "no": fix_idx,
                         "expense_type": cname,
+                        "amount": float(amt) / 100.0,
                         "amount_cents": amt,
                         "observations": m["reason"] or "Gasto menor de sucursal",
                     }
@@ -332,18 +336,31 @@ def get_branch_daily_reconciliation(
         "branch_name": branch_name,
         "date": date_str,
         "balance": {
+            "initial_cash": float(initial_cash_cents) / 100.0,
             "initial_cash_cents": initial_cash_cents,
+            "total_sales_with_tax": float(total_sales_with_tax_cents) / 100.0,
             "total_sales_with_tax_cents": total_sales_with_tax_cents,
+            "card_payments": float(card_payments_cents) / 100.0,
             "card_payments_cents": card_payments_cents,
+            "transfer_payments": float(transfer_payments_cents) / 100.0,
             "transfer_payments_cents": transfer_payments_cents,
+            "credit_sales": float(credit_sales_cents) / 100.0,
             "credit_sales_cents": credit_sales_cents,
+            "cash_sales": float(cash_sales_cents) / 100.0,
             "cash_sales_cents": cash_sales_cents,
+            "supplier_expenses": float(supplier_expenses_cents) / 100.0,
             "supplier_expenses_cents": supplier_expenses_cents,
+            "fixed_expenses": float(fixed_expenses_cents) / 100.0,
             "fixed_expenses_cents": fixed_expenses_cents,
+            "cash_withdrawals": float(cash_withdrawals_cents) / 100.0,
             "cash_withdrawals_cents": cash_withdrawals_cents,
+            "cash_deposits": float(cash_deposits_cents) / 100.0,
             "cash_deposits_cents": cash_deposits_cents,
+            "expected_cash_in_register": float(expected_cash_cents) / 100.0,
             "expected_cash_in_register_cents": expected_cash_cents,
+            "physical_cash_count": float(physical_cash_count_cents) / 100.0,
             "physical_cash_count_cents": physical_cash_count_cents,
+            "difference": float(difference_cents) / 100.0,
             "difference_cents": difference_cents,
         },
         "suppliers_breakdown": suppliers_breakdown,
@@ -381,18 +398,27 @@ def get_multi_branch_consolidated_report(
         branches_query = branches_query.where(models.branches.c.id == branch_id)
     branches = session.execute(branches_query).mappings().all()
 
+    supplier_totals: dict[str, float] = {}
     supplier_totals_cents: dict[str, int] = {}
+    fixed_expense_totals: dict[str, float] = {}
     fixed_expense_totals_cents: dict[str, int] = {}
     branch_summaries: list[dict[str, Any]] = []
 
+    total_sales = 0.0
     total_sales_cents = 0
+    total_cards = 0.0
     total_cards_cents = 0
+    total_transfers = 0.0
     total_transfers_cents = 0
+    total_credits = 0.0
     total_credits_cents = 0
     total_cash_sales = 0.0
     total_cash_deposits = 0.0
+    total_suppliers = 0.0
     total_suppliers_cents = 0
+    total_fixed = 0.0
     total_fixed_cents = 0
+    total_withdrawals = 0.0
     total_withdrawals_cents = 0
     total_expected = 0.0
 
@@ -415,31 +441,47 @@ def get_multi_branch_consolidated_report(
         for day in days:
             rep = get_branch_daily_reconciliation(session, b_id, day, actor_id=None)
             bal = rep["balance"]
-            b_sales += bal["total_sales_with_tax"]
-            b_expenses += bal["supplier_expenses"] + bal["fixed_expenses"]
-            total_sales += bal["total_sales_with_tax"]
-            total_cards += bal["card_payments"]
-            total_transfers += bal["transfer_payments"]
-            total_credits += bal["credit_sales"]
-            total_cash_sales += bal.get("cash_sales", 0.0)
-            total_cash_deposits += bal.get("cash_deposits", 0.0)
-            total_suppliers += bal["supplier_expenses"]
-            total_fixed += bal["fixed_expenses"]
-            total_withdrawals += bal["cash_withdrawals"]
+            s_sales = bal.get("total_sales_with_tax", float(bal.get("total_sales_with_tax_cents", 0)) / 100.0)
+            s_sup = bal.get("supplier_expenses", float(bal.get("supplier_expenses_cents", 0)) / 100.0)
+            s_fixed = bal.get("fixed_expenses", float(bal.get("fixed_expenses_cents", 0)) / 100.0)
+            s_cards = bal.get("card_payments", float(bal.get("card_payments_cents", 0)) / 100.0)
+            s_transf = bal.get("transfer_payments", float(bal.get("transfer_payments_cents", 0)) / 100.0)
+            s_cred = bal.get("credit_sales", float(bal.get("credit_sales_cents", 0)) / 100.0)
+            s_cash = bal.get("cash_sales", float(bal.get("cash_sales_cents", 0)) / 100.0)
+            s_dep = bal.get("cash_deposits", float(bal.get("cash_deposits_cents", 0)) / 100.0)
+            s_w = bal.get("cash_withdrawals", float(bal.get("cash_withdrawals_cents", 0)) / 100.0)
+            s_exp = bal.get("expected_cash_in_register", float(bal.get("expected_cash_in_register_cents", 0)) / 100.0)
 
-            if b_id not in branch_initial_cash and bal.get("initial_cash", 0.0) > 0:
-                branch_initial_cash[b_id] = bal["initial_cash"]
+            b_sales += s_sales
+            b_expenses += s_sup + s_fixed
+            total_sales += s_sales
+            total_cards += s_cards
+            total_transfers += s_transf
+            total_credits += s_cred
+            total_cash_sales += s_cash
+            total_cash_deposits += s_dep
+            total_suppliers += s_sup
+            total_fixed += s_fixed
+            total_withdrawals += s_w
+
+            init_cash = bal.get("initial_cash", float(bal.get("initial_cash_cents", 0)) / 100.0)
+            if b_id not in branch_initial_cash and init_cash > 0:
+                branch_initial_cash[b_id] = init_cash
 
             if len(days) == 1:
-                total_expected += bal["expected_cash_in_register"]
+                total_expected += s_exp
 
             for sup in rep["suppliers_breakdown"]:
                 sname = sup["provider_name"]
-                supplier_totals[sname] = supplier_totals.get(sname, 0.0) + sup["amount"]
+                s_amt = sup.get("amount", float(sup.get("amount_cents", 0)) / 100.0)
+                supplier_totals[sname] = supplier_totals.get(sname, 0.0) + s_amt
+                supplier_totals_cents[sname] = supplier_totals_cents.get(sname, 0) + sup.get("amount_cents", int(s_amt * 100))
 
             for fexp in rep["fixed_expenses_breakdown"]:
                 ename = fexp["expense_type"]
-                fixed_expense_totals[ename] = fixed_expense_totals.get(ename, 0.0) + fexp["amount"]
+                f_amt = fexp.get("amount", float(fexp.get("amount_cents", 0)) / 100.0)
+                fixed_expense_totals[ename] = fixed_expense_totals.get(ename, 0.0) + f_amt
+                fixed_expense_totals_cents[ename] = fixed_expense_totals_cents.get(ename, 0) + fexp.get("amount_cents", int(f_amt * 100))
 
         branch_summaries.append(
             {
@@ -461,21 +503,39 @@ def get_multi_branch_consolidated_report(
     else:
         total_expected = round(total_expected, 2)
 
+    total_sales_cents = int(round(total_sales * 100))
+    total_cards_cents = int(round(total_cards * 100))
+    total_transfers_cents = int(round(total_transfers * 100))
+    total_credits_cents = int(round(total_credits * 100))
+    total_suppliers_cents = int(round(total_suppliers * 100))
+    total_fixed_cents = int(round(total_fixed * 100))
+    total_withdrawals_cents = int(round(total_withdrawals * 100))
+
     return {
         "date_from": date_from_str,
         "date_to": date_to_str,
         "branches": branch_summaries,
         "supplier_totals": {k: round(v, 2) for k, v in supplier_totals.items()},
+        "supplier_totals_cents": supplier_totals_cents,
         "fixed_expense_totals": {k: round(v, 2) for k, v in fixed_expense_totals.items()},
+        "fixed_expense_totals_cents": fixed_expense_totals_cents,
         "summary": {
             "total_sales": round(total_sales, 2),
+            "total_sales_cents": total_sales_cents,
             "total_cards": round(total_cards, 2),
+            "total_cards_cents": total_cards_cents,
             "total_transfers": round(total_transfers, 2),
+            "total_transfers_cents": total_transfers_cents,
             "total_credits": round(total_credits, 2),
+            "total_credits_cents": total_credits_cents,
             "total_suppliers": round(total_suppliers, 2),
+            "total_suppliers_cents": total_suppliers_cents,
             "total_fixed": round(total_fixed, 2),
+            "total_fixed_cents": total_fixed_cents,
             "total_withdrawals": round(total_withdrawals, 2),
+            "total_withdrawals_cents": total_withdrawals_cents,
             "total_expected_cash": total_expected,
+            "total_expected_cash_cents": int(round(total_expected * 100)),
         },
     }
 
@@ -513,8 +573,10 @@ def get_business_analytics(
         "date_to": date_to_str,
         "summary": {
             "total_sales": 0.0,
+            "total_sales_cents": 0,
             "orders_count": 0,
             "average_ticket": 0.0,
+            "average_ticket_cents": 0,
             "items_sold_count": 0,
         },
         "payment_methods": [],
@@ -587,6 +649,7 @@ def get_business_analytics(
             {
                 "method_key": m_key,
                 "label": method_labels.get(m_key, m_key.capitalize()),
+                "total": round(cents / 100.0, 2),
                 "total_cents": cents,
                 "percentage": pct,
             }
@@ -631,6 +694,7 @@ def get_business_analytics(
                 "channel_key": ch_key,
                 "label": channel_labels.get(ch_key, ch_key.capitalize()),
                 "orders_count": channel_count_map.get(ch_key, 0),
+                "total": round(cents / 100.0, 2),
                 "total_cents": cents,
                 "percentage": pct,
             }
@@ -670,6 +734,7 @@ def get_business_analytics(
                 {
                     "product_name": p["product_name"],
                     "quantity": p["quantity"],
+                    "total": round(p["cents"] / 100.0, 2),
                     "total_cents": p["cents"],
                 }
             )
@@ -714,6 +779,7 @@ def get_business_analytics(
         daily_trend.append(
             {
                 "date": d_key,
+                "total_sales": round(info["total_cents"] / 100.0, 2),
                 "total_sales_cents": info["total_cents"],
                 "orders_count": len(info["order_ids"]),
             }
@@ -723,8 +789,10 @@ def get_business_analytics(
         "date_from": date_from_str,
         "date_to": date_to_str,
         "summary": {
+            "total_sales": round(total_sales_cents / 100.0, 2),
             "total_sales_cents": total_sales_cents,
             "orders_count": orders_count,
+            "average_ticket": round(avg_ticket_cents / 100.0, 2),
             "average_ticket_cents": avg_ticket_cents,
             "items_sold_count": items_sold_count,
         },
