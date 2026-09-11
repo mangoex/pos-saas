@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { CheckCircle2, X, ShoppingBag, ArrowLeft, Clock, ChefHat, Star, Send, ExternalLink, Sparkles, Camera, Upload, Copy, Check } from 'lucide-react';
+import { CheckCircle2, X, ShoppingBag, ArrowLeft, Clock, ChefHat, Star, Send, ExternalLink, Sparkles, Share2, Gift, Copy, Check } from 'lucide-react';
 import { CreatedOrderResult, BranchInfo } from '../types';
-import { formatMoney, submitCustomerFeedback, submitCommunityPhoto } from '../api';
+import { formatMoney, submitCustomerFeedback } from '../api';
 
 interface OrderSuccessModalProps {
   orderResult: CreatedOrderResult;
@@ -26,17 +26,10 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
-  // UGC Photo & Loyalty Campaign State
-  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
-  const [selectedDishId, setSelectedDishId] = useState<string>(
-    orderResult.items?.[0]?.product?.id || ''
-  );
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [photoCaption, setPhotoCaption] = useState('');
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [ugcRewardResult, setUgcRewardResult] = useState<{ discount_code: string; message: string } | null>(null);
+  // Instant Share & Loyalty Reward State (Zero friction)
+  const [hasShared, setHasShared] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [shareFeedbackToast, setShareFeedbackToast] = useState<string | null>(null);
 
   const isWhatsAppEnabled = Boolean(branch?.whatsapp_ordering_enabled) && Boolean(orderResult.whatsapp_url);
 
@@ -84,58 +77,43 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
     }
   };
 
-  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const maxDim = 800;
-        let w = img.width;
-        let h = img.height;
-        if (w > h && w > maxDim) {
-          h = Math.round((h * maxDim) / w);
-          w = maxDim;
-        } else if (h > maxDim) {
-          w = Math.round((w * maxDim) / h);
-          h = maxDim;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          setPhotoPreview(reader.result as string);
+  const handleShareOrder = async () => {
+    const restaurantName = branch?.name || 'este restaurante';
+    const currentUrl = window.location.href;
+    const shareTitle = `¡Pide en ${restaurantName}!`;
+    const shareText = `¡Acabo de pedir en ${restaurantName} por mimenu y la comida está increíble! 😋🍔 Te comparto el menú directo para que pidas:`;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: currentUrl,
+        });
+        setHasShared(true);
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          setHasShared(true);
           return;
         }
-        ctx.drawImage(img, 0, 0, w, h);
-        setPhotoPreview(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSendCommunityPhoto = async () => {
-    if (!branch?.public_key || !photoPreview || !selectedDishId) return;
-    setIsUploadingPhoto(true);
-    setUploadError(null);
-    try {
-      const res = await submitCommunityPhoto(branch.public_key, {
-        product_id: selectedDishId,
-        order_folio: orderFolio,
-        customer_name: orderResult.customer_info.name,
-        customer_phone: orderResult.customer_info.phone,
-        image_url: photoPreview,
-        caption: photoCaption.trim() || undefined,
-      });
-      setUgcRewardResult({ discount_code: res.discount_code, message: res.message });
-    } catch (err: any) {
-      setUploadError(err.message || 'No se pudo enviar la foto.');
-    } finally {
-      setIsUploadingPhoto(false);
+      }
     }
+
+    // Fallback: clipboard & WhatsApp
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(`${shareText} ${currentUrl}`);
+        setShareFeedbackToast('¡Enlace de recomendación copiado!');
+        setTimeout(() => setShareFeedbackToast(null), 3000);
+      }
+    } catch {
+      // ignore
+    }
+
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(`${shareText} ${currentUrl}`)}`;
+    window.open(waUrl, '_blank');
+    setHasShared(true);
   };
 
   const handleCopyCode = async (code: string) => {
@@ -429,180 +407,93 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
           </div>
 
           {/* Verified UGC Incentive Campaign */}
+          {/* Viral Share & Instant Reward Campaign (Zero Friction) */}
           <div
             style={{
-              background: 'linear-gradient(135deg, #fefce8 0%, #fef08a 100%)',
-              border: '1px solid #fde047',
+              background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+              border: '1px solid #fcd34d',
               borderRadius: '16px',
               padding: '16px',
               textAlign: 'left',
               marginBottom: '16px',
               boxSizing: 'border-box',
               width: '100%',
+              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <Camera size={20} color="#854d0e" />
-              <strong style={{ fontSize: '13px', color: '#854d0e' }}>
-                📸 ¡Gana 10% de descuento en tu próxima visita!
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <Gift size={20} color="#b45309" />
+              <strong style={{ fontSize: '14px', color: '#92400e', fontWeight: 800 }}>
+                🎁 ¡10% de descuento en tu próxima visita!
               </strong>
             </div>
 
-            {ugcRewardResult ? (
-              <div style={{ background: '#ffffff', borderRadius: '12px', padding: '12px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#15803d', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  🎉 ¡Foto enviada a moderación con éxito!
-                </span>
-                <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '8px' }}>
-                  Tu código de descuento para tu siguiente pedido es:
-                </span>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#f8fafc', padding: '6px 14px', borderRadius: '8px', border: '2px dashed #f59e0b', marginBottom: '8px' }}>
-                  <strong style={{ fontSize: '15px', color: '#b45309', letterSpacing: '0.05em' }}>
-                    {ugcRewardResult.discount_code}
-                  </strong>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyCode(ugcRewardResult.discount_code)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex' }}
-                    aria-label="Copiar código"
-                  >
-                    {copiedCode ? <Check size={16} color="#16a34a" /> : <Copy size={16} color="#64748b" />}
-                  </button>
-                </div>
-                {copiedCode && <span style={{ fontSize: '11px', color: '#16a34a', display: 'block', fontWeight: 600 }}>¡Copiado al portapapeles!</span>}
-              </div>
-            ) : !showPhotoUpload ? (
+            {!hasShared ? (
               <div>
-                <p style={{ fontSize: '12px', color: '#a16207', margin: '0 0 10px', lineHeight: 1.4 }}>
-                  Comparte una foto de tu comida cuando te la sirvan. Tras moderarse aparecerá en el menú y recibirás un cupón de 10% de descuento.
+                <p style={{ fontSize: '13px', color: '#78350f', margin: '0 0 12px', lineHeight: 1.45 }}>
+                  Comparte tu recomendación con amigos por WhatsApp o redes sociales y desbloquea al instante tu cupón de regalo.
                 </p>
                 <button
                   type="button"
-                  onClick={() => setShowPhotoUpload(true)}
-                  style={{
-                    background: '#854d0e',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '8px 16px',
-                    borderRadius: '9999px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <Camera size={14} />
-                  <span>Subir Foto y Recibir Cupón</span>
-                </button>
-              </div>
-            ) : (
-              <div style={{ background: '#ffffff', borderRadius: '12px', padding: '12px', border: '1px solid #e2e8f0' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                  ¿De qué platillo es tu foto?
-                </label>
-                <select
-                  value={selectedDishId}
-                  onChange={(e) => setSelectedDishId(e.target.value)}
+                  onClick={handleShareOrder}
                   style={{
                     width: '100%',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '12px',
-                    marginBottom: '10px',
-                    background: '#ffffff',
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '12px 18px',
+                    borderRadius: '9999px',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 12px rgba(217, 119, 6, 0.25)',
+                    fontFamily: 'inherit',
                   }}
                 >
-                  {orderResult.items?.map((item) => (
-                    <option key={item.cart_id} value={item.product.id}>
-                      {item.product.name}
-                    </option>
-                  ))}
-                  {(!orderResult.items || orderResult.items.length === 0) && (
-                    <option value="">Selecciona un platillo</option>
-                  )}
-                </select>
-
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                    Foto de tu comida:
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoFileChange}
-                    style={{ fontSize: '12px', width: '100%' }}
-                  />
-                  {photoPreview && (
-                    <div style={{ marginTop: '8px', position: 'relative', width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
-                      <img src={photoPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ marginBottom: '10px' }}>
-                  <input
-                    type="text"
-                    placeholder="Comentario breve (ej: ¡Exquisito!)"
-                    value={photoCaption}
-                    onChange={(e) => setPhotoCaption(e.target.value)}
-                    maxLength={140}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '12px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                {uploadError && (
-                  <span style={{ fontSize: '11px', color: '#dc2626', display: 'block', marginBottom: '8px' }}>
-                    {uploadError}
+                  <Share2 size={16} />
+                  <span>Compartir con amigos y desbloquear cupón</span>
+                </button>
+                {shareFeedbackToast && (
+                  <span style={{ fontSize: '12px', color: '#16a34a', display: 'block', marginTop: '6px', textAlign: 'center', fontWeight: 600 }}>
+                    {shareFeedbackToast}
                   </span>
                 )}
-
-                <div style={{ display: 'flex', gap: '8px' }}>
+              </div>
+            ) : (
+              <div style={{ background: '#ffffff', borderRadius: '12px', padding: '14px', border: '1px solid #fde68a', textAlign: 'center' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#16a34a', fontSize: '13px', fontWeight: 800, marginBottom: '6px' }}>
+                  <Sparkles size={16} />
+                  <span>¡Cupón Desbloqueado con Éxito!</span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 10px', lineHeight: 1.4 }}>
+                  Gracias por recomendarnos. Presenta o ingresa este cupón en tu próxima orden:
+                </p>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', background: '#fef3c7', padding: '8px 16px', borderRadius: '10px', border: '2px dashed #f59e0b', marginBottom: '8px' }}>
+                  <strong style={{ fontSize: '16px', color: '#b45309', letterSpacing: '0.06em' }}>
+                    MIMENU-GRACIAS10
+                  </strong>
                   <button
                     type="button"
-                    disabled={isUploadingPhoto || !photoPreview || !selectedDishId}
-                    onClick={handleSendCommunityPhoto}
-                    style={{
-                      background: isUploadingPhoto || !photoPreview || !selectedDishId ? '#94a3b8' : '#16a34a',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '9999px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: isUploadingPhoto || !photoPreview || !selectedDishId ? 'not-allowed' : 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
+                    onClick={() => handleCopyCode('MIMENU-GRACIAS10')}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex' }}
+                    aria-label="Copiar código"
                   >
-                    <Upload size={14} />
-                    <span>{isUploadingPhoto ? 'Enviando...' : 'Enviar y Obtener Cupón'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowPhotoUpload(false)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#64748b',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cancelar
+                    {copiedCode ? <Check size={18} color="#16a34a" /> : <Copy size={18} color="#b45309" />}
                   </button>
                 </div>
+                {copiedCode ? (
+                  <span style={{ fontSize: '12px', color: '#16a34a', display: 'block', fontWeight: 700 }}>
+                    ¡Código copiado al portapapeles!
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>
+                    Toca el icono para copiar
+                  </span>
+                )}
               </div>
             )}
           </div>
