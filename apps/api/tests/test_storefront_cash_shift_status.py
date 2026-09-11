@@ -68,7 +68,7 @@ def test_storefront_and_catalog_report_active_cash_shift_status():
                 name="Sucursal Centro",
                 code="CENTRO",
                 status="active",
-                timezone="UTC",
+                timezone="timezone.utc",
                 created_at=now,
                 updated_at=now,
             )

@@ -1,7 +1,7 @@
 # SEC001-SYNTHETIC-FIXTURE provenance=recovery-abba6cfc3d77
 """Order correction commands cannot cross SaaS tenant boundaries."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -42,7 +42,7 @@ def test_reopen_request_read_decision_and_apply_are_tenant_scoped() -> None:
                     "business_type": "blank",
                 },
             )
-            now = datetime.now(UTC)
+            now = datetime.now(timezone.utc)
             order_id = str(uuid4())
             session.execute(
                 models.orders.insert().values(

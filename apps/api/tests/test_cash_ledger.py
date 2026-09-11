@@ -44,7 +44,7 @@ from test_platform_api import ADMIN_USER_ID, _seed
 
 UTC = timezone.utc
 SHIFT_ID = "018f6f73-2d0a-74f0-8f1c-000000009901"
-NOW = datetime(2026, 8, 12, tzinfo=UTC)
+NOW = datetime(2026, 8, 12, tzinfo=timezone.utc)
 
 
 def _movement_payload(concept_id: str, **overrides: object) -> dict[str, object]:

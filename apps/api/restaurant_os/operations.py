@@ -305,8 +305,12 @@ def get_open_cash_shift(
     session: Session,
     register_code: str = DEFAULT_REGISTER,
     branch_id: str | None = None,
+    actor_user_id: str | None = None,
 ) -> dict[str, Any] | None:
     actual_branch_id = branch_id or BRANCH_ID
+    if actor_user_id:
+        actor_id = _actor_user_id(actor_user_id)
+        require_permission(session, actor_id, "cash.shift.read", actual_branch_id)
     organization_id = session.scalar(
         sa.select(models.branches.c.organization_id).where(models.branches.c.id == actual_branch_id)
     )
@@ -4077,7 +4081,7 @@ def _confirmed_payment(session: Session, order_id: str) -> dict[str, Any] | None
             sa.select(models.payments)
             .where(
                 models.payments.c.order_id == order_id,
-                models.payments.c.status == "CONFIRMED",
+                sa.func.upper(models.payments.c.status) == "CONFIRMED",
             )
             .order_by(models.payments.c.created_at.desc())
             .limit(1)
@@ -4596,7 +4600,7 @@ def create_order_reopen_request(
         order["status"] == "CLOSED"
         or session.execute(
             sa.select(models.payments.c.id)
-            .where(models.payments.c.order_id == order_id, models.payments.c.status == "CONFIRMED")
+            .where(models.payments.c.order_id == order_id, sa.func.upper(models.payments.c.status) == "CONFIRMED")
             .limit(1)
         ).scalar_one_or_none()
         or session.execute(
@@ -5282,7 +5286,7 @@ def apply_order_reopen_request(
         dict(row)
         for row in session.execute(
             sa.select(models.payments).where(
-                models.payments.c.order_id == order["id"], models.payments.c.status == "CONFIRMED"
+                models.payments.c.order_id == order["id"], sa.func.upper(models.payments.c.status) == "CONFIRMED"
             )
         ).mappings()
     ]
@@ -6221,7 +6225,7 @@ def cancel_order(
     paid = session.execute(
         sa.select(models.payments.c.id).where(
             models.payments.c.order_id == order_id,
-            models.payments.c.status == "CONFIRMED",
+            sa.func.upper(models.payments.c.status) == "CONFIRMED",
         )
     ).first()
     if paid:
@@ -6460,7 +6464,7 @@ def pay_order(
     existing_payment = session.execute(
         sa.select(models.payments.c.id).where(
             models.payments.c.order_id == order_id,
-            models.payments.c.status == "CONFIRMED",
+            sa.func.upper(models.payments.c.status) == "CONFIRMED",
         )
     ).first()
     if existing_payment:
@@ -7636,7 +7640,7 @@ def _cash_summary_for_shift(session: Session, shift: dict[str, Any]) -> dict[str
     confirmed_payment_count = 0
     for payment in session.execute(
         sa.select(models.payments).where(
-            models.payments.c.cash_shift_id == shift["id"], models.payments.c.status == "CONFIRMED"
+            models.payments.c.cash_shift_id == shift["id"], sa.func.upper(models.payments.c.status) == "CONFIRMED"
         )
     ).mappings():
         payment_total += int(payment["amount_cents"])
@@ -21944,7 +21948,7 @@ def calculate_expected_cash(session: Session, cash_shift_id: str) -> dict[str, i
     for payment in session.execute(
         sa.select(models.payments).where(models.payments.c.cash_shift_id == cash_shift_id)
     ).mappings():
-        if payment["status"] != "CONFIRMED":
+        if str(payment["status"]).upper() != "CONFIRMED":
             continue
         if str(payment["method"]).lower() == "cash":
             cash_payment_cents += int(payment["amount_cents"])
@@ -23192,7 +23196,7 @@ class UserCashCutService:
         for payment in self.session.execute(
             sa.select(models.payments).where(
                 models.payments.c.cash_shift_id == cut["cash_shift_id"],
-                models.payments.c.status == "CONFIRMED",
+                sa.func.upper(models.payments.c.status) == "CONFIRMED",
                 sa.func.lower(models.payments.c.method) == "cash",
             )
         ).mappings():

@@ -61,7 +61,7 @@ def test_grant_issuance_rechecks_human_permission_and_active_device(
     monkeypatch.setattr(
         operations, "_offline_grant_signing_material", lambda: (private_key, "active")
     )
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     try:
         session.execute(
             models.device_credentials.insert().values(

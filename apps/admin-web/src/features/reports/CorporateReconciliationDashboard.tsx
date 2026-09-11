@@ -51,13 +51,33 @@ export default function CorporateReconciliationDashboard() {
 
   const { data, isLoading, error, refetch } = useQuery<ConsolidatedReport>({
     queryKey: ['consolidated-reconciliation', dateFrom, dateTo, selectedBranchId],
-    queryFn: () => {
+    queryFn: async () => {
       const params = new URLSearchParams({
         date_from: dateFrom,
         date_to: dateTo,
       });
       if (selectedBranchId) params.set('branch_id', selectedBranchId);
-      return fetchApi(`/reports/branch-reconciliation/consolidated?${params.toString()}`);
+      const raw = await fetchApi<any>(`/reports/branch-reconciliation/consolidated?${params.toString()}`);
+      return {
+        ...raw,
+        branches: (raw.branches || []).map((b: any) => ({
+            ...b,
+            total_sales: b.total_sales_cents / 100.0,
+            total_expenses: b.total_expenses_cents / 100.0,
+        })),
+        supplier_totals: Object.fromEntries(Object.entries(raw.supplier_totals_cents || {}).map(([k,v]) => [k, (v as number)/100.0])),
+        fixed_expense_totals: Object.fromEntries(Object.entries(raw.fixed_expense_totals_cents || {}).map(([k,v]) => [k, (v as number)/100.0])),
+        summary: {
+           total_sales: (raw.summary?.total_sales_cents || 0) / 100.0,
+           total_cards: (raw.summary?.total_cards_cents || 0) / 100.0,
+           total_transfers: (raw.summary?.total_transfers_cents || 0) / 100.0,
+           total_credits: (raw.summary?.total_credits_cents || 0) / 100.0,
+           total_suppliers: (raw.summary?.total_suppliers_cents || 0) / 100.0,
+           total_fixed: (raw.summary?.total_fixed_cents || 0) / 100.0,
+           total_withdrawals: (raw.summary?.total_withdrawals_cents || 0) / 100.0,
+           total_expected_cash: (raw.summary?.total_expected_cash_cents || 0) / 100.0,
+        }
+      } as ConsolidatedReport;
     },
   });
 

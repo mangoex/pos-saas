@@ -58,7 +58,7 @@ def client(test_db: Session) -> TestClient:
 
 @pytest.fixture
 def sample_inventory_data(test_db: Session) -> dict[str, str]:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     role_id = "018f6f73-2d0a-74f0-8f1c-000000000070"
     permission_id = "018f6f73-2d0a-74f0-8f1c-000000000071"
 

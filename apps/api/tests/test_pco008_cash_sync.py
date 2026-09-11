@@ -245,7 +245,7 @@ def test_http_routes_accept_bearer_and_persisted_scoped_device(
 ) -> None:
     client = _cash_concept_client()
     token = "pco008-device-secret-for-route-test"
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     session_factory = client.app.state.test_session_factory
     with session_factory() as session:
         session.execute(

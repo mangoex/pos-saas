@@ -87,13 +87,25 @@ export const AnalyticsDashboard: React.FC = () => {
     refetch,
   } = useQuery<AnalyticsData>({
     queryKey: ['business-analytics', dateFrom, dateTo, selectedBranchId],
-    queryFn: () => {
+    queryFn: async () => {
       const params = new URLSearchParams({
         date_from: dateFrom,
         date_to: dateTo,
       });
       if (selectedBranchId) params.set('branch_id', selectedBranchId);
-      return fetchApi(`/reports/analytics?${params.toString()}`);
+      const raw = await fetchApi<any>(`/reports/analytics?${params.toString()}`);
+      return {
+        ...raw,
+        summary: {
+           ...raw.summary,
+           total_sales: (raw.summary.total_sales_cents || 0) / 100.0,
+           average_ticket: (raw.summary.average_ticket_cents || 0) / 100.0,
+        },
+        payment_methods: (raw.payment_methods || []).map((p: any) => ({ ...p, total: p.total_cents / 100.0 })),
+        order_channels: (raw.order_channels || []).map((c: any) => ({ ...c, total: c.total_cents / 100.0 })),
+        top_products: (raw.top_products || []).map((p: any) => ({ ...p, total: p.total_cents / 100.0 })),
+        daily_trend: (raw.daily_trend || []).map((d: any) => ({ ...d, total_sales: d.total_sales_cents / 100.0 }))
+      } as AnalyticsData;
     },
   });
 

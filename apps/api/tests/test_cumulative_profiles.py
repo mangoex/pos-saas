@@ -37,7 +37,7 @@ INITIAL_OWNER_EMAILS = ("aniacuestas@gmail.com", "mangoex@gmail.com")
 def test_authorization_uses_persisted_authority_not_role_label_and_fails_closed() -> None:
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
-    now = datetime(2026, 8, 10, tzinfo=UTC)
+    now = datetime(2026, 8, 10, tzinfo=timezone.utc)
     with Session(engine) as session:
         _seed_scope_fixture(session, now)
 
@@ -101,7 +101,7 @@ def test_branch_assignment_and_legacy_null_never_authorize() -> None:
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
 
         with pytest.raises(BusinessError) as missing_branch:
             assign_user_role(
@@ -132,7 +132,7 @@ def test_owner_assignment_requires_persisted_authority_and_role_updates_are_addi
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         owner_role_id = "018f6f73-2d0a-74f0-8f1c-000000001019"
         legacy_admin_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         cashier_id = "018f6f73-2d0a-74f0-8f1c-000000001020"
@@ -193,7 +193,7 @@ def test_owner_assignment_requires_persisted_authority_and_role_updates_are_addi
                 organization_id=ORG_A,
                 name="Especialidad preservada",
                 scope="branch",
-                created_at=datetime(2026, 8, 10, tzinfo=UTC),
+                created_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
             )
         )
         session.execute(
@@ -228,7 +228,7 @@ def test_update_user_same_role_different_branch_upserts_without_integrity_error(
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         cashier_id = "018f6f73-2d0a-74f0-8f1c-000000001020"
         legacy_admin_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         # User already has role 018f6f73-2d0a-74f0-8f1c-000000001018 on BRANCH_A
@@ -253,7 +253,7 @@ def test_organization_authority_role_is_immutable_except_for_authorized_rename()
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         authority_role_id = "018f6f73-2d0a-74f0-8f1c-000000001019"
         owner_id = "018f6f73-2d0a-74f0-8f1c-000000001021"
         legacy_admin_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
@@ -359,7 +359,7 @@ def test_initial_owner_bootstrap_is_atomic_idempotent_and_exact() -> None:
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         authority_role_id = "018f6f73-2d0a-74f0-8f1c-000000001019"
         operational_actor_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         session.execute(
@@ -439,7 +439,7 @@ def test_initial_owner_bootstrap_rejects_missing_or_partial_configuration_withou
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         authority_role_id = "018f6f73-2d0a-74f0-8f1c-000000001019"
         operational_actor_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         session.execute(
@@ -512,7 +512,7 @@ def test_profile_transition_is_additive_reversible_and_idempotent_without_pii() 
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         owner_id = "018f6f73-2d0a-74f0-8f1c-000000001021"
         subject_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         legacy_role_id = "018f6f73-2d0a-74f0-8f1c-000000001023"
@@ -524,7 +524,7 @@ def test_profile_transition_is_additive_reversible_and_idempotent_without_pii() 
                 organization_id=ORG_A,
                 name="Especialidad existente",
                 scope="branch",
-                created_at=datetime(2026, 8, 10, tzinfo=UTC),
+                created_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
             )
         )
         session.execute(
@@ -625,7 +625,7 @@ def test_profile_transition_is_additive_reversible_and_idempotent_without_pii() 
                 organization_id=ORG_A,
                 name="Especialidad posterior",
                 scope="branch",
-                created_at=datetime(2026, 8, 10, tzinfo=UTC),
+                created_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
             )
         )
         session.execute(
@@ -678,14 +678,14 @@ def test_rejection_audit_rolls_back_unrelated_pending_writes() -> None:
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         pending_permission_id = "018f6f73-2d0a-74f0-8f1c-000000001040"
         session.execute(
             models.permissions.insert().values(
                 id=pending_permission_id,
                 code="pending.write.must.rollback",
                 description="must not commit",
-                created_at=datetime(2026, 8, 10, tzinfo=UTC),
+                created_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
             )
         )
         with pytest.raises(AuthorizationError) as denied_transition:
@@ -714,7 +714,7 @@ def test_rejection_audit_rolls_back_unrelated_pending_writes() -> None:
                 id=pending_permission_id,
                 code="pending.bootstrap.must.rollback",
                 description="must not commit",
-                created_at=datetime(2026, 8, 10, tzinfo=UTC),
+                created_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
             )
         )
         with pytest.raises(BusinessError) as denied_bootstrap:
@@ -743,7 +743,7 @@ def test_profile_transition_create_race_rechecks_payload_and_audits_replay(
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         owner_id = "018f6f73-2d0a-74f0-8f1c-000000001021"
         subject_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         legacy_role_id = "018f6f73-2d0a-74f0-8f1c-000000001023"
@@ -811,7 +811,7 @@ def test_profile_transition_rejects_stale_legacy_and_reassigned_target() -> None
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         owner_id = "018f6f73-2d0a-74f0-8f1c-000000001021"
         subject_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         legacy_role_id = "018f6f73-2d0a-74f0-8f1c-000000001023"
@@ -930,7 +930,7 @@ def test_profile_transition_rejects_legacy_branch_drift_from_snapshot() -> None:
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         owner_id = "018f6f73-2d0a-74f0-8f1c-000000001021"
         subject_id = "018f6f73-2d0a-74f0-8f1c-000000001022"
         legacy_role_id = "018f6f73-2d0a-74f0-8f1c-000000001023"
@@ -999,7 +999,7 @@ def test_cross_organization_transition_actor_is_audited_without_committing_calle
     engine = create_engine("sqlite+pysqlite://")
     models.metadata.create_all(engine)
     with Session(engine) as session:
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         pending_permission_id = "018f6f73-2d0a-74f0-8f1c-000000001041"
         cross_organization_actor_id = "018f6f73-2d0a-74f0-8f1c-000000001025"
         session.execute(
@@ -1007,7 +1007,7 @@ def test_cross_organization_transition_actor_is_audited_without_committing_calle
                 id=pending_permission_id,
                 code="pending.cross-org.must.rollback",
                 description="must not commit",
-                created_at=datetime(2026, 8, 10, tzinfo=UTC),
+                created_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
             )
         )
         with pytest.raises(AuthorizationError) as denied_actor:
@@ -1039,7 +1039,7 @@ def test_profile_transition_invalid_organization_fails_before_authority_or_audit
     models.metadata.create_all(engine)
     with Session(engine) as session:
         session.connection().exec_driver_sql("PRAGMA foreign_keys=ON")
-        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=UTC))
+        _seed_scope_fixture(session, datetime(2026, 8, 10, tzinfo=timezone.utc))
         invalid_organization_id = "018f6f73-2d0a-74f0-8f1c-000000009999"
         with pytest.raises(BusinessError) as invalid_organization:
             create_profile_transition_mapping(
@@ -1133,7 +1133,7 @@ def _seed_scope_fixture(session: Session, now: datetime) -> None:
                 business_unit_id=unit_id,
                 name="Branch",
                 code=branch_id[-2:],
-                timezone="UTC",
+                timezone="timezone.utc",
                 status="active",
                 created_at=now,
                 updated_at=now,

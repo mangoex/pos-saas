@@ -107,7 +107,7 @@ def _fake(result: dict[str, Any], captured: dict[str, Any] | None = None):
 
 
 def _seed_purchase_price(session: Session) -> None:
-    now = datetime(2026, 8, 29, 18, 0, tzinfo=UTC)
+    now = datetime(2026, 8, 29, 18, 0, tzinfo=timezone.utc)
     session.execute(
         models.suppliers.insert().values(
             id=SUPPLIER_ID,
@@ -558,7 +558,7 @@ def test_tdd_tc_198_stale_and_tdd_tc_199_reject_are_fail_closed() -> None:
         session.execute(
             sa.update(models.products)
             .where(models.products.c.id == PRODUCT_ID)
-            .values(updated_at=datetime(2030, 1, 1, tzinfo=UTC))
+            .values(updated_at=datetime(2030, 1, 1, tzinfo=timezone.utc))
         )
         session.commit()
         with pytest.raises(BusinessError) as stale_error:
@@ -595,7 +595,7 @@ def test_tdd_tc_198_stale_and_tdd_tc_199_reject_are_fail_closed() -> None:
         session.execute(
             sa.update(models.admin_ai_proposals)
             .where(models.admin_ai_proposals.c.id == expired["id"])
-            .values(expires_at=datetime(2000, 1, 1, tzinfo=UTC))
+            .values(expires_at=datetime(2000, 1, 1, tzinfo=timezone.utc))
         )
         session.commit()
         with pytest.raises(BusinessError) as expired_error:
@@ -645,7 +645,7 @@ def test_tdd_tc_207_purchase_and_cost_changes_do_not_stale_catalog_proposal() ->
         )
         assert proposal["status"] == "READY_FOR_REVIEW"
 
-        now = datetime(2026, 8, 29, 18, 20, tzinfo=UTC)
+        now = datetime(2026, 8, 29, 18, 20, tzinfo=timezone.utc)
         session.execute(
             models.purchase_presentations.update()
             .where(models.purchase_presentations.c.id == PRESENTATION_ID)
@@ -914,7 +914,7 @@ def test_tdd_tc_209_structured_choice_resolves_and_parent_scope_fails_closed() -
 def test_tdd_tc_209_parent_is_private_to_actor_and_terminal_turns_cannot_continue() -> None:
     factory = _factory()
     with factory() as session:
-        now = datetime(2026, 8, 29, 20, 0, tzinfo=UTC)
+        now = datetime(2026, 8, 29, 20, 0, tzinfo=timezone.utc)
         session.execute(
             models.users.insert().values(
                 id=OTHER_ADMIN_ID,
@@ -974,7 +974,7 @@ def test_tdd_tc_209_parent_is_private_to_actor_and_terminal_turns_cannot_continu
         session.execute(
             models.admin_ai_proposals.update()
             .where(models.admin_ai_proposals.c.id == expired["id"])
-            .values(expires_at=datetime(2020, 1, 1, tzinfo=UTC))
+            .values(expires_at=datetime(2020, 1, 1, tzinfo=timezone.utc))
         )
         session.commit()
         with pytest.raises(AdminAiError) as expired_parent:
@@ -1021,7 +1021,7 @@ def test_tdd_tc_209_each_turn_revalidates_the_requested_branch_scope() -> None:
     factory = _factory()
     branch_admin_id = "018f6f73-2d0a-74f0-8f1c-000000000705"
     branch_role_id = "018f6f73-2d0a-74f0-8f1c-000000000706"
-    now = datetime(2026, 8, 29, 20, 0, tzinfo=UTC)
+    now = datetime(2026, 8, 29, 20, 0, tzinfo=timezone.utc)
     with factory() as session:
         source_branch = session.execute(
             sa.select(models.branches).where(models.branches.c.id == BRANCH_ID)
@@ -1182,7 +1182,7 @@ def test_tdd_tc_207_purchase_price_diagnostic_is_exact_and_branch_scoped() -> No
                 supplier_id=SUPPLIER_ID,
                 branch_id=BRANCH_ID,
                 is_enabled=False,
-                updated_at=datetime(2026, 8, 29, 18, 5, tzinfo=UTC),
+                updated_at=datetime(2026, 8, 29, 18, 5, tzinfo=timezone.utc),
             )
         )
         session.commit()
@@ -1278,7 +1278,7 @@ def test_tdd_tc_207_average_cost_diagnostic_uses_confirmed_state_without_values(
         raise AssertionError("Canonical cost diagnostics must not reach the provider")
 
     with factory() as session:
-        now = datetime(2026, 8, 29, 18, 10, tzinfo=UTC)
+        now = datetime(2026, 8, 29, 18, 10, tzinfo=timezone.utc)
         session.execute(
             models.inventory_cost_states.insert().values(
                 branch_id=BRANCH_ID,
@@ -1495,7 +1495,7 @@ def test_tdd_tc_207_external_context_excludes_purchase_and_cost_projections() ->
 
 def test_tdd_tc_207_diagnostic_output_is_bounded_and_sanitizes_labels() -> None:
     factory = _factory()
-    now = datetime(2026, 8, 29, 18, 20, tzinfo=UTC)
+    now = datetime(2026, 8, 29, 18, 20, tzinfo=timezone.utc)
     raw_uuid = "11111111-2222-3333-4444-555555555555"
     rows = [
         {
@@ -1538,7 +1538,7 @@ def test_tdd_tc_207_diagnostic_output_is_bounded_and_sanitizes_labels() -> None:
 
 def test_tdd_tc_207_branch_scope_excludes_items_from_other_branch() -> None:
     factory = _factory()
-    now = datetime(2026, 8, 29, 18, 30, tzinfo=UTC)
+    now = datetime(2026, 8, 29, 18, 30, tzinfo=timezone.utc)
     local_item_id = "30000000-0000-0000-0000-000000000001"
     other_item_id = "30000000-0000-0000-0000-000000000002"
 

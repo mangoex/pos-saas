@@ -39,7 +39,7 @@ def _client_with_db() -> TestClient:
 
 
 def _seed_base_permissions(session: Session) -> None:
-    now = datetime(2026, 7, 7, 17, 30, tzinfo=UTC)
+    now = datetime(2026, 7, 7, 17, 30, tzinfo=timezone.utc)
     standard_permissions = [
         ("admin.manage", "Administración central de la plataforma"),
         ("catalog.manage", "Administración de catálogos y productos"),

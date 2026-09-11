@@ -1612,7 +1612,7 @@ def get_current_cash_shift(
         if not authorized_branch_id:
             raise BusinessError("cash_shift_current_payload_invalid", "branch_id is required")
         shift = get_open_cash_shift(
-            session, register_code=register_id, branch_id=authorized_branch_id
+            session, register_code=register_id, branch_id=authorized_branch_id, actor_user_id=actor_id
         )
         closure = None
         if not shift:
@@ -1666,7 +1666,7 @@ def get_current_cash_shift_legacy(
             raise BusinessError("cash_shift_current_payload_invalid", "branch_id is required")
         return _serialize_pco_response(
             {
-                "cash_shift": get_open_cash_shift(session, register_id, scoped_branch),
+                "cash_shift": get_open_cash_shift(session, register_id, scoped_branch, actor_user_id=actor_id),
                 "closure": None,
             }
         )

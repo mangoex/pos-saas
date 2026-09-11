@@ -123,7 +123,7 @@ def get_branch_daily_reconciliation(
             )
             .where(
                 models.payments.c.branch_id == branch_id,
-                models.payments.c.status == "CONFIRMED",
+                sa.func.upper(models.payments.c.status) == "CONFIRMED",
                 models.payments.c.created_at >= start_utc,
                 models.payments.c.created_at <= end_utc,
             )
@@ -156,7 +156,7 @@ def get_branch_daily_reconciliation(
                     "ticket_folio": folio,
                     "customer_name": cust_name,
                     "customer_phone": cust_phone,
-                    "amount": float(amount) / 100.0,
+                    "amount_cents": amount,
                 }
             )
         elif method in ("credit", "customer_credit"):
@@ -166,7 +166,7 @@ def get_branch_daily_reconciliation(
                     "ticket_folio": folio,
                     "customer_name": cust_name,
                     "customer_phone": cust_phone,
-                    "amount": float(amount) / 100.0,
+                    "amount_cents": amount,
                 }
             )
         else:
@@ -272,7 +272,7 @@ def get_branch_daily_reconciliation(
                     {
                         "no": w_idx,
                         "folio": f"RET-{m['id'][:6].upper()}",
-                        "amount": float(amt) / 100.0,
+                        "amount_cents": amt,
                         "recipient_name": m["reference"] or m["reason"] or "Encargado / Bóveda",
                     }
                 )
@@ -283,7 +283,7 @@ def get_branch_daily_reconciliation(
                     {
                         "no": fix_idx,
                         "expense_type": cname,
-                        "amount": float(amt) / 100.0,
+                        "amount_cents": amt,
                         "observations": m["reason"] or "Gasto menor de sucursal",
                     }
                 )
@@ -332,19 +332,19 @@ def get_branch_daily_reconciliation(
         "branch_name": branch_name,
         "date": date_str,
         "balance": {
-            "initial_cash": float(initial_cash_cents) / 100.0,
-            "total_sales_with_tax": float(total_sales_with_tax_cents) / 100.0,
-            "card_payments": float(card_payments_cents) / 100.0,
-            "transfer_payments": float(transfer_payments_cents) / 100.0,
-            "credit_sales": float(credit_sales_cents) / 100.0,
-            "cash_sales": float(cash_sales_cents) / 100.0,
-            "supplier_expenses": float(supplier_expenses_cents) / 100.0,
-            "fixed_expenses": float(fixed_expenses_cents) / 100.0,
-            "cash_withdrawals": float(cash_withdrawals_cents) / 100.0,
-            "cash_deposits": float(cash_deposits_cents) / 100.0,
-            "expected_cash_in_register": float(expected_cash_cents) / 100.0,
-            "physical_cash_count": float(physical_cash_count_cents) / 100.0,
-            "difference": float(difference_cents) / 100.0,
+            "initial_cash_cents": initial_cash_cents,
+            "total_sales_with_tax_cents": total_sales_with_tax_cents,
+            "card_payments_cents": card_payments_cents,
+            "transfer_payments_cents": transfer_payments_cents,
+            "credit_sales_cents": credit_sales_cents,
+            "cash_sales_cents": cash_sales_cents,
+            "supplier_expenses_cents": supplier_expenses_cents,
+            "fixed_expenses_cents": fixed_expenses_cents,
+            "cash_withdrawals_cents": cash_withdrawals_cents,
+            "cash_deposits_cents": cash_deposits_cents,
+            "expected_cash_in_register_cents": expected_cash_cents,
+            "physical_cash_count_cents": physical_cash_count_cents,
+            "difference_cents": difference_cents,
         },
         "suppliers_breakdown": suppliers_breakdown,
         "fixed_expenses_breakdown": fixed_expenses_breakdown,
@@ -381,19 +381,19 @@ def get_multi_branch_consolidated_report(
         branches_query = branches_query.where(models.branches.c.id == branch_id)
     branches = session.execute(branches_query).mappings().all()
 
-    supplier_totals: dict[str, float] = {}
-    fixed_expense_totals: dict[str, float] = {}
+    supplier_totals_cents: dict[str, int] = {}
+    fixed_expense_totals_cents: dict[str, int] = {}
     branch_summaries: list[dict[str, Any]] = []
 
-    total_sales = 0.0
-    total_cards = 0.0
-    total_transfers = 0.0
-    total_credits = 0.0
+    total_sales_cents = 0
+    total_cards_cents = 0
+    total_transfers_cents = 0
+    total_credits_cents = 0
     total_cash_sales = 0.0
     total_cash_deposits = 0.0
-    total_suppliers = 0.0
-    total_fixed = 0.0
-    total_withdrawals = 0.0
+    total_suppliers_cents = 0
+    total_fixed_cents = 0
+    total_withdrawals_cents = 0
     total_expected = 0.0
 
     # Parse date range
@@ -545,7 +545,7 @@ def get_business_analytics(
         )
         .where(
             models.payments.c.branch_id.in_(branch_ids),
-            models.payments.c.status == "CONFIRMED",
+            sa.func.upper(models.payments.c.status) == "CONFIRMED",
             models.payments.c.created_at >= start_utc,
             models.payments.c.created_at <= end_utc,
         )
@@ -587,7 +587,7 @@ def get_business_analytics(
             {
                 "method_key": m_key,
                 "label": method_labels.get(m_key, m_key.capitalize()),
-                "total": round(float(cents) / 100.0, 2),
+                "total_cents": cents,
                 "percentage": pct,
             }
         )
@@ -631,7 +631,7 @@ def get_business_analytics(
                 "channel_key": ch_key,
                 "label": channel_labels.get(ch_key, ch_key.capitalize()),
                 "orders_count": channel_count_map.get(ch_key, 0),
-                "total": round(float(cents) / 100.0, 2),
+                "total_cents": cents,
                 "percentage": pct,
             }
         )
@@ -670,7 +670,7 @@ def get_business_analytics(
                 {
                     "product_name": p["product_name"],
                     "quantity": p["quantity"],
-                    "total": round(float(p["cents"]) / 100.0, 2),
+                    "total_cents": p["cents"],
                 }
             )
 
@@ -714,7 +714,7 @@ def get_business_analytics(
         daily_trend.append(
             {
                 "date": d_key,
-                "total_sales": round(float(info["total_cents"]) / 100.0, 2),
+                "total_sales_cents": info["total_cents"],
                 "orders_count": len(info["order_ids"]),
             }
         )
@@ -723,9 +723,9 @@ def get_business_analytics(
         "date_from": date_from_str,
         "date_to": date_to_str,
         "summary": {
-            "total_sales": round(float(total_sales_cents) / 100.0, 2),
+            "total_sales_cents": total_sales_cents,
             "orders_count": orders_count,
-            "average_ticket": round(float(avg_ticket_cents) / 100.0, 2),
+            "average_ticket_cents": avg_ticket_cents,
             "items_sold_count": items_sold_count,
         },
         "payment_methods": payment_methods,

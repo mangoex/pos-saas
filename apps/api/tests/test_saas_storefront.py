@@ -49,7 +49,7 @@ def client_for_restaurants() -> tuple[TestClient, sa.Engine]:
                     business_unit_id=name,
                     name=name,
                     code=code,
-                    timezone="UTC",
+                    timezone="timezone.utc",
                     created_at=now,
                     updated_at=now,
                 )
