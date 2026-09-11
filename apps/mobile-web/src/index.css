@@ -2545,3 +2545,158 @@ body {
   border-radius: 50% !important;
   display: block;
 }
+
+/* --------------------------------------------------------------------------
+   RETURNING CUSTOMER & PERSISTENT PROFILE (MIMENU SILENT ONBOARDING)
+-------------------------------------------------------------------------- */
+.cart-customer-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.btn-cart-toggle-customer {
+  border: none;
+  background: transparent;
+  color: var(--color-primary, #0f172a);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  transition: all 0.15s ease;
+}
+
+.btn-cart-toggle-customer:hover {
+  background: #f1f5f9;
+}
+
+.cart-returning-customer-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: var(--radius-md, 14px);
+  padding: 12px 14px;
+  transition: border-color 0.15s ease;
+}
+
+.cart-returning-customer-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: #ecfdf5;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cart-returning-customer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cart-returning-customer-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cart-returning-customer-name {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text-main, #0f172a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cart-returning-customer-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #059669;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.cart-returning-customer-badge.address {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.cart-returning-customer-phone {
+  font-size: 0.76rem;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.btn-cart-edit-customer {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.btn-cart-edit-customer:hover {
+  background: #f1f5f9;
+}
+
+.order-success-profile-card {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-success-profile-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.order-success-profile-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.order-success-profile-text {
+  flex: 1;
+}
+
+.order-success-profile-loyalty-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  color: #92400e;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+  line-height: 1.3;
+}

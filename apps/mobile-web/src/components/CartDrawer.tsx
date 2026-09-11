@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package } from 'lucide-react';
 import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Product } from '../types';
-import { formatMoney, fetchOrderUpsellRecommendations } from '../api';
+import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
 
 const getRecommendationIcon = (product: Product, size: number = 38) => {
@@ -72,14 +72,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   submitError,
 }) => {
   const isBranchClosed = hasActiveShift === false || selectedBranch?.has_active_shift === false;
+  const initialProfile = useMemo(() => getSavedCustomerProfile(), []);
+  const [isReturningCustomer] = useState(
+    Boolean(initialProfile?.name && initialProfile?.phone),
+  );
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+
   const [orderType, setOrderType] = useState<OrderType>(initialOrderType);
   const [tableNumber, setTableNumber] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [street, setStreet] = useState('');
-  const [number, setNumber] = useState('');
-  const [neighborhood, setNeighborhood] = useState('');
-  const [addressNotes, setAddressNotes] = useState('');
+  const [name, setName] = useState(initialProfile?.name || '');
+  const [phone, setPhone] = useState(initialProfile?.phone || '');
+  const [street, setStreet] = useState(initialProfile?.street || '');
+  const [number, setNumber] = useState(initialProfile?.number || '');
+  const [neighborhood, setNeighborhood] = useState(initialProfile?.neighborhood || '');
+  const [addressNotes, setAddressNotes] = useState(initialProfile?.address_notes || '');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [cashAmount, setCashAmount] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
@@ -238,6 +244,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       order_notes: orderNotes.trim(),
       delivery_fee_cents: deliveryFeeCents,
     };
+
+    saveCustomerProfile({
+      name: name.trim(),
+      phone: phone.trim(),
+      street: street.trim() || undefined,
+      number: number.trim() || undefined,
+      neighborhood: neighborhood.trim() || undefined,
+      address_notes: addressNotes.trim() || undefined,
+    });
 
     onSubmitOrder(orderInfo);
   };
@@ -506,32 +521,75 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
               {/* Customer Info */}
               <div className="cart-form-section">
-                <label className="cart-form-section-label">Tus Datos de Contacto</label>
-                <div className="cart-form-fields-grid">
-                  <div className="cart-input-wrapper">
-                    <User size={16} className="cart-input-icon" />
-                    <input
-                      type="text"
-                      className="cart-input-field"
-                      placeholder="Tu nombre completo *"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="cart-input-wrapper">
-                    <Phone size={16} className="cart-input-icon" />
-                    <input
-                      type="tel"
-                      className="cart-input-field"
-                      placeholder="Teléfono Celular *"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      required
-                    />
-                  </div>
+                <div className="cart-customer-section-header">
+                  <label className="cart-form-section-label" style={{ marginBottom: 0 }}>
+                    Tus Datos de Contacto
+                  </label>
+                  {isReturningCustomer && (
+                    <button
+                      type="button"
+                      className="btn-cart-toggle-customer"
+                      onClick={() => setIsEditingCustomer(!isEditingCustomer)}
+                    >
+                      {isEditingCustomer ? 'Listo' : 'Editar datos'}
+                    </button>
+                  )}
                 </div>
+
+                {isReturningCustomer && !isEditingCustomer ? (
+                  <div className="cart-returning-customer-card">
+                    <div className="cart-returning-customer-avatar">
+                      <CheckCircle2 size={20} color="#10b981" />
+                    </div>
+                    <div className="cart-returning-customer-info">
+                      <div className="cart-returning-customer-name-row">
+                        <span className="cart-returning-customer-name">{name || 'Cliente'}</span>
+                        <span className="cart-returning-customer-badge">⚡ Recordado</span>
+                      </div>
+                      <span className="cart-returning-customer-phone">{phone}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-cart-edit-customer"
+                      onClick={() => setIsEditingCustomer(true)}
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="cart-form-fields-grid">
+                    <div className="cart-input-wrapper">
+                      <User size={16} className="cart-input-icon" />
+                      <input
+                        id="customer-name"
+                        name="name"
+                        type="text"
+                        autoComplete="name"
+                        className="cart-input-field"
+                        placeholder="Tu nombre completo *"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="cart-input-wrapper">
+                      <Phone size={16} className="cart-input-icon" />
+                      <input
+                        id="customer-phone"
+                        name="phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        className="cart-input-field"
+                        placeholder="Teléfono Celular *"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Table or Spot if dine-in mode */}
@@ -541,7 +599,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <div className="cart-input-wrapper">
                     <Utensils size={16} className="cart-input-icon" />
                     <input
+                      id="customer-table"
+                      name="table_number"
                       type="text"
+                      autoComplete="off"
                       className="cart-input-field"
                       placeholder="Ej. Mesa 4, Barra principal, etc."
                       value={tableNumber}
@@ -554,46 +615,97 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               {/* Delivery Address if delivery mode */}
               {orderType === 'delivery' && (
                 <div className="cart-form-section">
-                  <label className="cart-form-section-label">Dirección de Entrega</label>
-                  <div className="cart-form-fields-grid">
-                    <div className="cart-input-wrapper">
-                      <MapPin size={16} className="cart-input-icon" />
+                  <div className="cart-customer-section-header">
+                    <label className="cart-form-section-label" style={{ marginBottom: 0 }}>
+                      Dirección de Entrega
+                    </label>
+                    {isReturningCustomer && street && (
+                      <button
+                        type="button"
+                        className="btn-cart-toggle-customer"
+                        onClick={() => setIsEditingCustomer(!isEditingCustomer)}
+                      >
+                        {isEditingCustomer ? 'Listo' : 'Cambiar dirección'}
+                      </button>
+                    )}
+                  </div>
+
+                  {isReturningCustomer && !isEditingCustomer && street ? (
+                    <div className="cart-returning-customer-card">
+                      <div className="cart-returning-customer-avatar">
+                        <MapPin size={20} color="#f59e0b" />
+                      </div>
+                      <div className="cart-returning-customer-info">
+                        <div className="cart-returning-customer-name-row">
+                          <span className="cart-returning-customer-name">{street} #{number}</span>
+                          <span className="cart-returning-customer-badge address">Casa / Entrega</span>
+                        </div>
+                        <span className="cart-returning-customer-phone">
+                          Col. {neighborhood} {addressNotes ? `• ${addressNotes}` : ''}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-cart-edit-customer"
+                        onClick={() => setIsEditingCustomer(true)}
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="cart-form-fields-grid">
+                      <div className="cart-input-wrapper">
+                        <MapPin size={16} className="cart-input-icon" />
+                        <input
+                          id="customer-street"
+                          name="street"
+                          type="text"
+                          autoComplete="street-address"
+                          className="cart-input-field"
+                          placeholder="Calle *"
+                          value={street}
+                          onChange={(e) => setStreet(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
+                        <input
+                          id="customer-number"
+                          name="number"
+                          type="text"
+                          autoComplete="address-line2"
+                          className="cart-input-field no-icon"
+                          placeholder="No. Ext / Int *"
+                          value={number}
+                          onChange={(e) => setNumber(e.target.value)}
+                          required
+                        />
+                        <input
+                          id="customer-neighborhood"
+                          name="neighborhood"
+                          type="text"
+                          autoComplete="address-level3"
+                          className="cart-input-field no-icon"
+                          placeholder="Colonia *"
+                          value={neighborhood}
+                          onChange={(e) => setNeighborhood(e.target.value)}
+                          required
+                        />
+                      </div>
+
                       <input
+                        id="customer-address-notes"
+                        name="address_notes"
                         type="text"
-                        className="cart-input-field"
-                        placeholder="Calle *"
-                        value={street}
-                        onChange={(e) => setStreet(e.target.value)}
-                        required
+                        autoComplete="off"
+                        className="cart-input-field no-icon"
+                        placeholder="Referencias de entrega (ej: Portón café, timbre blanco)"
+                        value={addressNotes}
+                        onChange={(e) => setAddressNotes(e.target.value)}
                       />
                     </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
-                      <input
-                        type="text"
-                        className="cart-input-field no-icon"
-                        placeholder="No. Ext / Int *"
-                        value={number}
-                        onChange={(e) => setNumber(e.target.value)}
-                        required
-                      />
-                      <input
-                        type="text"
-                        className="cart-input-field no-icon"
-                        placeholder="Colonia *"
-                        value={neighborhood}
-                        onChange={(e) => setNeighborhood(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <input
-                      type="text"
-                      className="cart-input-field no-icon"
-                      placeholder="Referencias de entrega (ej: Portón café, timbre blanco)"
-                      value={addressNotes}
-                      onChange={(e) => setAddressNotes(e.target.value)}
-                    />
+                  )}
 
                     {isFreeDeliveryConfigured && (
                       hasFreeDelivery ? (
@@ -633,7 +745,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       )
                     )}
                   </div>
-                </div>
               )}
 
               {/* Payment Methods */}

@@ -1,4 +1,4 @@
-import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront } from './types';
+import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile } from './types';
 import { getProductImage } from './imageMap';
 
 const API_BASE_URL = '/api/v1';
@@ -483,5 +483,54 @@ export async function fetchOrderUpsellRecommendations(
   } catch (err) {
     console.warn('Could not fetch dynamic upsell recommendations:', err);
     return [];
+  }
+}
+
+export const MIMENU_CUSTOMER_PROFILE_KEY = 'mimenu:customer_profile';
+export const LEGACY_CUSTOMER_PROFILE_KEY = 'restaurantos:customer_profile';
+
+export function getSavedCustomerProfile(): SavedCustomerProfile | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    const raw =
+      localStorage.getItem(MIMENU_CUSTOMER_PROFILE_KEY) ||
+      localStorage.getItem(LEGACY_CUSTOMER_PROFILE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.name === 'string' && typeof parsed.phone === 'string') {
+      return {
+        name: parsed.name.trim(),
+        phone: parsed.phone.trim(),
+        street: typeof parsed.street === 'string' ? parsed.street.trim() : undefined,
+        number: typeof parsed.number === 'string' ? parsed.number.trim() : undefined,
+        neighborhood: typeof parsed.neighborhood === 'string' ? parsed.neighborhood.trim() : undefined,
+        address_notes: typeof parsed.address_notes === 'string' ? parsed.address_notes.trim() : undefined,
+        last_updated_at: typeof parsed.last_updated_at === 'string' ? parsed.last_updated_at : undefined,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCustomerProfile(
+  profile: Partial<SavedCustomerProfile> & { name: string; phone: string },
+): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const cleanProfile: SavedCustomerProfile = {
+      name: profile.name.trim(),
+      phone: profile.phone.trim(),
+      street: profile.street?.trim() || undefined,
+      number: profile.number?.trim() || undefined,
+      neighborhood: profile.neighborhood?.trim() || undefined,
+      address_notes: profile.address_notes?.trim() || undefined,
+      last_updated_at: new Date().toISOString(),
+    };
+    localStorage.setItem(MIMENU_CUSTOMER_PROFILE_KEY, JSON.stringify(cleanProfile));
+    localStorage.setItem(LEGACY_CUSTOMER_PROFILE_KEY, JSON.stringify(cleanProfile));
+  } catch {
+    // Storage might be unavailable/full in restricted browser modes
   }
 }

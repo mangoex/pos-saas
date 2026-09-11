@@ -15,6 +15,10 @@ let buildWhatsAppLink;
 let fetchMobileMenu;
 let fetchOrderUpsellRecommendations;
 let submitMobileOrder;
+let getSavedCustomerProfile;
+let saveCustomerProfile;
+let MIMENU_CUSTOMER_PROFILE_KEY;
+let LEGACY_CUSTOMER_PROFILE_KEY;
 
 try {
   const source = join(root, 'apps/mobile-web/src/api.ts');
@@ -40,6 +44,10 @@ try {
   fetchMobileMenu = mobileApi.fetchMobileMenu;
   fetchOrderUpsellRecommendations = mobileApi.fetchOrderUpsellRecommendations;
   submitMobileOrder = mobileApi.submitMobileOrder;
+  getSavedCustomerProfile = mobileApi.getSavedCustomerProfile;
+  saveCustomerProfile = mobileApi.saveCustomerProfile;
+  MIMENU_CUSTOMER_PROFILE_KEY = mobileApi.MIMENU_CUSTOMER_PROFILE_KEY;
+  LEGACY_CUSTOMER_PROFILE_KEY = mobileApi.LEGACY_CUSTOMER_PROFILE_KEY;
 } catch (err) {
   rmSync(temporaryDirectory, { recursive: true, force: true });
   throw err;
@@ -327,4 +335,87 @@ test('Catalog photographs and nutrition are never inferred from a legacy SKU', a
     assert.equal(products[0].prep_time, undefined);
     assert.equal(products[1].image_url, '/uploads/own-dish.jpg');
   } finally { globalThis.fetch = previousFetch; }
+});
+
+test('Mobile checkout form has standard 1-tap HTML5 autofill attributes and returning customer recognition', () => {
+  const source = readFileSync(join(root, 'apps/mobile-web/src/components/CartDrawer.tsx'), 'utf8');
+
+  // Standard HTML5 autofill attributes for zero-friction 1-tap browser filling
+  assert.match(source, /id="customer-name"/);
+  assert.match(source, /autoComplete="name"/);
+  assert.match(source, /id="customer-phone"/);
+  assert.match(source, /autoComplete="tel"/);
+  assert.match(source, /inputMode="tel"/);
+  assert.match(source, /id="customer-street"/);
+  assert.match(source, /autoComplete="street-address"/);
+  assert.match(source, /id="customer-number"/);
+  assert.match(source, /autoComplete="address-line2"/);
+  assert.match(source, /id="customer-neighborhood"/);
+  assert.match(source, /autoComplete="address-level3"/);
+
+  // Returning customer profile integration
+  assert.match(source, /getSavedCustomerProfile/);
+  assert.match(source, /saveCustomerProfile/);
+  assert.match(source, /cart-returning-customer-card/);
+  assert.match(source, /⚡ Recordado/);
+});
+
+test('Persistent customer profile saves and retrieves across mimenu network', () => {
+  const store = new Map();
+  globalThis.window = {
+    localStorage: {
+      getItem: (key) => store.get(key) || null,
+      setItem: (key, val) => store.set(key, String(val)),
+      removeItem: (key) => store.delete(key),
+      clear: () => store.clear(),
+    },
+  };
+  globalThis.localStorage = globalThis.window.localStorage;
+
+  try {
+    // 1. Initially empty
+    assert.equal(getSavedCustomerProfile(), null);
+
+    // 2. Save profile
+    saveCustomerProfile({
+      name: '  Ana Brenda  ',
+      phone: '  +526671234567 ',
+      street: 'Av. Las Palmas',
+      number: '102',
+      neighborhood: 'Chapultepec',
+      address_notes: 'Casa blanca de 2 pisos',
+    });
+
+    // Verify written to primary mimenu key and legacy key
+    assert.ok(store.has(MIMENU_CUSTOMER_PROFILE_KEY));
+    assert.ok(store.has(LEGACY_CUSTOMER_PROFILE_KEY));
+
+    // 3. Load profile
+    const loaded = getSavedCustomerProfile();
+    assert.ok(loaded);
+    assert.equal(loaded.name, 'Ana Brenda');
+    assert.equal(loaded.phone, '+526671234567');
+    assert.equal(loaded.street, 'Av. Las Palmas');
+    assert.equal(loaded.number, '102');
+    assert.equal(loaded.neighborhood, 'Chapultepec');
+    assert.equal(loaded.address_notes, 'Casa blanca de 2 pisos');
+    assert.ok(loaded.last_updated_at);
+
+    // 4. Fallback to legacy key if primary missing
+    store.delete(MIMENU_CUSTOMER_PROFILE_KEY);
+    const legacyLoaded = getSavedCustomerProfile();
+    assert.ok(legacyLoaded);
+    assert.equal(legacyLoaded.name, 'Ana Brenda');
+  } finally {
+    delete globalThis.window;
+    delete globalThis.localStorage;
+  }
+});
+
+test('OrderSuccessModal displays silent onboarding persistent profile confirmation and loyalty teaser', () => {
+  const source = readFileSync(join(root, 'apps/mobile-web/src/components/OrderSuccessModal.tsx'), 'utf8');
+
+  assert.match(source, /order-success-profile-card/);
+  assert.match(source, /Datos recordados en mimenu/);
+  assert.match(source, /Próximamente: Vincula con Google para ganar puntos y recompensas/);
 });

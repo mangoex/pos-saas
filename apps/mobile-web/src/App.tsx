@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier, StorefrontOrganization } from './types';
-import { fetchMobileMenu, submitMobileOrder, fetchStorefront, fetchStorefrontContext } from './api';
+import { fetchMobileMenu, submitMobileOrder, fetchStorefront, fetchStorefrontContext, saveCustomerProfile } from './api';
 import { HeroHeader } from './components/HeroHeader';
 import { CategoryCircles } from './components/CategoryCircles';
 import { SizeSelectorFilter } from './components/SizeSelectorFilter';
@@ -332,6 +332,14 @@ export const App: React.FC = () => {
         selectedBranch?.phone,
         Boolean(selectedBranch?.whatsapp_ordering_enabled) === true,
       );
+      saveCustomerProfile({
+        name: info.name,
+        phone: info.phone,
+        street: info.address_street,
+        number: info.address_number,
+        neighborhood: info.address_neighborhood,
+        address_notes: info.address_notes,
+      });
       setCreatedOrderResult(result);
       setCart([]);
       setIsCartOpen(false);

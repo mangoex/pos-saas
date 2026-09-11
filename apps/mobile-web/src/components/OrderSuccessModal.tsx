@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, X, ShoppingBag, ArrowLeft, Clock, ChefHat, Star, Send, ExternalLink } from 'lucide-react';
+import { CheckCircle2, X, ShoppingBag, ArrowLeft, Clock, ChefHat, Star, Send, ExternalLink, Sparkles } from 'lucide-react';
 import { CreatedOrderResult, BranchInfo } from '../types';
 import { formatMoney, submitCustomerFeedback } from '../api';
 
@@ -350,6 +350,25 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                 )}
               </div>
             )}
+          </div>
+
+          {/* Persistent Profile & Loyalty Info */}
+          <div className="order-success-profile-card">
+            <div className="order-success-profile-header">
+              <span className="order-success-profile-icon">⚡</span>
+              <div className="order-success-profile-text">
+                <strong style={{ fontSize: '13px', color: '#0f172a', display: 'block' }}>
+                  Datos recordados en mimenu
+                </strong>
+                <span style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
+                  Para tus próximos pedidos en cualquier restaurante, tu nombre ({orderResult.customer_info.name}) y teléfono ya estarán listos.
+                </span>
+              </div>
+            </div>
+            <div className="order-success-profile-loyalty-hint">
+              <Sparkles size={14} color="#f59e0b" />
+              <span>Próximamente: Vincula con Google para ganar puntos y recompensas en tus visitas.</span>
+            </div>
           </div>
 
           {isWhatsAppEnabled && orderResult.whatsapp_url && (

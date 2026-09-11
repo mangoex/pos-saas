@@ -150,3 +150,13 @@ export interface PublicOrderIntentResult extends PersistedOrderResultBase {
 }
 
 export type CreatedOrderResult = OperationalOrderResult | PublicOrderIntentResult;
+
+export interface SavedCustomerProfile {
+  name: string;
+  phone: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  address_notes?: string;
+  last_updated_at?: string;
+}
