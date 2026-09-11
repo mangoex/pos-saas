@@ -1164,9 +1164,20 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   border: '1px solid #e2e8f0',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
                   marginBottom: 18,
+                  boxSizing: 'border-box',
+                  width: '100%',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 12,
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Tag size={20} color="#059669" />
                     <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
@@ -1193,12 +1204,13 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 4,
+                      flexShrink: 0,
                     }}
                   >
                     <Plus size={14} /> Agregar cupón
                   </button>
                 </div>
-                <p style={{ margin: '0 0 12px', fontSize: '0.775rem', color: '#64748b' }}>
+                <p style={{ margin: '0 0 12px', fontSize: '0.775rem', color: '#64748b', lineHeight: 1.4 }}>
                   Configura cupones promocionales con porcentaje de descuento que tus clientes pueden aplicar en el checkout del menú móvil.
                 </p>
 
@@ -1213,96 +1225,169 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                         key={idx}
                         style={{
                           display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          backgroundColor: '#f8fafc',
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          border: '1px solid #e2e8f0',
+                          flexDirection: 'column',
+                          gap: 10,
+                          padding: '12px',
+                          backgroundColor: coupon.is_active ? '#f0fdf4' : '#f8fafc',
+                          border: `1px solid ${coupon.is_active ? '#86efac' : '#e2e8f0'}`,
+                          borderRadius: 12,
+                          boxSizing: 'border-box',
+                          width: '100%',
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={coupon.is_active}
-                          title="Activar o desactivar cupón"
-                          onChange={(e) => {
-                            const updated = [...coupons];
-                            updated[idx] = { ...updated[idx], is_active: e.target.checked };
-                            setCoupons(updated);
-                          }}
-                          style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#059669', flexShrink: 0 }}
-                        />
-
-                        <input
-                          type="text"
-                          placeholder="CÓDIGO (ej. PROMO10)"
-                          value={coupon.code}
-                          onChange={(e) => {
-                            const updated = [...coupons];
-                            updated[idx] = { ...updated[idx], code: e.target.value.toUpperCase() };
-                            setCoupons(updated);
-                          }}
+                        {/* Fila 1: Estado del cupón y botón de eliminar */}
+                        <div
                           style={{
-                            flex: 1,
-                            minWidth: 0,
-                            padding: '8px 10px',
-                            fontSize: '0.85rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.05em',
-                            borderRadius: 8,
-                            border: '1px solid #cbd5e1',
-                            outline: 'none',
-                            background: '#ffffff',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 8,
+                            width: '100%',
+                            boxSizing: 'border-box',
                           }}
-                        />
+                        >
+                          <label
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              cursor: 'pointer',
+                              margin: 0,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={coupon.is_active}
+                              onChange={(e) => {
+                                const updated = [...coupons];
+                                updated[idx] = { ...updated[idx], is_active: e.target.checked };
+                                setCoupons(updated);
+                              }}
+                              style={{
+                                width: 18,
+                                height: 18,
+                                cursor: 'pointer',
+                                accentColor: '#16a34a',
+                                flexShrink: 0,
+                              }}
+                            />
+                            <span
+                              style={{
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                color: coupon.is_active ? '#059669' : '#64748b',
+                              }}
+                            >
+                              {coupon.is_active ? 'Cupón Activo' : 'Cupón Inactivo'}
+                            </span>
+                          </label>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                          <input
-                            type="number"
-                            min="1"
-                            max="100"
-                            step="1"
-                            value={coupon.discount_percentage}
-                            onChange={(e) => {
-                              const updated = [...coupons];
-                              const val = parseInt(e.target.value, 10) || 0;
-                              updated[idx] = { ...updated[idx], discount_percentage: Math.min(100, Math.max(0, val)) };
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = coupons.filter((_, i) => i !== idx);
                               setCoupons(updated);
                             }}
                             style={{
-                              width: 54,
-                              padding: '8px 6px',
-                              fontSize: '0.85rem',
-                              textAlign: 'center',
-                              borderRadius: 8,
-                              border: '1px solid #cbd5e1',
-                              outline: 'none',
-                              background: '#ffffff',
+                              background: 'none',
+                              border: 'none',
+                              color: '#ef4444',
+                              cursor: 'pointer',
+                              padding: '4px 6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
                             }}
-                          />
-                          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>% OFF</span>
+                            title="Eliminar cupón"
+                          >
+                            <Trash2 size={16} />
+                            <span>Eliminar</span>
+                          </button>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = coupons.filter((_, i) => i !== idx);
-                            setCoupons(updated);
-                          }}
+                        {/* Fila 2: Código y porcentaje de descuento */}
+                        <div
                           style={{
-                            border: 'none',
-                            background: 'transparent',
-                            color: '#94a3b8',
-                            cursor: 'pointer',
-                            padding: 4,
                             display: 'flex',
                             alignItems: 'center',
-                            flexShrink: 0,
+                            gap: 8,
+                            width: '100%',
+                            boxSizing: 'border-box',
                           }}
-                          title="Eliminar cupón"
                         >
-                          <Trash2 size={16} />
-                        </button>
+                          <div style={{ flex: 1, minWidth: 0, boxSizing: 'border-box' }}>
+                            <input
+                              type="text"
+                              placeholder="CÓDIGO (ej. PROMO10)"
+                              value={coupon.code}
+                              onChange={(e) => {
+                                const updated = [...coupons];
+                                updated[idx] = { ...updated[idx], code: e.target.value.toUpperCase() };
+                                setCoupons(updated);
+                              }}
+                              style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                padding: '8px 10px',
+                                fontSize: '0.85rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.04em',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                outline: 'none',
+                                background: '#ffffff',
+                              }}
+                            />
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              flexShrink: 0,
+                              boxSizing: 'border-box',
+                            }}
+                          >
+                            <input
+                              type="number"
+                              min="1"
+                              max="100"
+                              step="1"
+                              value={coupon.discount_percentage}
+                              onChange={(e) => {
+                                const updated = [...coupons];
+                                const val = parseInt(e.target.value, 10) || 0;
+                                updated[idx] = { ...updated[idx], discount_percentage: Math.min(100, Math.max(0, val)) };
+                                setCoupons(updated);
+                              }}
+                              style={{
+                                width: 50,
+                                boxSizing: 'border-box',
+                                padding: '8px 4px',
+                                fontSize: '0.85rem',
+                                fontWeight: 700,
+                                textAlign: 'center',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                outline: 'none',
+                                background: '#ffffff',
+                              }}
+                            />
+                            <span
+                              style={{
+                                fontSize: '0.8rem',
+                                color: '#64748b',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              % OFF
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
