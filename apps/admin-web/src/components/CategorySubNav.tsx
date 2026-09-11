@@ -21,6 +21,7 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     items: [
       { path: '/products', label: 'Productos y Precios' },
       { path: '/categories', label: 'Categorías' },
+      { path: '/community-photos', label: 'Fotos de la Comunidad' },
       { path: '/ingredient-extras', label: 'Adicionales y Modificadores' },
       { path: '/variations', label: 'Notas de Comanda' },
     ],

@@ -259,6 +259,7 @@ const AdminLayout = () => {
         '/catalog',
         '/products',
         '/categories',
+        '/community-photos',
         '/variations',
         '/ingredient-extras',
       ],

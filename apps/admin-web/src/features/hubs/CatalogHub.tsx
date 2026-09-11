@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Tags, MessageSquareText, Plus } from 'lucide-react';
+import { Package, Tags, MessageSquareText, Plus, Image as ImageIcon } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
 
 export const CatalogHub: React.FC = () => {
@@ -20,6 +20,14 @@ export const CatalogHub: React.FC = () => {
       iconBg: '#fef3c7',
       iconColor: '#d97706',
       path: '/categories',
+    },
+    {
+      title: 'Fotos de la Comunidad',
+      description: 'Modera, aprueba y supervisa fotos reales compartidas por comensales con órdenes verificadas.',
+      icon: <ImageIcon size={26} />,
+      iconBg: '#fffbeb',
+      iconColor: '#d97706',
+      path: '/community-photos',
     },
     {
       title: 'Comentarios y Notas',

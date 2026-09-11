@@ -1,4 +1,4 @@
-import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile } from './types';
+import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile, TrendingDish, CommunityPhoto } from './types';
 import { getProductImage } from './imageMap';
 
 const API_BASE_URL = '/api/v1';
@@ -179,6 +179,59 @@ export async function fetchMobileMenu(publicKey?: string | null): Promise<{ prod
     return { products, categories, has_active_shift: typeof data.has_active_shift === 'boolean' ? data.has_active_shift : undefined };
   } catch (err) {
     throw err;
+  }
+}
+
+export async function fetchTrendingDishes(publicKey?: string | null): Promise<TrendingDish[]> {
+  try {
+    if (!publicKey) return [];
+    const url = `${API_BASE_URL}/public/branches/${encodeURIComponent(publicKey)}/trending-dishes`;
+    const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.trending_dishes) ? data.trending_dishes : [];
+  } catch (err) {
+    console.warn('Could not load trending dishes:', err);
+    return [];
+  }
+}
+
+export async function submitCommunityPhoto(
+  publicKey: string,
+  payload: {
+    product_id: string;
+    order_folio?: string;
+    customer_name: string;
+    customer_phone?: string;
+    image_url: string;
+    caption?: string;
+  },
+): Promise<{ id: string; status: string; discount_code: string; message: string }> {
+  const url = `${API_BASE_URL}/public/branches/${encodeURIComponent(publicKey)}/community-photos`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || errorData.detail || `Error al subir foto: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchProductCommunityPhotos(
+  publicKey: string,
+  productId: string,
+): Promise<CommunityPhoto[]> {
+  try {
+    const url = `${API_BASE_URL}/public/branches/${encodeURIComponent(publicKey)}/products/${encodeURIComponent(productId)}/community-photos`;
+    const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
   }
 }
 

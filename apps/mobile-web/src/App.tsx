@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier, StorefrontOrganization } from './types';
-import { fetchMobileMenu, submitMobileOrder, fetchStorefront, fetchStorefrontContext, saveCustomerProfile } from './api';
+import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier, StorefrontOrganization, TrendingDish } from './types';
+import { fetchMobileMenu, submitMobileOrder, fetchStorefront, fetchStorefrontContext, saveCustomerProfile, fetchTrendingDishes } from './api';
 import { HeroHeader } from './components/HeroHeader';
 import { CategoryCircles } from './components/CategoryCircles';
 import { SizeSelectorFilter } from './components/SizeSelectorFilter';
@@ -9,6 +9,7 @@ import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { FavoritesView } from './components/FavoritesView';
+import { TrendingFeed } from './components/TrendingFeed';
 import { BottomNav, NavTab } from './components/BottomNav';
 import { FloatingCartBar } from './components/FloatingCartBar';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
@@ -70,6 +71,10 @@ export const App: React.FC = () => {
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [createdOrderResult, setCreatedOrderResult] = useState<CreatedOrderResult | null>(null);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
+
+  // Trending Dishes state
+  const [trendingDishes, setTrendingDishes] = useState<TrendingDish[]>([]);
+  const [isLoadingTrending, setIsLoadingTrending] = useState(false);
 
   // Restaurant Context (SaaS Multi-tenant)
   const storefrontIdentifier = useMemo(() => {
@@ -184,6 +189,53 @@ export const App: React.FC = () => {
       isMounted = false;
     };
   }, [selectedBranch?.public_key, catalogRetry]);
+
+  // Fetch trending dishes whenever branch changes
+  useEffect(() => {
+    if (!selectedBranch?.public_key) {
+      setTrendingDishes([]);
+      return;
+    }
+    let isMounted = true;
+    setIsLoadingTrending(true);
+    fetchTrendingDishes(selectedBranch.public_key)
+      .then((dishes) => {
+        if (isMounted) {
+          setTrendingDishes(dishes);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load trending dishes:', err);
+        if (isMounted) {
+          setTrendingDishes([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingTrending(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBranch?.public_key]);
+
+  // Deep Link handler: ?dish=<productId> or ?p=<productId> or ?product=<productId>
+  useEffect(() => {
+    if (products.length === 0) return;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dishId = urlParams.get('dish') || urlParams.get('p') || urlParams.get('product');
+      if (dishId) {
+        const target = products.find((p) => p.id === dishId);
+        if (target) {
+          setSelectedProduct(target);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [products]);
 
   const handleSelectBranch = (branch: BranchInfo) => {
     if (!branches.some((candidate) => candidate.id === branch.id)) return;
@@ -569,6 +621,22 @@ export const App: React.FC = () => {
         </main>
       )}
 
+      {currentTab === 'trending' && (
+        <main className="mobile-main-content">
+          <TrendingFeed
+            dishes={trendingDishes}
+            isLoading={isLoadingTrending}
+            likedProductIds={likedProductIds}
+            onToggleLike={handleToggleLike}
+            onOpenDetail={setSelectedProduct}
+            onQuickAdd={handleQuickAddToCart}
+            onExploreMenu={() => setCurrentTab('explore')}
+            publicKey={selectedBranch?.public_key}
+            restaurantName={organization?.name || selectedBranch?.name}
+          />
+        </main>
+      )}
+
       {/* Floating Cart Bar on Feed when cart has items */}
       {!isCartOpen && (
         <FloatingCartBar
@@ -586,6 +654,8 @@ export const App: React.FC = () => {
           onToggleLike={handleToggleLike}
           onClose={() => setSelectedProduct(null)}
           onAddToCart={handleAddToCart}
+          publicKey={selectedBranch?.public_key}
+          restaurantName={organization?.name || selectedBranch?.name}
         />
       )}
 

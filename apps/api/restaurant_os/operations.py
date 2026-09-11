@@ -26155,6 +26155,335 @@ def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
     }
 
 
+def get_branch_trending_dishes(session: Session, branch_id: str, limit: int = 20) -> dict[str, Any]:
+    catalog = get_public_catalog(session, branch_id=branch_id)
+    items = catalog.get("items", [])
+    branch_name = catalog.get("branch_name", "Restaurante")
+
+    order_counts_stmt = (
+        sa.select(
+            models.order_lines.c.product_id,
+            sa.func.sum(models.order_lines.c.quantity).label("order_count"),
+        )
+        .select_from(
+            models.order_lines.join(
+                models.orders,
+                models.order_lines.c.order_id == models.orders.c.id,
+            )
+        )
+        .where(
+            models.orders.c.branch_id == branch_id,
+            models.order_lines.c.status != "removed",
+        )
+        .group_by(models.order_lines.c.product_id)
+    )
+    counts = {
+        str(row["product_id"]): int(row["order_count"])
+        for row in session.execute(order_counts_stmt).mappings()
+    }
+
+    photos_stmt = (
+        sa.select(
+            models.dish_community_photos.c.id,
+            models.dish_community_photos.c.product_id,
+            models.dish_community_photos.c.image_url,
+            models.dish_community_photos.c.caption,
+            models.dish_community_photos.c.customer_name,
+            models.dish_community_photos.c.created_at,
+        )
+        .where(
+            models.dish_community_photos.c.branch_id == branch_id,
+            models.dish_community_photos.c.status == "approved",
+        )
+        .order_by(sa.desc(models.dish_community_photos.c.created_at))
+    )
+    photos_by_product: dict[str, list[dict[str, Any]]] = {}
+    for p in session.execute(photos_stmt).mappings():
+        pid = str(p["product_id"])
+        if pid not in photos_by_product:
+            photos_by_product[pid] = []
+        photos_by_product[pid].append(
+            {
+                "id": str(p["id"]),
+                "image_url": str(p["image_url"]),
+                "caption": p.get("caption") or "",
+                "customer_name": str(p.get("customer_name") or "Comensal"),
+                "created_at": p["created_at"].isoformat()
+                if hasattr(p["created_at"], "isoformat")
+                else str(p["created_at"]),
+            }
+        )
+
+    feedback_stmt = sa.select(
+        sa.func.count(models.customer_feedbacks.c.id).label("total_feedback"),
+        sa.func.sum(
+            sa.case((models.customer_feedbacks.c.rating >= 4, 1), else_=0)
+        ).label("positive_feedback"),
+    ).where(models.customer_feedbacks.c.branch_id == branch_id)
+    feedback_row = session.execute(feedback_stmt).mappings().first()
+    if (
+        feedback_row
+        and feedback_row["total_feedback"]
+        and feedback_row["total_feedback"] >= 5
+    ):
+        satisfaction_score = int(
+            round(
+                100.0
+                * (feedback_row["positive_feedback"] or 0)
+                / feedback_row["total_feedback"]
+            )
+        )
+    else:
+        satisfaction_score = 98
+
+    trending = []
+    for p in items:
+        if not p.get("is_available", True):
+            continue
+        pid = str(p["id"])
+        count = counts.get(pid, 0)
+        dish_photos = photos_by_product.get(pid, [])
+        trending.append(
+            {
+                **p,
+                "order_count": count,
+                "satisfaction_score": satisfaction_score,
+                "community_photos": dish_photos,
+            }
+        )
+
+    trending.sort(key=lambda d: d["order_count"], reverse=True)
+
+    for idx, dish in enumerate(trending, start=1):
+        dish["rank"] = idx
+        c = dish["order_count"]
+        if idx == 1:
+            dish["badge"] = (
+                f"🔥 #{idx} Más Pedido ({c} pedidos)"
+                if c > 0
+                else "🔥 Especialidad de la Casa"
+            )
+        elif idx == 2:
+            dish["badge"] = (
+                f"⭐ #{idx} Favorito ({c} pedidos)"
+                if c > 0
+                else "⭐ Recomendación del Chef"
+            )
+        elif idx == 3:
+            dish["badge"] = (
+                f"⚡ #{idx} Muy Popular ({c} pedidos)"
+                if c > 0
+                else "⚡ Destacado de la Semana"
+            )
+        elif c > 0:
+            dish["badge"] = f"🔥 Pedido {c} veces recientemente"
+        else:
+            dish["badge"] = "✨ Recomendación de la Casa"
+
+    return {
+        "branch_id": branch_id,
+        "branch_name": branch_name,
+        "trending_dishes": trending[:limit],
+    }
+
+
+def submit_community_photo(
+    session: Session, branch_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    active_branch_id = branch_id.strip()
+    branch_row = session.execute(
+        sa.select(models.branches.c.organization_id).where(
+            models.branches.c.id == active_branch_id
+        )
+    ).first()
+    if not branch_row:
+        raise BusinessError("branch_not_found", "Branch was not found")
+
+    organization_id = str(branch_row[0])
+    product_id = str(payload.get("product_id", "")).strip()
+    if not product_id:
+        raise BusinessError("product_id_required", "product_id is required")
+
+    image_url = str(payload.get("image_url", "")).strip()
+    if not image_url:
+        raise BusinessError("image_url_required", "image_url is required")
+
+    photo_id = str(uuid4())
+    now = datetime.now(timezone.utc)
+    discount_code = "MIMENU-GRACIAS10"
+
+    session.execute(
+        models.dish_community_photos.insert().values(
+            id=photo_id,
+            organization_id=organization_id,
+            branch_id=active_branch_id,
+            product_id=product_id,
+            order_folio=str(payload.get("order_folio") or "").strip() or None,
+            customer_name=str(payload.get("customer_name") or "Comensal mimenu").strip(),
+            customer_phone=str(payload.get("customer_phone") or "").strip() or None,
+            image_url=image_url,
+            caption=str(payload.get("caption") or "").strip() or None,
+            status="pending",
+            discount_code=discount_code,
+            created_at=now,
+        )
+    )
+    session.commit()
+
+    return {
+        "id": photo_id,
+        "status": "pending",
+        "discount_code": discount_code,
+        "message": "¡Tu foto ha sido enviada a moderación! Guarda tu cupón de descuento.",
+    }
+
+
+def list_product_community_photos(
+    session: Session, branch_id: str, product_id: str
+) -> list[dict[str, Any]]:
+    rows = session.execute(
+        sa.select(
+            models.dish_community_photos.c.id,
+            models.dish_community_photos.c.image_url,
+            models.dish_community_photos.c.caption,
+            models.dish_community_photos.c.customer_name,
+            models.dish_community_photos.c.created_at,
+        )
+        .where(
+            models.dish_community_photos.c.branch_id == branch_id,
+            models.dish_community_photos.c.product_id == product_id,
+            models.dish_community_photos.c.status == "approved",
+        )
+        .order_by(sa.desc(models.dish_community_photos.c.created_at))
+    ).mappings()
+
+    return [
+        {
+            "id": str(r["id"]),
+            "image_url": str(r["image_url"]),
+            "caption": r.get("caption") or "",
+            "customer_name": str(r.get("customer_name") or "Comensal"),
+            "created_at": r["created_at"].isoformat()
+            if hasattr(r["created_at"], "isoformat")
+            else str(r["created_at"]),
+        }
+        for r in rows
+    ]
+
+
+def list_community_photos_for_moderation(
+    session: Session,
+    organization_id: str,
+    status_filter: str | None = None,
+    branch_id: str | None = None,
+) -> list[dict[str, Any]]:
+    query = (
+        sa.select(
+            models.dish_community_photos.c.id,
+            models.dish_community_photos.c.organization_id,
+            models.dish_community_photos.c.branch_id,
+            models.dish_community_photos.c.product_id,
+            models.products.c.name.label("product_name"),
+            models.dish_community_photos.c.order_folio,
+            models.dish_community_photos.c.customer_name,
+            models.dish_community_photos.c.customer_phone,
+            models.dish_community_photos.c.image_url,
+            models.dish_community_photos.c.caption,
+            models.dish_community_photos.c.status,
+            models.dish_community_photos.c.discount_code,
+            models.dish_community_photos.c.created_at,
+            models.dish_community_photos.c.reviewed_at,
+        )
+        .select_from(
+            models.dish_community_photos.join(
+                models.products,
+                models.dish_community_photos.c.product_id == models.products.c.id,
+            )
+        )
+        .where(models.dish_community_photos.c.organization_id == organization_id)
+    )
+    if status_filter and status_filter.lower() != "all":
+        query = query.where(models.dish_community_photos.c.status == status_filter.lower())
+    if branch_id:
+        query = query.where(models.dish_community_photos.c.branch_id == branch_id)
+
+    query = query.order_by(sa.desc(models.dish_community_photos.c.created_at))
+    rows = session.execute(query).mappings()
+
+    return [
+        {
+            "id": str(r["id"]),
+            "organization_id": str(r["organization_id"]),
+            "branch_id": str(r["branch_id"]),
+            "product_id": str(r["product_id"]),
+            "product_name": str(r["product_name"]),
+            "order_folio": r.get("order_folio"),
+            "customer_name": str(r["customer_name"]),
+            "customer_phone": r.get("customer_phone"),
+            "image_url": str(r["image_url"]),
+            "caption": r.get("caption") or "",
+            "status": str(r["status"]),
+            "discount_code": r.get("discount_code"),
+            "created_at": r["created_at"].isoformat()
+            if hasattr(r["created_at"], "isoformat")
+            else str(r["created_at"]),
+            "reviewed_at": r["reviewed_at"].isoformat()
+            if r.get("reviewed_at") and hasattr(r["reviewed_at"], "isoformat")
+            else str(r.get("reviewed_at") or ""),
+        }
+        for r in rows
+    ]
+
+
+def moderate_community_photo(
+    session: Session,
+    photo_id: str,
+    organization_id: str,
+    actor_id: str,
+    status: str,
+) -> dict[str, Any]:
+    norm_status = status.strip().lower()
+    if norm_status not in ("approved", "rejected"):
+        raise BusinessError("invalid_status", "Status must be 'approved' or 'rejected'")
+
+    row = (
+        session.execute(
+            sa.select(models.dish_community_photos).where(
+                models.dish_community_photos.c.id == photo_id
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if not row:
+        raise NotFoundError("photo_not_found", "Photo was not found")
+
+    if str(row["organization_id"]) != organization_id:
+        raise AuthorizationError(
+            "forbidden", "You cannot moderate photos from another organization"
+        )
+
+    now = datetime.now(timezone.utc)
+    session.execute(
+        models.dish_community_photos.update()
+        .where(models.dish_community_photos.c.id == photo_id)
+        .values(
+            status=norm_status,
+            reviewed_at=now,
+            reviewed_by=actor_id,
+        )
+    )
+    session.commit()
+
+    return {
+        "id": photo_id,
+        "status": norm_status,
+        "reviewed_at": now.isoformat(),
+        "reviewed_by": actor_id,
+    }
+
+
+
 def _public_intent_response(intent: dict[str, Any]) -> dict[str, Any]:
     return {
         "public_reference": intent["public_reference"],

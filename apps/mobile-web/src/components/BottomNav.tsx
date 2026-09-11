@@ -1,7 +1,7 @@
 import React from 'react';
-import { Compass, Heart, ShoppingBag } from 'lucide-react';
+import { Compass, Flame, Heart, ShoppingBag } from 'lucide-react';
 
-export type NavTab = 'explore' | 'favorites' | 'cart';
+export type NavTab = 'explore' | 'trending' | 'favorites' | 'cart';
 
 interface BottomNavProps {
   currentTab: NavTab;
@@ -26,6 +26,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <Compass size={22} strokeWidth={currentTab === 'explore' ? 2.5 : 2} />
           <span>Menú</span>
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-nav-btn ${currentTab === 'trending' ? 'active' : ''}`}
+          onClick={() => onSelectTab('trending')}
+        >
+          <Flame
+            size={22}
+            color={currentTab === 'trending' ? '#f59e0b' : 'currentColor'}
+            strokeWidth={currentTab === 'trending' ? 2.5 : 2}
+          />
+          <span>Tendencias</span>
         </button>
 
         <button

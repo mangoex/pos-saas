@@ -158,6 +158,11 @@ from restaurant_os.operations import (
     get_open_cash_shift,
     get_order_detail,
     get_public_catalog,
+    get_branch_trending_dishes,
+    submit_community_photo,
+    list_product_community_photos,
+    list_community_photos_for_moderation,
+    moderate_community_photo,
     get_public_order_intent,
     reject_public_order_intent,
     get_sync_status,
@@ -3279,6 +3284,86 @@ def public_catalog_by_key_endpoint(public_key: str, session: SessionDep) -> dict
         if not key:
             raise NotFoundError("public_branch_not_found", "Public branch was not found")
         return get_public_catalog(session, branch_id=str(key["branch_id"]))
+
+    return _business_response(operation)
+
+
+@router.get("/public/branches/{public_key}/trending-dishes")
+def public_trending_dishes_endpoint(public_key: str, session: SessionDep) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        key = _resolve_active_public_order_key(session, public_key)
+        if not key:
+            raise NotFoundError("public_branch_not_found", "Public branch was not found")
+        return get_branch_trending_dishes(session, branch_id=str(key["branch_id"]))
+
+    return _business_response(operation)
+
+
+@router.post("/public/branches/{public_key}/community-photos")
+def submit_community_photo_endpoint(
+    public_key: str, payload: dict[str, Any], session: SessionDep
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        key = _resolve_active_public_order_key(session, public_key)
+        if not key:
+            raise NotFoundError("public_branch_not_found", "Public branch was not found")
+        return submit_community_photo(session, branch_id=str(key["branch_id"]), payload=payload)
+
+    return _business_response(operation)
+
+
+@router.get("/public/branches/{public_key}/products/{product_id}/community-photos")
+def public_product_community_photos_endpoint(
+    public_key: str, product_id: str, session: SessionDep
+) -> list[dict[str, Any]]:
+    def operation() -> list[dict[str, Any]]:
+        key = _resolve_active_public_order_key(session, public_key)
+        if not key:
+            raise NotFoundError("public_branch_not_found", "Public branch was not found")
+        return list_product_community_photos(
+            session, branch_id=str(key["branch_id"]), product_id=product_id
+        )
+
+    return _business_response(operation)
+
+
+@router.get("/admin/community-photos")
+def admin_list_community_photos_endpoint(
+    session: SessionDep,
+    status: str | None = None,
+    branch_id: str | None = None,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> list[dict[str, Any]]:
+    def operation() -> list[dict[str, Any]]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        return list_community_photos_for_moderation(
+            session, organization_id=org_id, status_filter=status, branch_id=branch_id
+        )
+
+    return _business_response(operation)
+
+
+@router.patch("/admin/community-photos/{photo_id}/status")
+def admin_moderate_community_photo_endpoint(
+    photo_id: str,
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    def operation() -> dict[str, Any]:
+        actor_id = _required_actor_from_request(actor_user_id, authorization)
+        org_id = _actor_org_from_request(session, actor_id)
+        target_status = str(payload.get("status") or "").strip()
+        return moderate_community_photo(
+            session,
+            photo_id=photo_id,
+            organization_id=org_id,
+            actor_id=actor_id,
+            status=target_status,
+        )
 
     return _business_response(operation)
 

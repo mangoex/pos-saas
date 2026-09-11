@@ -3093,3 +3093,30 @@ customer_feedbacks = sa.Table(
         unique=True,
     ),
 )
+
+
+dish_community_photos = sa.Table(
+    "dish_community_photos",
+    metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id"), nullable=False),
+    sa.Column("branch_id", sa.String(36), sa.ForeignKey("branches.id"), nullable=False),
+    sa.Column("product_id", sa.String(36), sa.ForeignKey("products.id"), nullable=False),
+    sa.Column("order_folio", sa.String(64), nullable=True),
+    sa.Column("customer_name", sa.String(160), nullable=False),
+    sa.Column("customer_phone", sa.String(32), nullable=True),
+    sa.Column("image_url", sa.Text(), nullable=False),
+    sa.Column("caption", sa.Text(), nullable=True),
+    sa.Column("status", sa.String(20), nullable=False, server_default="pending"),
+    sa.Column("discount_code", sa.String(64), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("reviewed_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
+    sa.CheckConstraint(
+        "status IN ('pending', 'approved', 'rejected')",
+        name="ck_dish_community_photos_status",
+    ),
+    sa.Index("ix_dish_community_photos_product_status", "product_id", "status"),
+    sa.Index("ix_dish_community_photos_branch_status", "branch_id", "status"),
+    sa.Index("ix_dish_community_photos_org_created", "organization_id", "created_at"),
+)

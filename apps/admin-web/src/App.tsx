@@ -7,6 +7,7 @@ import SubscriptionStatus from './features/auth/SubscriptionStatus';
 import AdminLayout from './components/AdminLayout';
 import ProductsList from './features/catalog/ProductsList';
 import CategoriesList from './features/catalog/CategoriesList';
+import CommunityPhotosModeration from './features/catalog/CommunityPhotosModeration';
 import BranchesList from './features/branches/BranchesList';
 import WarehousesList from './features/branches/WarehousesList';
 import UnitsList from './features/inventory/UnitsList';
@@ -196,6 +197,7 @@ export const App = () => {
           <Route path="products" element={<ProductsList />} />
           <Route path="recipes" element={<ExcludedCommercialModule module="Recetas y subrecetas" />} />
           <Route path="categories" element={<CategoriesList />} />
+          <Route path="community-photos" element={<CommunityPhotosModeration />} />
           <Route path="variations" element={<VariationNotes />} />
           <Route path="ingredient-extras" element={<IngredientExtras />} />
           <Route path="category-options" element={<CatalogManageRoute><CategoryOptionManager /></CatalogManageRoute>} />

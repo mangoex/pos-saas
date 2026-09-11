@@ -22,6 +22,21 @@ export interface SelectedModifier {
   text?: string;
 }
 
+export interface CommunityPhoto {
+  id: string;
+  image_url: string;
+  caption?: string;
+  customer_name: string;
+  created_at: string;
+}
+
+export interface TrendingDish extends Product {
+  order_count: number;
+  satisfaction_score: number;
+  badge: string;
+  rank: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -37,6 +52,8 @@ export interface Product {
   tags?: string[];
   is_available?: boolean;
   modifier_groups?: PublicModifierGroup[];
+  community_photos?: CommunityPhoto[];
+  badge?: string;
 }
 
 export interface Category {

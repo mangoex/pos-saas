@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { X, Heart, Plus, Minus, ShoppingBag, Flame, Clock, ChefHat } from 'lucide-react';
-import { Product, SelectedModifier } from '../types';
-import { formatMoney } from '../api';
+import React, { useState, useEffect } from 'react';
+import { X, Heart, Plus, Minus, ShoppingBag, Flame, Clock, ChefHat, Share2, Check } from 'lucide-react';
+import { Product, SelectedModifier, CommunityPhoto } from '../types';
+import { formatMoney, fetchProductCommunityPhotos } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
 
 interface ProductModalProps {
@@ -10,6 +10,8 @@ interface ProductModalProps {
   onToggleLike: (productId: string) => void;
   onClose: () => void;
   onAddToCart: (product: Product, quantity: number, notes?: string, modifiers?: SelectedModifier[]) => void;
+  publicKey?: string | null;
+  restaurantName?: string;
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({
@@ -18,11 +20,62 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   onToggleLike,
   onClose,
   onAddToCart,
+  publicKey,
+  restaurantName,
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, SelectedModifier>>({});
   const [modifierError, setModifierError] = useState('');
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const [communityPhotos, setCommunityPhotos] = useState<CommunityPhoto[]>(product.community_photos || []);
+
+  useEffect(() => {
+    if (publicKey && (!product.community_photos || product.community_photos.length === 0)) {
+      fetchProductCommunityPhotos(publicKey, product.id).then((photos) => {
+        if (photos && photos.length > 0) {
+          setCommunityPhotos(photos);
+        }
+      });
+    }
+  }, [publicKey, product.id, product.community_photos]);
+
+  const handleShare = async () => {
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('dish', product.id);
+    const shareUrl = currentUrl.toString();
+    const shareTitle = product.name;
+    const shareText = `¡Mira este delicioso platillo${restaurantName ? ` en ${restaurantName}` : ''}!: ${product.name}`;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+
+    // Fallback: Copy to clipboard
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareToast('¡Enlace copiado al portapapeles!');
+        setTimeout(() => setShareToast(null), 3000);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
+    // Fallback to WhatsApp
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`;
+    window.open(waUrl, '_blank');
+  };
 
   const modifierDeltaCents = Object.values(selectedModifiers).reduce(
     (sum, modifier) => sum + modifier.price_delta_cents,
@@ -117,6 +170,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
           <button
             type="button"
+            className="product-modal-share-btn"
+            onClick={handleShare}
+            aria-label="Compartir este platillo"
+          >
+            <Share2 size={18} />
+          </button>
+
+          <button
+            type="button"
             className={`product-modal-fav-btn ${isLiked ? 'liked' : ''}`}
             onClick={() => onToggleLike(product.id)}
             aria-label={isLiked ? 'Quitar de favoritos' : 'Agregar a favoritos'}
@@ -124,7 +186,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <Heart
               size={20}
               fill={isLiked ? '#ef4444' : 'none'}
-              color={isLiked ? '#ef4444' : '#0f172a'}
+              color={isLiked ? '#ef4444' : '#ffffff'}
             />
           </button>
         </div>
@@ -165,6 +227,28 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <div className="product-modal-section">
               <span className="product-modal-section-heading">Descripción</span>
               <p className="product-modal-description-text">{product.description}</p>
+            </div>
+          )}
+
+          {communityPhotos.length > 0 && (
+            <div className="product-modal-section">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span className="product-modal-section-heading">📸 Fotos de Comensales ({communityPhotos.length})</span>
+                <span style={{ fontSize: '11px', color: '#047857', fontWeight: 700, background: '#ecfdf5', padding: '2px 8px', borderRadius: '12px' }}>
+                  ✓ Verificadas
+                </span>
+              </div>
+              <div className="community-photos-carousel">
+                {communityPhotos.map((photo, i) => (
+                  <div key={photo.id || i} className="community-photo-card">
+                    <img src={photo.image_url} alt={product.name} className="community-photo-img" />
+                    <div className="community-photo-meta">
+                      <span className="community-photo-author">Por {photo.customer_name}</span>
+                      {photo.caption && <p className="community-photo-caption">"{photo.caption}"</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -256,6 +340,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <span>Agregar • {formatMoney(totalCents)}</span>
           </button>
         </div>
+
+        {shareToast && (
+          <div className="share-toast-notification">
+            <Check size={16} color="#10b981" />
+            <span>{shareToast}</span>
+          </div>
+        )}
       </div>
     </div>
   );
