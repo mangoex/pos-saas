@@ -1067,11 +1067,15 @@ def list_restaurant_administrators(session: Session) -> list[dict[str, Any]]:
             models.users.c.organization_id,
             models.organizations.c.name.label("tenant_name"),
             models.organizations.c.owner_phone,
+            models.organizations.c.business_type,
+            models.organizations.c.plan,
+            models.organizations.c.subscription_status,
             admin_roles_subq.c.role_name,
         )
         .outerjoin(admin_roles_subq, models.users.c.id == admin_roles_subq.c.user_id)
         .outerjoin(models.organizations, models.users.c.organization_id == models.organizations.c.id)
         .where(
+            models.users.c.status != "deleted",
             sa.or_(
                 admin_roles_subq.c.role_name.isnot(None),
                 models.users.c.email == models.organizations.c.owner_email,
@@ -1079,7 +1083,7 @@ def list_restaurant_administrators(session: Session) -> list[dict[str, Any]]:
                     models.users.c.organization_id.is_(None),
                     models.users.c.is_superadmin.is_(False),
                 ),
-            )
+            ),
         )
         .order_by(models.users.c.created_at.desc())
     )
@@ -1099,7 +1103,12 @@ def list_restaurant_administrators(session: Session) -> list[dict[str, Any]]:
             "status": str(r["status"]),
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "tenant_id": str(r["organization_id"]) if r["organization_id"] else None,
+            "organization_id": str(r["organization_id"]) if r["organization_id"] else None,
             "tenant_name": str(r["tenant_name"]) if r["tenant_name"] else None,
+            "restaurant_name": str(r["tenant_name"]) if r["tenant_name"] else None,
+            "business_type": str(r["business_type"]) if r["business_type"] else None,
+            "plan": str(r["plan"]) if r["plan"] else None,
+            "subscription_status": str(r["subscription_status"]) if r["subscription_status"] else None,
             "phone": str(r["owner_phone"]) if r["owner_phone"] else None,
             "role_name": str(r["role_name"]) if r["role_name"] else "Administrador de Restaurante",
         })
@@ -1220,6 +1229,273 @@ def create_restaurant_administrator(
         "phone": phone,
         "created_at": now.isoformat(),
     }
+
+
+def update_restaurant_administrator(
+    session: Session,
+    admin_id: str,
+    data: dict[str, Any],
+    actor_superadmin_id: str,
+) -> dict[str, Any]:
+    """Superadmin updates a restaurant administrator profile, status, password, or tenant assignment."""
+    actor_id = str(actor_superadmin_id)
+    require_superadmin(session, actor_id)
+
+    user = session.execute(
+        sa.select(models.users).where(models.users.c.id == admin_id)
+    ).mappings().first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "user_not_found", "message": "Administrador no encontrado."},
+        )
+
+    if bool(user.get("is_superadmin")):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "superadmin_modification_forbidden", "message": "No se pueden modificar cuentas de superadministrador desde este módulo."},
+        )
+
+    now = _now()
+    user_updates: dict[str, Any] = {}
+
+    if "display_name" in data and data["display_name"] is not None:
+        name = str(data["display_name"]).strip()
+        if not name:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_display_name", "message": "El nombre no puede estar vacío."},
+            )
+        user_updates["display_name"] = name
+
+    if "email" in data and data["email"] is not None:
+        new_email = str(data["email"]).strip().lower()
+        if not new_email:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_email", "message": "El correo no puede estar vacío."},
+            )
+        if new_email != str(user["email"]).lower():
+            collision = session.execute(
+                sa.select(models.users.c.id).where(
+                    sa.func.lower(models.users.c.email) == new_email,
+                    models.users.c.id != admin_id,
+                )
+            ).scalar_one_or_none()
+            if collision:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": "email_already_registered", "message": f"El correo {new_email} ya pertenece a otra cuenta."},
+                )
+            user_updates["email"] = new_email
+
+    if "status" in data and data["status"] is not None:
+        status_val = str(data["status"]).strip()
+        if status_val in ("active", "suspended", "inactive"):
+            user_updates["status"] = status_val
+
+    if "tenant_id" in data:
+        target_tenant_id = data["tenant_id"]
+        if target_tenant_id:
+            org = session.execute(
+                sa.select(models.organizations).where(models.organizations.c.id == target_tenant_id)
+            ).mappings().first()
+            if not org:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"code": "tenant_not_found", "message": "El restaurante asignado no existe."},
+                )
+            user_updates["organization_id"] = str(target_tenant_id)
+
+            # Assign administrator role in target organization
+            role = session.execute(
+                sa.select(models.roles).where(
+                    models.roles.c.organization_id == target_tenant_id,
+                    models.roles.c.name == "Administrador de Restaurante",
+                )
+            ).mappings().first()
+            if not role:
+                role = session.execute(
+                    sa.select(models.roles).where(
+                        models.roles.c.organization_id == target_tenant_id,
+                        models.roles.c.name.in_(["Administrador de Restaurante", "Dueño", "Owner", "Administrador"]),
+                    )
+                ).mappings().first()
+            if role:
+                session.execute(sa.delete(models.user_roles).where(models.user_roles.c.user_id == admin_id))
+                session.execute(models.user_roles.insert().values(user_id=admin_id, role_id=role["id"]))
+
+    if user_updates:
+        user_updates["updated_at"] = now
+        session.execute(
+            models.users.update().where(models.users.c.id == admin_id).values(**user_updates)
+        )
+
+    # Phone update on organization
+    if "phone" in data and data["phone"] is not None:
+        new_phone = str(data["phone"]).strip() if data["phone"] else None
+        target_org = user_updates.get("organization_id") or user["organization_id"]
+        if target_org:
+            session.execute(
+                models.organizations.update()
+                .where(models.organizations.c.id == target_org)
+                .values(owner_phone=new_phone, updated_at=now)
+            )
+
+    # Password update
+    if "password" in data and data["password"]:
+        pw = str(data["password"]).strip()
+        if len(pw) < 6:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "password_too_short", "message": "La contraseña debe tener al menos 6 caracteres."},
+            )
+        salt = generate_password_salt()
+        pw_hash = hash_password(pw, salt)
+        has_creds = session.execute(
+            sa.select(models.user_credentials.c.user_id).where(models.user_credentials.c.user_id == admin_id)
+        ).scalar_one_or_none()
+        if has_creds:
+            session.execute(
+                models.user_credentials.update()
+                .where(models.user_credentials.c.user_id == admin_id)
+                .values(password_hash=pw_hash, password_salt=salt, updated_at=now)
+            )
+        else:
+            session.execute(
+                models.user_credentials.insert().values(
+                    user_id=admin_id,
+                    password_hash=pw_hash,
+                    password_salt=salt,
+                    password_algorithm=PASSWORD_ALGORITHM,
+                    updated_at=now,
+                )
+            )
+
+    # Audit
+    effective_org = user_updates.get("organization_id") or user["organization_id"]
+    if not effective_org:
+        actor_user = session.execute(sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)).mappings().first()
+        effective_org = actor_user["organization_id"] if actor_user and actor_user["organization_id"] else session.execute(sa.select(models.organizations.c.id)).scalar()
+
+    if effective_org:
+        _subscription_audit(
+            session,
+            "admin.updated",
+            str(effective_org),
+            actor_id,
+            {
+                "target_user_id": admin_id,
+                "display_name": user_updates.get("display_name", user["display_name"]),
+                "email": user_updates.get("email", user["email"]),
+                "status": user_updates.get("status", user["status"]),
+                "password_changed": bool("password" in data and data["password"]),
+            },
+        )
+
+    session.commit()
+
+    # Re-query updated user info
+    updated = session.execute(
+        sa.select(
+            models.users.c.id,
+            models.users.c.display_name,
+            models.users.c.email,
+            models.users.c.status,
+            models.users.c.created_at,
+            models.users.c.organization_id,
+            models.organizations.c.name.label("tenant_name"),
+            models.organizations.c.owner_phone,
+            models.organizations.c.business_type,
+            models.organizations.c.plan,
+            models.organizations.c.subscription_status,
+        )
+        .outerjoin(models.organizations, models.users.c.organization_id == models.organizations.c.id)
+        .where(models.users.c.id == admin_id)
+    ).mappings().first()
+
+    return {
+        "id": str(updated["id"]),
+        "display_name": str(updated["display_name"]),
+        "email": str(updated["email"]),
+        "status": str(updated["status"]),
+        "created_at": updated["created_at"].isoformat() if updated["created_at"] else None,
+        "tenant_id": str(updated["organization_id"]) if updated["organization_id"] else None,
+        "organization_id": str(updated["organization_id"]) if updated["organization_id"] else None,
+        "tenant_name": str(updated["tenant_name"]) if updated["tenant_name"] else None,
+        "restaurant_name": str(updated["tenant_name"]) if updated["tenant_name"] else None,
+        "business_type": str(updated["business_type"]) if updated["business_type"] else None,
+        "plan": str(updated["plan"]) if updated["plan"] else None,
+        "subscription_status": str(updated["subscription_status"]) if updated["subscription_status"] else None,
+        "phone": str(updated["owner_phone"]) if updated["owner_phone"] else None,
+        "role_name": "Administrador de Restaurante",
+    }
+
+
+def delete_restaurant_administrator(
+    session: Session,
+    admin_id: str,
+    actor_superadmin_id: str,
+) -> dict[str, Any]:
+    """Delete or revoke a restaurant administrator account with full audit."""
+    actor_id = str(actor_superadmin_id)
+    require_superadmin(session, actor_id)
+
+    user = session.execute(
+        sa.select(models.users).where(models.users.c.id == admin_id)
+    ).mappings().first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "user_not_found", "message": "Administrador no encontrado."},
+        )
+
+    if bool(user.get("is_superadmin")):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "superadmin_deletion_forbidden", "message": "No se pueden eliminar cuentas superadmin."},
+        )
+
+    now = _now()
+
+    # Revoke credentials and role assignments
+    session.execute(sa.delete(models.user_credentials).where(models.user_credentials.c.user_id == admin_id))
+    session.execute(sa.delete(models.user_roles).where(models.user_roles.c.user_id == admin_id))
+
+    # Mark user as deleted and release original email
+    archived_email = f"deleted_{user['id'][:8]}_{user['email']}"
+    session.execute(
+        models.users.update()
+        .where(models.users.c.id == admin_id)
+        .values(
+            status="deleted",
+            email=archived_email,
+            updated_at=now,
+        )
+    )
+
+    # Audit
+    effective_org = user["organization_id"]
+    if not effective_org:
+        actor_user = session.execute(sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)).mappings().first()
+        effective_org = actor_user["organization_id"] if actor_user and actor_user["organization_id"] else session.execute(sa.select(models.organizations.c.id)).scalar()
+
+    if effective_org:
+        _subscription_audit(
+            session,
+            "admin.deleted",
+            str(effective_org),
+            actor_id,
+            {
+                "deleted_user_id": admin_id,
+                "display_name": user["display_name"],
+                "previous_email": user["email"],
+                "organization_id": user["organization_id"],
+            },
+        )
+
+    session.commit()
+    return {"success": True, "id": admin_id, "status": "deleted"}
 
 
 def setup_my_restaurant(

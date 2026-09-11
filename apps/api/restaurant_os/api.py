@@ -2915,6 +2915,8 @@ from restaurant_os.superadmin import (
     parse_and_import_menu_ai,
     list_restaurant_administrators,
     create_restaurant_administrator,
+    update_restaurant_administrator,
+    delete_restaurant_administrator,
     setup_my_restaurant,
     delete_tenant,
     migrate_tenant_canonical_roles,
@@ -3083,6 +3085,33 @@ def post_superadmin_administrators_endpoint(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_superadmin(session, actor_id)
     return create_restaurant_administrator(session, payload)
+
+
+@router.put("/superadmin/administrators/{admin_id}")
+@router.put("/v1/superadmin/administrators/{admin_id}")
+def put_superadmin_administrator_endpoint(
+    admin_id: str,
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return update_restaurant_administrator(session, admin_id, payload, actor_id)
+
+
+@router.delete("/superadmin/administrators/{admin_id}")
+@router.delete("/v1/superadmin/administrators/{admin_id}")
+def delete_superadmin_administrator_endpoint(
+    admin_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return delete_restaurant_administrator(session, admin_id, actor_id)
 
 
 @router.post("/superadmin/migrate-roles")

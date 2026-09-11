@@ -896,6 +896,75 @@ def test_superadmin_list_and_create_administrators() -> None:
         assert org["trial_ends_at"] - org["created_at"] == timedelta(days=14)
 
 
+def test_superadmin_update_and_delete_administrator() -> None:
+    """Verify superadmin can update an administrator (name, phone, status, password)
+    and delete/deactivate the administrator account.
+    """
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+
+    # 1. Create administrator
+    create_resp = client.post(
+        "/api/v1/superadmin/administrators",
+        headers=headers,
+        json={
+            "display_name": "Valeria Morales",
+            "email": "valeria@cafeboutique.com",
+            "password": "Password123!",
+            "phone": "5511223344",
+        },
+    )
+    assert create_resp.status_code == 201
+    admin_id = create_resp.json()["id"]
+
+    # Verify administrator in list
+    list_resp = client.get("/api/v1/superadmin/administrators", headers=headers)
+    assert list_resp.status_code == 200
+    admins = list_resp.json()
+    valeria = next(a for a in admins if a["id"] == admin_id)
+    assert valeria["display_name"] == "Valeria Morales"
+    assert valeria["phone"] == "5511223344"
+    assert valeria["organization_id"] is not None
+
+    # 2. Update administrator details
+    update_resp = client.put(
+        f"/api/v1/superadmin/administrators/{admin_id}",
+        headers=headers,
+        json={
+            "display_name": "Valeria Morales Editada",
+            "phone": "5599887766",
+            "status": "suspended",
+            "password": "NewSecretPassword456!",
+        },
+    )
+    assert update_resp.status_code == 200
+    updated_data = update_resp.json()
+    assert updated_data["display_name"] == "Valeria Morales Editada"
+    assert updated_data["status"] == "suspended"
+    assert updated_data["phone"] == "5599887766"
+
+    # Verify list reflects updated status and name
+    list_resp2 = client.get("/api/v1/superadmin/administrators", headers=headers)
+    assert list_resp2.status_code == 200
+    valeria2 = next(a for a in list_resp2.json() if a["id"] == admin_id)
+    assert valeria2["display_name"] == "Valeria Morales Editada"
+    assert valeria2["status"] == "suspended"
+    assert valeria2["phone"] == "5599887766"
+
+    # 3. Delete administrator
+    delete_resp = client.delete(
+        f"/api/v1/superadmin/administrators/{admin_id}",
+        headers=headers,
+    )
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["status"] == "deleted"
+
+    # Verify administrator no longer appears in the list
+    list_resp3 = client.get("/api/v1/superadmin/administrators", headers=headers)
+    assert list_resp3.status_code == 200
+    assert not any(a["id"] == admin_id for a in list_resp3.json())
+
+
 def test_update_user_permission_and_canonical_role_assignment() -> None:
     """Verify superadmin and org owner can update a user and assign Administrador de Restaurante
     without encountering 'Actor does not have the required permission'.

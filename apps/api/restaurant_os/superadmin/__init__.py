@@ -14,6 +14,8 @@ from .service import (
     require_superadmin,
     setup_my_restaurant,
     delete_tenant,
+    update_restaurant_administrator,
+    delete_restaurant_administrator,
     update_tenant_details,
     update_tenant_plan,
     update_tenant_status,
@@ -34,6 +36,8 @@ __all__ = [
     "provision_platform_superadmin",
     "list_restaurant_administrators",
     "create_restaurant_administrator",
+    "update_restaurant_administrator",
+    "delete_restaurant_administrator",
     "setup_my_restaurant",
     "migrate_tenant_canonical_roles",
 ]

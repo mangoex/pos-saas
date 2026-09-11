@@ -71,8 +71,10 @@ interface RestaurantAdmin {
   email: string;
   phone?: string | null;
   status: string;
-  organization_id: string;
-  restaurant_name: string;
+  organization_id?: string | null;
+  tenant_id?: string | null;
+  restaurant_name?: string | null;
+  tenant_name?: string | null;
   business_type?: string | null;
   plan?: string | null;
   subscription_status?: string | null;
@@ -141,6 +143,17 @@ export const SaaSConsoleView: React.FC = () => {
   const [adminFormError, setAdminFormError] = useState<string | null>(null);
   const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
 
+  // Edit administrator states
+  const [selectedAdminForEdit, setSelectedAdminForEdit] = useState<RestaurantAdmin | null>(null);
+  const [editAdminName, setEditAdminName] = useState('');
+  const [editAdminEmail, setEditAdminEmail] = useState('');
+  const [editAdminPhone, setEditAdminPhone] = useState('');
+  const [editAdminTenantId, setEditAdminTenantId] = useState<string>('');
+  const [editAdminStatus, setEditAdminStatus] = useState<string>('active');
+  const [editAdminPassword, setEditAdminPassword] = useState('');
+  const [showEditAdminPassword, setShowEditAdminPassword] = useState(false);
+  const [editAdminError, setEditAdminError] = useState<string | null>(null);
+
   // Queries
   const { data: metrics } = useQuery<SaaSMetrics>({
     queryKey: ['saas-metrics'],
@@ -202,6 +215,49 @@ export const SaaSConsoleView: React.FC = () => {
       setAdminFormError(err.message || 'Error al crear la cuenta de administrador');
     },
   });
+
+  const updateAdminMutation = useMutation({
+    mutationFn: ({ id, ...payload }: { id: string; [key: string]: any }) =>
+      fetchApi(`/superadmin/administrators/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['saas-administrators'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
+      setSelectedAdminForEdit(null);
+      setEditAdminError(null);
+    },
+    onError: (err: any) => {
+      setEditAdminError(err.message || 'Error al actualizar el administrador');
+    },
+  });
+
+  const deleteAdminMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchApi(`/superadmin/administrators/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['saas-administrators'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
+      setSelectedAdminForEdit(null);
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Error al eliminar el administrador');
+    },
+  });
+
+  const handleDeleteAdmin = (admin: RestaurantAdmin) => {
+    if (
+      window.confirm(
+        `¿Estás seguro de que deseas eliminar la cuenta de administrador "${admin.display_name}" (${admin.email})?\n\nEsta acción revocará su acceso al sistema.`
+      )
+    ) {
+      deleteAdminMutation.mutate(admin.id);
+    }
+  };
 
   const migrateRolesMutation = useMutation({
     mutationFn: () => fetchApi<{ message: string; organizations_checked: number }>('/superadmin/migrate-roles', { method: 'POST' }),
@@ -1126,7 +1182,9 @@ export const SaaSConsoleView: React.FC = () => {
                   </tr>
                 ) : (
                   administrators.map((admin) => {
-                    const isPendingOrg = admin.restaurant_name?.startsWith('Restaurante de ') || !admin.organization_id;
+                    const effectiveOrgId = admin.organization_id || admin.tenant_id;
+                    const restaurantDisplayName = admin.restaurant_name || admin.tenant_name;
+                    const isPendingOrg = restaurantDisplayName?.startsWith('Restaurante de ') || !effectiveOrgId;
                     return (
                       <tr key={admin.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                         <td style={{ padding: '14px 18px' }}>
@@ -1191,7 +1249,7 @@ export const SaaSConsoleView: React.FC = () => {
                           ) : (
                             <div>
                               <strong style={{ color: '#0f172a', fontSize: '13px', display: 'block' }}>
-                                {admin.restaurant_name}
+                                {restaurantDisplayName}
                               </strong>
                               <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'capitalize' }}>
                                 {admin.business_type || 'General'}
@@ -1235,30 +1293,86 @@ export const SaaSConsoleView: React.FC = () => {
                         </td>
 
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          {admin.organization_id && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px' }}>
+                            {effectiveOrgId && (
+                              <button
+                                type="button"
+                                title="Iniciar sesión de soporte como este restaurante"
+                                onClick={() => impersonateMutation.mutate(effectiveOrgId)}
+                                disabled={impersonateMutation.isPending}
+                                style={{
+                                  background: '#0f172a',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  padding: '6px 12px',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                              >
+                                <LogIn size={13} />
+                                <span>Soporte</span>
+                              </button>
+                            )}
+
                             <button
                               type="button"
-                              title="Iniciar sesión de soporte como este restaurante"
-                              onClick={() => impersonateMutation.mutate(admin.organization_id)}
-                              disabled={impersonateMutation.isPending}
+                              title="Editar datos del administrador"
+                              onClick={() => {
+                                setSelectedAdminForEdit(admin);
+                                setEditAdminName(admin.display_name);
+                                setEditAdminEmail(admin.email);
+                                setEditAdminPhone(admin.phone || '');
+                                setEditAdminTenantId(admin.organization_id || admin.tenant_id || '');
+                                setEditAdminStatus(admin.status || 'active');
+                                setEditAdminPassword('');
+                                setEditAdminError(null);
+                              }}
                               style={{
-                                background: '#eff6ff',
-                                color: '#1d4ed8',
-                                border: '1px solid #bfdbfe',
+                                background: '#f8fafc',
+                                color: '#334155',
+                                border: '1px solid #cbd5e1',
                                 borderRadius: '8px',
-                                padding: '6px 12px',
-                                fontSize: '12px',
-                                fontWeight: 600,
+                                padding: '6px 10px',
                                 cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '4px',
+                                fontSize: '12px',
+                                fontWeight: 600,
                               }}
                             >
-                              <LogIn size={13} />
-                              <span>Soporte</span>
+                              <Edit size={13} />
+                              <span>Editar</span>
                             </button>
-                          )}
+
+                            <button
+                              type="button"
+                              title="Eliminar administrador"
+                              onClick={() => handleDeleteAdmin(admin)}
+                              disabled={deleteAdminMutation.isPending}
+                              style={{
+                                background: '#fef2f2',
+                                color: '#ef4444',
+                                border: '1px solid #fecaca',
+                                borderRadius: '8px',
+                                padding: '6px 10px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              <Trash2 size={13} />
+                              <span>Eliminar</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2461,6 +2575,322 @@ export const SaaSConsoleView: React.FC = () => {
                   >
                     {createAdminMutation.isPending ? 'Creando...' : 'Crear Administrador'}
                   </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 7: Editar Administrador de Restaurante */}
+      {selectedAdminForEdit && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '16px',
+              maxWidth: '520px',
+              width: '100%',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            }}
+          >
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    background: '#eff6ff',
+                    color: '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <User size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                    Editar Administrador de Restaurante
+                  </h3>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    ID: {selectedAdminForEdit.id.substring(0, 8)}... • Cuenta Principal
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAdminForEdit(null)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              {editAdminError && (
+                <div
+                  style={{
+                    background: '#fee2e2',
+                    color: '#991b1b',
+                    padding: '12px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  <span>{editAdminError}</span>
+                </div>
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setEditAdminError(null);
+                  updateAdminMutation.mutate({
+                    id: selectedAdminForEdit.id,
+                    display_name: editAdminName,
+                    email: editAdminEmail,
+                    phone: editAdminPhone || null,
+                    tenant_id: editAdminTenantId || null,
+                    status: editAdminStatus,
+                    password: editAdminPassword || undefined,
+                  });
+                }}
+              >
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Nombre Completo del Administrador *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editAdminName}
+                    onChange={(e) => setEditAdminName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Correo Electrónico (Acceso) *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={editAdminEmail}
+                    onChange={(e) => setEditAdminEmail(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Teléfono Móvil
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="55 1234 5678"
+                      value={editAdminPhone}
+                      onChange={(e) => setEditAdminPhone(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Estado de la Cuenta
+                    </label>
+                    <select
+                      value={editAdminStatus}
+                      onChange={(e) => setEditAdminStatus(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <option value="active">Activo</option>
+                      <option value="suspended">Suspendido</option>
+                      <option value="inactive">Inactivo</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Asignación de Restaurante
+                  </label>
+                  <select
+                    value={editAdminTenantId}
+                    onChange={(e) => setEditAdminTenantId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <option value="">(Sin asignar / Pendiente de configuración)</option>
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.owner_email || 'Sin email'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Nueva Contraseña <span style={{ fontWeight: 400, color: '#64748b' }}>(Opcional, dejar vacío para conservar la actual)</span>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showEditAdminPassword ? 'text' : 'password'}
+                      placeholder="Dejar en blanco para no cambiarla"
+                      value={editAdminPassword}
+                      onChange={(e) => setEditAdminPassword(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 38px 10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEditAdminPassword(!showEditAdminPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        padding: '2px',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {showEditAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                  <button
+                    type="button"
+                    disabled={deleteAdminMutation.isPending}
+                    onClick={() => handleDeleteAdmin(selectedAdminForEdit)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid #fca5a5',
+                      background: '#fef2f2',
+                      color: '#b91c1c',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: deleteAdminMutation.isPending ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <Trash2 size={15} />
+                    <span>{deleteAdminMutation.isPending ? 'Eliminando...' : 'Eliminar Administrador'}</span>
+                  </button>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAdminForEdit(null)}
+                      style={{
+                        padding: '10px 18px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#fff',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={updateAdminMutation.isPending}
+                      style={{
+                        padding: '10px 20px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#0f172a',
+                        color: '#fff',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {updateAdminMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>
