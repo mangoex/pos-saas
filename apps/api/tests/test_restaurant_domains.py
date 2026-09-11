@@ -630,3 +630,70 @@ def test_empty_wildcard_preserves_landing_and_legacy_links(monkeypatch, tmp_path
         f"https://platform.example.com/menu/{response.json()['organization']['slug']}/"
     )
     get_settings.cache_clear()
+
+
+def test_supervision_tenants_and_assign_domain(wildcard_setup):
+    client, accounts = wildcard_setup
+    owner, owner_data, _ = accounts[0]
+    with client.app.state.test_session_factory() as session:
+        session.execute(
+            models.users.update()
+            .where(models.users.c.id == owner_data["user"]["id"])
+            .values(is_superadmin=True)
+        )
+        session.commit()
+
+    # 1. List supervision tenants
+    res = client.get("/api/v1/saas/domains/supervision/tenants", headers=owner)
+    assert res.status_code == 200
+    tenants = res.json()
+    assert len(tenants) >= 2
+    target_org_id = owner_data["organization"]["id"]
+    matching = next((t for t in tenants if t["organization_id"] == target_org_id), None)
+    assert matching is not None
+    assert matching["organization_name"] == owner_data["organization"]["name"]
+    assert "mimenu.onl" in matching["menu_url"]
+
+    # 2. Superadmin assigns domain to client
+    assign_res = client.post(
+        "/api/v1/saas/domains/supervision/assign",
+        headers=owner,
+        json={
+            "organization_id": owner_data["organization"]["id"],
+            "hostname": "assigned.tacos.com",
+        },
+    )
+    assert assign_res.status_code == 200, assign_res.text
+    assigned = assign_res.json()
+    assert assigned["hostname"] == "assigned.tacos.com"
+    assert assigned["status"] == "pending_dns"
+
+    # 3. Supervision list includes organization_name
+    sup_list = client.get("/api/v1/saas/domains/supervision", headers=owner).json()
+    found = next((d for d in sup_list if d["id"] == assigned["id"]), None)
+    assert found is not None
+    assert found["organization_name"] == owner_data["organization"]["name"]
+
+    # 4. Superadmin deletes domain
+    del_res = client.post(
+        f"/api/v1/saas/domains/{assigned['id']}/supervise",
+        headers=owner,
+        json={"action": "delete"},
+    )
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "deleted"
+
+    # Verify deleted
+    sup_list_after = client.get("/api/v1/saas/domains/supervision", headers=owner).json()
+    assert not any(d["id"] == assigned["id"] for d in sup_list_after)
+
+
+def test_superadmin_route_redirects_to_admin_superadmin():
+    client = _client_with_db()
+    res = client.get("/superadmin", follow_redirects=False)
+    assert res.status_code == 307
+    assert res.headers["location"] == "/admin/superadmin"
+
+    res_sub = client.get("/superadmin/domains", follow_redirects=False)
+    assert res_sub.status_code == 307
+    assert res_sub.headers["location"] == "/admin/superadmin/domains"

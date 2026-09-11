@@ -216,8 +216,14 @@ class DomainRequest(BaseModel):
 
 class SuperviseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["activate", "disable"]
+    action: Literal["activate", "disable", "delete"]
     tls_confirmed: bool = False
+
+
+class AssignDomainRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    organization_id: str
+    hostname: str = Field(min_length=3, max_length=253)
 
 
 @router.get("/links")
@@ -394,14 +400,141 @@ def platform_actor(session: Session, authorization: str | None) -> dict[str, Any
 @router.get("/domains/supervision")
 def supervision_list(session: SessionDep, authorization: AuthDep = None) -> list[dict[str, Any]]:
     platform_actor(session, authorization)
-    return [
-        domain_view(row)
-        for row in session.execute(
+    stmt = (
+        sa.select(
+            models.restaurant_domains,
+            models.organizations.c.name.label("organization_name"),
+            models.organizations.c.slug.label("organization_slug"),
+            models.organizations.c.preferred_public_slug.label("organization_preferred_slug"),
+        )
+        .outerjoin(
+            models.organizations,
+            models.restaurant_domains.c.organization_id == models.organizations.c.id,
+        )
+        .order_by(models.restaurant_domains.c.created_at.desc())
+        .limit(200)
+    )
+    results = []
+    for row in session.execute(stmt).mappings():
+        view = domain_view(row)
+        view["organization_name"] = row.get("organization_name") or "Restaurante"
+        view["organization_slug"] = row.get("organization_slug") or ""
+        view["organization_preferred_slug"] = row.get("organization_preferred_slug") or ""
+        results.append(view)
+    return results
+
+
+@router.get("/domains/supervision/tenants")
+def supervision_tenants(session: SessionDep, authorization: AuthDep = None) -> list[dict[str, Any]]:
+    platform_actor(session, authorization)
+    orgs = (
+        session.execute(
+            sa.select(models.organizations)
+            .order_by(models.organizations.c.name)
+            .limit(300)
+        )
+        .mappings()
+        .all()
+    )
+    all_domains = (
+        session.execute(
             sa.select(models.restaurant_domains)
             .order_by(models.restaurant_domains.c.created_at.desc())
-            .limit(200)
-        ).mappings()
-    ]
+        )
+        .mappings()
+        .all()
+    )
+    domains_by_org: dict[str, list[dict[str, Any]]] = {}
+    for d in all_domains:
+        org_id = str(d["organization_id"])
+        domains_by_org.setdefault(org_id, []).append(domain_view(d))
+
+    wildcard = wildcard_domain()
+    items = []
+    for org in orgs:
+        org_id = str(org["id"])
+        canonical_slug = str(org["slug"] or "")
+        alias = str(org["preferred_public_slug"] or canonical_slug)
+        org_domains = domains_by_org.get(org_id, [])
+        active_domain = next((d for d in org_domains if d["status"] == "active"), None)
+
+        wildcard_alias: str | None = None
+        if is_wildcard_compatible_public_name(alias):
+            wildcard_alias = alias
+        elif is_wildcard_compatible_public_name(canonical_slug):
+            wildcard_alias = canonical_slug
+
+        if active_domain and host_routing_enabled():
+            menu_url = f"https://{active_domain['hostname']}/menu/{alias}/"
+        elif wildcard and wildcard_alias:
+            menu_url = f"https://{wildcard_alias}.{wildcard}/"
+        else:
+            menu_url = f"{base_url()}/menu/{alias}/"
+
+        primary_status = (
+            active_domain["status"]
+            if active_domain
+            else (org_domains[0]["status"] if org_domains else "none")
+        )
+        items.append({
+            "organization_id": org_id,
+            "organization_name": org["name"],
+            "canonical_slug": canonical_slug,
+            "preferred_slug": alias,
+            "menu_url": menu_url,
+            "domains": org_domains,
+            "active_domain": active_domain["hostname"] if active_domain else None,
+            "domain_status": primary_status,
+        })
+    return items
+
+
+@router.post("/domains/supervision/assign")
+def supervision_assign_domain(
+    payload: AssignDomainRequest, session: SessionDep, authorization: AuthDep = None
+) -> dict[str, Any]:
+    actor = platform_actor(session, authorization)
+    org = session.execute(
+        sa.select(models.organizations.c.id).where(
+            models.organizations.c.id == payload.organization_id
+        )
+    ).scalar_one_or_none()
+    if not org:
+        raise error(404, "organization_not_found")
+    hostname = normalize_hostname(payload.hostname)
+    row = (
+        session.execute(
+            sa.select(models.restaurant_domains).where(
+                models.restaurant_domains.c.hostname == hostname
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row:
+        if row["organization_id"] != payload.organization_id:
+            raise error(409, "domain_unavailable")
+        return domain_view(row)
+    now = _now()
+    values = {
+        "id": str(uuid4()),
+        "organization_id": payload.organization_id,
+        "hostname": hostname,
+        "status": "pending_dns",
+        "verification_token": secrets.token_urlsafe(32),
+        "last_result": None,
+        "verified_at": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        session.execute(models.restaurant_domains.insert().values(**values))
+        audit(session, actor["id"], values, "requested_by_superadmin")
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise error(409, "domain_unavailable") from exc
+    return domain_view(values)
 
 
 @router.post("/domains/{domain_id}/supervise")
@@ -410,6 +543,13 @@ def supervise(
 ) -> dict[str, Any]:
     actor = platform_actor(session, authorization)
     row = locked_domain(session, domain_id)
+    if payload.action == "delete":
+        session.execute(
+            models.restaurant_domains.delete().where(models.restaurant_domains.c.id == domain_id)
+        )
+        audit(session, actor["id"], row, "deleted")
+        session.commit()
+        return {"status": "deleted", "id": domain_id}
     if payload.action == "activate":
         if not payload.tls_confirmed or not platform_hosts():
             raise error(409, "domain_tls_confirmation_required")

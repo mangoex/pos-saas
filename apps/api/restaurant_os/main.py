@@ -181,6 +181,12 @@ def create_app() -> FastAPI:
     def platform_images(full_path: str) -> Response:
         return serve_spa("mobile-web", f"images/{full_path.lstrip('/')}")
 
+    @app.get("/superadmin{full_path:path}", tags=["platform"])
+    def platform_superadmin_redirect(full_path: str = "") -> Response:
+        sub = full_path.lstrip("/")
+        target = f"/admin/superadmin/{sub}" if sub else "/admin/superadmin"
+        return RedirectResponse(target, status_code=307)
+
     @app.get("/admin{full_path:path}", tags=["platform"])
     def platform_admin(full_path: str) -> Response:
         return serve_spa("admin-web", full_path.lstrip("/"))

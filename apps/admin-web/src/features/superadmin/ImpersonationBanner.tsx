@@ -42,7 +42,7 @@ export const ImpersonationBanner: React.FC = () => {
     localStorage.removeItem('saas_master_branch_id');
     localStorage.removeItem('impersonation_info');
 
-    window.location.href = '/superadmin';
+    window.location.href = '/admin/superadmin';
   };
 
   return (

@@ -911,109 +911,121 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                         Selecciona con el radio cuál es la tarifa <strong>por defecto para el Menú Web Móvil</strong> (puedes marcar Gratis si no deseas cobrar envío por la web).
                       </p>
 
-                      <div style={{ display: 'grid', gap: 8 }}>
+                      <div style={{ display: 'grid', gap: 10 }}>
                         {deliveryTiers.map((tier, idx) => (
                           <div
                             key={tier.id || idx}
                             style={{
                               display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              padding: '10px 12px',
+                              flexDirection: 'column',
+                              gap: 10,
+                              padding: '12px',
                               backgroundColor: tier.is_default_web ? '#f0fdf4' : '#f8fafc',
                               border: `1px solid ${tier.is_default_web ? '#86efac' : '#e2e8f0'}`,
-                              borderRadius: 10,
+                              borderRadius: 12,
+                              boxSizing: 'border-box',
+                              width: '100%',
                             }}
                           >
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', margin: 0 }}>
-                              <input
-                                type="radio"
-                                name="default_web_tier"
-                                checked={tier.is_default_web}
-                                onChange={() => {
-                                  setDeliveryTiers(
-                                    deliveryTiers.map((t, i) => ({
-                                      ...t,
-                                      is_default_web: i === idx,
-                                    }))
-                                  );
-                                }}
-                                title="Predeterminado Web"
-                                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#16a34a' }}
-                              />
-                              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: tier.is_default_web ? '#059669' : '#64748b', whiteSpace: 'nowrap' }}>
-                                {tier.is_default_web ? 'Predeterminado Web' : 'Web'}
-                              </span>
-                            </label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0 }}>
+                                <input
+                                  type="radio"
+                                  name="default_web_tier"
+                                  checked={tier.is_default_web}
+                                  onChange={() => {
+                                    setDeliveryTiers(
+                                      deliveryTiers.map((t, i) => ({
+                                        ...t,
+                                        is_default_web: i === idx,
+                                      }))
+                                    );
+                                  }}
+                                  title="Predeterminado Web"
+                                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#16a34a' }}
+                                />
+                                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: tier.is_default_web ? '#059669' : '#64748b' }}>
+                                  {tier.is_default_web ? 'Tarifa por defecto en Menú Web' : 'Predeterminado Web'}
+                                </span>
+                              </label>
 
-                            <input
-                              type="text"
-                              value={tier.name}
-                              onChange={(e) => {
-                                const updated = [...deliveryTiers];
-                                updated[idx] = { ...updated[idx], name: e.target.value };
-                                setDeliveryTiers(updated);
-                              }}
-                              placeholder="Nombre (ej. Corta, Gratis)"
-                              style={{
-                                flex: 1,
-                                minWidth: 80,
-                                padding: '6px 8px',
-                                fontSize: '0.85rem',
-                                borderRadius: 6,
-                                border: '1px solid #cbd5e1',
-                                outline: 'none',
-                                background: '#ffffff',
-                              }}
-                            />
+                              {deliveryTiers.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = deliveryTiers.filter((_, i) => i !== idx);
+                                    if (tier.is_default_web && updated.length > 0) {
+                                      updated[0].is_default_web = true;
+                                    }
+                                    setDeliveryTiers(updated);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#ef4444',
+                                    cursor: 'pointer',
+                                    padding: '4px 6px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    fontSize: '0.75rem',
+                                  }}
+                                  title="Eliminar tarifa"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: '0.85rem', color: '#64748b' }}>$</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={tier.fee_cents / 100}
+                                type="text"
+                                value={tier.name}
                                 onChange={(e) => {
                                   const updated = [...deliveryTiers];
-                                  const val = parseFloat(e.target.value) || 0;
-                                  updated[idx] = { ...updated[idx], fee_cents: Math.max(0, Math.round(val * 100)) };
+                                  updated[idx] = { ...updated[idx], name: e.target.value };
                                   setDeliveryTiers(updated);
                                 }}
+                                placeholder="Nombre (ej. Corta, Gratis)"
                                 style={{
-                                  width: 65,
-                                  padding: '6px 8px',
+                                  flex: 1,
+                                  minWidth: 0,
+                                  boxSizing: 'border-box',
+                                  padding: '8px 10px',
                                   fontSize: '0.85rem',
-                                  borderRadius: 6,
+                                  borderRadius: 8,
                                   border: '1px solid #cbd5e1',
                                   outline: 'none',
                                   background: '#ffffff',
                                 }}
                               />
-                            </div>
 
-                            {deliveryTiers.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = deliveryTiers.filter((_, i) => i !== idx);
-                                  if (tier.is_default_web && updated.length > 0) {
-                                    updated[0].is_default_web = true;
-                                  }
-                                  setDeliveryTiers(updated);
-                                }}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#94a3b8',
-                                  cursor: 'pointer',
-                                  padding: 4,
-                                }}
-                                title="Eliminar tarifa"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>$</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={tier.fee_cents / 100}
+                                  onChange={(e) => {
+                                    const updated = [...deliveryTiers];
+                                    const val = parseFloat(e.target.value) || 0;
+                                    updated[idx] = { ...updated[idx], fee_cents: Math.max(0, Math.round(val * 100)) };
+                                    setDeliveryTiers(updated);
+                                  }}
+                                  style={{
+                                    width: 70,
+                                    boxSizing: 'border-box',
+                                    padding: '8px 10px',
+                                    fontSize: '0.85rem',
+                                    borderRadius: 8,
+                                    border: '1px solid #cbd5e1',
+                                    outline: 'none',
+                                    background: '#ffffff',
+                                  }}
+                                />
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>

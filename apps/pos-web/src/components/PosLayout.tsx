@@ -294,7 +294,7 @@ const PosLayout = () => {
               type="button"
               onClick={() => {
                 clearPosSession();
-                window.location.href = '/admin/login';
+                window.location.href = '/';
               }}
               style={{ 
                 display: 'flex', alignItems: 'center', gap: '16px', justifyContent: isCollapsed ? 'center' : 'flex-start', 

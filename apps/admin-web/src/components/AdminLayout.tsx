@@ -233,7 +233,7 @@ const AdminLayout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
     sessionStorage.removeItem('auth_token');
-    navigate('/login');
+    window.location.href = '/';
   };
 
   // Main Categories in Sidebar (POS-SaaS Lean Hub)
@@ -330,7 +330,7 @@ const AdminLayout = () => {
           },
         ]
       : []),
-    ...((currentUser.permissions || []).includes('admin.manage') ? [{
+    ...((currentUser.permissions || []).includes('admin.manage') && (!currentUser.is_superadmin || !!localStorage.getItem('impersonation_info')) ? [{
       path: '/restaurant-links', label: 'Enlaces y dominio', icon: <Users size={20} />,
       matchingPrefixes: ['/restaurant-links'],
     }] : []),

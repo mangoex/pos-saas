@@ -80,7 +80,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user');
         sessionStorage.removeItem('auth_token');
-        window.location.href = '/admin/login';
+        window.location.href = '/';
       };
 
       const goToPos = () => {
@@ -153,6 +153,16 @@ const CashConceptManageRoute = ({ children }: { children: React.ReactNode }) => 
   return <>{children}</>;
 };
 
+const RestaurantLinksRoute = () => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isSuperadmin = Boolean(user.is_superadmin);
+  const isImpersonating = Boolean(localStorage.getItem('impersonation_info'));
+  if (isSuperadmin && !isImpersonating) {
+    return <Navigate to="/superadmin/domains" replace />;
+  }
+  return <RestaurantLinks />;
+};
+
 export const App = () => {
   return (
     <BrowserRouter basename="/admin">
@@ -170,7 +180,7 @@ export const App = () => {
           <Route index element={<Overview />} />
           <Route path="orders-mobile" element={<MobileOrdersMonitor branchId={resolveBranchId()} />} />
           <Route path="superadmin" element={<SuperadminRoute><SaaSConsoleView /></SuperadminRoute>} />
-          <Route path="restaurant-links" element={<RestaurantLinks />} />
+          <Route path="restaurant-links" element={<RestaurantLinksRoute />} />
           <Route path="superadmin/domains" element={<SuperadminRoute><RestaurantLinks supervision /></SuperadminRoute>} />
 
           {/* Category Hubs (POS Style Grid Views) */}

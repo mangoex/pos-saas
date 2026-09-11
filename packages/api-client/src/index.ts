@@ -10,7 +10,7 @@ export class ApiError extends Error {
 }
 
 export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const isSuperadminEndpoint = endpoint.startsWith("/superadmin");
+  const isSuperadminEndpoint = endpoint.startsWith("/superadmin") || endpoint.startsWith("/saas/domains/supervision");
   const masterToken = typeof window !== "undefined" ? localStorage.getItem("saas_master_token") : null;
   const token = (isSuperadminEndpoint && masterToken)
     ? masterToken
