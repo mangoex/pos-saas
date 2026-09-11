@@ -40,7 +40,7 @@ def test_daily_reconciliation_calculation_and_balance():
     assert data["date"] == today_str
     assert "balance" in data
     assert "initial_cash" in data["balance"]
-    assert "total_sales_with_tax" in data["balance"]
+    assert "total_sales_with_tax_cents" in data["balance"]
     assert "card_payments" in data["balance"]
     assert "transfer_payments" in data["balance"]
     assert "credit_sales" in data["balance"]
@@ -238,7 +238,7 @@ def test_business_analytics_endpoint():
     assert data["date_from"] == today_str
     assert data["date_to"] == today_str
     assert "summary" in data
-    assert "total_sales" in data["summary"]
+    assert "total_sales_cents" in data["summary"]
     assert "orders_count" in data["summary"]
     assert "average_ticket" in data["summary"]
     assert "items_sold_count" in data["summary"]
