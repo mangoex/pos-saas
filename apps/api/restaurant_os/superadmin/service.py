@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import timedelta
+from datetime import timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -258,8 +258,11 @@ def provision_platform_superadmin(
 
 def get_saas_metrics(session: Session) -> dict[str, Any]:
     """Aggregate global business metrics for the SaaS Master Dashboard."""
-    # Exclude internal HQ organization
-    base_org_filter = models.organizations.c.name != "POS-SaaS HQ"
+    # Exclude internal HQ organization and deleted organizations
+    base_org_filter = sa.and_(
+        models.organizations.c.name != "POS-SaaS HQ",
+        models.organizations.c.status != "deleted",
+    )
 
     total_tenants = session.scalar(
         sa.select(sa.func.count(models.organizations.c.id)).where(base_org_filter)
@@ -321,7 +324,10 @@ def list_tenants(
     """List all registered restaurant tenants with usage counts."""
     query = (
         sa.select(models.organizations)
-        .where(models.organizations.c.name != "POS-SaaS HQ")
+        .where(
+            models.organizations.c.name != "POS-SaaS HQ",
+            models.organizations.c.status != "deleted",
+        )
         .order_by(models.organizations.c.created_at.desc())
     )
 
@@ -343,6 +349,7 @@ def list_tenants(
 
     org_rows = session.execute(query.limit(limit).offset(offset)).mappings().all()
 
+    now = _now()
     result = []
     for org in org_rows:
         org_id = str(org["id"])
@@ -359,6 +366,31 @@ def list_tenants(
             sa.select(sa.func.count(models.orders.c.id)).where(models.orders.c.organization_id == org_id)
         ) or 0
 
+        # Calculate trial days remaining & extra days
+        is_trial = org.get("plan") == "trial" or org.get("subscription_status") == "trialing"
+        trial_ends_at = org.get("trial_ends_at")
+        trial_days_remaining = 0
+        trial_extra_days = 0
+
+        if is_trial:
+            if not trial_ends_at and org.get("created_at"):
+                trial_ends_at = org["created_at"] + timedelta(days=14)
+
+            if trial_ends_at:
+                effective_end = (
+                    trial_ends_at
+                    if trial_ends_at.tzinfo is not None
+                    else trial_ends_at.replace(tzinfo=timezone.utc)
+                )
+                diff = effective_end - now
+                if diff.total_seconds() > 0:
+                    trial_days_remaining = max(1, int(diff.days + (1 if diff.seconds > 0 else 0)))
+                    trial_extra_days = 0
+                else:
+                    trial_days_remaining = 0
+                    past_seconds = abs(diff.total_seconds())
+                    trial_extra_days = int(past_seconds // 86400)
+
         result.append(
             {
                 "id": org_id,
@@ -366,6 +398,10 @@ def list_tenants(
                 "status": str(org.get("status") or "active"),
                 "plan": str(org.get("plan") or "trial"),
                 "subscription_status": str(org.get("subscription_status") or "active"),
+                "is_trial": is_trial,
+                "trial_ends_at": trial_ends_at.isoformat() if trial_ends_at else None,
+                "trial_days_remaining": trial_days_remaining,
+                "trial_extra_days": trial_extra_days,
                 "monthly_fee_cents": int(org.get("monthly_fee_cents") or 0),
                 "suspended_reason": org.get("suspended_reason"),
                 "owner_name": org.get("owner_name"),
@@ -382,6 +418,106 @@ def list_tenants(
         )
 
     return result
+
+
+def delete_tenant(
+    session: Session,
+    tenant_id: str,
+    actor_superadmin_id: str,
+) -> dict[str, Any]:
+    """Delete a suspended tenant, revoking domains, aliases, and marking it deleted with full audit."""
+    actor_id = str(actor_superadmin_id)
+    require_superadmin(session, actor_id)
+
+    org = session.execute(
+        sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
+    ).mappings().first()
+
+    if not org:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "tenant_not_found", "message": "Tenant no encontrado."},
+        )
+
+    # El restaurante debe estar suspendido para poder ser eliminado
+    if org["subscription_status"] != "suspended" and org["status"] != "suspended":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "tenant_must_be_suspended_to_delete",
+                "message": "El restaurante debe estar en estado suspendido antes de poder eliminarlo.",
+            },
+        )
+
+    now = _now()
+
+    # 1. Liberar alias y dominios para que puedan ser reutilizados
+    session.execute(
+        sa.delete(models.storefront_aliases).where(
+            models.storefront_aliases.c.organization_id == tenant_id
+        )
+    )
+    session.execute(
+        sa.delete(models.restaurant_domains).where(
+            models.restaurant_domains.c.organization_id == tenant_id
+        )
+    )
+
+    # 2. Inactivar o retirar llaves públicas de pedidos
+    session.execute(
+        models.public_order_keys.update()
+        .where(
+            models.public_order_keys.c.branch_id.in_(
+                sa.select(models.branches.c.id).where(
+                    models.branches.c.organization_id == tenant_id
+                )
+            )
+        )
+        .values(status="retired", retired_at=now)
+    )
+
+    # 3. Inactivar usuarios pertenecientes al tenant
+    session.execute(
+        models.users.update()
+        .where(models.users.c.organization_id == tenant_id)
+        .values(status="inactive", updated_at=now)
+    )
+
+    # 4. Marcar organización como eliminada y liberar slug
+    archived_slug = f"deleted_{org['id'][:8]}_{org['slug']}" if org["slug"] else None
+    session.execute(
+        models.organizations.update()
+        .where(models.organizations.c.id == tenant_id)
+        .values(
+            status="deleted",
+            subscription_status="deleted",
+            suspended_reason="Eliminado por superadmin",
+            slug=archived_slug,
+            updated_at=now,
+        )
+    )
+
+    # 5. Registrar auditoría permanente
+    _subscription_audit(
+        session,
+        "tenant.deleted",
+        tenant_id,
+        actor_id,
+        {
+            "name": org["name"],
+            "previous_status": org["status"],
+            "previous_subscription_status": org["subscription_status"],
+            "owner_email": org["owner_email"],
+        },
+    )
+
+    session.commit()
+
+    return {
+        "tenant_id": tenant_id,
+        "status": "deleted",
+        "message": f"Restaurante '{org['name']}' eliminado exitosamente.",
+    }
 
 
 def parse_and_import_menu_ai(

@@ -29,6 +29,8 @@ import {
   Check,
   RefreshCw,
   Users,
+  ArrowUp,
+  Trash2,
 } from 'lucide-react';
 
 interface SaaSMetrics {
@@ -57,6 +59,10 @@ interface Tenant {
   branches_count: number;
   products_count: number;
   orders_count: number;
+  is_trial?: boolean;
+  trial_ends_at?: string | null;
+  trial_days_remaining?: number;
+  trial_extra_days?: number;
 }
 
 interface RestaurantAdmin {
@@ -253,6 +259,21 @@ export const SaaSConsoleView: React.FC = () => {
     },
     onError: (err: any) => {
       alert(err.message || 'Error al actualizar restaurante');
+    },
+  });
+
+  const deleteTenantMutation = useMutation({
+    mutationFn: (tenantId: string) =>
+      fetchApi(`/superadmin/tenants/${tenantId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
+      setSelectedTenantForEdit(null);
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Error al eliminar restaurante');
     },
   });
 
@@ -794,24 +815,85 @@ export const SaaSConsoleView: React.FC = () => {
                         </td>
 
                         <td style={{ padding: '14px 18px' }}>
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              fontSize: '12px',
-                              color: t.plan === 'pro_599' ? '#7c3aed' : '#0284c7',
-                              background: t.plan === 'pro_599' ? '#f5f3ff' : '#f0f9ff',
-                              padding: '3px 8px',
-                              borderRadius: '6px',
-                              display: 'inline-block',
-                              marginBottom: '4px',
-                            }}
-                          >
-                            {t.plan === 'pro_599'
-                              ? 'Plan Pro ($599/mes)'
-                              : t.plan === 'starter_349'
-                              ? 'Plan Básico ($349/mes)'
-                              : 'Prueba (14 días)'}
-                          </span>
+                          {t.plan === 'pro_599' ? (
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                fontSize: '12px',
+                                color: '#7c3aed',
+                                background: '#f5f3ff',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                display: 'inline-block',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              Plan Pro ($599/mes)
+                            </span>
+                          ) : t.plan === 'starter_349' ? (
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                fontSize: '12px',
+                                color: '#0284c7',
+                                background: '#f0f9ff',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                display: 'inline-block',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              Plan Básico ($349/mes)
+                            </span>
+                          ) : t.plan === 'enterprise' ? (
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                fontSize: '12px',
+                                color: '#0f766e',
+                                background: '#f0fdfa',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                display: 'inline-block',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              Plan Enterprise ($1,200/mes)
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                fontSize: '12px',
+                                color: '#0284c7',
+                                background: '#f0f9ff',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              {(t.trial_extra_days ?? 0) > 0 ? (
+                                <>
+                                  <span>+{t.trial_extra_days} {t.trial_extra_days === 1 ? 'día' : 'días'}</span>
+                                  <ArrowUp size={12} strokeWidth={2.5} />
+                                </>
+                              ) : t.trial_days_remaining === 0 ? (
+                                <>
+                                  <span>0 días</span>
+                                  <ArrowUp size={12} strokeWidth={2.5} />
+                                </>
+                              ) : (
+                                <span>
+                                  {t.trial_days_remaining != null
+                                    ? `${t.trial_days_remaining} ${t.trial_days_remaining === 1 ? 'día' : 'días'}`
+                                    : '14 días'}
+                                </span>
+                              )}
+                            </span>
+                          )}
                           <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
                             {formatMoney(t.monthly_fee_cents)}/mes
                           </div>
@@ -1945,21 +2027,57 @@ export const SaaSConsoleView: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTenantForEdit(null)}
-                  style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={updateTenantMutation.isPending}
-                  style={{ padding: '10px 22px', borderRadius: '8px', border: 'none', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  {updateTenantMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
-                </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                {(selectedTenantForEdit.subscription_status === 'suspended' || selectedTenantForEdit.status === 'suspended') ? (
+                  <button
+                    type="button"
+                    disabled={deleteTenantMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `¿Estás seguro de que deseas eliminar permanentemente el restaurante "${selectedTenantForEdit.name}"?\n\nEsta acción eliminará el acceso, liberará su enlace y no se puede deshacer.`
+                        )
+                      ) {
+                        deleteTenantMutation.mutate(selectedTenantForEdit.id);
+                      }
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid #fca5a5',
+                      background: '#fef2f2',
+                      color: '#b91c1c',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: deleteTenantMutation.isPending ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <Trash2 size={15} />
+                    <span>{deleteTenantMutation.isPending ? 'Eliminando...' : 'Eliminar'}</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTenantForEdit(null)}
+                    style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updateTenantMutation.isPending}
+                    style={{ padding: '10px 22px', borderRadius: '8px', border: 'none', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {updateTenantMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

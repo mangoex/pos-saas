@@ -2916,6 +2916,7 @@ from restaurant_os.superadmin import (
     list_restaurant_administrators,
     create_restaurant_administrator,
     setup_my_restaurant,
+    delete_tenant,
     migrate_tenant_canonical_roles,
 )
 
@@ -3031,6 +3032,19 @@ def put_superadmin_tenant_update_endpoint(
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_superadmin(session, actor_id)
     return update_tenant_details(session, tenant_id, payload, actor_superadmin_id=actor_id)
+
+
+@router.delete("/superadmin/tenants/{tenant_id}")
+@router.delete("/v1/superadmin/tenants/{tenant_id}")
+def delete_superadmin_tenant_endpoint(
+    tenant_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    require_superadmin(session, actor_id)
+    return delete_tenant(session, tenant_id, actor_superadmin_id=actor_id)
 
 
 @router.post("/superadmin/tenants/{tenant_id}/impersonate")

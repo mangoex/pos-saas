@@ -18,7 +18,18 @@ import {
   Bike,
   Plus,
   Trash2,
+  ArrowUp,
 } from 'lucide-react';
+
+interface OrgProfile {
+  id: string;
+  name: string;
+  plan: string;
+  subscription_status: string;
+  trial_ends_at?: string | null;
+  trial_days_remaining?: number;
+  trial_extra_days?: number;
+}
 
 interface MobileBranchSettingsTabProps {
   branchId: string;
@@ -88,6 +99,11 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const { data: linksData } = useQuery<LinksResponse>({
     queryKey: ['saas-links'],
     queryFn: () => fetchApi('/saas/links'),
+  });
+
+  const { data: orgProfile } = useQuery<OrgProfile>({
+    queryKey: ['org-profile'],
+    queryFn: () => fetchApi<OrgProfile>('/organization/profile'),
   });
 
   // Local form states
@@ -279,6 +295,86 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       </header>
 
       <main style={{ padding: '16px 14px', maxWidth: 640, margin: '0 auto' }}>
+        {/* Trial Days Remaining Banner */}
+        {(orgProfile?.plan === 'trial' || orgProfile?.subscription_status === 'trialing') && (
+          <section
+            style={{
+              background: (orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0
+                ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                : 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)',
+              borderRadius: 16,
+              padding: '16px 18px',
+              color: '#ffffff',
+              marginBottom: 16,
+              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                <span>Periodo de Prueba</span>
+                {((orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0) && (
+                  <ArrowUp size={11} strokeWidth={3} />
+                )}
+              </div>
+              <h3 style={{ margin: '0 0 2px', fontSize: '1rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {(orgProfile.trial_extra_days ?? 0) > 0 ? (
+                  <>
+                    <span>+{orgProfile.trial_extra_days} {orgProfile.trial_extra_days === 1 ? 'día adicional' : 'días adicionales'}</span>
+                    <ArrowUp size={16} strokeWidth={3} />
+                  </>
+                ) : orgProfile.trial_days_remaining === 0 ? (
+                  <>
+                    <span>0 días restantes</span>
+                    <ArrowUp size={16} strokeWidth={3} />
+                  </>
+                ) : (
+                  <span>
+                    {orgProfile.trial_days_remaining} {orgProfile.trial_days_remaining === 1 ? 'día restante' : 'días restantes'}
+                  </span>
+                )}
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#e0f2fe' }}>
+                {(orgProfile.trial_extra_days ?? 0) > 0
+                  ? 'Tu prueba concluyó; tus operaciones continúan activas mientras gestionas tu activación.'
+                  : 'Cuentas con acceso completo a todas las funciones de tu sucursal.'}
+              </p>
+            </div>
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                borderRadius: 12,
+                padding: '8px 12px',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#e0f2fe', textTransform: 'uppercase' }}>
+                Estado
+              </div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>
+                {(orgProfile.trial_extra_days ?? 0) > 0 ? 'En Gracia' : 'Activo'}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Onboarding Quickstart Card */}
         {onOpenOnboarding && (
           <section

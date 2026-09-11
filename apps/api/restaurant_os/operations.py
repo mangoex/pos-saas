@@ -27017,15 +27017,22 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
     if not org:
         raise BusinessError("organization_not_found", "Organización no encontrada.")
 
-    # Calculate trial days remaining
+    # Calculate trial days remaining and extra days
     trial_days = 0
+    trial_extra_days = 0
     if org["trial_ends_at"]:
         trial_end = org["trial_ends_at"]
         if trial_end.tzinfo is None:
             trial_end = trial_end.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         diff = trial_end - now
-        trial_days = max(0, diff.days + (1 if diff.seconds > 0 else 0))
+        if diff.total_seconds() > 0:
+            trial_days = max(1, int(diff.days + (1 if diff.seconds > 0 else 0)))
+            trial_extra_days = 0
+        else:
+            trial_days = 0
+            past_seconds = abs(diff.total_seconds())
+            trial_extra_days = int(past_seconds // 86400)
 
     # Count products
     prod_count = session.execute(
@@ -27080,6 +27087,7 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
         "subscription_status": org["subscription_status"],
         "trial_ends_at": org["trial_ends_at"].isoformat() if org["trial_ends_at"] else None,
         "trial_days_remaining": trial_days,
+        "trial_extra_days": trial_extra_days,
         "monthly_fee_cents": org["monthly_fee_cents"],
         "mobile_theme": org["mobile_theme"] or "light",
         "products_count": prod_count,
