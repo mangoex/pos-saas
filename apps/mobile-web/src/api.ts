@@ -66,6 +66,46 @@ export async function fetchMobileTheme(restaurant?: string | null): Promise<'lig
   }
 }
 
+export interface CouponValidationResult {
+  valid: boolean;
+  code?: string;
+  discount_percentage?: number;
+  discount_cents?: number;
+  message?: string;
+}
+
+export async function validateBranchCoupon(
+  branchKey: string,
+  couponCode: string,
+  subtotalCents: number,
+): Promise<CouponValidationResult> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/public/branches/${encodeURIComponent(branchKey)}/validate-coupon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: couponCode.trim().toUpperCase(),
+        subtotal_cents: subtotalCents,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.detail?.message || err?.message || 'Cupón no válido para esta sucursal';
+      return { valid: false, message: msg };
+    }
+    const data = await res.json();
+    return {
+      valid: Boolean(data.valid),
+      code: data.code,
+      discount_percentage: data.discount_percentage,
+      discount_cents: data.discount_cents,
+      message: data.message,
+    };
+  } catch {
+    return { valid: false, message: 'No fue posible validar el cupón en este momento.' };
+  }
+}
+
 export interface PublicRestaurantInfo {
   id: string;
   name: string;
@@ -302,6 +342,10 @@ export function buildWhatsAppLink(
     }
   });
 
+  if (info.coupon_code && info.discount_cents && info.discount_cents > 0) {
+    text += `\n🎟️ *Cupón Aplicado:* ${info.coupon_code} (-${formatMoney(info.discount_cents)})\n`;
+  }
+
   text += `\n💰 *TOTAL A PAGAR:* *${formatMoney(totalCents)}*\n`;
   if (info.order_notes) {
     text += `📝 *Comentarios Adicionales:* ${info.order_notes}\n`;
@@ -360,6 +404,7 @@ export async function submitMobileOrder(
       customer_name: info.name.trim(),
       customer_phone: cleanPhone,
       order_type: apiOrderType,
+      coupon_code: info.coupon_code || undefined,
       table_number: info.order_type === 'dine-in' ? (info.table_number?.trim() || undefined) : undefined,
       payment_method: info.payment_method || undefined,
       cash_amount: info.payment_method === 'cash' ? (info.cash_amount?.trim() || undefined) : undefined,
@@ -378,6 +423,7 @@ export async function submitMobileOrder(
       owner_name: info.name.trim(),
       customer_phone: cleanPhone,
       order_type: apiOrderType,
+      coupon_code: info.coupon_code || undefined,
       branch_id: branchId,
       customer_lat: customerCoords?.lat,
       customer_lng: customerCoords?.lng,
@@ -469,6 +515,8 @@ export async function submitMobileOrder(
       customer_info: info,
       items,
       total_cents: totalCents,
+      coupon_code: info.coupon_code,
+      discount_cents: info.discount_cents,
       ...(whatsappUrl ? { whatsapp_url: whatsappUrl } : {}),
     };
   }
@@ -491,6 +539,8 @@ export async function submitMobileOrder(
     customer_info: info,
     items,
     total_cents: persisted.total_cents,
+    coupon_code: info.coupon_code,
+    discount_cents: info.discount_cents,
     ...(whatsappUrl ? { whatsapp_url: whatsappUrl } : {}),
   };
 }

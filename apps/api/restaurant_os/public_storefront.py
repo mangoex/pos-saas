@@ -115,6 +115,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         "delivery_fee_enabled",
         "delivery_tiers",
         "free_delivery_min_cents",
+        "coupons",
     )
     branches = []
     for branch in branch_rows:

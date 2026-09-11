@@ -3205,11 +3205,27 @@ class PublicOrderIntentPayload(BaseModel):
     table_number: str | None = Field(default=None, max_length=64)
     payment_method: str | None = Field(default=None, max_length=32)
     cash_amount: str | None = Field(default=None, max_length=32)
+    coupon_code: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode="after")
     def delivery_requires_address(self) -> PublicOrderIntentPayload:
         if self.order_type == "delivery" and self.delivery_address is None:
             raise ValueError("delivery orders require delivery_address")
+        return self
+
+
+class ValidateCouponPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str | None = Field(default=None, max_length=64)
+    coupon_code: str | None = Field(default=None, max_length=64)
+    subtotal_cents: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def resolve_code(self) -> ValidateCouponPayload:
+        val = (self.code or self.coupon_code or "").strip()
+        if not val:
+            raise ValueError("code or coupon_code is required")
+        self.code = val
         return self
 
 
@@ -3366,6 +3382,24 @@ def admin_moderate_community_photo_endpoint(
         )
 
     return _business_response(operation)
+
+
+@router.post("/public/branches/{public_key}/validate-coupon")
+def validate_coupon_endpoint(
+    public_key: str,
+    payload: ValidateCouponPayload,
+    session: SessionDep,
+) -> dict[str, Any]:
+    from restaurant_os.operations import validate_branch_coupon
+
+    return _business_response(
+        lambda: validate_branch_coupon(
+            session,
+            branch_key=public_key,
+            coupon_code=payload.code,
+            subtotal_cents=payload.subtotal_cents,
+        )
+    )
 
 
 @router.post("/public/branches/{public_key}/order-intents")

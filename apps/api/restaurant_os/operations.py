@@ -946,6 +946,37 @@ def authorize_supervisor_step_up(
     }
 
 
+DEFAULT_BRANCH_COUPONS: list[dict[str, Any]] = [
+    {"code": "MIMENU-GRACIAS10", "discount_percentage": 10, "is_active": True}
+]
+
+
+def _normalize_branch_coupons(coupons: Any) -> list[dict[str, Any]]:
+    if not isinstance(coupons, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    seen_codes: set[str] = set()
+    for item in coupons:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "").strip().upper()
+        if not code or code in seen_codes:
+            continue
+        seen_codes.add(code)
+        try:
+            pct = int(item.get("discount_percentage", 0))
+        except (ValueError, TypeError):
+            pct = 0
+        pct = max(1, min(100, pct))
+        is_active = bool(item.get("is_active", True))
+        normalized.append({
+            "code": code,
+            "discount_percentage": pct,
+            "is_active": is_active,
+        })
+    return normalized
+
+
 def create_branch(
     session: Session,
     name: str,
@@ -968,6 +999,7 @@ def create_branch(
     delivery_fee_enabled: bool | None = None,
     delivery_tiers: list[dict[str, Any]] | None = None,
     free_delivery_min_cents: int | None = None,
+    coupons: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -1044,6 +1076,9 @@ def create_branch(
         "free_delivery_min_cents": int(free_delivery_min_cents)
         if free_delivery_min_cents is not None and free_delivery_min_cents != ""
         else None,
+        "coupons": _normalize_branch_coupons(coupons)
+        if coupons is not None
+        else list(DEFAULT_BRANCH_COUPONS),
         "created_at": now,
         "updated_at": now,
     }
@@ -3592,6 +3627,8 @@ def create_local_order(
         "status": "ACCEPTED",
         "total_cents": total_cents,
         "delivery_fee_cents": fee_cents,
+        "coupon_code": None,
+        "discount_cents": 0,
         "currency": "MXN",
         "owner_name": owner_name,
         "order_type": order_type,
@@ -4226,6 +4263,8 @@ def get_order_detail(
             "active_reopen_request_status": None,
             "is_public_intent": True,
             "public_reference": intent["public_reference"],
+            "coupon_code": intent.get("coupon_code"),
+            "discount_cents": int(intent.get("discount_cents") or 0),
         }
     require_permission(session, actor_id, "orders.read", order["branch_id"])
     lines = [
@@ -11500,6 +11539,7 @@ def update_branch(
     delivery_fee_enabled: bool | None = None,
     delivery_tiers: list[dict[str, Any]] | None = None,
     free_delivery_min_cents: int | None = None,
+    coupons: list[dict[str, Any]] | None = None,
     extra_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
@@ -11563,6 +11603,8 @@ def update_branch(
         update_data["free_delivery_min_cents"] = (
             int(free_delivery_min_cents) if free_delivery_min_cents != "" and free_delivery_min_cents is not None else None
         )
+    if coupons is not None:
+        update_data["coupons"] = _normalize_branch_coupons(coupons)
 
     if extra_payload:
         for k in (
@@ -11598,6 +11640,8 @@ def update_branch(
             update_data["free_delivery_min_cents"] = (
                 int(v_free) if v_free is not None and v_free != "" else None
             )
+        if "coupons" in extra_payload and "coupons" not in update_data:
+            update_data["coupons"] = _normalize_branch_coupons(extra_payload["coupons"])
 
 
     if update_data:
@@ -11718,6 +11762,7 @@ def list_public_branches(
             models.branches.c.delivery_fee_enabled,
             models.branches.c.delivery_tiers,
             models.branches.c.free_delivery_min_cents,
+            models.branches.c.coupons,
             models.branches.c.status,
             models.public_order_keys.c.public_key,
         )
@@ -25730,6 +25775,7 @@ def _branch_detail(
                 models.branches.c.delivery_fee_enabled,
                 models.branches.c.delivery_tiers,
                 models.branches.c.free_delivery_min_cents,
+                models.branches.c.coupons,
                 models.business_units.c.id.label("bu_id"),
                 models.business_units.c.name.label("bu_name"),
                 models.business_units.c.code.label("bu_code"),
@@ -25773,6 +25819,7 @@ def _branch_detail(
         "delivery_fee_enabled": bool(row["delivery_fee_enabled"]) if row["delivery_fee_enabled"] is not None else True,
         "delivery_tiers": list(row["delivery_tiers"]) if isinstance(row["delivery_tiers"], list) else [],
         "free_delivery_min_cents": row["free_delivery_min_cents"],
+        "coupons": list(row["coupons"]) if isinstance(row.get("coupons"), list) else [],
         "business_unit": {
             "id": row["bu_id"],
             "name": row["bu_name"],
@@ -26483,6 +26530,73 @@ def moderate_community_photo(
     }
 
 
+def validate_branch_coupon(
+    session: Session,
+    branch_key: str,
+    coupon_code: str,
+    subtotal_cents: int,
+) -> dict[str, Any]:
+    configured = (
+        session.execute(
+            sa.select(
+                models.branches.c.id,
+                models.branches.c.coupons,
+            )
+            .join(models.branches, models.branches.c.id == models.public_order_keys.c.branch_id)
+            .where(
+                models.public_order_keys.c.public_key == branch_key,
+                models.public_order_keys.c.status == "active",
+                models.branches.c.status == "active",
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if not configured:
+        configured = (
+            session.execute(
+                sa.select(
+                    models.branches.c.id,
+                    models.branches.c.coupons,
+                ).where(
+                    models.branches.c.id == branch_key,
+                    models.branches.c.status == "active",
+                )
+            )
+            .mappings()
+            .first()
+        )
+
+    if not configured:
+        raise BusinessError("public_order_unavailable", "Public ordering is unavailable")
+
+    normalized_code = str(coupon_code or "").strip().upper()
+    if not normalized_code:
+        raise BusinessError("coupon_invalid", "El código de cupón es requerido")
+
+    coupons = configured.get("coupons") or []
+    match = None
+    for c in coupons:
+        if isinstance(c, dict) and str(c.get("code") or "").strip().upper() == normalized_code:
+            if c.get("is_active", True):
+                match = c
+            break
+
+    if not match:
+        raise BusinessError("coupon_invalid", "El cupón no es válido o ha expirado")
+
+    pct = int(match.get("discount_percentage", 0))
+    pct = max(0, min(100, pct))
+    safe_subtotal = max(0, int(subtotal_cents))
+    discount_cents = (safe_subtotal * pct) // 100
+
+    return {
+        "valid": True,
+        "code": match.get("code"),
+        "discount_percentage": pct,
+        "discount_cents": discount_cents,
+    }
+
 
 def _public_intent_response(intent: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -26491,6 +26605,8 @@ def _public_intent_response(intent: dict[str, Any]) -> dict[str, Any]:
         "version": int(intent["version"]),
         "total_cents": int(intent["total_cents"]),
         "delivery_fee_cents": int(intent.get("delivery_fee_cents") or 0),
+        "coupon_code": intent.get("coupon_code"),
+        "discount_cents": int(intent.get("discount_cents") or 0),
     }
 
 
@@ -26539,6 +26655,7 @@ def create_public_order_intent(
                 models.branches.c.delivery_fee_enabled,
                 models.branches.c.delivery_tiers,
                 models.branches.c.free_delivery_min_cents,
+                models.branches.c.coupons,
             )
             .join(models.branches, models.branches.c.id == models.public_order_keys.c.branch_id)
             .where(
@@ -26566,6 +26683,8 @@ def create_public_order_intent(
         "order_notes": str(payload.get("order_notes") or "").strip() or None,
         "delivery_address": payload.get("delivery_address"),
     }
+    if payload.get("coupon_code"):
+        normalized["coupon_code"] = str(payload["coupon_code"]).strip().upper()
     if payload.get("table_number"):
         normalized["table_number"] = str(payload["table_number"]).strip()
     if payload.get("payment_method"):
@@ -26662,13 +26781,33 @@ def create_public_order_intent(
             else:
                 delivery_fee = 0
 
-    grand_total_cents = total_cents + delivery_fee
+    coupon_code_input = normalized.get("coupon_code")
+    discount_cents = 0
+    applied_coupon_code = None
+    if coupon_code_input:
+        branch_coupons = configured.get("coupons") or []
+        found_coupon = None
+        for c in branch_coupons:
+            if isinstance(c, dict) and str(c.get("code") or "").strip().upper() == coupon_code_input:
+                if c.get("is_active", True):
+                    found_coupon = c
+                break
+        if not found_coupon:
+            raise BusinessError("coupon_invalid", "El cupón no es válido o ha expirado")
+        pct = int(found_coupon.get("discount_percentage", 0))
+        pct = max(0, min(100, pct))
+        discount_cents = (total_cents * pct) // 100
+        applied_coupon_code = found_coupon["code"]
+
+    grand_total_cents = max(0, total_cents - discount_cents) + delivery_fee
     result = {
         "public_reference": f"PI-{intent_id.replace('-', '').upper()}",
         "status": "PENDING_REVIEW",
         "version": 1,
         "total_cents": grand_total_cents,
         "delivery_fee_cents": delivery_fee,
+        "coupon_code": applied_coupon_code,
+        "discount_cents": discount_cents,
     }
     session.execute(
         models.public_order_intents.insert().values(
@@ -26692,6 +26831,8 @@ def create_public_order_intent(
             order_notes=normalized["order_notes"],
             total_cents=grand_total_cents,
             delivery_fee_cents=delivery_fee,
+            coupon_code=applied_coupon_code,
+            discount_cents=discount_cents,
             currency="MXN",
             version=1,
             created_at=now,
@@ -26970,6 +27111,8 @@ def accept_public_order_intent(
         "status": "ACCEPTED",
         "total_cents": int(intent["total_cents"]),
         "delivery_fee_cents": int(intent.get("delivery_fee_cents") or 0),
+        "coupon_code": intent.get("coupon_code"),
+        "discount_cents": int(intent.get("discount_cents") or 0),
         "currency": "MXN",
         "owner_name": (cust_snap or {}).get("name"),
         "order_type": intent["order_type"],

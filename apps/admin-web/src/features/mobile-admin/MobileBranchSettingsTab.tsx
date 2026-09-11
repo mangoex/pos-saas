@@ -19,6 +19,7 @@ import {
   Plus,
   Trash2,
   ArrowUp,
+  Tag,
 } from 'lucide-react';
 
 interface OrgProfile {
@@ -46,6 +47,16 @@ export interface DeliveryTier {
   is_default_web: boolean;
 }
 
+export interface BranchCoupon {
+  code: string;
+  discount_percentage: number;
+  is_active: boolean;
+}
+
+const defaultBranchCoupons: BranchCoupon[] = [
+  { code: 'MIMENU-GRACIAS10', discount_percentage: 10, is_active: true },
+];
+
 interface Branch {
   id: string;
   name: string;
@@ -57,6 +68,7 @@ interface Branch {
   delivery_fee_enabled?: boolean;
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
+  coupons?: BranchCoupon[];
 }
 
 interface LinksResponse {
@@ -114,6 +126,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [deliveryFeeEnabled, setDeliveryFeeEnabled] = useState(true);
   const [freeDeliveryMinPesos, setFreeDeliveryMinPesos] = useState('');
   const [deliveryTiers, setDeliveryTiers] = useState<DeliveryTier[]>([]);
+  const [coupons, setCoupons] = useState<BranchCoupon[]>([]);
 
   // Alias / Public link customization state
   const [aliasInput, setAliasInput] = useState('');
@@ -142,6 +155,11 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
               { id: 'tier-lejana', name: 'Lejana ($40)', fee_cents: 4000, is_default_web: false },
               { id: 'tier-gratis', name: 'Gratis ($0)', fee_cents: 0, is_default_web: true },
             ]
+      );
+      setCoupons(
+        currentBranch.coupons && currentBranch.coupons.length > 0
+          ? currentBranch.coupons
+          : defaultBranchCoupons
       );
     }
   }, [currentBranch]);
@@ -230,6 +248,13 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       delivery_fee_enabled: deliveryFeeEnabled,
       delivery_tiers: deliveryTiers,
       free_delivery_min_cents: freeDeliveryMinPesos.trim() ? Math.round(parseFloat(freeDeliveryMinPesos) * 100) : null,
+      coupons: coupons
+        .map((c) => ({
+          code: String(c.code || '').trim().toUpperCase(),
+          discount_percentage: Math.max(1, Math.min(100, Math.round(Number(c.discount_percentage) || 0))),
+          is_active: Boolean(c.is_active),
+        }))
+        .filter((c) => c.code.length > 0),
     });
   };
 
@@ -1127,6 +1152,160 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                       </div>
                     </div>
                   </>
+                )}
+              </div>
+
+              {/* Card: Cupones de Descuento */}
+              <div
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: 16,
+                  padding: 16,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                  marginBottom: 18,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Tag size={20} color="#059669" />
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                      Cupones de Descuento
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCoupons([
+                        ...coupons,
+                        { code: '', discount_percentage: 10, is_active: true },
+                      ]);
+                    }}
+                    style={{
+                      padding: '4px 10px',
+                      backgroundColor: '#ecfdf5',
+                      border: '1px solid #a7f3d0',
+                      borderRadius: 8,
+                      color: '#047857',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Plus size={14} /> Agregar cupón
+                  </button>
+                </div>
+                <p style={{ margin: '0 0 12px', fontSize: '0.775rem', color: '#64748b' }}>
+                  Configura cupones promocionales con porcentaje de descuento que tus clientes pueden aplicar en el checkout del menú móvil.
+                </p>
+
+                {coupons.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '16px 8px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                    No hay cupones configurados para esta sucursal.
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {coupons.map((coupon, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          backgroundColor: '#f8fafc',
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={coupon.is_active}
+                          title="Activar o desactivar cupón"
+                          onChange={(e) => {
+                            const updated = [...coupons];
+                            updated[idx] = { ...updated[idx], is_active: e.target.checked };
+                            setCoupons(updated);
+                          }}
+                          style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#059669', flexShrink: 0 }}
+                        />
+
+                        <input
+                          type="text"
+                          placeholder="CÓDIGO (ej. PROMO10)"
+                          value={coupon.code}
+                          onChange={(e) => {
+                            const updated = [...coupons];
+                            updated[idx] = { ...updated[idx], code: e.target.value.toUpperCase() };
+                            setCoupons(updated);
+                          }}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            padding: '8px 10px',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.05em',
+                            borderRadius: 8,
+                            border: '1px solid #cbd5e1',
+                            outline: 'none',
+                            background: '#ffffff',
+                          }}
+                        />
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            step="1"
+                            value={coupon.discount_percentage}
+                            onChange={(e) => {
+                              const updated = [...coupons];
+                              const val = parseInt(e.target.value, 10) || 0;
+                              updated[idx] = { ...updated[idx], discount_percentage: Math.min(100, Math.max(0, val)) };
+                              setCoupons(updated);
+                            }}
+                            style={{
+                              width: 54,
+                              padding: '8px 6px',
+                              fontSize: '0.85rem',
+                              textAlign: 'center',
+                              borderRadius: 8,
+                              border: '1px solid #cbd5e1',
+                              outline: 'none',
+                              background: '#ffffff',
+                            }}
+                          />
+                          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>% OFF</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = coupons.filter((_, i) => i !== idx);
+                            setCoupons(updated);
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            padding: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            flexShrink: 0,
+                          }}
+                          title="Eliminar cupón"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 

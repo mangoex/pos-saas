@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package } from 'lucide-react';
+import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag } from 'lucide-react';
 import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Product } from '../types';
-import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile } from '../api';
+import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile, validateBranchCoupon } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
 
 const getRecommendationIcon = (product: Product, size: number = 38) => {
@@ -137,7 +137,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [formError, setFormError] = useState('');
   const [aiRecs, setAiRecs] = useState<Array<{ product_id: string; product_name: string; price_cents: number; reason: string }>>([]);
 
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discount_percentage: number;
+    discount_cents: number;
+  } | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+
   const totalCents = items.reduce((acc, item) => acc + item.line_total_cents, 0);
+
+  // Deterministic discount calculation: (total_cents * discount_percentage) // 100
+  const discountCents = useMemo(() => {
+    if (!appliedCoupon || appliedCoupon.discount_percentage <= 0) return 0;
+    return Math.floor((totalCents * appliedCoupon.discount_percentage) / 100);
+  }, [appliedCoupon, totalCents]);
 
   // Delivery fee & Free Delivery threshold calculation
   const deliveryFeeCents = useMemo(() => {
@@ -155,7 +171,48 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return defaultTier ? Math.max(0, defaultTier.fee_cents) : 0;
   }, [orderType, selectedBranch, totalCents]);
 
-  const grandTotalCents = totalCents + deliveryFeeCents;
+  const grandTotalCents = Math.max(0, totalCents - discountCents) + deliveryFeeCents;
+
+  const handleApplyCoupon = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setCouponError('');
+    const code = couponInput.trim().toUpperCase();
+    if (!code) {
+      setCouponError('Ingresa un código de cupón');
+      return;
+    }
+    const branchKey = selectedBranch?.public_key || selectedBranch?.id;
+    if (!branchKey) {
+      setCouponError('Sucursal no disponible para validar cupones');
+      return;
+    }
+    setIsValidatingCoupon(true);
+    try {
+      const res = await validateBranchCoupon(branchKey, code, totalCents);
+      if (!res.valid) {
+        setCouponError(res.message || 'Cupón no válido o inactivo');
+      } else {
+        const pct = res.discount_percentage || 0;
+        const cents = res.discount_cents ?? Math.floor((totalCents * pct) / 100);
+        setAppliedCoupon({
+          code: res.code || code,
+          discount_percentage: pct,
+          discount_cents: cents,
+        });
+        setCouponInput('');
+        setCouponError('');
+      }
+    } catch {
+      setCouponError('Error al validar el cupón');
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError('');
+  };
 
   const freeDeliveryThreshold = selectedBranch?.free_delivery_min_cents;
   const isFreeDeliveryConfigured = selectedBranch?.delivery_fee_enabled !== false && freeDeliveryThreshold != null && freeDeliveryThreshold > 0;
@@ -288,6 +345,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       cash_amount: paymentMethod === 'cash' ? cashAmount.trim() : undefined,
       order_notes: orderNotes.trim(),
       delivery_fee_cents: deliveryFeeCents,
+      coupon_code: appliedCoupon ? appliedCoupon.code : undefined,
+      discount_cents: discountCents > 0 ? discountCents : undefined,
     };
 
     saveCustomerProfile({
@@ -931,12 +990,121 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               )}
 
+              {/* Coupon input & discount badge */}
+              <div className="cart-form-section" style={{ marginBottom: 14 }}>
+                <label className="cart-form-section-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Tag size={16} color="#059669" />
+                  <span>¿Tienes un cupón de descuento?</span>
+                </label>
+                {appliedCoupon ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: '#ecfdf5',
+                      border: '1px solid #a7f3d0',
+                      borderRadius: 12,
+                      padding: '10px 14px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '1.2rem' }}>🎉</span>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#065f46' }}>
+                          Cupón {appliedCoupon.code} aplicado
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#047857' }}>
+                          {appliedCoupon.discount_percentage}% de descuento (-{formatMoney(discountCents)})
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#059669',
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Ingresa tu cupón (ej. MIMENU-GRACIAS10)"
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          if (couponError) setCouponError('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleApplyCoupon();
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          border: couponError ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                          fontSize: '0.88rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCoupon()}
+                        disabled={isValidatingCoupon || !couponInput.trim()}
+                        style={{
+                          padding: '0 16px',
+                          backgroundColor: '#0f172a',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: 10,
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          cursor: isValidatingCoupon || !couponInput.trim() ? 'not-allowed' : 'pointer',
+                          opacity: isValidatingCoupon || !couponInput.trim() ? 0.6 : 1,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isValidatingCoupon ? 'Validando…' : 'Aplicar'}
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#ef4444', fontWeight: 500 }}>
+                        {couponError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Financial summary breakdown */}
               <div className="cart-financial-summary-card">
                 <div className="cart-summary-line">
                   <span>Subtotal de productos</span>
                   <span>{formatMoney(totalCents)}</span>
                 </div>
+                {discountCents > 0 && (
+                  <div className="cart-summary-line" style={{ color: '#16a34a', fontWeight: 600 }}>
+                    <span>Descuento ({appliedCoupon?.code} -{appliedCoupon?.discount_percentage}%)</span>
+                    <span>-{formatMoney(discountCents)}</span>
+                  </div>
+                )}
                 {orderType === 'delivery' && (
                   <div className="cart-summary-line">
                     <span>Costo de envío</span>

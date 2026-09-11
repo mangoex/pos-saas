@@ -71,6 +71,12 @@ export interface DeliveryTier {
   is_default_web: boolean;
 }
 
+export interface BranchCoupon {
+  code: string;
+  discount_percentage: number;
+  is_active: boolean;
+}
+
 export interface BranchInfo {
   id: string;
   name: string;
@@ -95,6 +101,7 @@ export interface BranchInfo {
   delivery_fee_enabled?: boolean;
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
+  coupons?: BranchCoupon[];
   has_active_shift?: boolean;
 }
 
@@ -136,6 +143,8 @@ export interface CustomerOrderInfo {
   cash_amount?: string;
   order_notes?: string;
   delivery_fee_cents?: number;
+  coupon_code?: string;
+  discount_cents?: number;
 }
 
 interface PersistedOrderResultBase {
@@ -143,6 +152,8 @@ interface PersistedOrderResultBase {
   items: CartItem[];
   total_cents: number;
   delivery_fee_cents?: number;
+  coupon_code?: string;
+  discount_cents?: number;
   whatsapp_url?: string;
 }
 

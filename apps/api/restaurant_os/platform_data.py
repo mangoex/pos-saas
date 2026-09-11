@@ -99,6 +99,7 @@ def list_branches(session: Session, organization_id: str | None = None) -> list[
             models.branches.c.delivery_fee_enabled,
             models.branches.c.delivery_tiers,
             models.branches.c.free_delivery_min_cents,
+            models.branches.c.coupons,
             models.business_units.c.name.label("business_unit_name"),
             models.business_units.c.unit_type.label("business_unit_type"),
             models.legal_entities.c.name.label("legal_entity_name"),
@@ -126,6 +127,7 @@ def list_branches(session: Session, organization_id: str | None = None) -> list[
             item["latitude"] = float(item["latitude"])
         if item.get("longitude") is not None:
             item["longitude"] = float(item["longitude"])
+        item["coupons"] = list(item["coupons"]) if isinstance(item.get("coupons"), list) else []
         result.append(item)
     return result
 
