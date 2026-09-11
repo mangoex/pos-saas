@@ -1820,11 +1820,11 @@ body {
 
 .cart-payment-methods-grid {
   display: flex;
-  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
 .cart-payment-method-pill {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2375,11 +2375,11 @@ body {
 -------------------------------------------------------------------------- */
 .social-mode-selector-container {
   display: flex;
-  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
 .social-mode-card-btn {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;

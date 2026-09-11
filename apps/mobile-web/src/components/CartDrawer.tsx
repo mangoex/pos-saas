@@ -115,6 +115,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const selectedBranchId = selectedBranch?.id;
 
   useEffect(() => {
+    if (orderType === 'delivery' && selectedBranch?.delivery_fee_enabled === false) {
+      setOrderType('takeaway');
+    }
+  }, [orderType, selectedBranch?.delivery_fee_enabled]);
+
+  useEffect(() => {
     setAiRecs([]);
     if (items.length === 0 || !selectedBranchId) {
       return;
@@ -481,18 +487,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <span className="social-mode-card-label">Llevar</span>
                   </button>
 
-                  <button
-                    type="button"
-                    className={`social-mode-card-btn ${orderType === 'delivery' ? 'active' : ''}`}
-                    onClick={() => setOrderType('delivery')}
-                    role="tab"
-                    aria-selected={orderType === 'delivery'}
-                  >
-                    <div className="social-mode-icon-circle">
-                      <Bike size={18} />
-                    </div>
-                    <span className="social-mode-card-label">Envío</span>
-                  </button>
+                  {selectedBranch?.delivery_fee_enabled !== false && (
+                    <button
+                      type="button"
+                      className={`social-mode-card-btn ${orderType === 'delivery' ? 'active' : ''}`}
+                      onClick={() => setOrderType('delivery')}
+                      role="tab"
+                      aria-selected={orderType === 'delivery'}
+                    >
+                      <div className="social-mode-icon-circle">
+                        <Bike size={18} />
+                      </div>
+                      <span className="social-mode-card-label">Envío</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
