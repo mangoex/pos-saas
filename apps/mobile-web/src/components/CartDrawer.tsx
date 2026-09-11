@@ -77,6 +77,51 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     Boolean(initialProfile?.name && initialProfile?.phone),
   );
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [supportsNativeContacts, setSupportsNativeContacts] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (
+        typeof window !== 'undefined' &&
+        'contacts' in navigator &&
+        'ContactsManager' in window &&
+        typeof (navigator as any).contacts?.select === 'function'
+      ) {
+        setSupportsNativeContacts(true);
+      }
+    } catch {
+      setSupportsNativeContacts(false);
+    }
+  }, []);
+
+  const handle1TapAutofill = async () => {
+    try {
+      if ((navigator as any).contacts?.select) {
+        const selected = await (navigator as any).contacts.select(['name', 'tel'], { multiple: false });
+        if (selected && selected.length > 0) {
+          const contact = selected[0];
+          const rawName = Array.isArray(contact.name) ? contact.name[0] : contact.name;
+          const rawTel = Array.isArray(contact.tel) ? contact.tel[0] : contact.tel;
+          const pickedName = String(rawName || '').trim();
+          const pickedPhone = String(rawTel || '').trim();
+          if (pickedName) setName(pickedName);
+          if (pickedPhone) setPhone(pickedPhone);
+          if (pickedName && pickedPhone) {
+            saveCustomerProfile({
+              name: pickedName,
+              phone: pickedPhone,
+              street: street || undefined,
+              number: number || undefined,
+              neighborhood: neighborhood || undefined,
+              address_notes: addressNotes || undefined,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Ignored if dismissed or cancelled
+    }
+  };
 
   const [orderType, setOrderType] = useState<OrderType>(initialOrderType);
   const [tableNumber, setTableNumber] = useState('');
@@ -283,7 +328,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="cart-drawer-form-body">
+        <form
+          id="cart-checkout-form"
+          name="checkout_form"
+          method="post"
+          action="#"
+          autoComplete="on"
+          onSubmit={handleSubmit}
+          className="cart-drawer-form-body"
+        >
           {items.length === 0 ? (
             <div className="cart-empty-view">
               <div className="cart-empty-icon-circle">
@@ -536,6 +589,37 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   )}
                 </div>
 
+                {/* 1-Tap Native Contact Picker Button (when supported by browser) */}
+                {supportsNativeContacts && (!isReturningCustomer || isEditingCustomer) && (
+                  <button
+                    type="button"
+                    className="btn-cart-1tap-autofill"
+                    onClick={handle1TapAutofill}
+                  >
+                    <Sparkles size={16} color="#059669" />
+                    <span>⚡ Autocompletar con mis datos del celular (1-Tap)</span>
+                  </button>
+                )}
+
+                {/* Returning customer chip if editing and wants to restore */}
+                {initialProfile?.name && isEditingCustomer && (
+                  <button
+                    type="button"
+                    className="btn-cart-restore-profile"
+                    onClick={() => {
+                      setName(initialProfile.name);
+                      setPhone(initialProfile.phone);
+                      if (initialProfile.street) setStreet(initialProfile.street);
+                      if (initialProfile.number) setNumber(initialProfile.number);
+                      if (initialProfile.neighborhood) setNeighborhood(initialProfile.neighborhood);
+                      if (initialProfile.address_notes) setAddressNotes(initialProfile.address_notes);
+                      setIsEditingCustomer(false);
+                    }}
+                  >
+                    <span>Restaurar datos guardados de <strong>{initialProfile.name}</strong></span>
+                  </button>
+                )}
+
                 {isReturningCustomer && !isEditingCustomer ? (
                   <div className="cart-returning-customer-card">
                     <div className="cart-returning-customer-avatar">
@@ -559,32 +643,45 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 ) : (
                   <div className="cart-form-fields-grid">
                     <div className="cart-input-wrapper">
-                      <User size={16} className="cart-input-icon" />
+                      <label htmlFor="customer-name" className="cart-accessible-label">
+                        Nombre completo
+                      </label>
+                      <User size={16} className="cart-input-icon" aria-hidden="true" />
                       <input
                         id="customer-name"
                         name="name"
                         type="text"
                         autoComplete="name"
+                        autoCapitalize="words"
+                        autoCorrect="off"
+                        spellCheck={false}
                         className="cart-input-field"
                         placeholder="Tu nombre completo *"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
+                        onInput={(e) => setName((e.target as HTMLInputElement).value)}
                         required
                       />
                     </div>
 
                     <div className="cart-input-wrapper">
-                      <Phone size={16} className="cart-input-icon" />
+                      <label htmlFor="customer-phone" className="cart-accessible-label">
+                        Teléfono celular
+                      </label>
+                      <Phone size={16} className="cart-input-icon" aria-hidden="true" />
                       <input
                         id="customer-phone"
-                        name="phone"
+                        name="tel"
                         type="tel"
                         inputMode="tel"
                         autoComplete="tel"
+                        autoCorrect="off"
+                        spellCheck={false}
                         className="cart-input-field"
                         placeholder="Teléfono Celular *"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
+                        onInput={(e) => setPhone((e.target as HTMLInputElement).value)}
                         required
                       />
                     </div>
@@ -655,55 +752,79 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   ) : (
                     <div className="cart-form-fields-grid">
                       <div className="cart-input-wrapper">
-                        <MapPin size={16} className="cart-input-icon" />
+                        <label htmlFor="customer-street" className="cart-accessible-label">
+                          Calle y número
+                        </label>
+                        <MapPin size={16} className="cart-input-icon" aria-hidden="true" />
                         <input
                           id="customer-street"
-                          name="street"
+                          name="address"
                           type="text"
                           autoComplete="street-address"
+                          autoCapitalize="words"
                           className="cart-input-field"
                           placeholder="Calle *"
                           value={street}
                           onChange={(e) => setStreet(e.target.value)}
+                          onInput={(e) => setStreet((e.target as HTMLInputElement).value)}
                           required
                         />
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
-                        <input
-                          id="customer-number"
-                          name="number"
-                          type="text"
-                          autoComplete="address-line2"
-                          className="cart-input-field no-icon"
-                          placeholder="No. Ext / Int *"
-                          value={number}
-                          onChange={(e) => setNumber(e.target.value)}
-                          required
-                        />
-                        <input
-                          id="customer-neighborhood"
-                          name="neighborhood"
-                          type="text"
-                          autoComplete="address-level3"
-                          className="cart-input-field no-icon"
-                          placeholder="Colonia *"
-                          value={neighborhood}
-                          onChange={(e) => setNeighborhood(e.target.value)}
-                          required
-                        />
+                        <div>
+                          <label htmlFor="customer-number" className="cart-accessible-label">
+                            Número exterior o interior
+                          </label>
+                          <input
+                            id="customer-number"
+                            name="address-line2"
+                            type="text"
+                            autoComplete="address-line2"
+                            className="cart-input-field no-icon"
+                            placeholder="No. Ext / Int *"
+                            value={number}
+                            onChange={(e) => setNumber(e.target.value)}
+                            onInput={(e) => setNumber((e.target as HTMLInputElement).value)}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="customer-neighborhood" className="cart-accessible-label">
+                            Colonia
+                          </label>
+                          <input
+                            id="customer-neighborhood"
+                            name="address-level3"
+                            type="text"
+                            autoComplete="address-level3"
+                            autoCapitalize="words"
+                            className="cart-input-field no-icon"
+                            placeholder="Colonia *"
+                            value={neighborhood}
+                            onChange={(e) => setNeighborhood(e.target.value)}
+                            onInput={(e) => setNeighborhood((e.target as HTMLInputElement).value)}
+                            required
+                          />
+                        </div>
                       </div>
 
-                      <input
-                        id="customer-address-notes"
-                        name="address_notes"
-                        type="text"
-                        autoComplete="off"
-                        className="cart-input-field no-icon"
-                        placeholder="Referencias de entrega (ej: Portón café, timbre blanco)"
-                        value={addressNotes}
-                        onChange={(e) => setAddressNotes(e.target.value)}
-                      />
+                      <div>
+                        <label htmlFor="customer-address-notes" className="cart-accessible-label">
+                          Referencias de entrega
+                        </label>
+                        <input
+                          id="customer-address-notes"
+                          name="address_notes"
+                          type="text"
+                          autoComplete="off"
+                          className="cart-input-field no-icon"
+                          placeholder="Referencias de entrega (ej: Portón café, timbre blanco)"
+                          value={addressNotes}
+                          onChange={(e) => setAddressNotes(e.target.value)}
+                          onInput={(e) => setAddressNotes((e.target as HTMLInputElement).value)}
+                        />
+                      </div>
                     </div>
                   )}
 

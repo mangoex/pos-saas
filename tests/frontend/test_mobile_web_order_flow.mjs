@@ -341,11 +341,18 @@ test('Mobile checkout form has standard 1-tap HTML5 autofill attributes and retu
   const source = readFileSync(join(root, 'apps/mobile-web/src/components/CartDrawer.tsx'), 'utf8');
 
   // Standard HTML5 autofill attributes for zero-friction 1-tap browser filling
+  assert.match(source, /id="cart-checkout-form"/);
+  assert.match(source, /method="post"/);
+  assert.match(source, /autoComplete="on"/);
+  assert.match(source, /htmlFor="customer-name"/);
   assert.match(source, /id="customer-name"/);
   assert.match(source, /autoComplete="name"/);
+  assert.match(source, /htmlFor="customer-phone"/);
   assert.match(source, /id="customer-phone"/);
+  assert.match(source, /name="tel"/);
   assert.match(source, /autoComplete="tel"/);
   assert.match(source, /inputMode="tel"/);
+  assert.match(source, /htmlFor="customer-street"/);
   assert.match(source, /id="customer-street"/);
   assert.match(source, /autoComplete="street-address"/);
   assert.match(source, /id="customer-number"/);
@@ -353,7 +360,9 @@ test('Mobile checkout form has standard 1-tap HTML5 autofill attributes and retu
   assert.match(source, /id="customer-neighborhood"/);
   assert.match(source, /autoComplete="address-level3"/);
 
-  // Returning customer profile integration
+  // 1-Tap native contact picker API and returning customer profile integration
+  assert.match(source, /handle1TapAutofill/);
+  assert.match(source, /btn-cart-1tap-autofill/);
   assert.match(source, /getSavedCustomerProfile/);
   assert.match(source, /saveCustomerProfile/);
   assert.match(source, /cart-returning-customer-card/);
