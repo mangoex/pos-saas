@@ -589,6 +589,33 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {order.payment_status === 'CONFIRMED' ? (
+                        <span
+                          style={{
+                            fontSize: '0.6875rem',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            backgroundColor: '#dcfce7',
+                            color: '#166534',
+                          }}
+                        >
+                          ✓ Pagado
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: '0.6875rem',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            backgroundColor: '#fef3c7',
+                            color: '#b45309',
+                          }}
+                        >
+                          Por cobrar
+                        </span>
+                      )}
                       <span
                         style={{
                           fontSize: '0.75rem',

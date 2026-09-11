@@ -34,5 +34,13 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     Given un usuario administrador en la pestaña de "Sucursal"
     When consulta los enlaces y canales digitales del restaurante
     Then el sistema muestra el enlace al menú digital público con opciones para copiar, abrir y compartir por WhatsApp
-    And permite activar o desactivar la recepción de pedidos por WhatsApp y alternar reversiblemente a la vista de escritorio
+  @BDD-SC-501
+  Scenario: Cobro y entrega integrada de pedidos desde el monitor móvil de comandas
+    Given un usuario administrador en el monitor móvil de pedidos con una comanda en estado "Listos"
+    And la comanda tiene cobro pendiente con un total positivo
+    When selecciona el método de pago ("Efectivo", "Tarjeta" o "Transferencia") y confirma la entrega
+    Then el sistema registra el pago mediante "POST /orders/{id}/payments" asociado al turno de caja abierto
+    And transiciona la comanda a entregada mediante "POST /orders/{id}/fulfillment/deliver"
+    And la venta queda reflejada inmediatamente en los reportes contables y corte de caja
+    And si la comanda ya estaba entregada pero con pago pendiente, permite confirmar el cobro directamente sin requerir una terminal POS de escritorio
 ```

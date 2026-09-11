@@ -328,7 +328,26 @@ def get_open_cash_shift(
     )
     if len(rows) > 1:
         raise BusinessError("cash_shift_ambiguous", "More than one open cash shift exists")
-    return dict(rows[0]) if rows else None
+    if rows:
+        return dict(rows[0])
+    branch_shifts = (
+        session.execute(
+            sa.select(models.cash_shifts)
+            .where(
+                models.cash_shifts.c.organization_id == organization_id,
+                models.cash_shifts.c.branch_id == actual_branch_id,
+                sa.func.upper(models.cash_shifts.c.status) == "OPEN",
+            )
+            .order_by(models.cash_shifts.c.opened_at.desc())
+        )
+        .mappings()
+        .all()
+    )
+    if len(branch_shifts) == 1:
+        return dict(branch_shifts[0])
+    if len(branch_shifts) > 1:
+        raise BusinessError("cash_shift_ambiguous", "More than one open cash shift exists")
+    return None
 
 
 def _authorize_cash_or_order_branch(

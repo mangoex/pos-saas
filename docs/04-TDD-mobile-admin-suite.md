@@ -17,3 +17,7 @@
 ### TDD-TC-253 Exposición de enlaces digitales de sucursal y alternancia reversible a vista de escritorio
 - Archivo: `apps/api/tests/test_mobile_admin_suite.py::test_mobile_branch_settings_and_links`
 - Propósito: Comprobar la consulta de enlaces digitales públicos (`/saas/links`) y actualización de configuración de sucursal (`whatsapp_ordering_enabled`, `google_review_url`).
+
+### TDD-TC-254 Cobro y entrega integrada de comanda con snapshot de venta y liquidación de pedidos entregados
+- Archivo: `apps/api/tests/test_mobile_admin_suite.py::test_mobile_order_payment_and_fulfillment`
+- Propósito: Validar que un pedido en estado listo o entregado puede recibir cobro vía `POST /orders/{id}/payments`, registrando el pago con el método seleccionado contra el turno de caja abierto, creando snapshot histórico de venta, emitiendo evento `PAYMENT_CONFIRMED` y actualizando la proyección de `payment_status` a `CONFIRMED`.

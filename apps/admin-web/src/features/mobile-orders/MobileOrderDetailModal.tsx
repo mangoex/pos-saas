@@ -86,11 +86,14 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
 
   useEffect(() => {
     if (!isOpen || !orderId) {
       setDetail(null);
       setError(null);
+      setNotice(null);
       return;
     }
 
@@ -98,10 +101,19 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     const fetchDetail = async () => {
       setLoading(true);
       setError(null);
+      setNotice(null);
       try {
         const data = await fetchApi<OrderDetail>(`/orders/${encodeURIComponent(orderId)}`);
         if (active) {
           setDetail(data);
+          const intent = (data.payment_method_intent || data.payment_method || '').toLowerCase();
+          if (intent.includes('card') || intent.includes('tarjeta')) {
+            setPaymentMethod('card');
+          } else if (intent.includes('transfer')) {
+            setPaymentMethod('transfer');
+          } else {
+            setPaymentMethod('cash');
+          }
         }
       } catch (err) {
         if (active) {
@@ -125,6 +137,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
   const handleAcceptOrder = async () => {
     if (!orderId) return;
     setActionLoading(true);
+    setError(null);
     try {
       await fetchApi(`/orders/${encodeURIComponent(orderId)}/accept`, {
         method: 'POST',
@@ -148,9 +161,104 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     }
   };
 
+  const handleDeliverAndPay = async () => {
+    if (!orderId || !detail) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const isAlreadyPaid = detail.payment_status === 'CONFIRMED';
+      if (!isAlreadyPaid && detail.total_cents > 0) {
+        const paymentIdempotencyKey = `pay-mobile-${orderId}-${Date.now()}`;
+        await fetchApi(`/orders/${encodeURIComponent(orderId)}/payments`, {
+          method: 'POST',
+          headers: {
+            'Idempotency-Key': paymentIdempotencyKey,
+          },
+          body: JSON.stringify({
+            amount_cents: detail.total_cents,
+            method: paymentMethod,
+            register_id: 'CAJA-01',
+            idempotency_key: paymentIdempotencyKey,
+          }),
+        });
+      }
+
+      const fulfillIdempotencyKey = `mobile-fulfill-${orderId}-deliver-${Date.now()}`;
+      await fetchApi(`/orders/${encodeURIComponent(orderId)}/fulfillment/deliver`, {
+        method: 'POST',
+        headers: {
+          'Idempotency-Key': fulfillIdempotencyKey,
+        },
+      });
+
+      if (onOrderUpdated) onOrderUpdated();
+      onClose();
+    } catch (err: any) {
+      let msg =
+        typeof err?.message === 'string'
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Error al procesar la entrega y cobro.';
+      if (msg.includes('cash_shift_not_open') || msg.includes('OPEN cash shift is required')) {
+        msg = '⚠️ La caja está cerrada. Abre el turno en la pestaña "Caja" para poder registrar cobros.';
+      }
+      setError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmPaymentOnly = async () => {
+    if (!orderId || !detail) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const paymentIdempotencyKey = `pay-mobile-${orderId}-${Date.now()}`;
+      await fetchApi(`/orders/${encodeURIComponent(orderId)}/payments`, {
+        method: 'POST',
+        headers: {
+          'Idempotency-Key': paymentIdempotencyKey,
+        },
+        body: JSON.stringify({
+          amount_cents: detail.total_cents,
+          method: paymentMethod,
+          register_id: 'CAJA-01',
+          idempotency_key: paymentIdempotencyKey,
+        }),
+      });
+
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              payment_status: 'CONFIRMED',
+              payment_method: paymentMethod,
+            }
+          : null
+      );
+      setNotice('¡Cobro registrado y confirmado exitosamente!');
+      if (onOrderUpdated) onOrderUpdated();
+    } catch (err: any) {
+      let msg =
+        typeof err?.message === 'string'
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Error al confirmar el cobro.';
+      if (msg.includes('cash_shift_not_open') || msg.includes('OPEN cash shift is required')) {
+        msg = '⚠️ La caja está cerrada. Abre el turno en la pestaña "Caja" para poder registrar cobros.';
+      }
+      setError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleFulfillTransition = async (command: string = 'deliver') => {
     if (!orderId) return;
     setActionLoading(true);
+    setError(null);
     try {
       const idempotencyKey = `mobile-fulfill-${orderId}-${command}-${Date.now()}`;
       await fetchApi(`/orders/${encodeURIComponent(orderId)}/fulfillment/${encodeURIComponent(command)}`, {
@@ -339,22 +447,30 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                 borderRadius: 6,
                 backgroundColor:
                   isCompleted
-                    ? '#f1f5f9'
+                    ? detail?.payment_status === 'CONFIRMED'
+                      ? '#dcfce7'
+                      : '#fef3c7'
                     : isReadyOrInPrep
                       ? '#dcfce7'
                       : '#e0f2fe',
                 color:
                   isCompleted
-                    ? '#475569'
+                    ? detail?.payment_status === 'CONFIRMED'
+                      ? '#166534'
+                      : '#b45309'
                     : isReadyOrInPrep
                       ? '#166534'
                       : '#0369a1',
               }}
             >
               {isCompleted
-                ? 'Entregado'
+                ? detail?.payment_status === 'CONFIRMED'
+                  ? 'Entregado y Pagado'
+                  : 'Entregado (Por Cobrar)'
                 : isReadyOrInPrep
-                  ? 'Listo para Entrega'
+                  ? detail?.payment_status === 'CONFIRMED'
+                    ? 'Listo (Pagado)'
+                    : 'Listo para Entrega'
                   : 'Por Aceptar'}
             </span>
           </div>
@@ -402,6 +518,27 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
             >
               <AlertCircle size={18} />
               <span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>
+            </div>
+          )}
+
+          {notice && (
+            <div
+              style={{
+                backgroundColor: '#f0fdf4',
+                color: '#166534',
+                padding: '12px 14px',
+                borderRadius: 8,
+                marginBottom: 14,
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                border: '1px solid #bbf7d0',
+              }}
+            >
+              <CheckCircle size={18} color="#16a34a" />
+              <span>{notice}</span>
             </div>
           )}
 
@@ -713,13 +850,81 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
             </button>
           )}
 
+          {/* Payment Method Selector if not yet confirmed */}
+          {detail && detail.payment_status !== 'CONFIRMED' && !isUnaccepted && (
+            <div
+              style={{
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: '8px 10px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: '#475569',
+                  textTransform: 'uppercase',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span>Método de Cobro al Entregar</span>
+                {cashAmount ? (
+                  <span style={{ color: '#059669', fontSize: '0.72rem', fontWeight: 600 }}>
+                    Paga con: ${cashAmount}
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                {[
+                  { id: 'cash' as const, label: 'Efectivo', icon: '💵' },
+                  { id: 'card' as const, label: 'Tarjeta', icon: '💳' },
+                  { id: 'transfer' as const, label: 'Transfer.', icon: '📲' },
+                ].map((m) => {
+                  const isSelected = paymentMethod === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setPaymentMethod(m.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        padding: '8px 4px',
+                        borderRadius: 8,
+                        border: isSelected ? '2px solid #059669' : '1px solid #cbd5e1',
+                        backgroundColor: isSelected ? '#ecfdf5' : '#ffffff',
+                        color: isSelected ? '#065f46' : '#64748b',
+                        fontWeight: isSelected ? 700 : 600,
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <span>{m.icon}</span>
+                      <span>{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {isReadyOrInPrep && (
             <button
-              onClick={() => handleFulfillTransition('deliver')}
+              onClick={handleDeliverAndPay}
               disabled={actionLoading}
               style={{
                 width: '100%',
-                backgroundColor: '#0f172a',
+                backgroundColor: detail?.payment_status === 'CONFIRMED' ? '#0f172a' : '#059669',
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: 10,
@@ -734,29 +939,77 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
               }}
             >
               <CheckCircle size={18} />
-              {actionLoading ? 'Marcando listo para entregar...' : 'Listo para Entregar'}
+              {actionLoading
+                ? 'Procesando entrega y cobro...'
+                : detail?.payment_status === 'CONFIRMED'
+                  ? 'Listo para Entregar'
+                  : `Entregar y Confirmar Pago ($${orderTotal} MXN)`}
             </button>
           )}
 
           {isCompleted && (
-            <div
-              style={{
-                width: '100%',
-                backgroundColor: '#f1f5f9',
-                color: '#166534',
-                borderRadius: 10,
-                padding: '12px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-              }}
-            >
-              <CheckCircle size={18} color="#16a34a" />
-              Pedido Entregado y Finalizado
-            </div>
+            detail?.payment_status === 'CONFIRMED' ? (
+              <div
+                style={{
+                  width: '100%',
+                  backgroundColor: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  color: '#166534',
+                  borderRadius: 10,
+                  padding: '12px',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <CheckCircle size={18} color="#16a34a" />
+                Pedido Entregado y Pagado
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    color: '#92400e',
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    fontSize: '0.825rem',
+                    fontWeight: 600,
+                    textAlign: 'center',
+                  }}
+                >
+                  ⚠️ Pedido entregado sin cobro confirmado
+                </div>
+                <button
+                  onClick={handleConfirmPaymentOnly}
+                  disabled={actionLoading}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#059669',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '12px',
+                    fontWeight: 700,
+                    fontSize: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <DollarSign size={18} />
+                  {actionLoading
+                    ? 'Confirmando pago...'
+                    : `Confirmar Pago Recibido ($${orderTotal} MXN)`}
+                </button>
+              </>
+            )
           )}
 
           <button

@@ -139,7 +139,10 @@ def test_db():
         "cash.movement.withdraw",
         "cash.concept.manage",
         "orders.read",
+        "orders.create",
         "orders.update",
+        "orders.fulfill",
+        "payments.confirm",
         "catalog.product.create",
         "catalog.product.update",
         "catalog.product.delete",
@@ -429,3 +432,86 @@ def test_mobile_branch_settings_and_links(test_db):
     assert branch_update_resp.status_code == 200
     updated_branch = branch_update_resp.json()
     assert updated_branch["whatsapp_ordering_enabled"] is True
+
+
+def test_mobile_order_payment_and_fulfillment(test_db):
+    """TDD-TC-254: Validate order payment and fulfillment lifecycle from mobile admin."""
+
+    def override_get_session():
+        yield test_db
+
+    app.dependency_overrides[get_session] = override_get_session
+    client = TestClient(app)
+    headers = _auth_headers(test_db)
+
+    # 1. Open cash shift
+    shift_resp = client.post(
+        "/api/v1/cash/shifts/open",
+        headers={**headers, "Idempotency-Key": "shift-open-mobile-001"},
+        json={
+            "branch_id": operations.BRANCH_ID,
+            "register_id": "CAJA-01",
+            "opening_cash_cents": 50000,
+        },
+    )
+    assert shift_resp.status_code == 200
+
+    # 2. Get product
+    prods = client.get("/api/v1/catalog/products", headers=headers).json()
+    assert len(prods) >= 1
+    target_product = prods[0]
+
+    # 3. Create order
+    create_resp = client.post(
+        "/api/v1/orders",
+        headers={**headers, "Idempotency-Key": "order-create-mobile-001"},
+        json={
+            "lines": [{"product_id": target_product["id"], "quantity": 1}],
+            "branch_id": operations.BRANCH_ID,
+            "order_type": "takeout",
+            "owner_name": "Carlos Gomez",
+            "payment_method_intent": "cash",
+        },
+    )
+    assert create_resp.status_code == 200
+    order = create_resp.json()
+    order_id = order["id"]
+    total_cents = order["total_cents"]
+
+    # 4. Check initial payment status is PENDING
+    detail_before = client.get(f"/api/v1/orders/{order_id}", headers=headers).json()
+    assert detail_before["payment_status"] == "PENDING"
+
+    # 5. Deliver order first (transition to DELIVERED)
+    fulfill_resp = client.post(
+        f"/api/v1/orders/{order_id}/fulfillment/deliver",
+        headers={**headers, "Idempotency-Key": f"mobile-fulfill-{order_id}-deliver"},
+    )
+    assert fulfill_resp.status_code == 200
+    assert fulfill_resp.json()["status"] == "DELIVERED"
+
+    # 6. Confirm payment for delivered order via POST /orders/{id}/payments
+    payment_resp = client.post(
+        f"/api/v1/orders/{order_id}/payments",
+        headers={**headers, "Idempotency-Key": f"pay-mobile-{order_id}-123456789"},
+        json={
+            "amount_cents": total_cents,
+            "method": "cash",
+            "register_id": "CAJA-01",
+        },
+    )
+    assert payment_resp.status_code == 200
+    payment = payment_resp.json()
+    assert payment["status"] == "CONFIRMED"
+
+    # 7. Check detail reflects CONFIRMED payment
+    detail_after = client.get(f"/api/v1/orders/{order_id}", headers=headers).json()
+    assert detail_after["payment_status"] == "CONFIRMED"
+    assert detail_after["status"] == "DELIVERED"
+
+    # 8. Check fallback resolution when register_id varies slightly
+    open_shift = operations.get_open_cash_shift(
+        test_db, register_code="CAJA-MOVILES", branch_id=operations.BRANCH_ID
+    )
+    assert open_shift is not None
+    assert open_shift["register_code"] == "CAJA-01"
