@@ -545,6 +545,10 @@ body {
 .category-circle-avatar {
   width: 58px;
   height: 58px;
+  min-height: 58px;
+  min-width: 58px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   background: #ffffff;
   border: 2px solid var(--border-light);
