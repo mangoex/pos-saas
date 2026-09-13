@@ -160,7 +160,14 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         items = Array.isArray(fallback) ? fallback : [];
       }
       
-      const todayOrders = items.filter((item) => isToday(item.created_at));
+      // Sort chronologically (FIFO: oldest arrivals at the top, newest arrivals at the bottom)
+      const todayOrders = items
+        .filter((item) => isToday(item.created_at))
+        .sort((a, b) => {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return timeA - timeB;
+        });
       
       const latestTs = todayOrders.reduce((max, order) => {
         const ts = Date.parse(order.created_at);
