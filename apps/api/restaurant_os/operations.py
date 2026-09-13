@@ -27630,6 +27630,7 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
         "owner_phone": org["owner_phone"],
         "plan": org["plan"],
         "subscription_status": org["subscription_status"],
+        "access_block_reason": org["access_block_reason"],
         "trial_ends_at": org["trial_ends_at"].isoformat() if org["trial_ends_at"] else None,
         "trial_days_remaining": trial_days,
         "trial_extra_days": trial_extra_days,

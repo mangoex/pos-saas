@@ -1594,9 +1594,41 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   fontWeight: 700,
                   color: '#334155',
                   cursor: 'pointer',
+                  width: '100%',
                 }}
               >
                 Ver Versión Completa de Escritorio
+              </button>
+            </div>
+
+            {/* Cerrar Sesión */}
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('auth_token');
+                  localStorage.removeItem('user');
+                  sessionStorage.removeItem('auth_token');
+                  window.location.href = '/';
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  backgroundColor: '#fee2e2',
+                  color: '#b91c1c',
+                  border: '1px solid #fecaca',
+                  borderRadius: 14,
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <Power size={18} />
+                Cerrar Sesión
               </button>
             </div>
           </div>
