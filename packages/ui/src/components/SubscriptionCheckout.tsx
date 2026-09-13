@@ -14,7 +14,9 @@ const getPublicKey = () => {
 };
 
 const PUBLIC_KEY = getPublicKey();
-initMercadoPago(PUBLIC_KEY, { locale: 'es-MX' });
+if (PUBLIC_KEY) {
+  initMercadoPago(PUBLIC_KEY, { locale: 'es-MX' });
+}
 
 export interface SubscriptionCheckoutProps {
   /** Callback emitido cuando se genera el token de forma segura */
@@ -82,43 +84,55 @@ export const SubscriptionCheckout: React.FC<SubscriptionCheckoutProps> = ({
       </header>
 
       <div className="checkout-form-wrapper" aria-live="polite">
-        {!isReady && (
-          <div className="loading-state">
-            <span className="loading-spinner" aria-hidden="true"></span>
-            <p>Cargando pasarela segura...</p>
+        {!PUBLIC_KEY ? (
+          <div className="loading-state" style={{ color: 'var(--color-error)' }}>
+            <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>⚠️</div>
+            <p style={{ margin: 0, fontWeight: 600 }}>Falta la clave pública de Mercado Pago</p>
+            <p style={{ fontSize: '0.75rem', marginTop: '4px', textAlign: 'center' }}>
+              Configura VITE_MERCADOPAGO_PUBLIC_KEY en tus variables de entorno para activar la pasarela.
+            </p>
           </div>
-        )}
-        
-        {/*
-          CardPayment renderiza un iframe seguro (Secure Fields).
-          Se inyectan customVariables para mantener coherencia con nuestros tokens de diseño.
-        */}
-        <CardPayment
-          initialization={initialization}
-          onSubmit={onSubmit}
-          onReady={onReady}
-          onError={onErrorHandler}
-          customization={{
-            visual: {
-              style: {
-                theme: 'default',
-                customVariables: {
-                  formBackgroundColor: 'transparent',
-                  baseColor: 'var(--color-primary)',
-                  textPrimaryColor: 'var(--color-text)',
-                  textSecondaryColor: 'var(--color-text-muted)',
-                  errorColor: 'var(--color-error)',
-                  successColor: 'var(--color-success)',
-                  outlinePrimaryColor: 'var(--color-focus)',
-                  buttonTextColor: '#ffffff',
+        ) : (
+          <>
+            {!isReady && (
+              <div className="loading-state">
+                <span className="loading-spinner" aria-hidden="true"></span>
+                <p>Cargando pasarela segura...</p>
+              </div>
+            )}
+            
+            {/*
+              CardPayment renderiza un iframe seguro (Secure Fields).
+              Se inyectan customVariables para mantener coherencia con nuestros tokens de diseño.
+            */}
+            <CardPayment
+              initialization={initialization}
+              onSubmit={onSubmit}
+              onReady={onReady}
+              onError={onErrorHandler}
+              customization={{
+                visual: {
+                  style: {
+                    theme: 'default',
+                    customVariables: {
+                      formBackgroundColor: 'transparent',
+                      baseColor: 'var(--color-primary)',
+                      textPrimaryColor: 'var(--color-text)',
+                      textSecondaryColor: 'var(--color-text-muted)',
+                      errorColor: 'var(--color-error)',
+                      successColor: 'var(--color-success)',
+                      outlinePrimaryColor: 'var(--color-focus)',
+                      buttonTextColor: '#ffffff',
+                    }
+                  }
+                },
+                paymentMethods: {
+                  maxInstallments: 1, // Restringido a 1 cargo por ser suscripción
                 }
-              }
-            },
-            paymentMethods: {
-              maxInstallments: 1, // Restringido a 1 cargo por ser suscripción
-            }
-          }}
-        />
+              }}
+            />
+          </>
+        )}
       </div>
 
       <style>{`
