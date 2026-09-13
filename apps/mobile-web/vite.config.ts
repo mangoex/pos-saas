@@ -30,7 +30,7 @@ export default defineConfig({
       }
     })
   ],
-  base: '/menu/',
+  base: '/',
   server: {
     host: true,
     port: 3004,
