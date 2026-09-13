@@ -2,7 +2,18 @@ import React, { useState } from 'react';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 
 // Inicializar Mercado Pago con la clave pública
-const PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '';
+// Soporta tanto Vite (import.meta.env) como Next/CRA (process.env)
+const getPublicKey = () => {
+  if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY) {
+    return process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
+  }
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_MERCADOPAGO_PUBLIC_KEY) {
+    return (import.meta as any).env.VITE_MERCADOPAGO_PUBLIC_KEY;
+  }
+  return ''; // Reemplaza esto con una default key si es necesario para pruebas
+};
+
+const PUBLIC_KEY = getPublicKey();
 initMercadoPago(PUBLIC_KEY, { locale: 'es-MX' });
 
 export interface SubscriptionCheckoutProps {

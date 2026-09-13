@@ -99,17 +99,6 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
     fetchApi<{ step: 'business' | 'menu' | 'register' | 'complete' }>('/saas/onboarding')
       .then((setup) => {
         setOnboardingStatus(setup.step);
-        if (setup.step !== 'complete') {
-          try {
-            const prompted = sessionStorage.getItem('restaurantos_mobile_onboarding_prompted');
-            if (!prompted) {
-              sessionStorage.setItem('restaurantos_mobile_onboarding_prompted', 'true');
-              setIsOnboardingModalOpen(true);
-            }
-          } catch {
-            // ignore
-          }
-        }
       })
       .catch(() => setOnboardingStatus(null));
   }, []);
