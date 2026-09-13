@@ -140,7 +140,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 6,
                 background: 'rgba(255, 255, 255, 0.2)',
                 padding: '2px 8px',
                 borderRadius: 9999,
@@ -181,7 +181,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
       )}
 
       {/* Active Tab View */}
-      <div style={{ minHeight: '100vh', paddingBottom: 72 }}>
+      <div style={{ minHeight: '100vh', paddingBottom: 88 }}>
         {currentTab === 'orders' && (
           <MobileTabErrorBoundary tabName="Pedidos">
             <MobileOrdersMonitor branchId={branchId} branchName={branchName} />
@@ -230,7 +230,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
           bottom: 0,
           left: 0,
           right: 0,
-          height: 64,
+          height: 76,
           backgroundColor: '#0f172a',
           borderTop: '1px solid #1e293b',
           display: 'flex',
@@ -254,14 +254,14 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 4,
+            gap: 6,
             cursor: 'pointer',
             color: currentTab === 'orders' ? '#38bdf8' : '#94a3b8',
             padding: 0,
           }}
         >
-          <ChefHat size={22} color={currentTab === 'orders' ? '#38bdf8' : '#94a3b8'} />
-          <span style={{ fontSize: '0.725rem', fontWeight: currentTab === 'orders' ? 800 : 600 }}>
+          <ChefHat size={26} color={currentTab === 'orders' ? '#38bdf8' : '#94a3b8'} />
+          <span style={{ fontSize: '0.8rem', fontWeight: currentTab === 'orders' ? 800 : 600 }}>
             Pedidos
           </span>
         </button>
@@ -279,14 +279,14 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 4,
+            gap: 6,
             cursor: 'pointer',
             color: currentTab === 'cash' ? '#38bdf8' : '#94a3b8',
             padding: 0,
           }}
         >
-          <CircleDollarSign size={22} color={currentTab === 'cash' ? '#38bdf8' : '#94a3b8'} />
-          <span style={{ fontSize: '0.725rem', fontWeight: currentTab === 'cash' ? 800 : 600 }}>
+          <CircleDollarSign size={26} color={currentTab === 'cash' ? '#38bdf8' : '#94a3b8'} />
+          <span style={{ fontSize: '0.8rem', fontWeight: currentTab === 'cash' ? 800 : 600 }}>
             Caja
           </span>
         </button>
@@ -304,14 +304,14 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 4,
+            gap: 6,
             cursor: 'pointer',
             color: currentTab === 'menu' ? '#38bdf8' : '#94a3b8',
             padding: 0,
           }}
         >
-          <Utensils size={22} color={currentTab === 'menu' ? '#38bdf8' : '#94a3b8'} />
-          <span style={{ fontSize: '0.725rem', fontWeight: currentTab === 'menu' ? 800 : 600 }}>
+          <Utensils size={26} color={currentTab === 'menu' ? '#38bdf8' : '#94a3b8'} />
+          <span style={{ fontSize: '0.8rem', fontWeight: currentTab === 'menu' ? 800 : 600 }}>
             Menú
           </span>
         </button>
@@ -329,14 +329,14 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 4,
+            gap: 6,
             cursor: 'pointer',
             color: currentTab === 'settings' ? '#38bdf8' : '#94a3b8',
             padding: 0,
           }}
         >
-          <Store size={22} color={currentTab === 'settings' ? '#38bdf8' : '#94a3b8'} />
-          <span style={{ fontSize: '0.725rem', fontWeight: currentTab === 'settings' ? 800 : 600 }}>
+          <Store size={26} color={currentTab === 'settings' ? '#38bdf8' : '#94a3b8'} />
+          <span style={{ fontSize: '0.8rem', fontWeight: currentTab === 'settings' ? 800 : 600 }}>
             Sucursal
           </span>
         </button>
