@@ -20,6 +20,7 @@ import {
   Trash2,
   ArrowUp,
   Tag,
+  CircleDollarSign,
 } from 'lucide-react';
 
 interface OrgProfile {
