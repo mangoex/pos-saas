@@ -248,6 +248,31 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
 
         {errorMessage && <div role="alert" style={{ marginBottom: 12, padding: '10px 12px', border: '1px solid #fecaca', borderRadius: 10, color: '#b91c1c', background: '#fef2f2', fontSize: '.82rem' }}>{errorMessage}</div>}
 
+        {draft && draft.unmatched_items && draft.unmatched_items.length > 0 && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 12,
+              padding: '12px 14px',
+              borderRadius: 12,
+              background: '#fffbeb',
+              border: '1.5px solid #f59e0b',
+              color: '#92400e',
+              boxShadow: '0 2px 6px rgba(245,158,11,0.08)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '.9rem', marginBottom: 4 }}>
+              <span style={{ fontSize: '1.15rem' }}>⚠️</span>
+              <span>No disponible en el menú:</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '.84rem', lineHeight: 1.4 }}>
+              No se incluyó:{' '}
+              <b style={{ color: '#b45309' }}>{draft.unmatched_items.join(', ')}</b>{' '}
+              porque no forma parte del menú de este restaurante. Abajo puedes revisar los productos que sí se agregaron al borrador.
+            </p>
+          </div>
+        )}
+
         {draft && <div style={{ marginBottom: 14, padding: 12, border: '1px solid #bbf7d0', borderRadius: 12, background: '#f0fdf4' }}>
           <strong style={{ color: '#166534' }}>Borrador para revisar</strong>
           {draft.lines.map((line, index) => <div key={`${line.product_id}-${index}`} style={{ marginTop: 8, color: '#334155' }}><b>{line.quantity} × {line.product_name}</b>{line.selected_options.length > 0 && <div style={{ fontSize: '.78rem', color: '#64748b' }}>{line.selected_options.map((option) => option.option_name).join(', ')}</div>}</div>)}
@@ -255,11 +280,6 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             const selected = draft.lines[question.line_index]?.selected_options.some((candidate) => candidate.group_id === question.group_id && candidate.option_id === option.id);
             return <button key={option.id} type="button" aria-pressed={selected} onClick={() => setDraft((current) => current ? toggleVoiceDraftOption(current, question, option) : current)} style={{ display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${selected ? '#16a34a' : '#cbd5e1'}`, borderRadius: 999, padding: '7px 10px', color: selected ? '#166534' : '#475569', background: selected ? '#dcfce7' : '#fff' }}>{selected && <Check size={14} />}{option.name}</button>;
           })}</div></fieldset>)}
-          {draft.unmatched_items && draft.unmatched_items.length > 0 && (
-            <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: '.78rem' }}>
-              ⚠️ No disponibles en el menú: {draft.unmatched_items.join(', ')}
-            </div>
-          )}
         </div>}
 
         {!draft ? <button type="button" onClick={() => void handleSubmit()} disabled={isLoading || !transcript.trim()} style={{ width: '100%', padding: 14, border: 0, borderRadius: 14, color: '#fff', fontWeight: 800, background: isLoading || !transcript.trim() ? '#cbd5e1' : 'linear-gradient(135deg,#10b981,#059669)' }}>{isLoading ? 'Interpretando…' : 'Crear borrador'}</button>
