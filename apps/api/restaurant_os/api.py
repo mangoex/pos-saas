@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -187,6 +188,7 @@ from restaurant_os.operations import (
     list_inventory_transfers,
     list_kds_tasks,
     list_order_accounts,
+    list_pending_public_order_alerts,
     list_order_comments,
     list_order_reopen_requests,
     list_payments,
@@ -2509,6 +2511,22 @@ def get_pending_order_count(
     return _business_response(lambda: count_pending_orders(session, branch_id, actor_id))
 
 
+@router.get("/orders/public-intent-alerts")
+def get_pending_public_order_alerts(
+    session: SessionDep,
+    response: Response,
+    branch_id: str | None = None,
+    since_utc: str | None = None,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, list[dict[str, Any]]]:
+    response.headers["Cache-Control"] = "no-store"
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return _business_response(
+        lambda: list_pending_public_order_alerts(session, branch_id, since_utc, actor_id)
+    )
+
+
 @router.post("/orders/{order_id}/reopen-requests")
 def create_order_reopen_request_endpoint(
     order_id: str,
@@ -3214,6 +3232,11 @@ class PublicOrderIntentPayload(BaseModel):
         return self
 
 
+class PublicVoiceOrderDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=3, max_length=1000)
+
+
 class ValidateCouponPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: str | None = Field(default=None, max_length=64)
@@ -3302,6 +3325,117 @@ def public_catalog_by_key_endpoint(public_key: str, session: SessionDep) -> dict
         return get_public_catalog(session, branch_id=str(key["branch_id"]))
 
     return _business_response(operation)
+
+
+def _public_client_signal(request: Request) -> str:
+    if request.client and request.client.host:
+        client_host = request.client.host
+    elif request.headers.get("x-forwarded-for"):
+        client_host = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    elif request.headers.get("x-real-ip"):
+        client_host = request.headers.get("x-real-ip", "").strip()
+    else:
+        client_host = "127.0.0.1"
+    user_agent = request.headers.get("user-agent", "")[:256]
+    return f"{client_host}\n{user_agent}"
+
+
+def _public_voice_order_error(code: str, status_code: int) -> HTTPException:
+    messages = {
+        "public_voice_order_unavailable": "El pedido asistido no está disponible.",
+        "public_voice_order_rate_limited": "Espera un momento antes de intentar de nuevo.",
+    }
+    return HTTPException(status_code=status_code, detail={"code": code, "message": messages[code]})
+
+
+@router.post("/public/branches/{public_key}/voice-order-draft")
+def create_public_voice_order_draft_endpoint(
+    public_key: str,
+    payload: PublicVoiceOrderDraftRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    settings = get_settings()
+    if (
+        not settings.public_voice_order_enabled
+        or not settings.openrouter_api_key
+        or not bool(getattr(request.app.state, "public_order_intents_enabled", False))
+    ):
+        raise _public_voice_order_error("public_voice_order_unavailable", 503)
+    key = _resolve_active_public_order_key(session, public_key)
+    limiter = getattr(request.app.state, "public_order_rate_limiter", None)
+    if not key or limiter is None:
+        raise _public_voice_order_error("public_voice_order_unavailable", 503)
+    try:
+        allowed = bool(limiter.allow(f"{public_key}:voice", _public_client_signal(request)))
+    except Exception as exc:
+        logger.info(
+            "public_voice_order_draft result=unavailable",
+            extra={"metric": "public_voice_order_draft", "result": "unavailable"},
+        )
+        raise _public_voice_order_error("public_voice_order_unavailable", 503) from exc
+    if not allowed:
+        logger.info(
+            "public_voice_order_draft result=limited",
+            extra={"metric": "public_voice_order_draft", "result": "limited"},
+        )
+        raise _public_voice_order_error("public_voice_order_rate_limited", 429)
+
+    catalog = get_public_catalog(session, branch_id=str(key["branch_id"]))
+    items = list(catalog.get("items") or [])
+    modifiers_by_product = {
+        str(item.get("id")): list(item.get("modifier_groups") or []) for item in items
+    }
+    options = OpenRouterOptions(
+        api_key=settings.openrouter_api_key,
+        model=settings.openrouter_model,
+        base_url=settings.openrouter_base_url,
+        timeout_seconds=settings.openrouter_timeout_seconds,
+        http_referer=settings.openrouter_http_referer,
+        app_title=settings.openrouter_app_title,
+    )
+    started_at = time.monotonic()
+    try:
+        draft = build_assisted_draft(
+            payload.text,
+            items,
+            lambda product_id: modifiers_by_product.get(product_id, []),
+            options,
+        )
+    except AssistedOrderError as exc:
+        latency_ms = round((time.monotonic() - started_at) * 1_000)
+        logger.info(
+            "public_voice_order_draft result=error error_code=%s model=%s latency_ms=%s",
+            exc.code,
+            settings.openrouter_model,
+            latency_ms,
+            extra={
+                "metric": "public_voice_order_draft",
+                "result": "error",
+                "latency_ms": latency_ms,
+            },
+        )
+        status_code = 422 if exc.code in {
+            "assisted_order_catalog_mismatch",
+            "assisted_order_unresolved",
+        } else 502
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    latency_ms = round((time.monotonic() - started_at) * 1_000)
+    logger.info(
+        "public_voice_order_draft result=success model=%s questions=%s latency_ms=%s",
+        settings.openrouter_model,
+        len(draft["questions"]),
+        latency_ms,
+        extra={
+            "metric": "public_voice_order_draft",
+            "result": "success",
+            "latency_ms": latency_ms,
+        },
+    )
+    return draft
 
 
 @router.get("/public/branches/{public_key}/trending-dishes")
@@ -3456,20 +3590,9 @@ def _create_public_order_intent_with_runtime(
             },
         )
 
-    client_host = ""
-    if request.client and request.client.host:
-        client_host = request.client.host
-    elif request.headers.get("x-forwarded-for"):
-        client_host = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    elif request.headers.get("x-real-ip"):
-        client_host = request.headers.get("x-real-ip", "").strip()
-    else:
-        client_host = "127.0.0.1"
-
     # Direct ASGI peer plus a bounded UA improves client partitioning without trusting
     # spoofable forwarding headers. The limiter HMACs this signal before Redis.
-    user_agent = request.headers.get("user-agent", "")[:256]
-    client_signal = f"{client_host}\n{user_agent}"
+    client_signal = _public_client_signal(request)
     try:
         allowed = bool(limiter.allow(public_key, client_signal))
     except Exception as exc:

@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     public_order_global_rate_limit_per_minute: int = Field(default=20, ge=1, le=1000)
     public_order_client_rate_limit_per_minute: int = Field(default=5, ge=1, le=1000)
     public_order_rate_limit_hmac_secret: str | None = Field(default=None, min_length=32)
+    public_voice_order_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "RESTAURANTOS_PUBLIC_VOICE_ORDER_ENABLED", "PUBLIC_VOICE_ORDER_ENABLED"
+        ),
+    )
     supervisor_authorization_global_rate_limit_per_minute: int = Field(
         default=30, ge=1, le=1000
     )
@@ -162,6 +168,17 @@ class Settings(BaseSettings):
             raise ValueError(
                 "RESTAURANTOS_OPENROUTER_API_KEY is required when assisted ordering is enabled"
             )
+        if self.environment == "production" and self.public_voice_order_enabled:
+            if not self.public_order_intents_enabled:
+                raise ValueError(
+                    "RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED is required when public voice "
+                    "ordering is enabled"
+                )
+            if not self.openrouter_api_key:
+                raise ValueError(
+                    "RESTAURANTOS_OPENROUTER_API_KEY is required when public voice ordering "
+                    "is enabled"
+                )
         if (
             self.environment == "production"
             and self.admin_ai_assistant_enabled

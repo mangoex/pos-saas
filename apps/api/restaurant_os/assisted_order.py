@@ -32,27 +32,75 @@ def _normalize(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", without_marks.lower()).strip()
 
 
+def _line_segments(
+    text: str,
+    proposal_lines: list[dict[str, Any]],
+    catalog_by_id: dict[str, dict[str, Any]],
+) -> list[str]:
+    normalized = _normalize(text)
+    starts: list[int] = []
+    search_from = 0
+    for candidate in proposal_lines:
+        product = catalog_by_id.get(str(candidate.get("product_id", "")))
+        product_name = _normalize(str(product.get("name", ""))) if product else ""
+        start = normalized.find(product_name, search_from) if product_name else -1
+        if start < 0:
+            return [""] * len(proposal_lines)
+        starts.append(start)
+        search_from = max(search_from, start + len(product_name))
+    return [
+        normalized[start : starts[index + 1] if index + 1 < len(starts) else len(normalized)]
+        for index, start in enumerate(starts)
+    ]
+
+
+def _option_is_requested(option_name: str, line_segment: str) -> bool:
+    normalized_option = _normalize(option_name)
+    if not normalized_option:
+        return False
+    option_pattern = rf"(?<!\w){re.escape(normalized_option)}(?!\w)"
+    if not re.search(option_pattern, line_segment):
+        return False
+    if normalized_option.startswith(("sin ", "no ")):
+        return True
+    negated_pattern = rf"(?<!\w)(?:sin|no)\s+{re.escape(normalized_option)}(?!\w)"
+    return re.search(negated_pattern, line_segment) is None
+
+
 def extract_and_redact_customer(text: str) -> tuple[str, str, str]:
-    phone_match = re.search(r"(?:\+?52[\s-]?)?(\d[\d\s-]{8,}\d)", text)
-    raw_phone = phone_match.group(0) if phone_match else ""
-    digits = re.sub(r"\D", "", raw_phone)
-    phone = (
-        digits if len(digits) in {10, 12} and (len(digits) == 10 or digits.startswith("52")) else ""
+    phone_pattern = re.compile(
+        r"(?<!\d)(?:\+?52[\s().-]*)?\(?(?:\d[\s().-]*){9}\d(?!\d)"
     )
-    name_match = re.search(
-        r"\b(?:para|a\s+nombre\s+de)\s+(?!recoger\b|llevar\b)(.+?)"
-        r"(?=\s+(?:con\s+)?tel[eé]fono\b|\s+\+?\d[\d\s-]{8,}\d|,?\s+"
-        r"(?:va\s+a\s+querer|quiere|pide)\b|$)",
-        text,
+    phone_matches = list(phone_pattern.finditer(text))
+    valid_phones = [
+        digits
+        for match in phone_matches
+        if (
+            len(digits := re.sub(r"\D", "", match.group(0))) in {10, 12}
+            and (len(digits) == 10 or digits.startswith("52"))
+        )
+    ]
+    phone = valid_phones[0] if valid_phones else ""
+    number_word = r"(?:cero|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)"
+    spoken_phone_pattern = re.compile(
+        rf"(?<!\w)(?:{number_word}[\s-]+){{6,14}}{number_word}(?!\w)",
         flags=re.IGNORECASE,
     )
-    customer_name = name_match.group(1).strip(" ,") if name_match else ""
-    redacted = text
-    if phone_match:
-        redacted = redacted[: phone_match.start()] + "[TELEFONO]" + redacted[phone_match.end() :]
-    if customer_name:
+    name_pattern = re.compile(
+        r"\b(?:para|a\s+nombre\s+de|soy|me\s+llamo|mi\s+nombre\s+es|"
+        r"pedido\s+(?:para|de))\s+(?!recoger\b|llevar\b)(.+?)"
+        r"(?=\s+(?:con\s+)?tel[eé]fono\b|\s+\+?\d[\d\s-]{8,}\d|,?\s+"
+        r"(?:y\s+)?(?:va\s+a\s+querer|quiero|quiere|pido|pide)\b|$)",
+        flags=re.IGNORECASE,
+    )
+    detected_names = [match.group(1).strip(" ,") for match in name_pattern.finditer(text)]
+    customer_name = detected_names[0] if detected_names else ""
+    redacted = spoken_phone_pattern.sub(
+        "[TELEFONO]", phone_pattern.sub("[TELEFONO]", text)
+    )
+    for detected_name in detected_names:
         redacted = re.sub(
-            re.escape(customer_name), "[CLIENTE]", redacted, count=1, flags=re.IGNORECASE
+            re.escape(detected_name), "[CLIENTE]", redacted, count=1, flags=re.IGNORECASE
         )
     return customer_name, phone, redacted
 
@@ -82,6 +130,21 @@ def _response_schema() -> dict[str, Any]:
     }
 
 
+def _parse_json_content(content: object) -> dict[str, Any]:
+    if isinstance(content, dict):
+        return content
+    if not isinstance(content, str):
+        raise ValueError("provider content must be JSON")
+    normalized = content.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", normalized, flags=re.IGNORECASE)
+    if fenced:
+        normalized = fenced.group(1).strip()
+    parsed = json.loads(normalized)
+    if not isinstance(parsed, dict):
+        raise ValueError("provider content must be an object")
+    return parsed
+
+
 def request_openrouter_draft(
     redacted_text: str,
     catalog: list[dict[str, Any]],
@@ -93,15 +156,7 @@ def request_openrouter_draft(
         "model": options.model,
         "temperature": 0,
         "max_tokens": 700,
-        "provider": {"require_parameters": True},
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "restaurant_order_draft",
-                "strict": True,
-                "schema": _response_schema(),
-            },
-        },
+        "response_format": {"type": "json_object"},
         "messages": [
             {
                 "role": "system",
@@ -113,7 +168,12 @@ def request_openrouter_draft(
             {
                 "role": "user",
                 "content": json.dumps(
-                    {"request": redacted_text, "catalog": menu}, ensure_ascii=False
+                    {
+                        "request": redacted_text,
+                        "catalog": menu,
+                        "response_schema": _response_schema(),
+                    },
+                    ensure_ascii=False,
                 ),
             },
         ],
@@ -135,7 +195,7 @@ def request_openrouter_draft(
         with opener(request, timeout=options.timeout_seconds) as response:
             envelope = json.loads(response.read().decode("utf-8"))
         content = envelope["choices"][0]["message"]["content"]
-        parsed = json.loads(content) if isinstance(content, str) else content
+        parsed = _parse_json_content(content)
     except (HTTPError, URLError, TimeoutError) as exc:
         raise AssistedOrderError(
             "assisted_order_provider_unavailable", "OpenRouter no respondió a tiempo."
@@ -166,23 +226,32 @@ def build_assisted_draft(
     ]
     by_id = {str(item["id"]): item for item in active_catalog}
     proposal = request_openrouter_draft(redacted_text, active_catalog, options, opener)
+    proposal_lines = proposal.get("lines")
+    if not isinstance(proposal_lines, list) or not 1 <= len(proposal_lines) <= 20:
+        raise AssistedOrderError(
+            "assisted_order_invalid_response", "OpenRouter devolvió una respuesta inválida."
+        )
     order_type = proposal.get("order_type")
     if order_type not in {None, "takeout", "delivery"}:
         raise AssistedOrderError(
             "assisted_order_invalid_response", "La modalidad propuesta no es válida."
         )
 
-    normalized_text = _normalize(redacted_text)
+    typed_proposal_lines = [
+        candidate for candidate in proposal_lines if isinstance(candidate, dict)
+    ]
+    if len(typed_proposal_lines) != len(proposal_lines):
+        raise AssistedOrderError(
+            "assisted_order_invalid_response", "La línea propuesta no es válida."
+        )
+    line_segments = _line_segments(redacted_text, typed_proposal_lines, by_id)
     lines: list[dict[str, Any]] = []
     questions: list[dict[str, Any]] = []
-    for index, candidate in enumerate(proposal["lines"]):
-        if not isinstance(candidate, dict):
-            raise AssistedOrderError(
-                "assisted_order_invalid_response", "La línea propuesta no es válida."
-            )
+    option_groups: list[dict[str, Any]] = []
+    for index, candidate in enumerate(typed_proposal_lines):
         product_id = str(candidate.get("product_id", ""))
         quantity = candidate.get("quantity")
-        if product_id not in by_id or not isinstance(quantity, int) or not 1 <= quantity <= 99:
+        if product_id not in by_id or type(quantity) is not int or not 1 <= quantity <= 99:
             raise AssistedOrderError(
                 "assisted_order_catalog_mismatch",
                 "La interpretación no coincide con el catálogo disponible.",
@@ -191,12 +260,12 @@ def build_assisted_draft(
         selected_options: list[dict[str, Any]] = []
         for group in groups:
             group_options = list(group.get("options") or [])
+            maximum = int(group.get("maximum_selections") or 1)
             matched = [
                 option
                 for option in group_options
-                if _normalize(str(option.get("name", "")))
-                and _normalize(str(option.get("name", ""))) in normalized_text
-            ][: int(group.get("maximum_selections") or len(group_options) or 1)]
+                if _option_is_requested(str(option.get("name", "")), line_segments[index])
+            ][:maximum]
             selected_options.extend(
                 {
                     "group_id": str(group["id"]),
@@ -204,36 +273,38 @@ def build_assisted_draft(
                     "option_name": str(option["name"]),
                     "price_delta_cents": int(option.get("price_delta_cents") or 0),
                     "kind": "comment"
-                    if option.get("variation_kind") == "order_comment"
+                    if (option.get("variation_kind") or option.get("selection_kind"))
+                    == "order_comment"
                     else "modifier",
                 }
                 for option in matched
             )
             minimum = int(group.get("minimum_selections") or 0)
-            maximum = int(group.get("maximum_selections") or 1)
-            if len(matched) < minimum:
+            if group_options:
                 group_name = str(group.get("name") or "opción").lower()
                 product_name = str(by_id[product_id]["name"])
-                questions.append(
-                    {
-                        "line_index": index,
-                        "group_id": str(group["id"]),
-                        "prompt": f"¿Qué {group_name} quiere para {product_name}?",
-                        "minimum_selections": minimum,
-                        "maximum_selections": maximum,
-                        "options": [
-                            {
-                                "id": str(option["id"]),
-                                "name": str(option["name"]),
-                                "price_delta_cents": int(option.get("price_delta_cents") or 0),
-                                "kind": "comment"
-                                if option.get("variation_kind") == "order_comment"
-                                else "modifier",
-                            }
-                            for option in group_options
-                        ],
-                    }
-                )
+                option_group = {
+                    "line_index": index,
+                    "group_id": str(group["id"]),
+                    "prompt": f"¿Qué {group_name} quiere para {product_name}?",
+                    "minimum_selections": minimum,
+                    "maximum_selections": maximum,
+                    "options": [
+                        {
+                            "id": str(option["id"]),
+                            "name": str(option["name"]),
+                            "price_delta_cents": int(option.get("price_delta_cents") or 0),
+                            "kind": "comment"
+                            if (option.get("variation_kind") or option.get("selection_kind"))
+                            == "order_comment"
+                            else "modifier",
+                        }
+                        for option in group_options
+                    ],
+                }
+                option_groups.append(option_group)
+                if len(matched) < minimum:
+                    questions.append(option_group)
         lines.append(
             {
                 "product_id": product_id,
@@ -252,6 +323,7 @@ def build_assisted_draft(
         "order_type": order_type,
         "lines": lines,
         "questions": questions,
+        "option_groups": option_groups,
         "status": "needs_input" if questions else "ready",
         "model": options.model,
     }

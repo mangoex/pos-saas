@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ChefHat, CircleDollarSign, Utensils, Store, Sparkles } from 'lucide-react';
 import { fetchApi } from '@restaurantos/api-client';
 import { MobileOrdersMonitor } from '../mobile-orders/MobileOrdersMonitor';
+import { MobileOrderAlertsCoordinator } from '../mobile-orders/MobileOrderAlertsCoordinator';
 import { MobileCashShiftTab } from './MobileCashShiftTab';
 import { MobileMenuManagerTab } from './MobileMenuManagerTab';
 import { MobileBranchSettingsTab } from './MobileBranchSettingsTab';
@@ -181,6 +182,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
       )}
 
       {/* Active Tab View */}
+      <MobileOrderAlertsCoordinator branchId={branchId} />
       <div style={{ minHeight: '100vh', paddingBottom: 88 }}>
         {currentTab === 'orders' && (
           <MobileTabErrorBoundary tabName="Pedidos">

@@ -249,6 +249,7 @@ def test_mobile_admin_tabs_and_contracts(test_db):
     )
     assert orders_resp.status_code == 200
 
+
     # 2. Cash shift tab endpoint
     cash_resp = client.get(
         f"/api/v1/cash/shifts/current?branch_id={operations.BRANCH_ID}&register_id=CAJA-01",
@@ -270,6 +271,106 @@ def test_mobile_admin_tabs_and_contracts(test_db):
     branches_resp = client.get("/api/v1/branches", headers=headers)
     assert branches_resp.status_code == 200
     assert len(branches_resp.json()) >= 1
+
+
+def test_mobile_public_intent_alert_feed_is_minimal_scoped_and_cursor_aware(test_db):
+    """TDD-TC-255/256: alert polling exposes only pending intent identity and time."""
+
+    def override_get_session():
+        yield test_db
+
+    app.dependency_overrides[get_session] = override_get_session
+    client = TestClient(app)
+    public_key = "mobile-alert-feed-key"
+    test_db.execute(
+        models.public_order_keys.insert().values(
+            public_key=public_key,
+            organization_id=ORGANIZATION_ID,
+            branch_id=operations.BRANCH_ID,
+            status="active",
+            created_at=datetime(2026, 9, 13, 6, 0, tzinfo=timezone.utc),
+        )
+    )
+    created_times = [
+        datetime(2026, 9, 13, 6, minute, tzinfo=timezone.utc) for minute in (1, 2)
+    ]
+    for index, created_at in enumerate(created_times, start=1):
+        test_db.execute(
+            models.public_order_intents.insert().values(
+                id=str(uuid.uuid4()),
+                organization_id=ORGANIZATION_ID,
+                branch_id=operations.BRANCH_ID,
+                public_key=public_key,
+                public_reference=f"PI-MOBILE-ALERT-{index}",
+                correlation_id=str(uuid.uuid4()),
+                status="PENDING_REVIEW",
+                customer_snapshot={"name": f"Cliente {index}", "phone": "5555555555"},
+                order_type="takeout",
+                total_cents=1000,
+                created_at=created_at,
+            )
+        )
+    test_db.execute(
+        models.public_order_intents.insert().values(
+            id=str(uuid.uuid4()),
+            organization_id=ORGANIZATION_ID,
+            branch_id=operations.BRANCH_ID,
+            public_key=public_key,
+            public_reference="PI-MOBILE-ALERT-ACCEPTED",
+            correlation_id=str(uuid.uuid4()),
+            status="ACCEPTED",
+            customer_snapshot={"name": "Cliente aceptado", "phone": "5555555555"},
+            order_type="takeout",
+            total_cents=1000,
+            created_at=datetime(2026, 9, 13, 6, 3, tzinfo=timezone.utc),
+        )
+    )
+    test_db.commit()
+
+    unauthorized = client.get(
+        f"/api/v1/orders/public-intent-alerts?branch_id={operations.BRANCH_ID}"
+    )
+    assert unauthorized.status_code == 401
+
+    forbidden = client.get(
+        f"/api/v1/orders/public-intent-alerts?branch_id={uuid.uuid4()}",
+        headers=_auth_headers(test_db),
+    )
+    assert forbidden.status_code == 403
+
+    response = client.get(
+        f"/api/v1/orders/public-intent-alerts?branch_id={operations.BRANCH_ID}",
+        headers=_auth_headers(test_db),
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert len(response.json()["items"]) == 2
+    assert set(response.json()["items"][0]) == {
+        "id",
+        "created_at",
+        "status",
+        "is_public_intent",
+    }
+    returned_cursor = response.json()["items"][1]["created_at"]
+    assert returned_cursor.endswith("Z")
+
+    cursor_response = client.get(
+        "/api/v1/orders/public-intent-alerts",
+        params={
+            "branch_id": operations.BRANCH_ID,
+            "since_utc": returned_cursor,
+        },
+        headers=_auth_headers(test_db),
+    )
+    assert cursor_response.status_code == 200, cursor_response.text
+    assert len(cursor_response.json()["items"]) == 1
+
+    invalid_cursor = client.get(
+        "/api/v1/orders/public-intent-alerts",
+        params={"branch_id": operations.BRANCH_ID, "since_utc": "not-a-date"},
+        headers=_auth_headers(test_db),
+    )
+    assert invalid_cursor.status_code == 409
 
 
 def test_mobile_cash_shift_open_close_and_movements(test_db):

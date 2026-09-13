@@ -726,7 +726,7 @@ export const App: React.FC = () => {
       <VoiceOrderModal
         isOpen={isVoiceModalOpen}
         onClose={() => setIsVoiceModalOpen(false)}
-        branchId={selectedBranch?.id || null}
+        publicKey={selectedBranch?.public_key || null}
         products={products}
         onAddCartItems={(items) => {
           setCart((prev) => [...prev, ...items]);
