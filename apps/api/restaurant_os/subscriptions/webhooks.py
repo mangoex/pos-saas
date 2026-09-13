@@ -1,6 +1,7 @@
-from typing import Any
-from fastapi import APIRouter
 import logging
+from typing import Any
+
+from fastapi import APIRouter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

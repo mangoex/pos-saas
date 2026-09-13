@@ -94,6 +94,8 @@ def create_app() -> FastAPI:
         )
     app.include_router(platform_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(storefront_router)
+    from restaurant_os.public_storefront import storefront_orders_router
+    app.include_router(storefront_orders_router)
     app.include_router(host_context_router)
     app.include_router(setup_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(domains_router, dependencies=[Depends(bind_support_audit_context)])

@@ -44,10 +44,16 @@ def _line_segments(
         product = catalog_by_id.get(str(candidate.get("product_id", "")))
         product_name = _normalize(str(product.get("name", ""))) if product else ""
         start = normalized.find(product_name, search_from) if product_name else -1
+        match_len = len(product_name)
+        if start < 0 and product_name:
+            stripped = re.sub(r"\d+\s*(?:oz|ml|l|gr|g|pz)?\b", "", product_name).strip()
+            if stripped:
+                start = normalized.find(stripped, search_from)
+                match_len = len(stripped)
         if start < 0:
             return [""] * len(proposal_lines)
         starts.append(start)
-        search_from = max(search_from, start + len(product_name))
+        search_from = max(search_from, start + match_len)
     return [
         normalized[start : starts[index + 1] if index + 1 < len(starts) else len(normalized)]
         for index, start in enumerate(starts)
@@ -161,8 +167,15 @@ def request_openrouter_draft(
             {
                 "role": "system",
                 "content": (
-                    "Eres un capturista de pedidos en español de México. Elige exclusivamente IDs "
-                    "del catálogo dado. No inventes productos. Devuelve sólo el JSON del esquema."
+                    "Eres un capturista experto de pedidos para restaurantes en México.\n"
+                    "Tu tarea es interpretar la solicitud del cliente y mapearla a los productos del catálogo.\n"
+                    "Reglas obligatorias:\n"
+                    "1. En 'product_id', usa ÚNICAMENTE el 'id' exacto del producto del catálogo que mejor coincida.\n"
+                    "2. Asocia nombres comunes, sinónimos y variaciones al producto más cercano del catálogo "
+                    "(por ejemplo: 'cafe americano' -> 'Café Americano12Oz', 'una bebida' -> 'Bebida del día', 'combo del dia' -> 'Combo del día').\n"
+                    "3. 'order_type' debe ser 'delivery', 'takeout', o null si no se especifica explícitamente entrega a domicilio o para llevar.\n"
+                    "4. 'quantity' debe ser un número entero (ej: 1, 2, 3).\n"
+                    "5. Responde estrictamente con el JSON requerido, sin texto adicional."
                 ),
             },
             {
@@ -231,11 +244,16 @@ def build_assisted_draft(
         raise AssistedOrderError(
             "assisted_order_invalid_response", "OpenRouter devolvió una respuesta inválida."
         )
-    order_type = proposal.get("order_type")
-    if order_type not in {None, "takeout", "delivery"}:
-        raise AssistedOrderError(
-            "assisted_order_invalid_response", "La modalidad propuesta no es válida."
-        )
+    raw_order_type = str(proposal.get("order_type") or "").strip().lower()
+    if raw_order_type in {"delivery", "domicilio", "envio", "envío"}:
+        order_type: str | None = "delivery"
+    elif raw_order_type in {
+        "takeout", "llevar", "para llevar", "recoger", "sucursal", "comedor",
+        "dine_in", "aqui", "aquí", "pedido", "orden"
+    }:
+        order_type = "takeout"
+    else:
+        order_type = None
 
     typed_proposal_lines = [
         candidate for candidate in proposal_lines if isinstance(candidate, dict)
@@ -249,9 +267,30 @@ def build_assisted_draft(
     questions: list[dict[str, Any]] = []
     option_groups: list[dict[str, Any]] = []
     for index, candidate in enumerate(typed_proposal_lines):
-        product_id = str(candidate.get("product_id", ""))
+        product_id = str(candidate.get("product_id", "")).strip()
         quantity = candidate.get("quantity")
-        if product_id not in by_id or type(quantity) is not int or not 1 <= quantity <= 99:
+        if product_id not in by_id:
+            norm_pid = _normalize(product_id)
+            for item in active_catalog:
+                if _normalize(str(item["name"])) == norm_pid:
+                    product_id = str(item["id"])
+                    break
+        if product_id not in by_id:
+            norm_pid = _normalize(product_id)
+            if len(norm_pid) >= 4:
+                for item in active_catalog:
+                    item_norm = _normalize(str(item["name"]))
+                    if norm_pid in item_norm or item_norm in norm_pid:
+                        product_id = str(item["id"])
+                        break
+
+        if type(quantity) is bool or type(quantity) is not int or not 1 <= quantity <= 99:
+            raise AssistedOrderError(
+                "assisted_order_catalog_mismatch",
+                "La interpretación no coincide con el catálogo disponible.",
+            )
+
+        if product_id not in by_id:
             raise AssistedOrderError(
                 "assisted_order_catalog_mismatch",
                 "La interpretación no coincide con el catálogo disponible.",

@@ -3,6 +3,8 @@
 from .service import (
     create_restaurant_administrator,
     create_tenant_by_admin,
+    delete_restaurant_administrator,
+    delete_tenant,
     get_saas_metrics,
     grant_tenant_administrative_activation,
     impersonate_tenant,
@@ -13,9 +15,7 @@ from .service import (
     provision_platform_superadmin,
     require_superadmin,
     setup_my_restaurant,
-    delete_tenant,
     update_restaurant_administrator,
-    delete_restaurant_administrator,
     update_tenant_details,
     update_tenant_plan,
     update_tenant_status,

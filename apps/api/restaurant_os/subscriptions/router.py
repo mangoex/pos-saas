@@ -1,7 +1,9 @@
 from typing import Any
+
 from fastapi import APIRouter
-from restaurant_os.subscriptions.webhooks import router as webhooks_router
+
 from restaurant_os.subscriptions.service import create_subscription
+from restaurant_os.subscriptions.webhooks import router as webhooks_router
 
 router = APIRouter()
 

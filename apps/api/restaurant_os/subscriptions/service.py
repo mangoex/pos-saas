@@ -1,6 +1,8 @@
 import inspect
 from decimal import Decimal
+
 import httpx
+
 
 async def create_subscription(package_name: str, card_token: str, user_email: str) -> None:
     # Use Decimal for the amount

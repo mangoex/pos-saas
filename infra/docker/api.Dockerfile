@@ -40,6 +40,7 @@ WORKDIR /app/apps/api
 RUN pip install --no-cache-dir -e .
 
 ENV RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED="true"
+ENV RESTAURANTOS_PUBLIC_VOICE_ORDER_ENABLED="true"
 
 EXPOSE 8000
 CMD ["/app/entrypoint.sh"]

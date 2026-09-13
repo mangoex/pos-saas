@@ -1,6 +1,5 @@
-import pytest
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 # We assume the app is imported from here.
