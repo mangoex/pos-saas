@@ -30,6 +30,7 @@ interface OrgProfile {
   trial_ends_at?: string | null;
   trial_days_remaining?: number;
   trial_extra_days?: number;
+  access_block_reason?: string | null;
 }
 
 interface MobileBranchSettingsTabProps {
