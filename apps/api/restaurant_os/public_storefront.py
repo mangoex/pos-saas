@@ -275,10 +275,8 @@ def post_storefront_voice_order(
     # 2. Load public catalog for the branch
     catalog = get_public_catalog(session, request.branch_id)
     menu: list[dict[str, Any]] = []
-    if "groups" in catalog:
-        for group in catalog["groups"]:
-            for item in group.get("items", []):
-                menu.append({"id": item["id"], "name": item["name"]})
+    for item in catalog.get("items", []):
+        menu.append({"id": str(item["id"]), "name": str(item["name"])})
 
     if not menu:
         raise HTTPException(

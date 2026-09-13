@@ -23,19 +23,9 @@ PRODUCT_1 = str(uuid.uuid4())
 PRODUCT_2 = str(uuid.uuid4())
 
 FAKE_CATALOG: dict[str, Any] = {
-    "groups": [
-        {
-            "name": "Tacos",
-            "items": [
-                {"id": PRODUCT_1, "name": "Tacos al Pastor"},
-            ],
-        },
-        {
-            "name": "Bebidas",
-            "items": [
-                {"id": PRODUCT_2, "name": "Coca Cola"},
-            ],
-        },
+    "items": [
+        {"id": PRODUCT_1, "name": "Tacos al Pastor"},
+        {"id": PRODUCT_2, "name": "Coca Cola"},
     ]
 }
 
