@@ -16,8 +16,8 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "subscriptions",
-        sa.Column("id", sa.Uuid(), primary_key=True),
-        sa.Column("restaurant_id", sa.Uuid(), nullable=False),
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("restaurant_id", sa.String(36), nullable=False),
         sa.Column("customer_id", sa.String(255), nullable=False),
         sa.Column("preapproval_id", sa.String(255), nullable=False),
         sa.Column("status", sa.String(32), nullable=False),

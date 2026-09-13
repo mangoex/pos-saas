@@ -3137,8 +3137,8 @@ dish_community_photos = sa.Table(
 subscriptions = sa.Table(
     "subscriptions",
     metadata,
-    sa.Column("id", sa.Uuid(), primary_key=True),
-    sa.Column("restaurant_id", sa.Uuid(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("restaurant_id", sa.String(36), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
     sa.Column("customer_id", sa.String(255), nullable=False),
     sa.Column("preapproval_id", sa.String(255), nullable=False),
     sa.Column("status", sa.String(32), nullable=False),
@@ -3148,7 +3148,7 @@ subscriptions = sa.Table(
 integration_events = sa.Table(
     "integration_events",
     metadata,
-    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("event_id", sa.String(255), nullable=False, unique=True),
     sa.Column("source", sa.String(255), nullable=False),
     sa.Column("payload", sa.JSON(), nullable=False),
