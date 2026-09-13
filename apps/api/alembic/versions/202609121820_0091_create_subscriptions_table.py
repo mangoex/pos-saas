@@ -1,15 +1,15 @@
 """Create subscriptions table
 
-Revision ID: 0089_create_subscriptions_table
-Revises: 0088_delivery_fees_configuration
+Revision ID: 0091_create_subscriptions_table
+Revises: 0090_branch_coupons_and_order_discounts
 """
 from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0089_create_subscriptions_table"
-down_revision: str | None = "0088_delivery_fees_configuration"
+revision: str = "0091_create_subscriptions_table"
+down_revision: str | None = "0090_branch_coupons_and_order_discounts"
 branch_labels = None
 depends_on = None
 
