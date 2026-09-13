@@ -72,13 +72,49 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
+  
+  const prevLatestTsRef = useRef<number>(0);
+  const isFirstLoadRef = useRef<boolean>(true);
+
+  const playNewOrderSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, ctx.currentTime);
+      gain1.gain.setValueAtTime(0, ctx.currentTime);
+      gain1.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
+      gain1.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.2);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.3);
+      gain2.gain.setValueAtTime(0, ctx.currentTime + 0.3);
+      gain2.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.35);
+      gain2.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.6);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 0.3);
+      osc2.stop(ctx.currentTime + 0.6);
+    } catch (e) {
+      console.error("Audio playback failed", e);
+    }
+  };
 
   const loadOrders = useCallback(async (isSilent = false) => {
     if (!branchId) return;
     if (!isSilent) setRefreshing(true);
     setError(null);
     try {
-      // First try /orders/accounts
       let items: OrderItem[] = [];
       try {
         const res = await fetchApi<{ items: OrderItem[] }>(
@@ -86,14 +122,26 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         );
         items = Array.isArray(res?.items) ? res.items : [];
       } catch {
-        // Fallback to /orders
         const fallback = await fetchApi<OrderItem[]>(
           `/orders?branch_id=${encodeURIComponent(branchId)}`
         );
         items = Array.isArray(fallback) ? fallback : [];
       }
-      // ONLY SHOW ORDERS CREATED TODAY (NO HISTORICAL ORDERS)
+      
       const todayOrders = items.filter((item) => isToday(item.created_at));
+      
+      const latestTs = todayOrders.reduce((max, order) => {
+        const ts = Date.parse(order.created_at);
+        return Math.max(max, isNaN(ts) ? 0 : ts);
+      }, 0);
+
+      if (!isFirstLoadRef.current && prevLatestTsRef.current > 0 && latestTs > prevLatestTsRef.current) {
+        playNewOrderSound();
+      }
+      
+      prevLatestTsRef.current = latestTs;
+      isFirstLoadRef.current = false;
+
       setOrders(todayOrders);
       setLastUpdated(new Date());
     } catch (err) {
