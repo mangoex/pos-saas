@@ -348,7 +348,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
 
       <main style={{ padding: '16px 14px', maxWidth: 640, margin: '0 auto' }}>
         {/* Trial Days Remaining Banner */}
-        {(orgProfile?.plan === 'trial' || orgProfile?.subscription_status === 'trialing') && (
+        {orgProfile && (orgProfile.plan === 'trial' || orgProfile.subscription_status === 'trialing' || orgProfile.trial_days_remaining === 0 || (orgProfile.trial_extra_days ?? 0) > 0) && (
           <section
             style={{
               background: (orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0
@@ -380,7 +380,8 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   marginBottom: 4,
                 }}
               >
-                <span>Periodo de Prueba</span>
+                <CircleDollarSign size={11} /> 
+                {((orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0) ? 'Prueba Vencida' : 'Prueba Gratuita'}
                 {((orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0) && (
                   <ArrowUp size={11} strokeWidth={3} />
                 )}
@@ -403,7 +404,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                 )}
               </h3>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#e0f2fe' }}>
-                {(orgProfile.trial_extra_days ?? 0) > 0
+                {(orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0
                   ? 'Tu prueba concluyó; tus operaciones continúan activas mientras gestionas tu activación.'
                   : 'Cuentas con acceso completo a todas las funciones de tu sucursal.'}
               </p>
@@ -421,14 +422,14 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                 Estado
               </div>
               <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>
-                {(orgProfile.trial_extra_days ?? 0) > 0 ? 'En Gracia' : orgProfile.subscription_status === 'PAST_DUE' || orgProfile.access_block_reason === 'tenant_trial_expired' ? 'Vencida' : 'Activo'}
+                {(orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0 ? 'En Gracia' : orgProfile.subscription_status === 'PAST_DUE' || orgProfile.access_block_reason === 'tenant_trial_expired' ? 'Vencida' : 'Activo'}
               </div>
             </div>
           </section>
         )}
 
         {/* Subscription Checkout for Trial / Expired */}
-        {orgProfile && (orgProfile.plan === 'trial' || orgProfile.subscription_status === 'trialing' || orgProfile.access_block_reason === 'tenant_trial_expired' || orgProfile.subscription_status === 'PAST_DUE') && (
+        {orgProfile && (orgProfile.plan === 'trial' || orgProfile.subscription_status === 'trialing' || orgProfile.access_block_reason === 'tenant_trial_expired' || orgProfile.subscription_status === 'PAST_DUE' || orgProfile.trial_days_remaining === 0 || (orgProfile.trial_extra_days ?? 0) > 0) && (
           <div style={{ marginBottom: 16 }}>
             {!showCheckout ? (
               <button
