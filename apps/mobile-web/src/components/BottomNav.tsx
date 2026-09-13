@@ -57,6 +57,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         // Actually I will just dispatch an event and let App.tsx handle it, or fetch here.
         // Wait, the prompt says "agrégalo al estado global (useCart / Zustand si existe, o despacha un evento)".
         // I'll dispatch a custom event.
+        alert(transcript);
         const customEvent = new CustomEvent('voice-transcript-ready', { detail: { transcript } });
         window.dispatchEvent(customEvent);
       } catch (e) {

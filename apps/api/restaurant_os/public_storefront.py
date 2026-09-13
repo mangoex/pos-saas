@@ -292,50 +292,21 @@ def post_storefront_voice_order(
             detail="Voice ordering is not configured on this installation.",
         )
 
-    schema = {
-        "type": "object",
-        "properties": {
-            "items": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "product_id": {"type": "string"},
-                        "quantity": {"type": "integer"},
-                        "modifiers": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                        },
-                    },
-                    "required": ["product_id", "quantity", "modifiers"],
-                    "additionalProperties": False,
-                },
-            },
-        },
-        "required": ["items"],
-        "additionalProperties": False,
-    }
-
     body = {
         "model": settings.openrouter_model,
         "temperature": 0,
         "max_tokens": 700,
         "provider": {"require_parameters": True},
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "voice_order",
-                "strict": True,
-                "schema": schema,
-            },
-        },
+        "response_format": {"type": "json_object"},
         "messages": [
             {
                 "role": "system",
                 "content": (
                     "Eres un capturista de pedidos de restaurante en español de México. "
                     "Usa exclusivamente los IDs del catálogo proporcionado. "
-                    "No inventes productos. Devuelve sólo el JSON del esquema."
+                    "No inventes productos.\n"
+                    "Devuelve EXACTAMENTE un objeto JSON con este esquema:\n"
+                    '{"items": [{"product_id": "string", "quantity": 1, "modifiers": ["string"]}]}'
                 ),
             },
             {
@@ -372,7 +343,17 @@ def post_storefront_voice_order(
         with urlopen(req, timeout=timeout) as resp:
             envelope = _json.loads(resp.read().decode("utf-8"))
         content = envelope["choices"][0]["message"]["content"]
-        parsed = _json.loads(content) if isinstance(content, str) else content
+        if isinstance(content, str):
+            content = content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            parsed = _json.loads(content.strip())
+        else:
+            parsed = content
     except (HTTPError, URLError, TimeoutError) as exc:
         logger.warning("storefront_voice_order provider_error: %s", exc)
         raise HTTPException(

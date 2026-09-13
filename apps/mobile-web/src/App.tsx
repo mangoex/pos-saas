@@ -195,6 +195,7 @@ export const App: React.FC = () => {
     const handleVoiceReady = async (e: any) => {
       const transcript = e.detail.transcript;
       if (!transcript || !selectedBranch) return;
+      alert("Procesando: " + transcript); // DEBUG
       try {
         const response = await fetch(`${API_BASE_URL}/storefront/orders/voice`, {
           method: 'POST',
@@ -222,6 +223,7 @@ export const App: React.FC = () => {
           if (newCartItems.length > 0) {
             setCart((prev) => [...prev, ...newCartItems]);
             setIsCartOpen(true);
+            alert("Pedido agregado al carrito"); // DEBUG
           } else {
             alert("No pudimos entender qué productos del menú querías. Intenta de nuevo.");
           }
