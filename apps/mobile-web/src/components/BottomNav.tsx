@@ -19,7 +19,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const [isRecording, setIsRecording] = useState(false);
 
   const handleDictate = async () => {
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Tu navegador no soporta reconocimiento de voz.");
       return;

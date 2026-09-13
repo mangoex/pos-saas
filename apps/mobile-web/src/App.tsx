@@ -207,7 +207,7 @@ export const App: React.FC = () => {
         // Add items to cart
         if (data.items) {
           const newCartItems = data.items.map((item: any) => {
-            const product = catalog?.groups.flatMap((g: any) => g.items).find((i: any) => i.id === item.product_id);
+            const product = products.find((p: Product) => p.id === item.product_id);
             if (!product) return null;
             return {
               cart_id: Math.random().toString(36).substring(2, 9),
@@ -217,7 +217,10 @@ export const App: React.FC = () => {
             };
           }).filter(Boolean);
 
-          setCart((prev: any) => [...prev, ...newCartItems]);
+          if (newCartItems.length > 0) {
+            setCart((prev) => [...prev, ...newCartItems]);
+            setIsCartOpen(true);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -226,7 +229,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('voice-transcript-ready', handleVoiceReady);
     return () => window.removeEventListener('voice-transcript-ready', handleVoiceReady);
-  }, [selectedBranch, catalog]);
+  }, [selectedBranch, products]);
 
   // Fetch trending dishes whenever branch changes
   useEffect(() => {
