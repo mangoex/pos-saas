@@ -27620,6 +27620,12 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
             "public_key": pk_row[0] if pk_row else None,
         })
 
+    access_block_reason = None
+    if org["subscription_status"] == "suspended" or org["status"] == "suspended":
+        access_block_reason = "tenant_suspended"
+    elif org["subscription_status"] == "trialing" and trial_days == 0:
+        access_block_reason = "tenant_trial_expired"
+
     return {
         "id": org["id"],
         "name": org["name"],
@@ -27630,7 +27636,7 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
         "owner_phone": org["owner_phone"],
         "plan": org["plan"],
         "subscription_status": org["subscription_status"],
-        "access_block_reason": org["access_block_reason"],
+        "access_block_reason": access_block_reason,
         "trial_ends_at": org["trial_ends_at"].isoformat() if org["trial_ends_at"] else None,
         "trial_days_remaining": trial_days,
         "trial_extra_days": trial_extra_days,
