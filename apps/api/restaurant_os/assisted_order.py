@@ -119,7 +119,7 @@ def _response_schema() -> dict[str, Any]:
             "order_type": {"type": ["string", "null"], "enum": ["takeout", "delivery", None]},
             "lines": {
                 "type": "array",
-                "minItems": 1,
+                "minItems": 0,
                 "maxItems": 20,
                 "items": {
                     "type": "object",
@@ -130,6 +130,10 @@ def _response_schema() -> dict[str, Any]:
                     },
                     "required": ["product_id", "quantity"],
                 },
+            },
+            "unmatched_items": {
+                "type": "array",
+                "items": {"type": "string"},
             },
         },
         "required": ["order_type", "lines"],
@@ -168,14 +172,19 @@ def request_openrouter_draft(
                 "role": "system",
                 "content": (
                     "Eres un capturista experto de pedidos para restaurantes en México.\n"
-                    "Tu tarea es interpretar la solicitud del cliente y mapearla a los productos del catálogo.\n"
-                    "Reglas obligatorias:\n"
-                    "1. En 'product_id', usa ÚNICAMENTE el 'id' exacto del producto del catálogo que mejor coincida.\n"
-                    "2. Asocia nombres comunes, sinónimos y variaciones al producto más cercano del catálogo "
-                    "(por ejemplo: 'cafe americano' -> 'Café Americano12Oz', 'una bebida' -> 'Bebida del día', 'combo del dia' -> 'Combo del día').\n"
-                    "3. 'order_type' debe ser 'delivery', 'takeout', o null si no se especifica explícitamente entrega a domicilio o para llevar.\n"
-                    "4. 'quantity' debe ser un número entero (ej: 1, 2, 3).\n"
-                    "5. Responde estrictamente con el JSON requerido, sin texto adicional."
+                    "Tu tarea es interpretar la solicitud del cliente y mapearla ÚNICAMENTE a los productos reales del catálogo provisto.\n\n"
+                    "Reglas obligatorias y estrictas:\n"
+                    "1. En 'product_id', usa ÚNICAMENTE el 'id' exacto del producto del catálogo que coincida con lo pedido.\n"
+                    "2. Asocia sinónimos directos o variaciones de presentación del mismo producto "
+                    "(por ejemplo: 'cafe americano' -> 'Café Americano12Oz', 'una bebida' -> 'Bebida del día', 'combo' -> 'Combo del día', 'coca' -> 'Refresco Coca-Cola').\n"
+                    "3. PROHIBIDO FORZAR COINCIDENCIAS O INVENTAR: Si el cliente pide algo que NO existe en el catálogo "
+                    "(por ejemplo: pide tacos, gringas, pizza o sushi en una cafetería o hamburguesería), "
+                    "NUNCA lo asignes a otro producto del menú (como 'platillo especial', 'combo', 'hamburguesa' ni ningún otro). "
+                    "Agrégalo como texto a la lista 'unmatched_items' y NO lo agregues a 'lines'.\n"
+                    "4. Si NINGUNO de los productos pedidos existe en el catálogo, 'lines' debe ser una lista vacía [].\n"
+                    "5. 'order_type' debe ser 'delivery', 'takeout', o null si no se especifica explícitamente entrega a domicilio o para llevar.\n"
+                    "6. 'quantity' debe ser un número entero (ej: 1, 2, 3).\n"
+                    "7. Responde estrictamente con el JSON requerido, sin texto adicional."
                 ),
             },
             {
@@ -240,10 +249,15 @@ def build_assisted_draft(
     by_id = {str(item["id"]): item for item in active_catalog}
     proposal = request_openrouter_draft(redacted_text, active_catalog, options, opener)
     proposal_lines = proposal.get("lines")
-    if not isinstance(proposal_lines, list) or not 1 <= len(proposal_lines) <= 20:
+    if not isinstance(proposal_lines, list) or not 0 <= len(proposal_lines) <= 20:
         raise AssistedOrderError(
             "assisted_order_invalid_response", "OpenRouter devolvió una respuesta inválida."
         )
+    unmatched_items = [
+        str(item).strip()
+        for item in (proposal.get("unmatched_items") or [])
+        if isinstance(item, str) and item.strip()
+    ]
     raw_order_type = str(proposal.get("order_type") or "").strip().lower()
     if raw_order_type in {"delivery", "domicilio", "envio", "envío"}:
         order_type: str | None = "delivery"
@@ -291,9 +305,10 @@ def build_assisted_draft(
             )
 
         if product_id not in by_id:
+            item_label = candidate.get("product_id") or "desconocido"
             raise AssistedOrderError(
                 "assisted_order_catalog_mismatch",
-                "La interpretación no coincide con el catálogo disponible.",
+                f"El producto «{item_label}» no se encuentra en el catálogo disponible de este restaurante.",
             )
         groups = modifier_loader(product_id)
         selected_options: list[dict[str, Any]] = []
@@ -353,14 +368,24 @@ def build_assisted_draft(
             }
         )
     if not lines:
-        raise AssistedOrderError(
-            "assisted_order_unresolved", "No se pudo identificar un producto del catálogo."
-        )
+        if unmatched_items:
+            items_preview = ", ".join(f"«{item}»" for item in unmatched_items[:3])
+            message = (
+                f"No encontramos en el menú de este restaurante: {items_preview}. "
+                "Por favor revisa los productos disponibles."
+            )
+        else:
+            message = (
+                "No se encontraron productos disponibles del catálogo en tu pedido. "
+                "Por favor revisa los productos disponibles."
+            )
+        raise AssistedOrderError("assisted_order_unresolved", message)
     return {
         "customer_name": customer_name,
         "phone": phone,
         "order_type": order_type,
         "lines": lines,
+        "unmatched_items": unmatched_items,
         "questions": questions,
         "option_groups": option_groups,
         "status": "needs_input" if questions else "ready",

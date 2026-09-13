@@ -415,3 +415,83 @@ def test_modifier_text_is_not_applied_globally_across_multiple_lines() -> None:
             options,
         )
     assert [line["selected_options"] for line in ambiguous["lines"]] == [[], []]
+
+
+def test_voice_order_when_items_not_in_menu_returns_unresolved_with_informative_message(
+    app_with_mock_session: tuple[Any, MagicMock],
+) -> None:
+    app, _mock_session = app_with_mock_session
+    client = TestClient(app)
+
+    with patch("restaurant_os.api.get_settings") as settings, patch(
+        "restaurant_os.api._resolve_active_public_order_key",
+        return_value={"branch_id": BRANCH_ID},
+    ), patch("restaurant_os.api.get_public_catalog", return_value=FAKE_CATALOG), patch(
+        "restaurant_os.assisted_order.request_openrouter_draft",
+        return_value={
+            "order_type": None,
+            "lines": [],
+            "unmatched_items": ["2 tacos de carne asada", "una gringa al pastor"],
+        },
+    ):
+        settings.return_value = MagicMock(
+            public_voice_order_enabled=True,
+            openrouter_api_key="test-key",
+            openrouter_model="test-model",
+            openrouter_base_url="https://openrouter.ai/api/v1",
+            openrouter_timeout_seconds=5,
+            openrouter_http_referer=None,
+            openrouter_app_title="RestaurantOS",
+        )
+        app.state.public_order_intents_enabled = True
+        app.state.public_order_rate_limiter = MagicMock(allow=MagicMock(return_value=True))
+        response = client.post(
+            f"/api/v1/public/branches/{PUBLIC_KEY}/voice-order-draft",
+            json={"text": "quiero dos tacos de asada y una gringa"},
+        )
+
+    assert response.status_code == 422
+    data = response.json()
+    assert data["detail"]["code"] == "assisted_order_unresolved"
+    assert "2 tacos de carne asada" in data["detail"]["message"]
+    assert "una gringa al pastor" in data["detail"]["message"]
+
+
+def test_voice_order_partial_match_includes_unmatched_items_in_draft(
+    app_with_mock_session: tuple[Any, MagicMock],
+) -> None:
+    app, _mock_session = app_with_mock_session
+    client = TestClient(app)
+
+    with patch("restaurant_os.api.get_settings") as settings, patch(
+        "restaurant_os.api._resolve_active_public_order_key",
+        return_value={"branch_id": BRANCH_ID},
+    ), patch("restaurant_os.api.get_public_catalog", return_value=FAKE_CATALOG), patch(
+        "restaurant_os.assisted_order.request_openrouter_draft",
+        return_value={
+            "order_type": None,
+            "lines": [{"product_id": PRODUCT_1, "quantity": 1}],
+            "unmatched_items": ["2 tacos de carne asada"],
+        },
+    ):
+        settings.return_value = MagicMock(
+            public_voice_order_enabled=True,
+            openrouter_api_key="test-key",
+            openrouter_model="test-model",
+            openrouter_base_url="https://openrouter.ai/api/v1",
+            openrouter_timeout_seconds=5,
+            openrouter_http_referer=None,
+            openrouter_app_title="RestaurantOS",
+        )
+        app.state.public_order_intents_enabled = True
+        app.state.public_order_rate_limiter = MagicMock(allow=MagicMock(return_value=True))
+        response = client.post(
+            f"/api/v1/public/branches/{PUBLIC_KEY}/voice-order-draft",
+            json={"text": "quiero una hamburguesa y 2 tacos de asada"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ready"
+    assert data["lines"][0]["product_id"] == PRODUCT_1
+    assert data["unmatched_items"] == ["2 tacos de carne asada"]

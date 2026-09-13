@@ -255,6 +255,11 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             const selected = draft.lines[question.line_index]?.selected_options.some((candidate) => candidate.group_id === question.group_id && candidate.option_id === option.id);
             return <button key={option.id} type="button" aria-pressed={selected} onClick={() => setDraft((current) => current ? toggleVoiceDraftOption(current, question, option) : current)} style={{ display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${selected ? '#16a34a' : '#cbd5e1'}`, borderRadius: 999, padding: '7px 10px', color: selected ? '#166534' : '#475569', background: selected ? '#dcfce7' : '#fff' }}>{selected && <Check size={14} />}{option.name}</button>;
           })}</div></fieldset>)}
+          {draft.unmatched_items && draft.unmatched_items.length > 0 && (
+            <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: '.78rem' }}>
+              ⚠️ No disponibles en el menú: {draft.unmatched_items.join(', ')}
+            </div>
+          )}
         </div>}
 
         {!draft ? <button type="button" onClick={() => void handleSubmit()} disabled={isLoading || !transcript.trim()} style={{ width: '100%', padding: 14, border: 0, borderRadius: 14, color: '#fff', fontWeight: 800, background: isLoading || !transcript.trim() ? '#cbd5e1' : 'linear-gradient(135deg,#10b981,#059669)' }}>{isLoading ? 'Interpretando…' : 'Crear borrador'}</button>

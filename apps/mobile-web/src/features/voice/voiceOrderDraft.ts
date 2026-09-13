@@ -34,6 +34,7 @@ export interface VoiceOrderDraft {
   }>;
   questions: VoiceDraftQuestion[];
   option_groups?: VoiceDraftQuestion[];
+  unmatched_items?: string[];
   status: 'ready' | 'needs_input';
   model: string;
 }
