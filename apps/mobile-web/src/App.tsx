@@ -13,6 +13,7 @@ import { TrendingFeed } from './components/TrendingFeed';
 import { BottomNav, NavTab } from './components/BottomNav';
 import { FloatingCartBar } from './components/FloatingCartBar';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
+import { VoiceOrderModal } from './components/VoiceOrderModal';
 import { detectProductSize } from './imageMap';
 
 const EXCLUDED_CATEGORY_KEYWORDS = [
@@ -68,6 +69,7 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('explore');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [createdOrderResult, setCreatedOrderResult] = useState<CreatedOrderResult | null>(null);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
@@ -190,53 +192,7 @@ export const App: React.FC = () => {
     };
   }, [selectedBranch?.public_key, catalogRetry]);
 
-  // Voice ordering: listen for transcript from BottomNav microphone
-  useEffect(() => {
-    const handleVoiceReady = async (e: any) => {
-      const transcript = e.detail.transcript;
-      if (!transcript || !selectedBranch) return;
-      alert("Procesando: " + transcript); // DEBUG
-      try {
-        const response = await fetch(`${API_BASE_URL}/storefront/orders/voice`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript, branch_id: selectedBranch.id })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(typeof data.detail === 'string' ? data.detail : "Error al procesar pedido por voz");
-        }
 
-        // Add items to cart
-        if (data.items) {
-          const newCartItems = data.items.map((item: any) => {
-            const product = products.find((p: Product) => p.id === item.product_id);
-            if (!product) return null;
-            return {
-              cart_id: Math.random().toString(36).substring(2, 9),
-              product,
-              quantity: item.quantity || 1,
-              selected_options: []
-            };
-          }).filter(Boolean);
-
-          if (newCartItems.length > 0) {
-            setCart((prev) => [...prev, ...newCartItems]);
-            setIsCartOpen(true);
-            alert("Pedido agregado al carrito"); // DEBUG
-          } else {
-            alert("No pudimos entender qué productos del menú querías. Intenta de nuevo.");
-          }
-        }
-      } catch (err: any) {
-        console.error(err);
-        alert(err.message || "Ocurrió un error al procesar tu pedido por voz. Intenta de nuevo.");
-      }
-    };
-
-    window.addEventListener('voice-transcript-ready', handleVoiceReady);
-    return () => window.removeEventListener('voice-transcript-ready', handleVoiceReady);
-  }, [selectedBranch, products]);
 
   // Fetch trending dishes whenever branch changes
   useEffect(() => {
@@ -763,6 +719,19 @@ export const App: React.FC = () => {
         }}
         cartCount={totalCartCount}
         favoritesCount={likedProductIds.size}
+        onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+      />
+
+      {/* Voice / AI Order Modal */}
+      <VoiceOrderModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        branchId={selectedBranch?.id || null}
+        products={products}
+        onAddCartItems={(items) => {
+          setCart((prev) => [...prev, ...items]);
+          setIsCartOpen(true);
+        }}
       />
     </div>
   );
