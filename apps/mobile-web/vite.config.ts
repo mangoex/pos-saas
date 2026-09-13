@@ -9,6 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['pwa-192x192.svg', 'pwa-512x512.svg'],
       manifest: {
+        scope: '/',
+        start_url: '/',
         name: 'RestaurantOS Menú',
         short_name: 'Menú',
         description: 'Menú Digital de RestaurantOS',
@@ -30,7 +32,7 @@ export default defineConfig({
       }
     })
   ],
-  base: '/',
+  base: '/menu/',
   server: {
     host: true,
     port: 3004,
