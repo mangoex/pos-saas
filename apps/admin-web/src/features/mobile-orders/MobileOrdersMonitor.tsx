@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
-  ChefHat
+  ChefHat,
+  Bell,
 } from 'lucide-react';
 import { MobileOrderDetailModal } from './MobileOrderDetailModal';
 
@@ -75,40 +76,71 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   
   const prevLatestTsRef = useRef<number>(0);
   const isFirstLoadRef = useRef<boolean>(true);
+  const sharedAudioCtxRef = useRef<any>(null);
+  const [soundActive, setSoundActive] = useState(false);
 
-  const playNewOrderSound = () => {
+  const getAudioContext = useCallback(() => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(880, ctx.currentTime);
-      gain1.gain.setValueAtTime(0, ctx.currentTime);
-      gain1.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
-      gain1.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(ctx.currentTime);
-      osc1.stop(ctx.currentTime + 0.2);
-
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.3);
-      gain2.gain.setValueAtTime(0, ctx.currentTime + 0.3);
-      gain2.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.35);
-      gain2.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.6);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(ctx.currentTime + 0.3);
-      osc2.stop(ctx.currentTime + 0.6);
-    } catch (e) {
-      console.error("Audio playback failed", e);
+      const AudioContextClass =
+        window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return null;
+      if (!sharedAudioCtxRef.current) {
+        sharedAudioCtxRef.current = new AudioContextClass();
+      }
+      if (sharedAudioCtxRef.current.state === 'suspended') {
+        void sharedAudioCtxRef.current.resume();
+      }
+      return sharedAudioCtxRef.current;
+    } catch {
+      return null;
     }
-  };
+  }, []);
+
+  // Unlock audio on any first interaction anywhere in the page
+  useEffect(() => {
+    const handleUnlock = () => {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === 'running') {
+        setSoundActive(true);
+      }
+    };
+    window.addEventListener('click', handleUnlock, { passive: true });
+    window.addEventListener('touchstart', handleUnlock, { passive: true });
+    return () => {
+      window.removeEventListener('click', handleUnlock);
+      window.removeEventListener('touchstart', handleUnlock);
+    };
+  }, [getAudioContext]);
+
+  const playNewOrderSound = useCallback(() => {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      // 3-tone pleasant kitchen bell (E5 -> G#5 -> B5)
+      const notes = [659.25, 830.61, 987.77];
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.16);
+
+        gain.gain.setValueAtTime(0.001, now + idx * 0.16);
+        gain.gain.linearRampToValueAtTime(0.7, now + idx * 0.16 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.16 + 0.5);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + idx * 0.16);
+        osc.stop(now + idx * 0.16 + 0.55);
+      });
+      setSoundActive(true);
+    } catch (e) {
+      console.error('Audio playback failed', e);
+    }
+  }, [getAudioContext]);
 
   const loadOrders = useCallback(async (isSilent = false) => {
     if (!branchId) return;
@@ -261,6 +293,29 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={playNewOrderSound}
+            aria-label="Probar sonido de alarma"
+            title="Toca para probar el timbre y activar el audio"
+            style={{
+              border: soundActive ? '1px solid #10b981' : '1px solid #475569',
+              background: soundActive ? '#064e3b' : '#1e293b',
+              color: soundActive ? '#6ee7b7' : '#e2e8f0',
+              borderRadius: 8,
+              padding: '6px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Bell size={15} color={soundActive ? '#34d399' : '#e2e8f0'} />
+            <span>{soundActive ? '🔔 Alarma Lista' : '🔔 Probar Timbre'}</span>
+          </button>
+
           <button
             onClick={() => void loadOrders()}
             disabled={refreshing}

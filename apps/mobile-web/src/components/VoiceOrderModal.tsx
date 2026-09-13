@@ -42,24 +42,41 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
 
     if (!SpeechRecognition) {
       setSpeechSupported(false);
+      setErrorMessage('Tu navegador no soporta reconocimiento de voz. Puedes escribir tu pedido abajo.');
       return;
     }
 
     setSpeechSupported(true);
-    startRecording();
 
     return () => {
       stopRecording();
     };
   }, [isOpen]);
 
-  const startRecording = () => {
+  const startRecording = async () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       setSpeechSupported(false);
+      setErrorMessage('Tu navegador no soporta reconocimiento de voz nativo. Escribe tu pedido abajo.');
       return;
+    }
+
+    setErrorMessage(null);
+
+    // Explicitly request microphone permission on mobile
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (micErr: any) {
+        console.warn('getUserMedia mic permission error:', micErr);
+        if (micErr.name === 'NotAllowedError' || micErr.name === 'PermissionDeniedError') {
+          setErrorMessage('Permiso de micrófono no otorgado. Escribe tu pedido en el cuadro abajo.');
+          return;
+        }
+      }
     }
 
     try {
@@ -74,8 +91,9 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
       recognition.lang = 'es-MX';
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
         setIsRecording(true);
@@ -83,33 +101,34 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       };
 
       recognition.onresult = (event: any) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
+        let interimText = '';
+        let finalText = '';
 
         for (let i = 0; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            finalTranscript += result[0].transcript + ' ';
+          const res = event.results[i];
+          if (res.isFinal) {
+            finalText += res[0].transcript + ' ';
           } else {
-            interimTranscript += result[0].transcript;
+            interimText += res[0].transcript;
           }
         }
 
-        const full = (finalTranscript + interimTranscript).trim();
-        if (full) {
-          setTranscript(full);
+        const recognized = (finalText + interimText).trim();
+        if (recognized) {
+          setTranscript(recognized);
         }
       };
 
       recognition.onerror = (event: any) => {
-        console.warn('Speech recognition event error:', event.error);
+        console.warn('SpeechRecognition event error:', event.error);
         if (event.error === 'not-allowed') {
-          setErrorMessage('Permiso de micrófono denegado. Escribe tu pedido abajo.');
-          setIsRecording(false);
+          setErrorMessage('Permiso de micrófono denegado. Puedes escribir tu pedido abajo.');
         } else if (event.error === 'network') {
-          setErrorMessage('Error de red al procesar voz. Puedes escribir tu pedido abajo.');
-          setIsRecording(false);
+          setErrorMessage('Error de conexión con el servicio de voz. Puedes escribir tu pedido abajo.');
+        } else if (event.error === 'no-speech') {
+          setErrorMessage('No se escuchó ninguna voz. Toca de nuevo para hablar o escribe abajo.');
         }
+        setIsRecording(false);
       };
 
       recognition.onend = () => {
@@ -117,9 +136,10 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       };
 
       recognition.start();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start speech recognition:', err);
       setIsRecording(false);
+      setErrorMessage('No se pudo activar el micrófono: ' + (err.message || 'Error'));
     }
   };
 
@@ -139,7 +159,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
     if (isRecording) {
       stopRecording();
     } else {
-      startRecording();
+      void startRecording();
     }
   };
 
@@ -252,6 +272,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '90vh',
+          boxSizing: 'border-box',
         }}
       >
         {/* Header */}
@@ -359,16 +380,16 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             }}
           >
             {isRecording
-              ? '🔴 Escuchando... Di tu pedido'
+              ? '🔴 Escuchando... Di lo que deseas ordenar'
               : speechSupported
-              ? 'Toca el micrófono para dictar'
+              ? 'Toca el micrófono para comenzar a dictar'
               : 'Micrófono no disponible en este navegador'}
           </span>
 
           <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>
             {isRecording
-              ? 'Toca el micrófono al terminar de hablar'
-              : 'También puedes editar o escribir abajo'}
+              ? 'Habla y verás tu pedido aparecer en tiempo real abajo'
+              : 'También puedes escribir tu pedido directamente abajo'}
           </span>
         </div>
 
@@ -389,19 +410,20 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
             disabled={isLoading}
-            placeholder="Ej: Quiero 3 tacos al pastor, una gringa y una coca bien fría..."
+            placeholder="Lo que digas aparecerá aquí... (ej: Quiero 3 tacos al pastor, una gringa y una coca)"
             rows={3}
             style={{
               width: '100%',
               padding: '12px',
               borderRadius: '12px',
-              border: '1.5px solid #cbd5e1',
+              border: isRecording ? '1.5px solid #ef4444' : '1.5px solid #cbd5e1',
               fontSize: '0.95rem',
               color: '#0f172a',
               resize: 'none',
               boxSizing: 'border-box',
               outline: 'none',
               fontFamily: 'inherit',
+              background: isRecording ? '#fffafb' : '#ffffff',
             }}
           />
           {transcript && !isLoading && (
