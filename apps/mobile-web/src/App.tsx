@@ -201,8 +201,10 @@ export const App: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ transcript, branch_id: selectedBranch.id })
         });
-        if (!response.ok) throw new Error("Error in voice order");
         const data = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof data.detail === 'string' ? data.detail : "Error al procesar pedido por voz");
+        }
 
         // Add items to cart
         if (data.items) {
@@ -220,10 +222,13 @@ export const App: React.FC = () => {
           if (newCartItems.length > 0) {
             setCart((prev) => [...prev, ...newCartItems]);
             setIsCartOpen(true);
+          } else {
+            alert("No pudimos entender qué productos del menú querías. Intenta de nuevo.");
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        alert(err.message || "Ocurrió un error al procesar tu pedido por voz. Intenta de nuevo.");
       }
     };
 

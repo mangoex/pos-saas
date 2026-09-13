@@ -17,8 +17,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   favoritesCount,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-  const handleDictate = async () => {
+  const handleDictate = () => {
+    if (isRecording) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
+      }
+      setIsRecording(false);
+      return;
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Tu navegador no soporta reconocimiento de voz.");
@@ -26,6 +37,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     }
 
     const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
     recognition.lang = 'es-MX';
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
@@ -60,16 +72,25 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       setIsRecording(false);
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error(e);
+      setIsRecording(false);
+    }
   };
 
   return (
     <>
       {isRecording && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', textAlign: 'center' }}>
-            <Mic size={48} color="red" />
-            <p>Escuchando...</p>
+        <div 
+          onClick={handleDictate}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, cursor: 'pointer' }}
+        >
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+            <Mic size={48} color="#ef4444" style={{ marginBottom: '1rem' }} />
+            <p style={{ margin: 0, fontWeight: 'bold' }}>Escuchando...</p>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: '#666' }}>Toca para detener</p>
           </div>
         </div>
       )}
