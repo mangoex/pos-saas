@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
@@ -62,7 +62,7 @@ def _login_superadmin(client: TestClient) -> dict[str, str]:
 def test_list_tenants_includes_trial_days_remaining_and_extra_days() -> None:
     client = _client_with_db()
     headers = _login_superadmin(client)
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
 
     # 1. Tenant con prueba activa: 10 días restantes
     resp_active_trial = client.post(
@@ -192,7 +192,7 @@ def test_delete_tenant_requires_suspended_status() -> None:
 def test_organization_profile_includes_trial_extra_days() -> None:
     client = _client_with_db()
     headers = _login_superadmin(client)
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
 
     # Crear tenant vencido
     create_resp = client.post(

@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 import threading
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -52,7 +52,7 @@ def _order(session: Session, org: str, branch: str, order_id: str) -> None:
             currency="MXN",
             payment_method_intent="cash",
             version=1,
-            created_at=datetime.now(UTC),
+            created_at=datetime.now(timezone.utc),
         )
     )
 
