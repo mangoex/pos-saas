@@ -186,6 +186,11 @@ La implementación y certificación real de ambos proveedores se difiere de esta
 - `PRD-FR-071`: **Gestión de Personal con PIN de 4 Dígitos**: Alta ágil de cajeros y supervisores con asignación de PIN de 4 dígitos para cambio rápido de usuario en el POS físico.
 - `PRD-FR-072`: **Reporte Automatizado al Dueño**: Configuración de envío nocturno del resumen de caja y ventas por WhatsApp o correo electrónico.
 
+### 4.9 Pago y Suscripción (Paquete Lite)
+
+- `PRD-FR-090`: **Custom Checkout Mercado Pago**: El pago del paquete Lite ($349 MXN) se procesa nativamente en el Backoffice sin redirección. Falla si hay fuga de contexto (redirección externa a Mercado Pago).
+- `PRD-FR-091`: **Suscripción Preapproval**: Mercado Pago gestiona la recurrencia mensual. La plataforma consume webhooks idempotentes para actualizar la vigencia de la sucursal de forma inmutable.
+
 ---
 
 ## 5. Módulos Podados y Fuera de Alcance para MVP (ERP Complejo)

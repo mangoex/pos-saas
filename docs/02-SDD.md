@@ -336,6 +336,21 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
 - La unicidad `(organization_id, branch_id, order_folio)` evita duplicados concurrentes para una referencia no nula. La migración se detiene si encuentra duplicados históricos y no los elimina automáticamente.
 - Lecturas y reparaciones de feedback filtran simultáneamente por `customer_id` y `organization_id`; consultar un cliente nunca incorpora filas de otra organización.
 
+### 5.8 Suscripciones Mercado Pago (Máquina de Estados)
+
+#### Modelo y Máquina de Estados (`subscriptions`):
+- `TRIAL`: Estado inicial tras onboarding (14 días).
+- `ACTIVE`: Tarjeta tokenizada y cobro validado (Preapproval activo).
+- `PAST_DUE`: Cobro recurrente fallido (ventana de gracia en postura fail-closed).
+- `CANCELED`: Suscripción terminada (manual o por morosidad).
+
+#### Arquitectura de Webhooks (Idempotencia):
+- **Idempotencia**: Todo webhook de pago de Mercado Pago valida su `id` contra la tabla de eventos (`integration_events`). Eventos procesados se descartan atómicamente.
+- **Fail-Closed**: Desajustes temporales o falta de confirmación tras expirar `next_billing_date` transicionan la suscripción a `PAST_DUE`, suspendiendo accesos operativos (excepto configuraciones).
+
+#### Modelo Físico:
+Tabla exclusiva para facturación de inquilinos: `id` (UUID), `restaurant_id` (FK `organizations.id`), `customer_id` (ID Mercado Pago), `preapproval_id` (ID Suscripción Mercado Pago), `status` (Enum/String), `next_billing_date` (DateTime UTC).
+
 ---
 
 ## 6. Plan de Podado y Desacople de Módulos ERP Tradicional

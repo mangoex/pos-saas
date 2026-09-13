@@ -3108,7 +3108,6 @@ customer_feedbacks = sa.Table(
     ),
 )
 
-
 dish_community_photos = sa.Table(
     "dish_community_photos",
     metadata,
@@ -3133,4 +3132,25 @@ dish_community_photos = sa.Table(
     sa.Index("ix_dish_community_photos_product_status", "product_id", "status"),
     sa.Index("ix_dish_community_photos_branch_status", "branch_id", "status"),
     sa.Index("ix_dish_community_photos_org_created", "organization_id", "created_at"),
+)
+
+subscriptions = sa.Table(
+    "subscriptions",
+    metadata,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("restaurant_id", sa.Uuid(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("customer_id", sa.String(255), nullable=False),
+    sa.Column("preapproval_id", sa.String(255), nullable=False),
+    sa.Column("status", sa.String(32), nullable=False),
+    sa.Column("next_billing_date", sa.DateTime(timezone=True), nullable=True),
+)
+
+integration_events = sa.Table(
+    "integration_events",
+    metadata,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("event_id", sa.String(255), nullable=False, unique=True),
+    sa.Column("source", sa.String(255), nullable=False),
+    sa.Column("payload", sa.JSON(), nullable=False),
+    sa.Column("processed_at", sa.DateTime(timezone=True), nullable=False),
 )
