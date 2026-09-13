@@ -190,6 +190,44 @@ export const App: React.FC = () => {
     };
   }, [selectedBranch?.public_key, catalogRetry]);
 
+  // Voice ordering: listen for transcript from BottomNav microphone
+  useEffect(() => {
+    const handleVoiceReady = async (e: any) => {
+      const transcript = e.detail.transcript;
+      if (!transcript || !selectedBranch) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/storefront/orders/voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transcript, branch_id: selectedBranch.id })
+        });
+        if (!response.ok) throw new Error("Error in voice order");
+        const data = await response.json();
+
+        // Add items to cart
+        if (data.items) {
+          const newCartItems = data.items.map((item: any) => {
+            const product = catalog?.groups.flatMap((g: any) => g.items).find((i: any) => i.id === item.product_id);
+            if (!product) return null;
+            return {
+              cart_id: Math.random().toString(36).substring(2, 9),
+              product,
+              quantity: item.quantity || 1,
+              selected_options: []
+            };
+          }).filter(Boolean);
+
+          setCart((prev: any) => [...prev, ...newCartItems]);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    window.addEventListener('voice-transcript-ready', handleVoiceReady);
+    return () => window.removeEventListener('voice-transcript-ready', handleVoiceReady);
+  }, [selectedBranch, catalog]);
+
   // Fetch trending dishes whenever branch changes
   useEffect(() => {
     if (!selectedBranch?.public_key) {

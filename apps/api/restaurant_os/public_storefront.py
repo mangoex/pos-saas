@@ -9,6 +9,9 @@ from typing import Annotated, Any
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
+from restaurant_os.config import get_settings
+from restaurant_os.operations import get_public_catalog
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
@@ -233,3 +236,162 @@ def icon(identifier: str, session: Annotated[Session, Depends(get_session)]) -> 
         f'font-size="160" fill="white">{initials}</text></svg>'
     )
     return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
+storefront_orders_router = APIRouter(
+    prefix="/api/v1/storefront/orders", tags=["storefront-orders"]
+)
+
+
+class VoiceOrderRequest(BaseModel):
+    """Public voice order request — no authentication required."""
+
+    transcript: str
+    branch_id: str
+
+
+@storefront_orders_router.post("/voice")
+def post_storefront_voice_order(
+    request: VoiceOrderRequest,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict[str, Any]:
+    """Parse a voice transcript into structured cart items using AI."""
+    import json as _json
+    import logging
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    logger = logging.getLogger("restaurant_os.storefront_voice")
+
+    # 1. Validate branch exists
+    branch_exists = session.execute(
+        sa.select(models.branches.c.id).where(
+            models.branches.c.id == request.branch_id
+        )
+    ).scalar()
+    if not branch_exists:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    # 2. Load public catalog for the branch
+    catalog = get_public_catalog(session, request.branch_id)
+    menu: list[dict[str, Any]] = []
+    if "groups" in catalog:
+        for group in catalog["groups"]:
+            for item in group.get("items", []):
+                menu.append({"id": item["id"], "name": item["name"]})
+
+    if not menu:
+        raise HTTPException(
+            status_code=422, detail="No catalog items found for this branch."
+        )
+
+    # 3. Build AI request using configured settings
+    settings = get_settings()
+    api_key = settings.openrouter_api_key
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Voice ordering is not configured on this installation.",
+        )
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "product_id": {"type": "string"},
+                        "quantity": {"type": "integer"},
+                        "modifiers": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["product_id", "quantity", "modifiers"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+    }
+
+    body = {
+        "model": settings.openrouter_model,
+        "temperature": 0,
+        "max_tokens": 700,
+        "provider": {"require_parameters": True},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "voice_order",
+                "strict": True,
+                "schema": schema,
+            },
+        },
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Eres un capturista de pedidos de restaurante en español de México. "
+                    "Usa exclusivamente los IDs del catálogo proporcionado. "
+                    "No inventes productos. Devuelve sólo el JSON del esquema."
+                ),
+            },
+            {
+                "role": "user",
+                "content": _json.dumps(
+                    {"request": request.transcript, "catalog": menu},
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+    }
+
+    base_url = getattr(settings, "openrouter_base_url", "https://openrouter.ai/api/v1")
+    timeout = getattr(settings, "openrouter_timeout_seconds", 15)
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    http_referer = getattr(settings, "openrouter_http_referer", None)
+    app_title = getattr(settings, "openrouter_app_title", "RestaurantOS")
+    if http_referer:
+        headers["HTTP-Referer"] = http_referer
+    headers["X-OpenRouter-Title"] = app_title
+
+    req = Request(
+        f"{base_url.rstrip('/')}/chat/completions",
+        data=_json.dumps(body).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            envelope = _json.loads(resp.read().decode("utf-8"))
+        content = envelope["choices"][0]["message"]["content"]
+        parsed = _json.loads(content) if isinstance(content, str) else content
+    except (HTTPError, URLError, TimeoutError) as exc:
+        logger.warning("storefront_voice_order provider_error: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="Voice service unavailable. Try again."
+        ) from exc
+    except (KeyError, IndexError, ValueError, _json.JSONDecodeError) as exc:
+        logger.warning("storefront_voice_order parse_error: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="Could not parse AI response."
+        ) from exc
+
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        return {"items": []}
+
+    logger.info(
+        "storefront_voice_order success branch_id=%s items=%d",
+        request.branch_id,
+        len(parsed["items"]),
+    )
+    return parsed
