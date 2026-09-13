@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mercadopago/sdk-react": "^1.0.7",
     "lucide-react": "^0.370.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
