@@ -11,8 +11,10 @@ import {
   AlertCircle,
   ChevronRight,
   ChefHat,
+  QrCode,
 } from 'lucide-react';
 import { MobileOrderDetailModal } from './MobileOrderDetailModal';
+import { MobileMenuQrModal } from './MobileMenuQrModal';
 
 interface OrderItem {
   id: string;
@@ -66,6 +68,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [filter, setFilter] = useState<OrderFilter>('ACTIVE');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -219,6 +222,27 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setIsQrModalOpen(true)}
+            aria-label="Ver y compartir código QR del menú"
+            title="Código QR del menú"
+            style={{
+              border: 'none',
+              background: '#1e293b',
+              color: '#38bdf8',
+              borderRadius: 8,
+              padding: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }}
+          >
+            <QrCode size={18} />
+          </button>
+
           <button
             onClick={() => void loadOrders()}
             disabled={refreshing}
@@ -663,6 +687,13 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           setFilter('READY');
           void loadOrders();
         }}
+        branchName={branchName}
+      />
+
+      {/* Menu QR Code Modal for Download and Sharing */}
+      <MobileMenuQrModal
+        isOpen={isQrModalOpen}
+        onClose={() => setIsQrModalOpen(false)}
         branchName={branchName}
       />
     </div>
