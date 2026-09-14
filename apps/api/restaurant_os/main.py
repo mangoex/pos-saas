@@ -20,6 +20,7 @@ from restaurant_os.public_storefront import router as storefront_router
 from restaurant_os.request_audit import bind_support_audit_context
 from restaurant_os.restaurant_domains import router as domains_router
 from restaurant_os.saas_setup import router as setup_router
+from restaurant_os.subscriptions.router import router as subscriptions_router
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +94,12 @@ def create_app() -> FastAPI:
         )
     app.include_router(platform_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(storefront_router)
+    from restaurant_os.public_storefront import storefront_orders_router
+    app.include_router(storefront_orders_router)
     app.include_router(host_context_router)
     app.include_router(setup_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(domains_router, dependencies=[Depends(bind_support_audit_context)])
+    app.include_router(subscriptions_router)
 
     @app.exception_handler(AuthorizationError)
     async def authorization_error_handler(
@@ -128,7 +132,10 @@ def create_app() -> FastAPI:
             except ValueError:
                 return Response(status_code=404)
             if file_path.is_file():
-                return FileResponse(file_path)
+                resp = FileResponse(file_path)
+                if file_path.name == "sw.js":
+                    resp.headers["Service-Worker-Allowed"] = "/"
+                return resp
             if (file_path / "index.html").is_file():
                 return FileResponse(file_path / "index.html")
         index_path = base_path / "index.html"

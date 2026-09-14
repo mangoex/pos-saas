@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+
 def main():
     md_path = Path("docs/MANUAL_RESTAURANTOS_COMPLETO.md")
     raw_md = md_path.read_text(encoding="utf-8")

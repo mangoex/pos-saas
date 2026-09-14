@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -89,7 +89,7 @@ def test_kill_switch_rejects_unprivileged_cross_tenant_and_suspended_actors() ->
         headers={"Authorization": f"Bearer {tenant_a['token']}"},
     ).json()[0]["id"]
     unprivileged_id = str(uuid4())
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
 
     with factory() as session:
         session.execute(

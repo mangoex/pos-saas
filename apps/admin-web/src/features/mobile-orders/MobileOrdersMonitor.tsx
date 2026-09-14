@@ -10,9 +10,11 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
-  ChefHat
+  ChefHat,
+  QrCode,
 } from 'lucide-react';
 import { MobileOrderDetailModal } from './MobileOrderDetailModal';
+import { MobileMenuQrModal } from './MobileMenuQrModal';
 
 interface OrderItem {
   id: string;
@@ -66,19 +68,19 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [filter, setFilter] = useState<OrderFilter>('ACTIVE');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
-
+  
   const loadOrders = useCallback(async (isSilent = false) => {
     if (!branchId) return;
     if (!isSilent) setRefreshing(true);
     setError(null);
     try {
-      // First try /orders/accounts
       let items: OrderItem[] = [];
       try {
         const res = await fetchApi<{ items: OrderItem[] }>(
@@ -86,14 +88,21 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         );
         items = Array.isArray(res?.items) ? res.items : [];
       } catch {
-        // Fallback to /orders
         const fallback = await fetchApi<OrderItem[]>(
           `/orders?branch_id=${encodeURIComponent(branchId)}`
         );
         items = Array.isArray(fallback) ? fallback : [];
       }
-      // ONLY SHOW ORDERS CREATED TODAY (NO HISTORICAL ORDERS)
-      const todayOrders = items.filter((item) => isToday(item.created_at));
+      
+      // Sort chronologically (FIFO: oldest arrivals at the top, newest arrivals at the bottom)
+      const todayOrders = items
+        .filter((item) => isToday(item.created_at))
+        .sort((a, b) => {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return timeA - timeB;
+        });
+      
       setOrders(todayOrders);
       setLastUpdated(new Date());
     } catch (err) {
@@ -213,6 +222,27 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setIsQrModalOpen(true)}
+            aria-label="Ver y compartir código QR del menú"
+            title="Código QR del menú"
+            style={{
+              border: 'none',
+              background: '#1e293b',
+              color: '#38bdf8',
+              borderRadius: 8,
+              padding: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }}
+          >
+            <QrCode size={18} />
+          </button>
+
           <button
             onClick={() => void loadOrders()}
             disabled={refreshing}
@@ -657,6 +687,13 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           setFilter('READY');
           void loadOrders();
         }}
+        branchName={branchName}
+      />
+
+      {/* Menu QR Code Modal for Download and Sharing */}
+      <MobileMenuQrModal
+        isOpen={isQrModalOpen}
+        onClose={() => setIsQrModalOpen(false)}
         branchName={branchName}
       />
     </div>

@@ -53,3 +53,60 @@ Scenario: Modo catálogo y bloqueo de pedidos cuando la caja está cerrada
   And la web móvil muestra los productos y categorías con navegación normal
   And la categoría inicial se presenta como "Cerrado por el momento" en vez de "Todos"
   And el botón de envío de pedido se encuentra deshabilitado mostrando "Abriremos pronto"
+
+## BDD-FEAT-810 Pedido asistido público como borrador del carrito
+
+@PRD-FR-739 @PRD-NFR-531 @mobile-web @voice @privacy
+Feature: Dictar o escribir una solicitud sin delegar autoridad al proveedor de IA
+
+@BDD-SC-819
+Scenario: Dictado soportado conserva una transcripción visible y editable
+  Given el navegador ofrece SpeechRecognition y el comensal autoriza el micrófono
+  When dicta una frase, el navegador cierra la sesión y vuelve a dictar
+  Then la nueva frase se agrega sin duplicados al texto existente
+  And cerrar, detener o un callback obsoleto no altera una sesión posterior
+
+@BDD-SC-820
+Scenario: Captura escrita permanece disponible sin micrófono
+  Given el navegador no ofrece SpeechRecognition o el permiso se deniega
+  When el comensal abre Pedido por voz
+  Then puede escribir, editar y enviar la solicitud sin bloquear el menú ni el carrito
+
+@BDD-SC-821
+Scenario: La integración externa recibe texto redactado y acotado
+  Given una solicitud contiene nombre y teléfono sintéticos
+  When el backend solicita un borrador al adaptador OpenRouter
+  Then el proveedor recibe marcadores redactados en lugar de esos valores
+  And logs y métricas no contienen transcript, PII, catálogo completo ni respuesta cruda
+
+@BDD-SC-822
+Scenario: Python rechaza autoridad inventada por el modelo
+  Given el proveedor devuelve un producto desconocido o una cantidad inválida
+  When Python reconcilia la propuesta contra la sucursal pública
+  Then falla cerrado con código estable y no devuelve una línea aplicable
+
+  Given el texto menciona una opción ajena o no puede segmentarse sin ambigüedad
+  When Python reconcilia las coincidencias locales contra el catálogo del producto
+  Then no selecciona esa opción automáticamente
+  And devuelve únicamente grupos canónicos para decisión humana
+
+@BDD-SC-823
+Scenario: Modificadores obligatorios requieren decisión humana
+  Given un producto válido tiene grupos obligatorios incompletos
+  When el borrador se muestra al comensal
+  Then presenta sólo las opciones canónicas disponibles
+  And no permite agregar el artículo hasta cumplir cada mínimo y máximo
+
+@BDD-SC-824
+Scenario: Borrador válido entra al carrito con total exacto
+  Given Python devuelve productos, cantidades y opciones canónicas completas
+  When el comensal confirma el borrador
+  Then mobile-web crea CartItem tipados con modifiers y line_total_cents exacto
+  And el checkout normal permanece editable y es la única frontera que persiste la intención
+
+@BDD-SC-825
+Scenario: Configuración, límite o proveedor indisponible preservan el estado
+  Given la función está apagada, el cliente excede el límite o OpenRouter falla
+  When el comensal solicita interpretar
+  Then recibe un error estable sin éxito falso
+  And conserva transcripción, carrito y captura escrita

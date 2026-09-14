@@ -13,6 +13,7 @@ import { TrendingFeed } from './components/TrendingFeed';
 import { BottomNav, NavTab } from './components/BottomNav';
 import { FloatingCartBar } from './components/FloatingCartBar';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
+import { VoiceOrderModal } from './components/VoiceOrderModal';
 import { detectProductSize } from './imageMap';
 
 const EXCLUDED_CATEGORY_KEYWORDS = [
@@ -68,6 +69,7 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('explore');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [createdOrderResult, setCreatedOrderResult] = useState<CreatedOrderResult | null>(null);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
@@ -189,6 +191,8 @@ export const App: React.FC = () => {
       isMounted = false;
     };
   }, [selectedBranch?.public_key, catalogRetry]);
+
+
 
   // Fetch trending dishes whenever branch changes
   useEffect(() => {
@@ -715,6 +719,19 @@ export const App: React.FC = () => {
         }}
         cartCount={totalCartCount}
         favoritesCount={likedProductIds.size}
+        onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+      />
+
+      {/* Voice / AI Order Modal */}
+      <VoiceOrderModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        publicKey={selectedBranch?.public_key || null}
+        products={products}
+        onAddCartItems={(items) => {
+          setCart((prev) => [...prev, ...items]);
+          setIsCartOpen(true);
+        }}
       />
     </div>
   );

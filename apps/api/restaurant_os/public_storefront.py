@@ -233,3 +233,8 @@ def icon(identifier: str, session: Annotated[Session, Depends(get_session)]) -> 
         f'font-size="160" fill="white">{initials}</text></svg>'
     )
     return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
+storefront_orders_router = APIRouter(
+    prefix="/api/v1/storefront/orders", tags=["storefront-orders"]
+)

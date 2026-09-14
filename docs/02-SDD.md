@@ -288,6 +288,25 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
 - Carga de catálogo optimizada mediante caché HTTP y CDN para apertura instantánea en redes 4G móviles.
 - Selector interactivo de opciones y modificadores obligatorios/opcionales.
 
+#### Pedido asistido público por texto o dictado:
+- El micrófono es mejora progresiva del textarea: sólo inicia por gesto explícito, conserva texto editable,
+  concatena sesiones sin duplicados y descarta callbacks pertenecientes a una sesión cancelada.
+- La ruta pública se resuelve por la clave pública de la sucursal, permanece `default-off`, comparte el
+  limitador de escritura pública y acepta una transcripción acotada; nunca confía en un UUID de sucursal,
+  precio, total, opción o disponibilidad enviados por el cliente.
+- `assisted_order.py` es el servicio compartido de interpretación. Antes de OpenRouter extrae y redacta
+  todos los teléfonos detectables y los nombres introducidos con patrones explícitos de identificación;
+  después reconcilia producto, cantidad y disponibilidad contra el catálogo efectivo. Los modificadores
+  sólo se reconocen dentro del segmento del producto correspondiente, con negaciones explícitas, y todos
+  los grupos se devuelven como opciones canónicas editables por línea; nunca se aplican por coincidencia
+  global del transcript. La salida del modelo nunca es un `CartItem` autoritativo.
+- El frontend transforma exclusivamente el borrador validado en artículos tipados con centavos enteros y
+  opciones canónicas. Si falta un mínimo obligatorio, muestra la pregunta y no permite agregar la línea.
+- Interpretar no crea intención, pedido, pago, reserva, producción ni inventario. El checkout público
+  vigente sigue siendo la única frontera de persistencia y conserva el carrito ante cualquier no-éxito.
+- Logs y métricas usan sólo resultado, código estable y latencia: no contienen transcript, nombre,
+  teléfono, dirección, catálogo completo ni respuesta cruda del proveedor.
+
 #### Generación y Formateo a WhatsApp:
 - Al pulsar "Enviar Pedido por WhatsApp":
   1. Genera orden preliminar en `orders` con estado `pending_confirmation` y canal `whatsapp_web`.
@@ -327,6 +346,21 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
   3. **Menú (`menu`)**: Gestión compacta de catálogo (`MobileMenuManagerTab`), creación y edición ágil de categorías y platillos, conmutador inmediato de disponibilidad activo/agotado (`PUT /catalog/products/{id}`), y asignación de imágenes mediante cámara/galería o presets de alta calidad.
   4. **Sucursal (`settings`)**: Configuración operativa (`MobileBranchSettingsTab`) de estado de sucursal, recepción de pedidos por WhatsApp, enlace directo y códigos para compartir el menú móvil digital, y enlace para alternar a la versión completa de escritorio.
 - Los comandos de apertura, movimiento y cierre construyen una intención estable a partir del payload. Una falla sin confirmación conserva su `Idempotency-Key`; la clave se descarta sólo tras éxito confirmado o al cambiar el payload. El movimiento manual captura una referencia de evidencia real del operador y no usa valores sintéticos.
+- Un coordinador de alertas se monta una sola vez en `MobileAdminShell`, separado de la vista de Pedidos.
+  Consulta únicamente intenciones públicas `PENDING_REVIEW` de la sucursal autorizada y mantiene un cursor
+  estable `(created_at, id)` para no perder elementos con la misma fecha ni volver a alertar tras una
+  respuesta tardía. El cambio de sucursal crea una nueva línea base silenciosa.
+- Las consultas no se superponen, tienen aborto a 6.5 segundos y las respuestas obsoletas se descartan.
+  Un timeout libera el siguiente reintento y muestra estado degradado. La carga inicial no suena; al
+  regresar desde segundo plano se reconcilia el cursor antes de continuar el intervalo.
+- El audio se habilita mediante gesto explícito y sólo se declara listo después de que `AudioContext`
+  confirme estado `running`. La suspensión o rechazo mantiene badge/banner visual y permite reactivar.
+  Cada lote reconciliado reproduce una secuencia audible y conserva los IDs exactos en el badge hasta
+  reconocimiento humano, evitando tanto pérdida visual como una tormenta sonora por lote.
+  Este contrato cubre únicamente admin-web abierta; Web Push queda en un incremento separado.
+- Señales acotadas deben permitir responder cuántas novedades se detectaron, cuántas se deduplicaron y
+  por qué el audio no estaba disponible, sin incluir PII ni IDs como etiquetas de métricas. El coordinador
+  publica esos contadores y razones mediante `restaurantos:mobile-order-alert` para consumo de telemetría.
 - Sin regresión sobre la experiencia de comensal en `mobile-web` ni sobre el backoffice de escritorio.
 
 ### 5.7 Frontera pública de feedback y aislamiento de cliente
@@ -335,6 +369,21 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
 - La referencia debe pertenecer a la misma sucursal y organización solicitadas, y el teléfono normalizado debe coincidir con el snapshot persistido. Referencia inexistente, sucursal distinta o teléfono distinto producen la misma respuesta cerrada sin revelar qué dato falló.
 - La unicidad `(organization_id, branch_id, order_folio)` evita duplicados concurrentes para una referencia no nula. La migración se detiene si encuentra duplicados históricos y no los elimina automáticamente.
 - Lecturas y reparaciones de feedback filtran simultáneamente por `customer_id` y `organization_id`; consultar un cliente nunca incorpora filas de otra organización.
+
+### 5.8 Suscripciones Mercado Pago (Máquina de Estados)
+
+#### Modelo y Máquina de Estados (`subscriptions`):
+- `TRIAL`: Estado inicial tras onboarding (14 días).
+- `ACTIVE`: Tarjeta tokenizada y cobro validado (Preapproval activo).
+- `PAST_DUE`: Cobro recurrente fallido (ventana de gracia en postura fail-closed).
+- `CANCELED`: Suscripción terminada (manual o por morosidad).
+
+#### Arquitectura de Webhooks (Idempotencia):
+- **Idempotencia**: Todo webhook de pago de Mercado Pago valida su `id` contra la tabla de eventos (`integration_events`). Eventos procesados se descartan atómicamente.
+- **Fail-Closed**: Desajustes temporales o falta de confirmación tras expirar `next_billing_date` transicionan la suscripción a `PAST_DUE`, suspendiendo accesos operativos (excepto configuraciones).
+
+#### Modelo Físico:
+Tabla exclusiva para facturación de inquilinos: `id` (UUID), `restaurant_id` (FK `organizations.id`), `customer_id` (ID Mercado Pago), `preapproval_id` (ID Suscripción Mercado Pago), `status` (Enum/String), `next_billing_date` (DateTime UTC).
 
 ---
 

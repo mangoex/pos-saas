@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Flame, Heart, ShoppingBag } from 'lucide-react';
+import { Compass, Mic, Heart, ShoppingBag } from 'lucide-react';
 
 export type NavTab = 'explore' | 'trending' | 'favorites' | 'cart';
 
@@ -8,6 +8,7 @@ interface BottomNavProps {
   onSelectTab: (tab: NavTab) => void;
   cartCount: number;
   favoritesCount: number;
+  onOpenVoiceModal?: () => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
@@ -15,6 +16,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onSelectTab,
   cartCount,
   favoritesCount,
+  onOpenVoiceModal,
 }) => {
   return (
     <nav className="mobile-bottom-nav" role="navigation" aria-label="Navegación principal">
@@ -30,15 +32,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
         <button
           type="button"
-          className={`mobile-nav-btn ${currentTab === 'trending' ? 'active' : ''}`}
-          onClick={() => onSelectTab('trending')}
+          className="mobile-nav-btn"
+          onClick={onOpenVoiceModal}
         >
-          <Flame
-            size={22}
-            color={currentTab === 'trending' ? '#f59e0b' : 'currentColor'}
-            strokeWidth={currentTab === 'trending' ? 2.5 : 2}
-          />
-          <span>Tendencias</span>
+          <Mic size={22} strokeWidth={2} />
+          <span>Dictar</span>
         </button>
 
         <button

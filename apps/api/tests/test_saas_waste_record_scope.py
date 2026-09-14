@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from threading import Barrier
 from uuid import uuid4
@@ -25,7 +25,7 @@ from test_saas_cash_scope import _cash_scope_api_client
 
 
 def _seed_stock(session, tenant: dict, suffix: str) -> dict[str, str]:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     organization_id = str(tenant["organization"]["id"])
     branch_id = str(tenant["branch"]["id"])
     warehouse_id = str(

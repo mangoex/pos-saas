@@ -21,3 +21,21 @@
 ### TDD-TC-254 Cobro y entrega integrada de comanda con snapshot de venta y liquidación de pedidos entregados
 - Archivo: `apps/api/tests/test_mobile_admin_suite.py::test_mobile_order_payment_and_fulfillment`
 - Propósito: Validar que un pedido en estado listo o entregado puede recibir cobro vía `POST /orders/{id}/payments`, registrando el pago con el método seleccionado contra el turno de caja abierto, creando snapshot histórico de venta, emitiendo evento `PAYMENT_CONFIRMED` y actualizando la proyección de `payment_status` a `CONFIRMED`.
+
+### TDD-TC-255 Coordinador persistente en el shell móvil
+- Archivos: `tests/frontend/test_mobile_admin_order_alerts.mjs`,
+  `apps/api/tests/test_mobile_admin_suite.py::test_mobile_public_intent_alert_feed_is_minimal_scoped_and_cursor_aware`
+- Propósito: comprobar que el coordinador se monta fuera de la vista condicional de Pedidos y permanece activo al navegar por cualquier pestaña.
+
+### TDD-TC-256 Cursor determinista y deduplicación
+- Archivos: `tests/frontend/test_mobile_admin_order_alerts.mjs`,
+  `apps/api/tests/test_mobile_admin_suite.py::test_mobile_public_intent_alert_feed_is_minimal_scoped_and_cursor_aware`
+- Propósito: verificar línea base silenciosa, claves `(created_at, id)`, timestamps iguales, respuestas obsoletas, cambio de sucursal y ausencia de duplicados.
+
+### TDD-TC-257 Estado real de AudioContext
+- Archivo: `tests/frontend/test_mobile_admin_order_alerts.mjs`
+- Propósito: verificar que `resume()` se espera, que sólo `running` activa la alarma y que suspensión/rechazo conserva el fallback visual.
+
+### TDD-TC-258 Regresión del monitor de pedidos
+- Archivo: `tests/frontend/test_mobile_admin_orders_monitor.mjs`
+- Propósito: confirmar que listado, filtros, aceptación, cobro y entrega permanecen independientes del coordinador global de alertas.

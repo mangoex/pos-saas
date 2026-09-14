@@ -39,6 +39,7 @@ def test_assisted_order_openrouter_defaults_to_disabled(monkeypatch: MonkeyPatch
     settings = get_settings()
 
     assert settings.assisted_order_enabled is False
+    assert settings.public_voice_order_enabled is False
     assert settings.openrouter_api_key is None
     assert settings.openrouter_model == "google/gemini-3.1-flash-lite"
 
@@ -108,3 +109,21 @@ def test_public_order_hmac_secret_falls_back_to_secret_key_in_production(
 
     settings = get_settings()
     assert settings.public_order_rate_limit_hmac_secret == "k" * 32
+
+
+def test_public_voice_order_requires_public_ordering_and_provider_in_production(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESTAURANTOS_ENVIRONMENT", "production")
+    monkeypatch.setenv("RESTAURANTOS_SECRET_KEY", "v" * 32)
+    monkeypatch.setenv("RESTAURANTOS_PUBLIC_VOICE_ORDER_ENABLED", "true")
+    monkeypatch.delenv("RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED", raising=False)
+    monkeypatch.delenv("RESTAURANTOS_OPENROUTER_API_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="PUBLIC_ORDER_INTENTS_ENABLED"):
+        get_settings()
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED", "true")
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+        get_settings()

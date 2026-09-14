@@ -5004,6 +5004,80 @@ def count_pending_orders(
     return {"count": int(order_count) + int(intent_count)}
 
 
+def list_pending_public_order_alerts(
+    session: Session,
+    branch_id: str | None,
+    since_utc: str | None,
+    actor_user_id: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return the minimal authorized foreground-alert feed without customer payloads."""
+    actor_id = _actor_user_id(actor_user_id)
+    authorized_branch_id = authorize_branch_scope(session, actor_id, "orders.read", branch_id)
+    if not authorized_branch_id:
+        raise BusinessError(
+            "public_order_alert_branch_required",
+            "An active branch is required to monitor public order alerts",
+        )
+    organization_id = session.scalar(
+        sa.select(models.branches.c.organization_id).where(
+            models.branches.c.id == authorized_branch_id
+        )
+    )
+    if not organization_id:
+        raise BusinessError(
+            "public_order_alert_branch_required",
+            "An active branch is required to monitor public order alerts",
+        )
+    since: datetime | None = None
+    if since_utc:
+        try:
+            since = datetime.fromisoformat(str(since_utc).replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise BusinessError(
+                "public_order_alert_cursor_invalid", "Alert cursor must be an ISO datetime"
+            ) from exc
+        if since.tzinfo is None:
+            raise BusinessError(
+                "public_order_alert_cursor_invalid", "Alert cursor must include a timezone"
+            )
+    query = sa.select(
+        models.public_order_intents.c.id,
+        models.public_order_intents.c.created_at,
+    ).where(
+        models.public_order_intents.c.organization_id == organization_id,
+        models.public_order_intents.c.branch_id == authorized_branch_id,
+        models.public_order_intents.c.status == "PENDING_REVIEW",
+    )
+    if since is not None:
+        query = query.where(models.public_order_intents.c.created_at >= since)
+    rows = list(session.execute(
+        query.order_by(
+            models.public_order_intents.c.created_at,
+            models.public_order_intents.c.id,
+        )
+    ).mappings())
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        created_at = row["created_at"]
+        if not isinstance(created_at, datetime):
+            raise BusinessError(
+                "public_order_alert_cursor_invalid", "Alert timestamp must be a datetime"
+            )
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        items.append(
+            {
+                "id": str(row["id"]),
+                "created_at": created_at.astimezone(timezone.utc).isoformat().replace(
+                    "+00:00", "Z"
+                ),
+                "status": "PENDING_REVIEW",
+                "is_public_intent": True,
+            }
+        )
+    return {"items": items}
+
+
 def list_order_reopen_requests(
     session: Session, raw: dict[str, Any], actor_user_id: str | None = None
 ) -> dict[str, Any]:
@@ -27620,6 +27694,12 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
             "public_key": pk_row[0] if pk_row else None,
         })
 
+    access_block_reason = None
+    if org["subscription_status"] == "suspended" or org["status"] == "suspended":
+        access_block_reason = "tenant_suspended"
+    elif org["subscription_status"] == "trialing" and trial_days == 0:
+        access_block_reason = "tenant_trial_expired"
+
     return {
         "id": org["id"],
         "name": org["name"],
@@ -27630,6 +27710,7 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
         "owner_phone": org["owner_phone"],
         "plan": org["plan"],
         "subscription_status": org["subscription_status"],
+        "access_block_reason": access_block_reason,
         "trial_ends_at": org["trial_ends_at"].isoformat() if org["trial_ends_at"] else None,
         "trial_days_remaining": trial_days,
         "trial_extra_days": trial_extra_days,

@@ -43,4 +43,34 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     And transiciona la comanda a entregada mediante "POST /orders/{id}/fulfillment/deliver"
     And la venta queda reflejada inmediatamente en los reportes contables y corte de caja
     And si la comanda ya estaba entregada pero con pago pendiente, permite confirmar el cobro directamente sin requerir una terminal POS de escritorio
+
+  @BDD-SC-815
+  Scenario: Una intención pública nueva alerta una sola vez desde cualquier pestaña móvil
+    Given un administrador autenticado con alcance a la sucursal activa y admin-web abierta
+    And el coordinador ya estableció una línea base sin reproducir sonido
+    When se persiste una nueva intención pública PENDING_REVIEW en esa sucursal
+    Then se muestra una alerta visual y se reproduce una sola alarma si el audio está activo
+    And si varias novedades llegan en la misma reconciliación se reproduce una secuencia por lote y el badge conserva la cantidad exacta hasta confirmación humana
+    And la detección continúa aunque el administrador navegue por Caja, Menú o Sucursal
+
+  @BDD-SC-816
+  Scenario: Identidad estable evita pedidos perdidos o alarmas duplicadas
+    Given dos intenciones nuevas comparten created_at o llegan respuestas de consulta fuera de orden
+    When el coordinador reconcilia las novedades
+    Then identifica cada intención por created_at e id
+    And no pierde ninguna ni vuelve a alertar una intención ya observada
+
+  @BDD-SC-817
+  Scenario: Cambio de sucursal crea una línea base silenciosa y aislada
+    Given el administrador cambia de una sucursal autorizada a otra
+    When se carga por primera vez la lista de la nueva sucursal
+    Then no suenan pedidos históricos de ninguna de las dos sucursales
+    And sólo las novedades posteriores de la sucursal activa pueden alertar
+
+  @BDD-SC-818
+  Scenario: El estado de audio refleja la capacidad real del navegador
+    Given el navegador suspende o rechaza AudioContext
+    When el administrador activa o recupera la alarma
+    Then la interfaz no declara Alarma lista hasta confirmar estado running
+    And conserva una alerta visual y una acción explícita de reactivación
 ```

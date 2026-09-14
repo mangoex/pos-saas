@@ -20,6 +20,7 @@ import {
   Trash2,
   ArrowUp,
   Tag,
+  CircleDollarSign,
 } from 'lucide-react';
 
 interface OrgProfile {
@@ -30,6 +31,7 @@ interface OrgProfile {
   trial_ends_at?: string | null;
   trial_days_remaining?: number;
   trial_extra_days?: number;
+  access_block_reason?: string | null;
 }
 
 interface MobileBranchSettingsTabProps {
@@ -85,6 +87,8 @@ interface LinksResponse {
   };
 }
 
+import { SubscriptionCheckout } from '../../../../../packages/ui/src/components/SubscriptionCheckout';
+
 export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = ({
   branchId,
   branchName: _branchName,
@@ -95,6 +99,29 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const queryClient = useQueryClient();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleTokenGenerated = async (tokenId: string, formData: any) => {
+    setIsProcessing(true);
+    try {
+      await fetchApi('/api/subscriptions', {
+        method: 'POST',
+        body: JSON.stringify({
+          package_name: 'lite',
+          card_token: tokenId,
+          user_email: formData.payer?.email || 'admin@restaurant.com'
+        })
+      });
+      setShowCheckout(false);
+      await queryClient.invalidateQueries({ queryKey: ['org-profile'] });
+      showToast('Suscripción activada con éxito');
+    } catch (err: any) {
+      setError('Error al procesar la suscripción. Inténtalo de nuevo.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -322,7 +349,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
 
       <main style={{ padding: '16px 14px', maxWidth: 640, margin: '0 auto' }}>
         {/* Trial Days Remaining Banner */}
-        {(orgProfile?.plan === 'trial' || orgProfile?.subscription_status === 'trialing') && (
+        {orgProfile && (orgProfile.plan === 'trial' || orgProfile.subscription_status === 'trialing' || orgProfile.trial_days_remaining === 0 || (orgProfile.trial_extra_days ?? 0) > 0) && (
           <section
             style={{
               background: (orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0
@@ -354,7 +381,8 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   marginBottom: 4,
                 }}
               >
-                <span>Periodo de Prueba</span>
+                <CircleDollarSign size={11} /> 
+                {((orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0) ? 'Prueba Vencida' : 'Prueba Gratuita'}
                 {((orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0) && (
                   <ArrowUp size={11} strokeWidth={3} />
                 )}
@@ -377,7 +405,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                 )}
               </h3>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#e0f2fe' }}>
-                {(orgProfile.trial_extra_days ?? 0) > 0
+                {(orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0
                   ? 'Tu prueba concluyó; tus operaciones continúan activas mientras gestionas tu activación.'
                   : 'Cuentas con acceso completo a todas las funciones de tu sucursal.'}
               </p>
@@ -395,10 +423,60 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                 Estado
               </div>
               <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>
-                {(orgProfile.trial_extra_days ?? 0) > 0 ? 'En Gracia' : 'Activo'}
+                {(orgProfile.trial_extra_days ?? 0) > 0 || orgProfile.trial_days_remaining === 0 ? 'En Gracia' : orgProfile.subscription_status === 'PAST_DUE' || orgProfile.access_block_reason === 'tenant_trial_expired' ? 'Vencida' : 'Activo'}
               </div>
             </div>
           </section>
+        )}
+
+        {/* Subscription Checkout for Trial / Expired */}
+        {orgProfile && (orgProfile.plan === 'trial' || orgProfile.subscription_status === 'trialing' || orgProfile.access_block_reason === 'tenant_trial_expired' || orgProfile.subscription_status === 'PAST_DUE' || orgProfile.trial_days_remaining === 0 || (orgProfile.trial_extra_days ?? 0) > 0) && (
+          <div style={{ marginBottom: 16 }}>
+            {!showCheckout ? (
+              <button
+                type="button"
+                onClick={() => setShowCheckout(true)}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 12,
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)',
+                }}
+              >
+                Suscribir Paquete Lite ($349 MXN)
+              </button>
+            ) : (
+              <div style={{ backgroundColor: '#ffffff', padding: 16, borderRadius: 16, border: '1px solid #e2e8f0' }}>
+                <SubscriptionCheckout
+                  onTokenGenerated={handleTokenGenerated}
+                  onError={(err) => setError('Error en el checkout: ' + err.message)}
+                />
+                {isProcessing && <p style={{ textAlign: 'center', color: '#64748b' }}>Procesando pago...</p>}
+                <button
+                  type="button"
+                  onClick={() => setShowCheckout(false)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: '#f1f5f9',
+                    color: '#475569',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 10,
+                    marginTop: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Onboarding Quickstart Card */}
@@ -1519,9 +1597,41 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   fontWeight: 700,
                   color: '#334155',
                   cursor: 'pointer',
+                  width: '100%',
                 }}
               >
                 Ver Versión Completa de Escritorio
+              </button>
+            </div>
+
+            {/* Cerrar Sesión */}
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('auth_token');
+                  localStorage.removeItem('user');
+                  sessionStorage.removeItem('auth_token');
+                  window.location.href = '/';
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  backgroundColor: '#fee2e2',
+                  color: '#b91c1c',
+                  border: '1px solid #fecaca',
+                  borderRadius: 14,
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <Power size={18} />
+                Cerrar Sesión
               </button>
             </div>
           </div>
