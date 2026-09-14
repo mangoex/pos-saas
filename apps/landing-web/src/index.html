@@ -7,11 +7,41 @@
   <title>Omnipos | Sistema Operativo Inteligente para Restaurantes</title>
   <meta name="description" content="Omnipos. Punto de venta táctil, pantallas de cocina KDS, Delivery Hub unificado (Uber Eats, DiDi, Rappi, WhatsApp) y facturación para restaurantes.">
   <link rel="icon" href="/landing-assets/assets/omnipos-logo.svg">
-  <link rel="preload" as="image" href="/landing-assets/assets/omnipos-bg.webp">
+  <link rel="preload" as="image" href="/landing-assets/assets/omnipos-bg.webp" media="(min-width: 861px)">
   <link rel="stylesheet" href="/landing-assets/scrollcraft.css">
   <link rel="stylesheet" href="/landing-assets/styles.css">
 </head>
 <body>
+  <main class="mobile-landing" aria-labelledby="mobile-title">
+    <header class="mobile-landing__brand">
+      <img src="/landing-assets/assets/omnipos-logo.svg" width="36" height="36" alt="">
+      <span>Omnipos</span>
+    </header>
+    <section class="mobile-landing__hero">
+      <p class="mobile-landing__eyebrow">Tu restaurante, bajo control</p>
+      <h1 id="mobile-title">Menos pendientes.<br><em>Más restaurante.</em></h1>
+      <p class="mobile-landing__intro">Organiza tus pedidos, cocina y cobros en un solo lugar.</p>
+      <nav class="mobile-landing__actions" aria-label="Comienza con Omnipos">
+        <a class="mobile-landing__primary" href="/admin/register?plan=trial">Probar gratis 14 días <span aria-hidden="true">→</span></a>
+        <a class="mobile-landing__secondary" href="/admin/login">Iniciar sesión</a>
+      </nav>
+      <p class="mobile-landing__note">Crea tu cuenta para comenzar la prueba.</p>
+    </section>
+    <section class="mobile-landing__details" aria-labelledby="mobile-benefits">
+      <p class="mobile-landing__eyebrow">Para el día a día</p>
+      <h2 id="mobile-benefits">Todo sigue su orden.</h2>
+      <ul>
+        <li><span aria-hidden="true">01</span><div><h3>Pedidos en un lugar</h3><p>Da seguimiento a las comandas de tu restaurante.</p></div></li>
+        <li><span aria-hidden="true">02</span><div><h3>Cocina conectada</h3><p>Comandas en tiempo real para tu equipo de cocina.</p></div></li>
+        <li><span aria-hidden="true">03</span><div><h3>Cobros organizados</h3><p>Punto de venta y caja para tu operación diaria.</p></div></li>
+      </ul>
+      <div class="mobile-landing__pricing">
+        <p>Planes desde <strong>$349 MXN/mes</strong></p>
+        <a href="/admin/register?plan=starter">Conocer el plan inicial <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+    <footer class="mobile-landing__footer"><span>Omnipos · Tu operación, conectada.</span><a href="/manual/">Manual de uso</a></footer>
+  </main>
   <span data-sc-progress aria-hidden="true"></span>
   <div class="sc-grain" aria-hidden="true"></div>
 
@@ -30,6 +60,7 @@
     <div data-sc-world aria-hidden="true">
       <div data-sc-segment data-sc-w="4.8" data-sc-linger="0.06" data-sc-waypoint="Omnipos">
         <picture>
+          <source media="(max-width: 860px)" srcset="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'/%3E">
           <source srcset="/landing-assets/assets/omnipos-bg.webp" type="image/webp">
           <img class="sc-world__poster" src="https://res.cloudinary.com/dfvnyhur4/image/upload/v1788415834/ezgif.com-video-to-webp-converter_4_udrqho.webp" width="800" height="450" alt="Omnipos en acción">
         </picture>

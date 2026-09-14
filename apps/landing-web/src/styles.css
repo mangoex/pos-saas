@@ -1,3 +1,5 @@
+.mobile-landing { display: none; }
+
 :root {
   --sc-canvas: #070e14;
   --sc-surface: #0e1722;
@@ -823,5 +825,165 @@ body {
   .plate-map__dish,
   .plate-map__seed {
     transition-duration: 1ms;
+  }
+}
+
+/* The compact acquisition page is independent of the desktop scroll journey. */
+@media (max-width: 860px) {
+  body > .omnipos-bar,
+  body > [data-sc-progress],
+  body > .sc-grain,
+  body > [data-sc-mode="worldflight"],
+  body > .plate-map {
+    display: none;
+  }
+
+  .mobile-landing {
+    display: block;
+    max-width: 36rem;
+    margin: 0 auto;
+    padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+    font-family: var(--sc-font-text);
+  }
+  .mobile-landing__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+  .mobile-landing__hero {
+    padding: 2.5rem 0 2rem;
+  }
+  .mobile-landing__eyebrow {
+    margin: 0 0 0.9rem;
+    color: var(--sc-accent);
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .mobile-landing h1 {
+    margin: 0;
+    font-size: clamp(2rem, 8.5vw, 3.4rem);
+    line-height: 1.08;
+    letter-spacing: -0.045em;
+  }
+  .mobile-landing h1 em {
+    color: var(--sc-accent);
+    font-style: normal;
+  }
+  .mobile-landing__intro {
+    max-width: 29ch;
+    margin: 1rem 0 1.5rem;
+    color: var(--sc-ink-soft);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .mobile-landing__actions {
+    display: grid;
+    gap: 0.7rem;
+  }
+  .mobile-landing__actions a {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .mobile-landing__primary {
+    background: var(--sc-accent);
+    color: var(--sc-accent-ink);
+  }
+  .mobile-landing__secondary {
+    border: 1px solid #425162;
+    color: var(--sc-ink);
+    background: var(--sc-surface);
+  }
+  .mobile-landing a:focus-visible {
+    outline: 3px solid var(--sc-ink);
+    outline-offset: 4px;
+  }
+  .mobile-landing__note {
+    margin: 0.85rem 0 0;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--sc-ink-soft);
+  }
+  .mobile-landing__details {
+    border-top: 1px solid #253341;
+    padding-top: 2rem;
+  }
+  .mobile-landing h2 {
+    margin: 0;
+    font-size: 1.65rem;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+  }
+  .mobile-landing ul {
+    list-style: none;
+    margin: 1.5rem 0;
+    padding: 0;
+  }
+  .mobile-landing li {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid #253341;
+  }
+  .mobile-landing li > span {
+    padding-top: 0.1rem;
+    color: var(--sc-accent);
+    font-size: 0.8rem;
+  }
+  .mobile-landing h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+  }
+  .mobile-landing li p {
+    margin: 0;
+    color: var(--sc-ink-soft);
+    font-size: 0.9rem;
+  }
+  .mobile-landing__pricing {
+    padding: 0.5rem 0 1.5rem;
+  }
+  .mobile-landing__pricing p {
+    margin: 0;
+    color: var(--sc-ink-soft);
+  }
+  .mobile-landing__pricing strong {
+    color: var(--sc-ink);
+  }
+  .mobile-landing__pricing a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    gap: 0.5rem;
+    color: var(--sc-accent);
+    text-underline-offset: 4px;
+  }
+  .mobile-landing__footer {
+    border-top: 1px solid #253341;
+    padding-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    color: var(--sc-ink-soft);
+    font-size: 0.75rem;
+  }
+  .mobile-landing__footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--sc-ink-soft);
+    text-underline-offset: 4px;
   }
 }

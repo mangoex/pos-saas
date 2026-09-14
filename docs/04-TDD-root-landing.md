@@ -1,5 +1,16 @@
 # TDD: Portada pública por dispositivo
 
+## Verificación vigente de la portada SaaS móvil
+
+- `tests/frontend/test_landing_mobile.mjs`: no inicializar el motor en móvil; inicialización
+  única al pasar a escritorio; destinos del registro de prueba y login preservados.
+- Ejecutar `pnpm --filter @restaurantos/landing-web test` y `typecheck`.
+- QA en navegador: 320×568, 390×844 y escritorio 1440×900; acciones visibles, sin
+  desbordamiento, enlaces correctos, móvil sin video, cambio de breakpoint y móvil sin JS.
+- Mantener los tests API de `test_root_landing.py` para raíz sin redirección y rutas
+  operativas separadas. El caso histórico TDD-TC-218 de abajo fue sustituido por
+  `test_root_serves_the_acquisition_landing_for_every_device`.
+
 ## TDD-TS-101 Selección y empaquetado aislados de la portada
 
 ### TDD-TC-217 Escritorio y recursos contenidos

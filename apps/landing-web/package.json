@@ -7,6 +7,6 @@
     "build": "node build.mjs",
     "lint": "node --check build.mjs && node --check src/app.js && node --check src/scrollcraft.js",
     "typecheck": "node --check build.mjs && node --check src/app.js && node --check src/scrollcraft.js",
-    "test": "node --check build.mjs && node --check src/app.js && node --check src/scrollcraft.js"
+    "test": "node --check build.mjs && node --check src/app.js && node --check src/scrollcraft.js && node ../../tests/frontend/test_landing_mobile.mjs"
   }
 }

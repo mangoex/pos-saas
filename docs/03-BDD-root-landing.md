@@ -1,5 +1,17 @@
 # BDD: Portada pública por dispositivo
 
+## Portada SaaS móvil compacta (vigente)
+
+- En anchos de hasta 860 px, `/` muestra una portada estática con propuesta de valor,
+  «Probar gratis 14 días» a `/admin/register?plan=trial` e «Iniciar sesión» a
+  `/admin/login`, visibles sin recorrer una animación; beneficios y precio existente debajo.
+- No hay redirección automática ni creación de sesión. Los enlaces usan el registro y login
+  existentes; la portada no activa la prueba por sí misma.
+- En una carga móvil no se monta el motor de scroll ni se solicita su video. Los enlaces
+  funcionan también sin JavaScript. No debe haber desbordamiento horizontal a 320 px.
+- Por encima de 860 px se conserva la presentación de escritorio. Cambiar el ancho entre
+  ambas experiencias mantiene los accesos utilizables y monta el motor como máximo una vez.
+
 > Comportamiento histórico sustituido para SaaS: la raíz actual ofrece adquisición y registro tanto en móvil como escritorio. La redirección móvil siguiente se conserva como evidencia anterior, no debe restaurarse para pasar tests SaaS.
 
 ## BDD-FEAT-095 Acceso institucional desde la raíz
