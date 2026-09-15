@@ -415,3 +415,12 @@ problemas, sin relajar las guardas de producción ni agregar silenciamientos.
 
 Esta evidencia histórica no certifica el working tree de recuperación ni la imagen publicada, la configuración
 real de EasyPanel, una migración productiva, restauración de backup, proveedor fiscal real ni canary.
+## Regresión visual: selectores del registro
+
+`tests/frontend/register_select_contrast.browser.js` se ejecuta con Playwright CLI
+`run-code` pasando el contenido del archivo, después de abrir `/admin/register?plan=trial`
+en el servidor local de admin-web. Mide contraste mínimo 4.5:1 en reposo, hover y foco,
+para ambos selectores, temas oscuro/claro y anchos 390/1440; verifica la paleta de las
+opciones y que cada valor pueda seleccionarse. No envía el formulario ni crea cuentas.
+RED confirmado: tema oscuro, hover, contraste 1.03:1 antes de corregir `Select.css`.
+La hoja nativa del sistema en iOS/Android requiere además comprobación en dispositivo real.

@@ -1016,3 +1016,9 @@ configuración de A. A puede consultar su cobertura, crear una opción y asociar
 Dadas organizaciones A y B con catálogos distintos, cuando cada administrador solicita una propuesta,
 el contexto enviado al proveedor contiene sólo los recursos de su organización. B no puede leer,
 revisar ni continuar una conversación o propuesta de A; el rechazo no cambia la propuesta de A.
+## Contraste de selectores del registro
+
+En `/admin/register`, los selectores de plan y tipo de negocio conservan texto legible
+sobre su fondo en tema claro y oscuro, tanto en reposo como al pasar el puntero o enfocar.
+Las opciones nativas usan la misma paleta y cada selección conserva su valor. Se mantiene
+el contrato de alta existente. La corrección aplica al componente compartido `Select`.

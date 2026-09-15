@@ -12,6 +12,7 @@
   border: 1px solid var(--color-border, #e2e8f0);
   background-color: var(--color-surface, #ffffff);
   color: var(--color-text, #111827);
+  color-scheme: light dark;
   font-family: var(--font-family, inherit);
   font-size: 0.9375rem;
   line-height: 1.35;
@@ -30,19 +31,26 @@
 
 .ui-select:hover:not(:disabled) {
   border-color: #cbd5e1;
-  background-color: #fcfdfe;
+  background-color: var(--color-surface, #ffffff);
 }
 
 .ui-select:focus {
   border-color: var(--color-blue, #3b82f6);
-  background-color: #ffffff;
+  background-color: var(--color-surface, #ffffff);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
 .ui-select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background-color: #f1f5f9;
+  background-color: var(--color-surface, #ffffff);
+}
+
+/* Native popups must not combine a system-white surface with dark-theme text. */
+.ui-select option,
+.ui-select optgroup {
+  background-color: var(--color-surface, #ffffff);
+  color: var(--color-text, #111827);
 }
 
 .ui-select--with-icon {
