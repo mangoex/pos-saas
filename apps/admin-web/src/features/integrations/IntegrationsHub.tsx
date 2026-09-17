@@ -244,45 +244,74 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
   }, []);
 
   const handleLaunchMetaPopup = () => {
+    const appId = (formData.client_id || '').trim();
+    const configId = (formData.config_id || '').trim();
+
+    if (!appId || !configId) {
+      alert(
+        "⚠️ Faltan datos de Tech Provider (Meta App ID y Configuration ID).\n\n" +
+        "Para que Meta pueda abrir la ventana oficial de Embedded Signup, primero debes ingresar " +
+        "el Meta App ID y el Configuration ID generados en tu Meta Developer App.\n\n" +
+        "Puedes ingresarlos en el formulario de Tech Provider de esta ventana o en la sección de Credenciales."
+      );
+      setShowManualSignup(true);
+      return;
+    }
+
     setIsLaunchingFb(true);
-    const appId = formData.client_id || '';
-    const configId = formData.config_id || '';
+
+    // Timeout de seguridad en caso de bloqueo de ventanas emergentes o cierre abrupto
+    const safetyTimer = setTimeout(() => {
+      setIsLaunchingFb(false);
+    }, 12000);
 
     const launchLogin = () => {
       if (!(window as any).FB) {
+        clearTimeout(safetyTimer);
         setIsLaunchingFb(false);
         setShowManualSignup(true);
         alert("El SDK de Meta no está disponible o fue bloqueado en este navegador. Puedes ingresar los datos manualmente.");
         return;
       }
 
-      (window as any).FB.login((response: any) => {
+      try {
+        (window as any).FB.login((response: any) => {
+          clearTimeout(safetyTimer);
+          setIsLaunchingFb(false);
+          if (response?.authResponse?.code) {
+            setSignupCode(response.authResponse.code);
+          }
+        }, {
+          config_id: configId,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            feature: 'whatsapp_embedded_signup',
+            version: 2,
+            sessionInfoVersion: 2,
+          }
+        });
+      } catch (err) {
+        clearTimeout(safetyTimer);
         setIsLaunchingFb(false);
-        if (response.authResponse?.code) {
-          setSignupCode(response.authResponse.code);
-        }
-      }, {
-        config_id: configId || undefined,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          feature: 'whatsapp_embedded_signup',
-          version: 2,
-          sessionInfoVersion: 2,
-        }
-      });
+        alert("Error al intentar abrir el popup de Meta: " + String(err));
+      }
     };
 
     if ((window as any).FB) {
       launchLogin();
     } else {
       (window as any).fbAsyncInit = function() {
-        (window as any).FB.init({
-          appId: appId || 'dummy',
-          autoLogAppEvents: true,
-          xfbml: true,
-          version: 'v20.0'
-        });
+        try {
+          (window as any).FB.init({
+            appId: appId,
+            autoLogAppEvents: true,
+            xfbml: true,
+            version: 'v20.0'
+          });
+        } catch (e) {
+          console.error("FB.init error", e);
+        }
         launchLogin();
       };
       if (!document.getElementById('facebook-jssdk')) {
@@ -293,6 +322,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
         script.defer = true;
         script.crossOrigin = 'anonymous';
         script.onerror = () => {
+          clearTimeout(safetyTimer);
           setIsLaunchingFb(false);
           setShowManualSignup(true);
           alert("No se pudo cargar el SDK de Facebook. Ingresa las credenciales manualmente en el formulario.");
@@ -2564,6 +2594,55 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             </select>
           </div>
 
+          {/* Alerta y formulario de Tech Provider si faltan App ID o Config ID */}
+          {(!formData.client_id || !formData.config_id) && (
+            <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 16 }}>⚠️</span>
+                <strong style={{ color: '#92400e', fontSize: '0.875rem' }}>Datos de Tech Provider Requeridos</strong>
+              </div>
+              <p style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#78350f', lineHeight: 1.4 }}>
+                Para abrir el diálogo oficial de Meta, debes ingresar el <strong>Meta App ID</strong> y el <strong>Configuration ID</strong> creados en Meta for Developers. Puedes ingresarlos aquí mismo:
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#78350f', marginBottom: 4 }}>
+                    Meta App ID:
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    placeholder="e.g. 192837465019283"
+                    value={formData.client_id ?? ''}
+                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                    style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#78350f', marginBottom: 4 }}>
+                    Configuration ID:
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    placeholder="e.g. 102938475610293"
+                    value={formData.config_id ?? ''}
+                    onChange={(e) => setFormData({ ...formData, config_id: e.target.value })}
+                    style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                  />
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                disabled={saveConfigMutation.isPending || !formData.client_id || !formData.config_id}
+                onClick={() => saveConfigMutation.mutate(formData)}
+                style={{ fontSize: '0.75rem', padding: '6px 12px', background: '#fff', borderColor: '#d97706', color: '#92400e', fontWeight: 600 }}
+              >
+                {saveConfigMutation.isPending ? 'Guardando...' : '💾 Guardar Tech Provider'}
+              </Button>
+            </div>
+          )}
+
           {/* Tarjeta de Inicio de Popup Meta SDK */}
           <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 12, padding: 18, marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -2581,17 +2660,21 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             <Button
               variant="primary"
               onClick={handleLaunchMetaPopup}
-              disabled={isLaunchingFb || !signupBranchId}
-              style={{ background: '#2563eb', borderColor: '#1d4ed8', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, padding: '10px 16px' }}
+              disabled={isLaunchingFb || !signupBranchId || !formData.client_id || !formData.config_id}
+              style={{ background: '#2563eb', borderColor: '#1d4ed8', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, padding: '10px 16px', opacity: (!formData.client_id || !formData.config_id) ? 0.6 : 1 }}
             >
               <Zap size={16} />
               {isLaunchingFb ? 'Abriendo Meta Login...' : '🚀 Iniciar Conexión Oficial con Meta (Popup)'}
             </Button>
-            {!signupBranchId && (
+            {!signupBranchId ? (
               <small style={{ color: '#ef4444', display: 'block', marginTop: 6, fontSize: '0.75rem' }}>
                 * Selecciona primero la sucursal arriba para habilitar el botón.
               </small>
-            )}
+            ) : (!formData.client_id || !formData.config_id) ? (
+              <small style={{ color: '#d97706', display: 'block', marginTop: 6, fontSize: '0.75rem' }}>
+                * Guarda primero el Meta App ID y Configuration ID de Tech Provider arriba para abrir el popup.
+              </small>
+            ) : null}
           </div>
 
           <div style={{ marginBottom: 16 }}>

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
+from restaurant_os.config import get_settings
 from restaurant_os.database import get_session
 from restaurant_os.integrations.service import channel_service
 from restaurant_os.operations import require_permission
@@ -104,12 +105,19 @@ def get_whatsapp_config(
         )
     ).mappings().all()
 
+    settings = get_settings()
+    default_app_id = settings.meta_app_id or ""
+    default_config_id = settings.meta_config_id or ""
+    default_has_secret = bool(settings.meta_app_secret)
+
     if not row:
         return {
             "is_enabled": False,
             "environment": "sandbox",
-            "client_id": "",
-            "config_id": "",
+            "client_id": default_app_id,
+            "app_id": default_app_id,
+            "config_id": default_config_id,
+            "has_client_secret": default_has_secret,
             "webhook_secret": "",
             "connected_numbers": [dict(s) for s in stores],
         }
@@ -118,6 +126,11 @@ def get_whatsapp_config(
     app_id = raw_client_id.split(":::")[0] if ":::" in raw_client_id else raw_client_id
     config_id = raw_client_id.split(":::")[1] if ":::" in raw_client_id else ""
 
+    if not app_id and default_app_id:
+        app_id = default_app_id
+    if not config_id and default_config_id:
+        config_id = default_config_id
+
     return {
         "id": row["id"],
         "is_enabled": bool(row["is_enabled"]),
@@ -125,7 +138,7 @@ def get_whatsapp_config(
         "client_id": app_id,
         "app_id": app_id,
         "config_id": config_id,
-        "has_client_secret": bool(row["client_secret"]),
+        "has_client_secret": bool(row["client_secret"]) or default_has_secret,
         "webhook_secret": row["webhook_secret"] or "",
         "connected_numbers": [dict(s) for s in stores],
     }
@@ -230,11 +243,14 @@ def post_whatsapp_embedded_signup_exchange(
         )
     ).mappings().first()
 
-    app_id = existing["client_id"] if existing and existing["client_id"] else "app_default_id"
+    settings = get_settings()
+    existing_raw = existing["client_id"] if existing and existing["client_id"] else ""
+    existing_app = existing_raw.split(":::")[0] if ":::" in existing_raw else existing_raw
+    app_id = existing_app or settings.meta_app_id or "app_default_id"
     app_secret = (
         existing["client_secret"]
         if existing and existing["client_secret"]
-        else "meta_app_secret_test"
+        else (settings.meta_app_secret or "meta_app_secret_test")
     )
 
     token_data = exchange_meta_code(code, app_id, app_secret)

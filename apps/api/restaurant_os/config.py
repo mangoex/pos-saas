@@ -82,6 +82,24 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="RESTAURANTOS_OFFLINE_GRANT_PUBLIC_KEYRING",
     )
+    meta_app_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "RESTAURANTOS_META_APP_ID", "META_APP_ID", "WHATSAPP_APP_ID"
+        ),
+    )
+    meta_config_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "RESTAURANTOS_META_CONFIG_ID", "META_CONFIG_ID", "WHATSAPP_CONFIG_ID"
+        ),
+    )
+    meta_app_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "RESTAURANTOS_META_APP_SECRET", "META_APP_SECRET", "WHATSAPP_APP_SECRET"
+        ),
+    )
 
     @field_validator("environment", mode="before")
     @classmethod
