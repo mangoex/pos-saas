@@ -31,6 +31,9 @@ interface Product {
   station: string;
   status?: string;
   image_url?: string;
+  is_promo?: boolean;
+  promo_price_cents?: number | null;
+  promo_badge_text?: string | null;
 }
 
 interface Category {
@@ -103,6 +106,9 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     category_name: '',
     station: 'kitchen',
     price: '',
+    is_promo: false,
+    promo_price: '',
+    promo_badge_text: 'PROMO',
     image_url: '',
     status: 'active',
   });
@@ -156,9 +162,15 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name));
   }, [categories]);
 
+  const promoProductsCount = useMemo(() => {
+    return products.filter((p) => Boolean(p.is_promo)).length;
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     let list = products;
-    if (selectedCategory !== 'ALL') {
+    if (selectedCategory === 'PROMOS') {
+      list = list.filter((p) => Boolean(p.is_promo));
+    } else if (selectedCategory !== 'ALL') {
       list = list.filter((p) => p.category_name?.trim().toLowerCase() === selectedCategory.trim().toLowerCase());
     }
     const q = search.trim().toLowerCase();
@@ -181,6 +193,9 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
           station: product.station,
           status: nextStatus,
           image_url: product.image_url,
+          is_promo: product.is_promo,
+          promo_price_cents: product.promo_price_cents,
+          promo_badge_text: product.promo_badge_text,
         }),
       });
     },
@@ -197,6 +212,9 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   const saveProductMutation = useMutation({
     mutationFn: async (form: typeof productForm) => {
       const cents = Math.round((parseFloat(form.price) || 0) * 100);
+      const promoCents = form.is_promo && form.promo_price.trim() !== ''
+        ? Math.round((parseFloat(form.promo_price) || 0) * 100)
+        : null;
       const skuVal = form.sku.trim() || `PROD-${Date.now().toString().slice(-6)}`;
       const payload = {
         name: form.name.trim(),
@@ -204,6 +222,9 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         category_name: form.category_name.trim(),
         station: form.station,
         price_cents: cents,
+        is_promo: form.is_promo,
+        promo_price_cents: promoCents,
+        promo_badge_text: form.is_promo ? (form.promo_badge_text.trim() || 'PROMO') : null,
         status: form.status,
         image_url: form.image_url.trim() || undefined,
       };
@@ -299,6 +320,9 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         category_name: product.category_name || (sortedCategories[0]?.name || ''),
         station: product.station || 'kitchen',
         price: product.price_cents ? (product.price_cents / 100).toFixed(2) : '0.00',
+        is_promo: Boolean(product.is_promo),
+        promo_price: product.promo_price_cents ? (product.promo_price_cents / 100).toFixed(2) : '',
+        promo_badge_text: product.promo_badge_text || 'PROMO',
         image_url: product.image_url || '',
         status: product.status || 'active',
       });
@@ -307,9 +331,12 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       setProductForm({
         name: '',
         sku: '',
-        category_name: selectedCategory !== 'ALL' ? selectedCategory : (sortedCategories[0]?.name || ''),
+        category_name: (selectedCategory !== 'ALL' && selectedCategory !== 'PROMOS') ? selectedCategory : (sortedCategories[0]?.name || ''),
         station: 'kitchen',
         price: '',
+        is_promo: selectedCategory === 'PROMOS',
+        promo_price: '',
+        promo_badge_text: 'PROMO',
         image_url: '',
         status: 'active',
       });
@@ -582,6 +609,28 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
             >
               {menuHome?.name || 'Todos'} ({products.length})
             </button>
+            {promoProductsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('PROMOS')}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 20,
+                  border: selectedCategory === 'PROMOS' ? 'none' : '1px solid #fed7aa',
+                  backgroundColor: selectedCategory === 'PROMOS' ? '#ea580c' : '#fff7ed',
+                  color: selectedCategory === 'PROMOS' ? '#ffffff' : '#c2410c',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <span>🔥 Promociones ({promoProductsCount})</span>
+              </button>
+            )}
             {sortedCategories.map((cat) => {
               const count = products.filter((p) => p.category_name === cat.name).length;
               const isSelected = selectedCategory === cat.name;
@@ -657,8 +706,8 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                       backgroundColor: '#ffffff',
                       borderRadius: 14,
                       padding: 12,
-                      border: '1px solid #e2e8f0',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                      border: product.is_promo ? '1.5px solid #fb923c' : '1px solid #e2e8f0',
+                      boxShadow: product.is_promo ? '0 2px 8px rgba(234,88,12,0.12)' : '0 2px 4px rgba(0,0,0,0.03)',
                       display: 'flex',
                       gap: 12,
                       alignItems: 'center',
@@ -671,7 +720,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                         width: 54,
                         height: 54,
                         borderRadius: 10,
-                        backgroundColor: '#f1f5f9',
+                        backgroundColor: product.is_promo ? '#fff7ed' : '#f1f5f9',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -695,17 +744,35 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
 
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: '0.95rem',
-                          fontWeight: 800,
-                          color: '#0f172a',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {product.name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            fontSize: '0.95rem',
+                            fontWeight: 800,
+                            color: '#0f172a',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {product.name}
+                        </span>
+                        {product.is_promo && (
+                          <span
+                            style={{
+                              backgroundColor: '#ea580c',
+                              color: '#ffffff',
+                              fontSize: '0.65rem',
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: 6,
+                              letterSpacing: '0.04em',
+                              flexShrink: 0,
+                            }}
+                          >
+                            🔥 {product.promo_badge_text || 'PROMO'}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: 6, marginTop: 2 }}>
                         <span>{product.category_name || 'Sin categoría'}</span>
@@ -714,8 +781,20 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                           {product.station === 'drinks' ? 'Barra' : 'Cocina'}
                         </span>
                       </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', marginTop: 4 }}>
-                        ${priceFormatted} <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>MXN</span>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        {product.is_promo && product.promo_price_cents ? (
+                          <>
+                            <span style={{ color: '#ea580c' }}>
+                              ${(product.promo_price_cents / 100).toFixed(2)}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', textDecoration: 'line-through', color: '#94a3b8', fontWeight: 500 }}>
+                              ${priceFormatted}
+                            </span>
+                          </>
+                        ) : (
+                          <span>${priceFormatted}</span>
+                        )}
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>MXN</span>
                       </div>
                     </div>
 
@@ -1155,6 +1234,97 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Configuración de Promoción */}
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  backgroundColor: productForm.is_promo ? '#fff7ed' : '#f8fafc',
+                  border: productForm.is_promo ? '1.5px solid #fb923c' : '1px solid #e2e8f0',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={productForm.is_promo}
+                    onChange={(e) => setProductForm({ ...productForm, is_promo: e.target.checked })}
+                    style={{ width: 20, height: 20, accentColor: '#ea580c', cursor: 'pointer' }}
+                  />
+                  <div>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: productForm.is_promo ? '#c2410c' : '#334155' }}>
+                      🔥 Producto en promoción
+                    </span>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                      Mostrará banda promocional y precio especial en el menú digital móvil.
+                    </p>
+                  </div>
+                </label>
+
+                {productForm.is_promo && (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 10,
+                      marginTop: 12,
+                      paddingTop: 10,
+                      borderTop: '1px dashed #fed7aa',
+                    }}
+                  >
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#9a3412', marginBottom: 4 }}>
+                        Texto distintivo
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={32}
+                        value={productForm.promo_badge_text}
+                        onChange={(e) => setProductForm({ ...productForm, promo_badge_text: e.target.value })}
+                        placeholder="PROMO, 2x1..."
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '8px 10px',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          borderRadius: 8,
+                          border: '1px solid #fdba74',
+                          backgroundColor: '#ffffff',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#9a3412', marginBottom: 4 }}>
+                        Precio promo ($ MXN)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.50"
+                        min="0"
+                        value={productForm.promo_price}
+                        onChange={(e) => setProductForm({ ...productForm, promo_price: e.target.value })}
+                        placeholder="Opcional"
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '8px 10px',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          borderRadius: 8,
+                          border: '1px solid #fdba74',
+                          backgroundColor: '#ffffff',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Station & Status */}
