@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
-import urllib.parse
 from typing import TYPE_CHECKING, Any
+
+from restaurant_os.integrations.whatsapp.urls import build_cart_url, get_wildcard_domain
 
 if TYPE_CHECKING:
     from .knowledge import WhatsAppKnowledgeService
@@ -84,7 +84,7 @@ class WhatsAppOrderParser:
 
         catalog_items = self.knowledge_service.get_branch_catalog_items()
         summary = self.knowledge_service.get_branch_knowledge_summary()
-        storefront_url = summary.get("storefront_url") or "https://mimenu.com"
+        storefront_url = summary.get("storefront_url") or f"https://menu.{get_wildcard_domain()}"
 
         matched_items: list[dict[str, Any]] = []
         unavailable_items: list[dict[str, Any]] = []
@@ -206,8 +206,7 @@ class WhatsAppOrderParser:
                 {"product_id": item["product_id"], "quantity": item["quantity"]}
                 for item in matched_items
             ]
-            encoded_payload = urllib.parse.quote(json.dumps(items_payload))
-            cart_url = f"{storefront_url}/cart?items={encoded_payload}&from=wa"
+            cart_url = build_cart_url(storefront_url, items_payload)
 
         return {
             "is_order_intent": is_order_intent,

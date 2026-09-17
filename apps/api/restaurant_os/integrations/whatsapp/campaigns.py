@@ -14,6 +14,7 @@ from restaurant_os.customer_ai import (
     generate_churn_recovery_message,
     get_crm_segments_and_churn_risk,
 )
+from restaurant_os.integrations.whatsapp.urls import resolve_storefront_url
 
 from .adapter import send_whatsapp_text_message
 
@@ -195,7 +196,6 @@ class WhatsAppCampaignService:
     def _resolve_branch_info(self) -> tuple[str, str]:
         """Return (branch_name, storefront_url)."""
         branch_name = "Restaurante"
-        slug = self.branch_id
         if self.branch_id:
             branch = (
                 self.session.execute(
@@ -206,8 +206,9 @@ class WhatsAppCampaignService:
             )
             if branch:
                 branch_name = branch["name"]
-                slug = branch.get("slug") or self.branch_id
-        storefront_url = f"https://mimenu.com/{slug}"
+        storefront_url, _ = resolve_storefront_url(
+            self.session, self.organization_id or "", self.branch_id
+        )
         return branch_name, storefront_url
 
     def preview_campaign(

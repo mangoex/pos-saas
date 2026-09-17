@@ -424,10 +424,8 @@ def test_whatsapp_bot_menu_and_hours_context(test_db):
     # 86'd / unavailable items must be strictly excluded
     assert "Gringa Especial" not in summary["available_products_text"]
 
-    # Storefront link must be present
-    assert (
-        "mimenu" in summary["storefront_url"].lower() or "menu" in summary["storefront_url"].lower()
-    )
+    # Storefront link must follow canonical wildcard format: https://{slug}.mimenu.onl
+    assert summary["storefront_url"] == "https://sucursal-roma.mimenu.onl"
 
     # Bot answer generation for a menu inquiry
     bot = WhatsAppBot(knowledge)
@@ -528,7 +526,7 @@ def test_whatsapp_knowledge_preview_endpoint(test_db):
     assert data["branch_name"] == "Sucursal Roma"
     assert "Tacos al Pastor" in data["available_products_text"]
     assert "Gringa Especial" not in data["available_products_text"]
-    assert "mimenu.com" in data["storefront_url"]
+    assert data["storefront_url"] == "https://sucursal-roma.mimenu.onl"
 
 
 def test_whatsapp_order_parser_intent_and_cart_link(test_db):
@@ -553,7 +551,7 @@ def test_whatsapp_order_parser_intent_and_cart_link(test_db):
     assert item["unit_price_cents"] == 9500
     assert item["subtotal_cents"] == 19000
     assert result["total_cents"] == 19000
-    assert result["cart_url"].startswith("https://mimenu.com/sucursal-roma/cart?items=")
+    assert result["cart_url"].startswith("https://sucursal-roma.mimenu.onl/cart?items=")
     assert "SKU-TAC-PAS" in result["cart_url"] or item["product_id"] in result["cart_url"]
 
 
@@ -615,7 +613,7 @@ def test_whatsapp_bot_conversational_order_proposal(test_db):
     assert "Gringa Especial" in reply
     assert "agotado" in reply.lower() or "no disponible" in reply.lower()
     # Verify prefilled storefront link
-    assert "https://mimenu.com/sucursal-roma/cart?items=" in reply
+    assert "https://sucursal-roma.mimenu.onl/cart?items=" in reply
 
 
 def _seed_test_order(
@@ -670,7 +668,7 @@ def test_whatsapp_notification_order_accepted(test_db):
     assert "Juan Perez" in result["message"]
     assert "FOL-1042" in result["message"]
     assert "preparar" in result["message"].lower() or "aceptado" in result["message"].lower()
-    assert "mimenu.com" in result["message"]
+    assert "https://sucursal-roma.mimenu.onl/orders/" in result["message"]
 
 
 def test_whatsapp_notification_ready_and_in_delivery(test_db):
@@ -859,7 +857,7 @@ def test_whatsapp_campaign_segmentation_and_preview(test_db):
     assert preview["total_eligible"] >= 1
     assert "VUELVE10" in preview["sample_message"]
     assert "STOP" in preview["sample_message"] or "BAJA" in preview["sample_message"]
-    assert "mimenu.com" in preview["sample_message"]
+    assert "https://sucursal-roma.mimenu.onl" in preview["sample_message"]
 
 
 def test_whatsapp_campaign_dispatch_to_segment(test_db):
@@ -1112,3 +1110,84 @@ def test_whatsapp_embedded_signup_config_and_sdk_params(test_db):
     cfg_data = get_resp.json()
     assert cfg_data["app_id"] == "app_987654321"
     assert cfg_data["config_id"] == "meta_cfg_778899"
+
+
+def test_whatsapp_storefront_url_never_returns_raw_uuid(test_db):
+    """TDD-TC-341: Verify storefront URL resolution NEVER returns a raw UUID even if
+    branch.slug is NULL or contains a UUID string.
+    """
+    from restaurant_os.integrations.whatsapp.urls import (
+        is_uuid_string,
+        resolve_storefront_slug,
+        resolve_storefront_url,
+    )
+
+    # 1. Update branch to have slug = None
+    test_db.execute(
+        models.branches.update()
+        .where(models.branches.c.id == BRANCH_ID)
+        .values(slug=None)
+    )
+    test_db.commit()
+
+    url, slug = resolve_storefront_url(test_db, ORGANIZATION_ID, BRANCH_ID)
+    assert not is_uuid_string(slug)
+    assert not is_uuid_string(url.split("//")[1].split(".")[0])
+    # Resolves to slugified organization name "Kiwi Corporativo" -> "kiwi-corporativo"
+    assert slug == "kiwi-corporativo"
+    assert resolve_storefront_slug(test_db, ORGANIZATION_ID, BRANCH_ID) == "kiwi-corporativo"
+    assert url == "https://kiwi-corporativo.mimenu.onl"
+
+    # 2. Update branch to have a raw UUID string as slug
+    raw_uuid = str(uuid.uuid4())
+    test_db.execute(
+        models.branches.update()
+        .where(models.branches.c.id == BRANCH_ID)
+        .values(slug=raw_uuid)
+    )
+    test_db.commit()
+
+    url, slug = resolve_storefront_url(test_db, ORGANIZATION_ID, BRANCH_ID)
+    assert slug != raw_uuid
+    assert not is_uuid_string(slug)
+    assert slug == "kiwi-corporativo"
+    assert url == "https://kiwi-corporativo.mimenu.onl"
+
+
+def test_whatsapp_storefront_url_prefers_organization_preferred_slug(test_db):
+    """TDD-TC-342: Verify preferred_public_slug takes precedence when configured."""
+    from restaurant_os.integrations.whatsapp.urls import resolve_storefront_url
+
+    test_db.execute(
+        models.organizations.update()
+        .where(models.organizations.c.id == ORGANIZATION_ID)
+        .values(preferred_public_slug="don-taco")
+    )
+    test_db.commit()
+
+    url, slug = resolve_storefront_url(test_db, ORGANIZATION_ID, BRANCH_ID)
+    assert slug == "don-taco"
+    assert url == "https://don-taco.mimenu.onl"
+
+
+def test_whatsapp_url_builders_and_slugify():
+    """TDD-TC-343: Verify URL builders produce canonical links and slugify handles accents."""
+    from restaurant_os.integrations.whatsapp.urls import (
+        build_cart_url,
+        build_rating_url,
+        build_tracking_url,
+        slugify,
+    )
+
+    base = "https://elguero.mimenu.onl"
+    assert build_tracking_url(base, "ORD-456") == "https://elguero.mimenu.onl/orders/ORD-456"
+    assert build_rating_url(base, "ORD-456") == "https://elguero.mimenu.onl/orders/ORD-456/review"
+
+    items = [{"product_id": "p1", "quantity": 2}]
+    cart = build_cart_url(base, items)
+    assert cart.startswith("https://elguero.mimenu.onl/cart?items=")
+    assert "from=wa" in cart
+
+    # Accents, punctuation, multiple spaces
+    assert slugify("Taquería El Güero & Cervecería!") == "taqueria-el-guero-cerveceria"
+    assert slugify("Los 3 Hermanos (Matriz)") == "los-3-hermanos-matriz"

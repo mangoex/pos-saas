@@ -37,6 +37,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
             sa.select(models.branches).where(
                 sa.or_(
                     sa.func.lower(models.branches.c.code) == identifier,
+                    sa.func.lower(models.branches.c.slug) == identifier,
                     models.branches.c.id == identifier,
                 )
             )

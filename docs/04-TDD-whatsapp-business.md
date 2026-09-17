@@ -44,7 +44,7 @@
 
 ### TDD-TC-328 Generación de enlace seguro a storefront con items codificados y respuesta conversacional formateada
 - Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_bot_conversational_order_proposal`
-- Propósito: Verificar que el bot formule un mensaje contextualizado con emojis, desglose detallado con precios unitarios y subtotales en MXN, advertencias de agotados y un enlace `https://mimenu.com/<slug>/cart?items=...` para finalizar el checkout en la web.
+- Propósito: Verificar que el bot formule un mensaje contextualizado con emojis, desglose detallado con precios unitarios y subtotales en MXN, advertencias de agotados y un enlace `https://<slug>.mimenu.onl/cart?items=...` para finalizar el checkout en la web.
 
 ## TDD-TS-325 Suite de Notificaciones de Estado de Pedido por WhatsApp
 
@@ -99,3 +99,17 @@
 ### TDD-TC-340 Configuración de Embedded Signup con Meta Configuration ID
 - Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_embedded_signup_config_and_sdk_params`
 - Propósito: Validar que la configuración de WhatsApp acepte y persista el `config_id` de Meta Embedded Signup y exponga los parámetros requeridos para el popup nativo de `FB.login`.
+
+## TDD-TS-328 Suite de Resolución Canónica de URLs de Menú ({slug}.mimenu.onl)
+
+### TDD-TC-341 Garantía de no exposición de UUIDs y fallback a slug de marca
+- Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_storefront_url_never_returns_raw_uuid`
+- Propósito: Verificar que la resolución de URLs de menú nunca exponga un identificador UUID crudo incluso si `branch.slug` es nulo o contiene un UUID, recurriendo limpiamente al nombre o slug de la organización (`kiwi-corporativo.mimenu.onl`).
+
+### TDD-TC-342 Precedencia de preferred_public_slug de la organización
+- Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_storefront_url_prefers_organization_preferred_slug`
+- Propósito: Comprobar que cuando la organización tiene configurado un alias público preferido (`preferred_public_slug`), este tome prioridad absoluta en el subdominio (`https://{preferred_slug}.mimenu.onl`).
+
+### TDD-TC-343 Constructores canónicos de URLs y normalización de slugify
+- Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_url_builders_and_slugify`
+- Propósito: Validar que los constructores de enlaces de carrito (`/cart?items=...&from=wa`), seguimiento (`/orders/{folio}`) y calificación (`/orders/{folio}/review`) operen sobre el subdominio wildcard y que `slugify` limpie acentos, puntuación y caracteres especiales en etiquetas DNS válidas.

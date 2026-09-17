@@ -1603,7 +1603,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   <div style={{ fontSize: '0.8125rem', color: '#475569', marginBottom: 10 }}>
                     <strong>🌐 Enlace Web:</strong>{' '}
                     <a href={knowledgePreview?.storefront_url} target="_blank" rel="noreferrer" style={{ color: '#16a34a', fontWeight: 600 }}>
-                      {knowledgePreview?.storefront_url || 'https://mimenu.com'}
+                      {knowledgePreview?.storefront_url || 'https://mimenu.onl'}
                     </a>
                   </div>
                   <div>

@@ -26,6 +26,7 @@ from .adapter import (
 )
 from .bot import WhatsAppBot
 from .knowledge import WhatsAppKnowledgeService
+from .urls import build_rating_url, build_tracking_url, resolve_storefront_url
 
 logger = logging.getLogger(__name__)
 
@@ -622,8 +623,9 @@ def post_whatsapp_simulate_notification(
     branch_name = str(payload.get("branch_name") or "Restaurante Demo").strip()
     order_type = str(payload.get("order_type") or "delivery").strip().lower()
 
-    tracking_url = f"https://mimenu.com/demo/orders/{folio.lower()}"
-    rating_url = f"https://mimenu.com/demo/orders/{folio.lower()}/review"
+    storefront_url, _ = resolve_storefront_url(session, org_id)
+    tracking_url = build_tracking_url(storefront_url, folio.lower())
+    rating_url = build_rating_url(storefront_url, folio.lower())
 
     if status in {"ACCEPTED", "IN_PRODUCTION"}:
         message = (

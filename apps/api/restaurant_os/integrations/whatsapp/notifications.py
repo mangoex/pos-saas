@@ -9,6 +9,11 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
+from restaurant_os.integrations.whatsapp.urls import (
+    build_rating_url,
+    build_tracking_url,
+    resolve_storefront_url,
+)
 
 from .adapter import send_whatsapp_text_message
 
@@ -116,10 +121,11 @@ class WhatsAppNotificationService:
             .first()
         )
         branch_name = branch["name"] if branch else "Restaurante"
-        slug = (branch.get("slug") or self.branch_id) if branch else self.branch_id
-        storefront_url = f"https://mimenu.com/{slug}"
-        resolved_tracking_url = tracking_url or f"{storefront_url}/orders/{order_id}"
-        resolved_rating_url = smart_rating_url or f"{storefront_url}/orders/{order_id}/review"
+        storefront_url, slug = resolve_storefront_url(
+            self.session, self.organization_id or "", self.branch_id
+        )
+        resolved_tracking_url = tracking_url or build_tracking_url(storefront_url, order_id)
+        resolved_rating_url = smart_rating_url or build_rating_url(storefront_url, order_id)
         folio = order.get("folio") or order_id[:8].upper()
         order_type = str(order.get("order_type") or "delivery").lower()
 

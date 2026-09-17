@@ -62,7 +62,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-NFR-007 | SDD SaaS y suplemento de cierre | BDD-SC-749, BDD-SC-809 | TDD-TS-249, TDD-TS-309 | Disenado |
 | PRD-FR-090 | SDD Mercado Pago Checkout | BDD Mercado Pago Checkout | test_subscriptions.py | Disenado |
 | PRD-FR-091 | SDD Mercado Pago Suscripción | BDD Mercado Pago Suscripción | test_subscriptions_webhook.py | Disenado |
-| PRD-FR-092 | SDD-ADR-036 Integración WhatsApp Business y Asistente de Menú | BDD-SC-901, BDD-SC-902, BDD-SC-903, BDD-SC-904 | TDD-TS-320, TDD-TS-321, TDD-TS-322, TDD-TS-323, TDD-TC-320, TDD-TC-321, TDD-TC-322, TDD-TC-323, TDD-TC-324 | Implementado |
+| PRD-FR-092 | SDD-ADR-036 Integración WhatsApp Business y Asistente de Menú | BDD-SC-901, BDD-SC-902, BDD-SC-903, BDD-SC-904 | TDD-TS-320, TDD-TS-321, TDD-TS-322, TDD-TS-323, TDD-TS-328, TDD-TC-320, TDD-TC-321, TDD-TC-322, TDD-TC-323, TDD-TC-324, TDD-TC-341, TDD-TC-342, TDD-TC-343 | Implementado |
 | PRD-FR-093 | SDD-ADR-037 Conversational Commerce y Carrito Asistido por WhatsApp | BDD-SC-905, BDD-SC-906, BDD-SC-907, BDD-SC-908 | TDD-TS-324, TDD-TC-325, TDD-TC-326, TDD-TC-327, TDD-TC-328 | Implementado |
 | PRD-FR-094 | SDD-ADR-038 Notificaciones Proactivas de Pedidos por WhatsApp | BDD-SC-909, BDD-SC-910, BDD-SC-911, BDD-SC-912 | TDD-TS-325, TDD-TC-329, TDD-TC-330, TDD-TC-331, TDD-TC-332 | Implementado |
 | PRD-FR-095 | SDD-ADR-039 Campañas de Marketing y Opt-Out por WhatsApp | BDD-SC-913, BDD-SC-914, BDD-SC-915, BDD-SC-916 | TDD-TS-326, TDD-TC-333, TDD-TC-334, TDD-TC-335, TDD-TC-336 | Implementado |

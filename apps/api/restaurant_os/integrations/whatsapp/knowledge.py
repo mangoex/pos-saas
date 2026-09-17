@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from restaurant_os import models
+from restaurant_os.integrations.whatsapp.urls import resolve_storefront_url
 
 
 class WhatsAppKnowledgeService:
@@ -20,6 +21,10 @@ class WhatsAppKnowledgeService:
 
     def get_branch_knowledge_summary(self) -> dict[str, Any]:
         """Compile complete operational knowledge of the branch."""
+        storefront_url, slug = resolve_storefront_url(
+            self.session, self.organization_id, self.branch_id
+        )
+
         # 1. Branch information
         branch = self.session.execute(
             sa.select(models.branches).where(
@@ -34,12 +39,10 @@ class WhatsAppKnowledgeService:
                 "available_products_text": "El menú no está disponible en este momento.",
                 "hours_text": "Horario no configurado.",
                 "promotions_text": "Sin promociones activas.",
-                "storefront_url": "https://mimenu.com",
+                "storefront_url": storefront_url,
             }
 
         branch_name = branch["name"]
-        slug = branch.get("slug") or self.branch_id
-        storefront_url = f"https://mimenu.com/{slug}"
 
         # 2. Query all products and group available ones by category
         catalog_items = self.get_branch_catalog_items()

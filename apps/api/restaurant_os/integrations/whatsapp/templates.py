@@ -31,7 +31,7 @@ STANDARD_TEMPLATES: dict[str, dict[str, Any]] = {
                             "ORD-101",
                             "Tacos El Güero",
                             "En Preparación",
-                            "https://mimenu.com/elguero/orders/101",
+                            "https://elguero.mimenu.onl/orders/101",
                         ]
                     ]
                 },
@@ -58,7 +58,7 @@ STANDARD_TEMPLATES: dict[str, dict[str, Any]] = {
                             "Tacos El Güero",
                             "¡Hace tiempo que no ordenas tus Tacos al Pastor!",
                             "VUELVE10",
-                            "https://mimenu.com/elguero",
+                            "https://elguero.mimenu.onl",
                         ]
                     ]
                 },
