@@ -23,6 +23,7 @@
     "test:pco007-reports": "node tests/frontend/test_pco007_reports.mjs",
     "test:pco007-recipe": "node tests/frontend/test_pco007_recipe.mjs",
     "test:mobile-web-order-flow": "node tests/frontend/test_mobile_web_order_flow.mjs",
+    "test:mobile-gps-delivery": "node tests/frontend/test_mobile_gps_delivery.mjs",
     "test:mobile-order-modifier-labels": "node tests/frontend/test_mobile_order_modifier_labels.mjs",
     "test:mobile-admin-order-alerts": "node tests/frontend/test_mobile_admin_order_alerts.mjs",
     "test:mobile-voice-order": "node tests/frontend/test_mobile_voice_order.mjs",

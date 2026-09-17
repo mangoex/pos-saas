@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag } from 'lucide-react';
+import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag, Navigation } from 'lucide-react';
 import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Product } from '../types';
 import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile, validateBranchCoupon } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
+import { requestBrowserCoordinates, reverseGeocode, formatGpsAddressNotes } from '../utils/geolocation';
 
 const getRecommendationIcon = (product: Product, size: number = 38) => {
   const category = (product.category_name || '').toLowerCase();
@@ -131,6 +132,56 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [number, setNumber] = useState(initialProfile?.number || '');
   const [neighborhood, setNeighborhood] = useState(initialProfile?.neighborhood || '');
   const [addressNotes, setAddressNotes] = useState(initialProfile?.address_notes || '');
+  const [isLocatingGps, setIsLocatingGps] = useState(false);
+  const [gpsFeedback, setGpsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleDetectGpsLocation = async () => {
+    setGpsFeedback(null);
+    setIsLocatingGps(true);
+    try {
+      const coords = await requestBrowserCoordinates({ enableHighAccuracy: true, timeout: 9000, maximumAge: 30000 });
+      const geo = await reverseGeocode(coords.lat, coords.lng);
+
+      if (geo.street) {
+        setStreet(geo.street);
+      }
+      if (geo.number) {
+        setNumber(geo.number);
+      }
+      if (geo.neighborhood) {
+        setNeighborhood(geo.neighborhood);
+      }
+
+      const updatedNotes = formatGpsAddressNotes(addressNotes, geo.mapsUrl);
+      setAddressNotes(updatedNotes);
+
+      if (name.trim() && phone.trim()) {
+        saveCustomerProfile({
+          name: name.trim(),
+          phone: phone.trim(),
+          street: geo.street || street || undefined,
+          number: geo.number || number || undefined,
+          neighborhood: geo.neighborhood || neighborhood || undefined,
+          address_notes: updatedNotes || undefined,
+        });
+      }
+
+      setGpsFeedback({
+        type: 'success',
+        message: geo.street
+          ? `📍 ¡Ubicación detectada! ${geo.street}${geo.number ? ` #${geo.number}` : ''}${geo.neighborhood ? `, Col. ${geo.neighborhood}` : ''}`
+          : '📍 ¡Coordenadas GPS obtenidas! Se incluyó tu enlace de ubicación en notas.',
+      });
+    } catch (err: any) {
+      setGpsFeedback({
+        type: 'error',
+        message: err?.message || 'No fue posible detectar la ubicación GPS.',
+      });
+    } finally {
+      setIsLocatingGps(false);
+    }
+  };
+
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [cashAmount, setCashAmount] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
@@ -815,82 +866,106 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <div className="cart-form-fields-grid">
-                      <div className="cart-input-wrapper">
-                        <label htmlFor="customer-street" className="cart-accessible-label">
-                          Calle y número
-                        </label>
-                        <MapPin size={16} className="cart-input-icon" aria-hidden="true" />
-                        <input
-                          id="customer-street"
-                          name="address"
-                          type="text"
-                          autoComplete="street-address"
-                          autoCapitalize="words"
-                          className="cart-input-field"
-                          placeholder="Calle *"
-                          value={street}
-                          onChange={(e) => setStreet(e.target.value)}
-                          onInput={(e) => setStreet((e.target as HTMLInputElement).value)}
-                          required
-                        />
-                      </div>
+                    <>
+                      {/* Botón de Ubicación GPS */}
+                      <button
+                        type="button"
+                        onClick={handleDetectGpsLocation}
+                        disabled={isLocatingGps}
+                        className="btn-detect-gps-address"
+                      >
+                        <Navigation size={15} className={isLocatingGps ? 'spin-icon' : ''} />
+                        <span>{isLocatingGps ? 'Obteniendo señal GPS...' : '📍 Usar mi ubicación actual (GPS)'}</span>
+                        <span className="gps-pill-auto">Auto</span>
+                      </button>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
-                        <div>
-                          <label htmlFor="customer-number" className="cart-accessible-label">
-                            Número exterior o interior
-                          </label>
-                          <input
-                            id="customer-number"
-                            name="address-line2"
-                            type="text"
-                            autoComplete="address-line2"
-                            className="cart-input-field no-icon"
-                            placeholder="No. Ext / Int *"
-                            value={number}
-                            onChange={(e) => setNumber(e.target.value)}
-                            onInput={(e) => setNumber((e.target as HTMLInputElement).value)}
-                            required
-                          />
+                      {gpsFeedback && (
+                        <div
+                          className={`gps-feedback-banner ${gpsFeedback.type}`}
+                          role="alert"
+                        >
+                          <span>{gpsFeedback.type === 'success' ? '✅' : '⚠️'}</span>
+                          <span>{gpsFeedback.message}</span>
                         </div>
-                        <div>
-                          <label htmlFor="customer-neighborhood" className="cart-accessible-label">
-                            Colonia
+                      )}
+
+                      <div className="cart-form-fields-grid">
+                        <div className="cart-input-wrapper">
+                          <label htmlFor="customer-street" className="cart-accessible-label">
+                            Calle y número
                           </label>
+                          <MapPin size={16} className="cart-input-icon" aria-hidden="true" />
                           <input
-                            id="customer-neighborhood"
-                            name="address-level3"
+                            id="customer-street"
+                            name="address"
                             type="text"
-                            autoComplete="address-level3"
+                            autoComplete="street-address"
                             autoCapitalize="words"
-                            className="cart-input-field no-icon"
-                            placeholder="Colonia *"
-                            value={neighborhood}
-                            onChange={(e) => setNeighborhood(e.target.value)}
-                            onInput={(e) => setNeighborhood((e.target as HTMLInputElement).value)}
+                            className="cart-input-field"
+                            placeholder="Calle *"
+                            value={street}
+                            onChange={(e) => setStreet(e.target.value)}
+                            onInput={(e) => setStreet((e.target as HTMLInputElement).value)}
                             required
                           />
                         </div>
-                      </div>
 
-                      <div>
-                        <label htmlFor="customer-address-notes" className="cart-accessible-label">
-                          Referencias de entrega
-                        </label>
-                        <input
-                          id="customer-address-notes"
-                          name="address_notes"
-                          type="text"
-                          autoComplete="off"
-                          className="cart-input-field no-icon"
-                          placeholder="Referencias de entrega (ej: Portón café, timbre blanco)"
-                          value={addressNotes}
-                          onChange={(e) => setAddressNotes(e.target.value)}
-                          onInput={(e) => setAddressNotes((e.target as HTMLInputElement).value)}
-                        />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
+                          <div>
+                            <label htmlFor="customer-number" className="cart-accessible-label">
+                              Número exterior o interior
+                            </label>
+                            <input
+                              id="customer-number"
+                              name="address-line2"
+                              type="text"
+                              autoComplete="address-line2"
+                              className="cart-input-field no-icon"
+                              placeholder="No. Ext / Int *"
+                              value={number}
+                              onChange={(e) => setNumber(e.target.value)}
+                              onInput={(e) => setNumber((e.target as HTMLInputElement).value)}
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="customer-neighborhood" className="cart-accessible-label">
+                              Colonia
+                            </label>
+                            <input
+                              id="customer-neighborhood"
+                              name="address-level3"
+                              type="text"
+                              autoComplete="address-level3"
+                              autoCapitalize="words"
+                              className="cart-input-field no-icon"
+                              placeholder="Colonia *"
+                              value={neighborhood}
+                              onChange={(e) => setNeighborhood(e.target.value)}
+                              onInput={(e) => setNeighborhood((e.target as HTMLInputElement).value)}
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label htmlFor="customer-address-notes" className="cart-accessible-label">
+                            Referencias de entrega
+                          </label>
+                          <input
+                            id="customer-address-notes"
+                            name="address_notes"
+                            type="text"
+                            autoComplete="off"
+                            className="cart-input-field no-icon"
+                            placeholder="Referencias de entrega (ej: Portón café, timbre blanco)"
+                            value={addressNotes}
+                            onChange={(e) => setAddressNotes(e.target.value)}
+                            onInput={(e) => setAddressNotes((e.target as HTMLInputElement).value)}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    </>
                   )}
 
                     {isFreeDeliveryConfigured && (
