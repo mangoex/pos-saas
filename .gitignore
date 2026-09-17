@@ -33,3 +33,4 @@ scratch/
 # Evidencia local E2E: puede contener credenciales y datos sintéticos de sesión.
 /.e2e/
 /cashier-sales-branch-*.png
+/output/

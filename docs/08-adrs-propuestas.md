@@ -329,3 +329,59 @@ el adaptador conserva la frontera. Alternativa descartada: marcar sincronizado s
 Consecuencia: nueva dependencia runtime con revisión de vulnerabilidades en CI; fallos de
 red se modelan como reintento/error, nunca confirmación. Lease/CAS y reconciliación de versión
 están definidos en SDD SaaS; el worker se detiene sin borrar comandos pendientes.
+
+## SDD-ADR-036 — Integración Oficial WhatsApp Business Platform (Tech Provider) y Asistente de Menú
+
+Estado: Propuesta y adoptada para el canal de atención y onboarding de WhatsApp en mimenu (RestaurantOS).
+
+Contexto:
+El sistema requiere conectar el WhatsApp Business de cada restaurante de manera multi-tenant sin fricción técnica mediante Meta Embedded Signup (flujo oficial de Tech Provider), y proporcionar un asistente automatizado cuya base de conocimiento sea el catálogo en tiempo real (menú, horarios, disponibilidad y promociones).
+
+Decisión:
+1. Se adopta un adaptador desacoplado en `apps/api/restaurant_os/integrations/whatsapp/` bajo el principio de cero acoplamiento del dominio a proveedores externos.
+2. El Onboarding utiliza el SDK de Facebook en `admin-web` (Embedded Signup). El backend intercambia el código de autorización por un System User Token / WABA ID y almacena la configuración de forma aislada por sucursal.
+3. El Webhook de Meta (`/integrations/whatsapp/webhook`) valida `hub.verify_token` en `GET` y firma criptográfica `X-Hub-Signature-256` en `POST`. Todo payload entrante se persiste de forma inmutable en `integration_webhook_logs` y responde `HTTP 200 OK` en < 3 segundos.
+4. El asistente conversacional (`WhatsAppKnowledgeService` + `WhatsAppBot`) consulta la base de datos de la sucursal (PostgreSQL) en modo solo lectura (menú activo, platillos en existencia, horarios operativos y promociones vigentes) y genera respuestas gobernadas bajo Prompt Behavior Design (PBD), sin inventar precios ni ingredientes, incluyendo siempre el enlace al menú web móvil para autoservicio.
+5. El sistema preserva compatibilidad absoluta para los restaurantes que no habiliten WhatsApp: no se ejecutan procesos extra ni cambia su flujo de órdenes POS/KDS.
+
+## SDD-ADR-037 — Arquitectura de Conversational Commerce por WhatsApp y Carrito Asistido Pre-llenado
+
+Estado: Aprobada y adoptada para la Fase 2 de Conversational Commerce en mimenu (RestaurantOS).
+
+Contexto:
+Los comensales suelen enviar mensajes de texto libres solicitando pedidos por WhatsApp (ej. *"Quiero 2 órdenes de tacos al pastor y una gringa especial"*). El asistente debe interpretar de forma precisa la intención, productos y cantidades, advertir al instante si algún producto está agotado (86'd), calcular los totales monetarios exactos y permitir al comensal finalizar su compra sin fricción ni errores manuales.
+
+Decisión:
+1. **Desacoplamiento de Autoridad de Checkout**: WhatsApp actúa como asistente conversacional y facilitador de compra, **no** como autoridad final de órdenes ni de cobro. La autoridad sobre precios finales, comisiones, propinas, validación de stock y creación transaccional de órdenes pertenece al checkout web del storefront (`mimenu.com/<slug>/cart`).
+2. **Matching Determinista y Tolerante**: Se implementa `WhatsAppOrderParser` que normaliza texto, identifica palabras numéricas y dígitos ("dos", "2", "una"), y realiza matching determinista contra los nombres del catálogo de la sucursal.
+3. **Tratamiento Transparente de Disponibilidad (86'd)**: Los productos agotados (`branch_product_availability.is_available = False`) son reconocidos por el parser pero segregados en `unavailable_items`. El bot alerta explícitamente al comensal que dicho artículo está agotado y no lo incluye en el total estimado.
+4. **Artículos no Encontrados**: Cualquier platillo solicitado que no coincida con el menú activo se reporta en `unmatched_items` con aviso cortés, evitando alucinaciones o asociaciones forzadas.
+5. **Aritmética Monetaria Exacta**: Los importes unitarios, subtotales y totales se manejan y calculan en enteros de centavos de MXN (`price_cents`, `subtotal_cents`, `total_cents`), sin operaciones de punto flotante.
+6. **Enlace a Carrito Pre-llenado**: El bot genera un enlace seguro con los productos y cantidades identificados (`https://mimenu.com/<slug>/cart?items=<encoded>&from=wa`), permitiendo que el comensal abra el menú digital con su carrito ya armado, seleccione su modalidad (entrega a domicilio / recoger), ingrese su dirección y pague.
+
+## SDD-ADR-038 — Arquitectura de Notificaciones Proactivas y Trazabilidad de Pedidos por WhatsApp
+
+Estado: Aprobada y adoptada para la Fase 3 de Notificaciones de Pedidos en mimenu (RestaurantOS).
+
+Contexto:
+Una vez capturado el pedido (ya sea vía storefront web, POS o asistencia conversacional), el restaurante requiere notificar al comensal cuando la cocina acepta la orden (`ACCEPTED` / `IN_PRODUCTION`), cuando el pedido está listo (`READY`), cuando sale a reparto (`IN_DELIVERY`) y cuando se completa la entrega (`DELIVERED`), cerrando con la invitación a calificar el servicio (Smart Rating).
+
+Decisión:
+1. **Desacoplamiento Operativo y No Bloqueante**: Las notificaciones salientes de WhatsApp se ejecutan de manera protegida y desacoplada del ciclo transaccional de órdenes. Un fallo de red, rate limit o número inválido en WhatsApp **nunca** revierte ni bloquea un cambio de estado en cocina, POS o despacho.
+2. **Aislamiento Multi-Tenant Estricto**: Si la sucursal no tiene WhatsApp Business conectado o el comensal no proporcionó número de teléfono, el servicio omite la notificación de forma silenciosa (`skipped`) sin levantar excepciones ni alterar los logs del negocio.
+3. **Plantillas de Utilidad de Meta (HSM)**: La redacción sigue estrictamente el formato transaccional de utilidad de Meta: mensaje breve, personalizado con nombre y folio, estado claro y enlace de seguimiento en vivo (`https://mimenu.com/<slug>/orders/<order_id>`).
+4. **Integración con Smart Rating (`PRD-FR-735`)**: En el estado `DELIVERED`, el mensaje incluye el enlace de calificación del comensal (`/feedback` o `/review`), incentivando reseñas positivas en Google Reviews y conteniendo el feedback privado ante inconformidades.
+
+## SDD-ADR-039 — Arquitectura de Campañas de Marketing por WhatsApp, Segmentación CRM y Políticas de Opt-Out
+
+Estado: Aprobada y adoptada para la Fase 4 de Campañas y Re-engagement en mimenu (RestaurantOS).
+
+Contexto:
+Para incrementar la recurrencia de compra, los restaurantes necesitan reactivar comensales en riesgo de abandono (churn), consentir a clientes VIP y dar la bienvenida a nuevos compradores mediante promociones por WhatsApp. Estas campañas deben cumplir con las políticas comerciales de Meta (Marketing HSM), consentimiento explícito, mecanismo de desuscripción obligatorio (Opt-Out) y aislamiento multi-tenant estricto.
+
+Decisión:
+1. **Segmentación CRM Integrada**: Las campañas operan sobre segmentos calculados por `customer_ai.py` (`churn_risk`, `vip`, `new_customers`), cruzando historial de órdenes e importes para generar mensajes contextualizados (con platillos favoritos del comensal y cupones de descuento vigentes).
+2. **Cumplimiento Obligatorio de Opt-Out (STOP / BAJA)**: Todo mensaje promocional saliente incluye una cláusula visible de baja: *"Para no recibir más promociones, responde STOP o BAJA"*.
+3. **Gestión Inmediata de Bajas en Webhook**: Cuando un comensal envía palabras clave de desuscripción ("BAJA", "STOP", "CANCELAR", "NO MAS"), el webhook de WhatsApp registra inmediatamente la baja y el bot confirma al usuario. Los números con opt-out activo quedan permanentemente excluidos de envíos de marketing.
+4. **Preservación de Notificaciones Transaccionales**: La baja de marketing NO afecta las notificaciones transaccionales de utilidad (seguimiento de órdenes activas `ACCEPTED`, `READY`, `IN_DELIVERY`, etc.).
+5. **Despacho Controlado y No Bloqueante**: Las campañas se procesan por lote con control de tasa de envío y reporte de métricas (`total_targets`, `sent_count`, `skipped_count`, `failed_count`), garantizando que fallos individuales en Meta no impidan el procesamiento del resto del lote ni bloqueen el sistema.

@@ -655,6 +655,8 @@ def get_crm_segments_and_churn_risk(
             order_dates = [o["created_at"] for o in orders if o["created_at"]]
             if order_dates:
                 last_order_dt = max(order_dates)
+                if last_order_dt.tzinfo is None:
+                    last_order_dt = last_order_dt.replace(tzinfo=UTC)
 
         days_inactive = (now - last_order_dt).days if last_order_dt else 999
 

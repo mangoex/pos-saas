@@ -4108,6 +4108,14 @@ def fulfill_order(
         actor_user_id,
     )
     session.commit()
+    try:
+        from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
+
+        WhatsAppNotificationService(session).notify_order_status_change(order_id, next_state.value)
+    except Exception as notify_exc:
+        logger.warning(
+            "WhatsApp order status notification failed for %s: %s", order_id, notify_exc
+        )
     return response
 
 
@@ -6471,6 +6479,18 @@ def cancel_order(
         actor_user_id=actor_id,
     )
     session.commit()
+    try:
+        from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
+
+        WhatsAppNotificationService(session).notify_order_status_change(
+            order_id, "CANCELLED", notes=normalized_reason
+        )
+    except Exception as notify_exc:
+        logger.warning(
+            "WhatsApp order status notification failed for cancel %s: %s",
+            order_id,
+            notify_exc,
+        )
     returned_tasks = [
         {**task, "status": "CANCELLED", "completed_at": now}
         if task["status"] == "PENDING"
@@ -27626,6 +27646,16 @@ def accept_pending_order(
         actor_user_id=actor_id,
     )
     session.commit()
+    try:
+        from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
+
+        WhatsAppNotificationService(session).notify_order_status_change(order_id, "ACCEPTED")
+    except Exception as notify_exc:
+        logger.warning(
+            "WhatsApp order status notification failed for accept %s: %s",
+            order_id,
+            notify_exc,
+        )
     return get_order_detail(session, order_id, actor_id)
 
 

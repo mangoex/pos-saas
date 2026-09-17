@@ -21,6 +21,11 @@ import {
   Eye,
   EyeOff,
   Receipt,
+  MessageSquare,
+  Bot,
+  Sparkles,
+  ExternalLink,
+  ShoppingCart,
 } from 'lucide-react';
 import '../../premium-catalogs.css';
 
@@ -54,6 +59,17 @@ interface FacturapiConfig {
   self_invoicing_domain: string;
   self_invoicing_days_valid: number;
   print_qr_on_ticket: boolean;
+}
+
+interface WhatsAppKnowledgePreview {
+  branch_id: string;
+  branch_name: string;
+  phone?: string;
+  storefront_url: string;
+  available_products_text: string;
+  hours_text: string;
+  promotions_text: string;
+  categories_count: number;
 }
 
 interface StoreMapping {
@@ -101,15 +117,17 @@ interface InvoiceRecord {
   verification_url?: string;
 }
 
+export type ProviderType = 'UBER_EATS' | 'DIDI_FOOD' | 'RAPPI' | 'FACTURAPI' | 'WHATSAPP_BUSINESS';
+
 interface IntegrationsHubProps {
-  defaultProvider?: 'UBER_EATS' | 'DIDI_FOOD' | 'RAPPI' | 'FACTURAPI';
+  defaultProvider?: ProviderType;
 }
 
 export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProps = {}) {
   const location = useLocation();
   const isInvoicingRoute = location.pathname.includes('/invoicing') || defaultProvider === 'FACTURAPI';
   const queryClient = useQueryClient();
-  const [selectedProvider, setSelectedProvider] = useState<'UBER_EATS' | 'DIDI_FOOD' | 'RAPPI' | 'FACTURAPI'>(
+  const [selectedProvider, setSelectedProvider] = useState<ProviderType>(
     isInvoicingRoute ? 'FACTURAPI' : (defaultProvider || 'UBER_EATS')
   );
   const isDeferredProvider = selectedProvider === 'DIDI_FOOD' || selectedProvider === 'RAPPI';
@@ -132,7 +150,50 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
   const [newMappingBranchId, setNewMappingBranchId] = useState('');
   const [newMappingStoreId, setNewMappingStoreId] = useState('');
 
-  // Queries for Uber/Delivery Channels
+  // WhatsApp state
+  const [selectedPreviewBranch, setSelectedPreviewBranch] = useState('');
+  const [simulateMessage, setSimulateMessage] = useState('Hola, ¿qué tienen de comer y cuáles son sus horarios?');
+  const [simulateChatHistory, setSimulateChatHistory] = useState<Array<{ sender: 'user' | 'bot'; text: string; time: string; parsedOrder?: any }>>([]);
+  const [embeddedSignupOpen, setEmbeddedSignupOpen] = useState(false);
+  const [signupCode, setSignupCode] = useState('');
+  const [signupWabaId, setSignupWabaId] = useState('');
+  const [signupPhoneNumberId, setSignupPhoneNumberId] = useState('');
+  const [signupBranchId, setSignupBranchId] = useState('');
+
+  // WhatsApp Notification Simulator state
+  const [simulateNotificationStatus, setSimulateNotificationStatus] = useState('ACCEPTED');
+  const [simulateNotificationName, setSimulateNotificationName] = useState('Carlos M.');
+  const [simulateNotificationFolio, setSimulateNotificationFolio] = useState('FOL-1042');
+  const [simulateNotificationOrderType, setSimulateNotificationOrderType] = useState('delivery');
+  const [simulatedNotificationPreview, setSimulatedNotificationPreview] = useState<{
+    status: string;
+    message: string;
+    tracking_url: string;
+    smart_rating_url?: string | null;
+  } | null>(null);
+
+  // WhatsApp Marketing Campaigns & Opt-Out State
+  const [selectedCampaignSegment, setSelectedCampaignSegment] = useState('churn_risk');
+  const [campaignDiscountCode, setCampaignDiscountCode] = useState('VUELVE10');
+  const [campaignCustomMessage, setCampaignCustomMessage] = useState('');
+  const [campaignPreviewData, setCampaignPreviewData] = useState<{
+    segment: string;
+    total_eligible: number;
+    discount_code: string;
+    sample_message: string;
+    sample_recipient?: string;
+    storefront_url: string;
+  } | null>(null);
+  const [campaignDispatchResult, setCampaignDispatchResult] = useState<{
+    status: string;
+    segment: string;
+    total_targets: number;
+    sent_count: number;
+    skipped_count: number;
+    failed_count: number;
+  } | null>(null);
+
+  // Queries for Uber/Delivery Channels & WhatsApp
   const { data: config } = useQuery<ChannelConfig>({
     queryKey: ['integrations', selectedProvider, 'config'],
     queryFn: () => fetchApi('/integrations/' + selectedProvider.toLowerCase().replace('_', '-') + '/config'),
@@ -273,6 +334,144 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
     },
   });
 
+  // WhatsApp Knowledge Preview Query
+  const { data: knowledgePreview, isLoading: isLoadingPreview } = useQuery<WhatsAppKnowledgePreview>({
+    queryKey: ['integrations', 'whatsapp', 'knowledge-preview', selectedPreviewBranch],
+    queryFn: () => fetchApi('/integrations/whatsapp/knowledge-preview' + (selectedPreviewBranch ? `?branch_id=${selectedPreviewBranch}` : '')),
+    enabled: selectedProvider === 'WHATSAPP_BUSINESS' && activeTab === 'config',
+  });
+
+  // WhatsApp Chat Simulation Mutation
+  const simulateWhatsAppMutation = useMutation({
+    mutationFn: (payload: { branch_id: string; message: string }) =>
+      fetchApi<{ incoming_message: string; reply: string; knowledge_summary: any; parsed_order?: any }>('/integrations/whatsapp/simulate', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data) => {
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setSimulateChatHistory((prev) => [
+        ...prev,
+        { sender: 'user', text: data.incoming_message, time: nowTime },
+        { sender: 'bot', text: data.reply, time: nowTime, parsedOrder: data.parsed_order },
+      ]);
+    },
+    onError: (err: any) => {
+      alert('Error al simular conversación: ' + (err.message || 'Desconocido'));
+    },
+  });
+
+  // WhatsApp Embedded Signup Exchange Mutation
+  const exchangeEmbeddedSignupMutation = useMutation({
+    mutationFn: (payload: { code: string; waba_id: string; phone_number_id: string; branch_id: string }) =>
+      fetchApi('/integrations/whatsapp/embedded-signup/exchange', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'WHATSAPP_BUSINESS'] });
+      setEmbeddedSignupOpen(false);
+      setSignupCode('');
+      setSignupWabaId('');
+      setSignupPhoneNumberId('');
+      setSignupBranchId('');
+      alert('¡Cuenta y número de WhatsApp Business vinculados con éxito!');
+    },
+    onError: (err: any) => {
+      alert('Error al vincular con Meta: ' + (err.message || 'Código o IDs inválidos'));
+    },
+  });
+
+  // WhatsApp Order Notification Simulation Mutation
+  const simulateNotificationMutation = useMutation({
+    mutationFn: (payload: {
+      status: string;
+      customer_name: string;
+      folio: string;
+      order_type: string;
+      branch_name: string;
+    }) =>
+      fetchApi<{
+        status: string;
+        customer_name: string;
+        folio: string;
+        message: string;
+        tracking_url: string;
+        smart_rating_url?: string | null;
+      }>('/integrations/whatsapp/simulate-notification', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data) => {
+      setSimulatedNotificationPreview(data);
+    },
+    onError: (err: any) => {
+      alert('Error al simular notificación: ' + (err.message || 'Desconocido'));
+    },
+  });
+
+  // WhatsApp Marketing Campaign Segments Query
+  const { data: campaignSegmentsData } = useQuery<{
+    branch_id: string;
+    segments: Record<string, { count: number; label: string }>;
+    total_campaign_audience: number;
+  }>({
+    queryKey: ['integrations', 'whatsapp', 'campaigns', 'segments', selectedPreviewBranch],
+    queryFn: () =>
+      fetchApi(
+        '/integrations/whatsapp/campaigns/segments' +
+          (selectedPreviewBranch ? `?branch_id=${selectedPreviewBranch}` : '')
+      ),
+    enabled: selectedProvider === 'WHATSAPP_BUSINESS' && activeTab === 'config',
+  });
+
+  // WhatsApp Marketing Campaign Preview Mutation
+  const previewCampaignMutation = useMutation({
+    mutationFn: (payload: { branch_id: string; segment: string; discount_code: string; custom_message?: string }) =>
+      fetchApi<{
+        segment: string;
+        total_eligible: number;
+        discount_code: string;
+        sample_message: string;
+        sample_recipient?: string;
+        storefront_url: string;
+      }>('/integrations/whatsapp/campaigns/preview', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data) => {
+      setCampaignPreviewData(data);
+      setCampaignDispatchResult(null);
+    },
+    onError: (err: any) => {
+      alert('Error al previsualizar campaña: ' + (err.message || 'Desconocido'));
+    },
+  });
+
+  // WhatsApp Marketing Campaign Dispatch Mutation
+  const sendCampaignMutation = useMutation({
+    mutationFn: (payload: { branch_id: string; segment: string; discount_code: string; custom_message?: string }) =>
+      fetchApi<{
+        status: string;
+        segment: string;
+        total_targets: number;
+        sent_count: number;
+        skipped_count: number;
+        failed_count: number;
+      }>('/integrations/whatsapp/campaigns/send', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data) => {
+      setCampaignDispatchResult(data);
+      alert(`¡Campaña enviada con éxito! Enviados: ${data.sent_count}, Omitidos/Bajas: ${data.skipped_count}`);
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'whatsapp', 'campaigns'] });
+    },
+    onError: (err: any) => {
+      alert('Error al despachar campaña: ' + (err.message || 'Desconocido'));
+    },
+  });
+
   const webhookPath =
     selectedProvider === 'UBER_EATS'
       ? 'uber-eats'
@@ -280,6 +479,8 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
       ? 'didi-food'
       : selectedProvider === 'RAPPI'
       ? 'rappi'
+      : selectedProvider === 'WHATSAPP_BUSINESS'
+      ? 'whatsapp'
       : selectedProvider.toLowerCase().replace('_', '-');
   const webhookUrl = `${window.location.origin}/v1/integrations/${webhookPath}/webhook`;
 
@@ -438,6 +639,37 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             {selectedProvider === 'RAPPI' && formData.is_enabled ? 'Conectado' : 'Configurar'}
           </Badge>
         </div>
+
+        {/* WhatsApp Business */}
+        <div
+          onClick={() => { setSelectedProvider('WHATSAPP_BUSINESS'); setActiveTab('config'); }}
+          style={{
+            background: selectedProvider === 'WHATSAPP_BUSINESS' ? '#064e3b' : '#fff',
+            color: selectedProvider === 'WHATSAPP_BUSINESS' ? '#fff' : '#0f172a',
+            border: selectedProvider === 'WHATSAPP_BUSINESS' ? '2px solid #22c55e' : '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: '20px 24px',
+            cursor: 'pointer',
+            boxShadow: selectedProvider === 'WHATSAPP_BUSINESS' ? '0 10px 20px -5px rgba(34, 197, 94, 0.3)' : '0 2px 4px rgba(0,0,0,0.02)',
+            transition: 'all 0.2s',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 20 }}>💬</span>
+              <strong style={{ fontSize: '1.1rem' }}>WhatsApp Business</strong>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.8125rem', opacity: 0.85 }}>
+              Embedded Signup · Menú & Horarios IA
+            </p>
+          </div>
+          <Badge variant={selectedProvider === 'WHATSAPP_BUSINESS' && formData.is_enabled ? 'success' : 'default'}>
+            {selectedProvider === 'WHATSAPP_BUSINESS' && formData.is_enabled ? 'Conectado' : 'Configurar'}
+          </Badge>
+        </div>
       </div>
 
       {/* Main Panel Content */}
@@ -453,8 +685,8 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
               background: 'transparent',
               fontWeight: 600,
               fontSize: '0.9375rem',
-              color: activeTab === 'config' ? (selectedProvider === 'FACTURAPI' ? '#a855f7' : '#10b981') : '#64748b',
-              borderBottom: activeTab === 'config' ? `3px solid ${selectedProvider === 'FACTURAPI' ? '#a855f7' : '#10b981'}` : '3px solid transparent',
+              color: activeTab === 'config' ? (selectedProvider === 'FACTURAPI' ? '#a855f7' : selectedProvider === 'WHATSAPP_BUSINESS' ? '#16a34a' : '#10b981') : '#64748b',
+              borderBottom: activeTab === 'config' ? `3px solid ${selectedProvider === 'FACTURAPI' ? '#a855f7' : selectedProvider === 'WHATSAPP_BUSINESS' ? '#16a34a' : '#10b981'}` : '3px solid transparent',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -462,7 +694,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             }}
           >
             <Key size={18} />
-            {selectedProvider === 'FACTURAPI' ? 'Configuración Fiscal & API' : 'Credenciales & Webhook'}
+            {selectedProvider === 'FACTURAPI' ? 'Configuración Fiscal & API' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'Credenciales & Asistente IA' : 'Credenciales & Webhook'}
           </button>
 
           {selectedProvider === 'FACTURAPI' ? (
@@ -497,8 +729,8 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   background: 'transparent',
                   fontWeight: 600,
                   fontSize: '0.9375rem',
-                  color: activeTab === 'stores' ? '#10b981' : '#64748b',
-                  borderBottom: activeTab === 'stores' ? '3px solid #10b981' : '3px solid transparent',
+                  color: activeTab === 'stores' ? (selectedProvider === 'WHATSAPP_BUSINESS' ? '#16a34a' : '#10b981') : '#64748b',
+                  borderBottom: activeTab === 'stores' ? `3px solid ${selectedProvider === 'WHATSAPP_BUSINESS' ? '#16a34a' : '#10b981'}` : '3px solid transparent',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -506,7 +738,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                 }}
               >
                 <Building2 size={18} />
-                Mapeo de Sucursales ({storeMappings.length})
+                {selectedProvider === 'WHATSAPP_BUSINESS' ? 'Números & Sucursales' : 'Mapeo de Sucursales'} ({storeMappings.length})
               </button>
 
               <button
@@ -518,8 +750,8 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   background: 'transparent',
                   fontWeight: 600,
                   fontSize: '0.9375rem',
-                  color: activeTab === 'logs' ? '#10b981' : '#64748b',
-                  borderBottom: activeTab === 'logs' ? '3px solid #10b981' : '3px solid transparent',
+                  color: activeTab === 'logs' ? (selectedProvider === 'WHATSAPP_BUSINESS' ? '#16a34a' : '#10b981') : '#64748b',
+                  borderBottom: activeTab === 'logs' ? `3px solid ${selectedProvider === 'WHATSAPP_BUSINESS' ? '#16a34a' : '#10b981'}` : '3px solid transparent',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -527,7 +759,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                 }}
               >
                 <Activity size={18} />
-                Bitácora de Webhooks ({logs.length})
+                {selectedProvider === 'WHATSAPP_BUSINESS' ? 'Bitácora de Mensajes' : 'Bitácora de Webhooks'} ({logs.length})
               </button>
             </>
           )}
@@ -993,8 +1225,712 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
           </div>
         )}
 
+        {/* WhatsApp Business Config Tab */}
+        {selectedProvider === 'WHATSAPP_BUSINESS' && activeTab === 'config' && (
+          <div style={{ padding: '32px 28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 6px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.5rem' }}>💬</span>
+                  WhatsApp Business Platform (Cloud API & Embedded Signup)
+                </h2>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b' }}>
+                  Conecta tu número oficial con Meta Embedded Signup para habilitar un asistente virtual con IA que responde menú, horarios y promociones en tiempo real.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => setEmbeddedSignupOpen(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, borderColor: '#22c55e', color: '#15803d', borderRadius: 10, padding: '10px 18px', fontWeight: 600 }}
+                >
+                  <Zap size={17} />
+                  Meta Embedded Signup
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => saveConfigMutation.mutate(formData)}
+                  disabled={saveConfigMutation.isPending}
+                  style={{ background: '#16a34a', borderColor: '#15803d', borderRadius: 10, padding: '10px 22px', fontWeight: 700, boxShadow: '0 4px 14px rgba(22, 163, 74, 0.3)' }}
+                >
+                  {saveConfigMutation.isPending ? 'Guardando...' : 'Guardar Configuración'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Webhook Configuration Box */}
+            <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 14, padding: '18px 22px', marginBottom: 28, boxShadow: '0 2px 8px rgba(34, 197, 94, 0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14 }}>
+                <div style={{ flex: 1, minWidth: 280 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 16 }}>🔗</span>
+                    <strong style={{ color: '#166534', fontSize: '0.9375rem' }}>
+                      URL de Webhook & Token de Verificación (Meta for Developers)
+                    </strong>
+                  </div>
+                  <p style={{ margin: '0 0 10px', fontSize: '0.8125rem', color: '#15803d' }}>
+                    Configura esta URL en tu Meta App (Webhooks &gt; WhatsApp Business Account &gt; suscribir al campo <code>messages</code>):
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', display: 'block' }}>Callback URL:</span>
+                      <code style={{ fontSize: '0.8125rem', color: '#166534', background: '#dcfce7', padding: '4px 8px', borderRadius: 6, wordBreak: 'break-all' }}>{webhookUrl}</code>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', display: 'block' }}>Verify Token:</span>
+                      <code style={{ fontSize: '0.8125rem', color: '#166534', background: '#dcfce7', padding: '4px 8px', borderRadius: 6 }}>{formData.webhook_secret || 'mimenu_verify_secret_123'}</code>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={copyToClipboard}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: '#22c55e', color: '#15803d', background: '#fff', fontWeight: 600 }}
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                  {copied ? '¡Copiado!' : 'Copiar URL'}
+                </Button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: 24, marginBottom: 28 }}>
+              {/* Sección 1: Credenciales & Entorno */}
+              <div style={{ background: '#ffffff', padding: 24, borderRadius: 16, border: '1.5px solid #e2e8f0', boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Key size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                      1. Credenciales de Meta Developer
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                      Tokens y llaves de acceso a WhatsApp Cloud API
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.9rem',
+                      background: formData.is_enabled ? '#f0fdf4' : '#f8fafc',
+                      padding: '14px 16px',
+                      borderRadius: 12,
+                      border: formData.is_enabled ? '1.5px solid #86efac' : '1.5px solid #e2e8f0',
+                      color: formData.is_enabled ? '#14532d' : '#475569',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.is_enabled ?? false}
+                      onChange={(e) => setFormData({ ...formData, is_enabled: e.target.checked })}
+                      style={{ width: 19, height: 19, accentColor: '#16a34a', cursor: 'pointer' }}
+                    />
+                    <span>Habilitar Asistente de WhatsApp en este Restaurante</span>
+                  </label>
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Entorno
+                  </label>
+                  <select
+                    className="premium-select"
+                    value={formData.environment ?? 'sandbox'}
+                    onChange={(e) => setFormData({ ...formData, environment: e.target.value })}
+                  >
+                    <option value="sandbox">🧪 Sandbox (Pruebas / Emulador local)</option>
+                    <option value="production">🚀 Producción en Vivo (Meta Cloud API)</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Meta App ID
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    placeholder="e.g. 192837465019283"
+                    value={formData.client_id ?? ''}
+                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Meta App Secret (Firma HMAC-SHA256)
+                  </label>
+                  <input
+                    type="password"
+                    className="premium-input"
+                    placeholder="••••••••••••••••"
+                    value={formData.client_secret ?? ''}
+                    onChange={(e) => setFormData({ ...formData, client_secret: e.target.value })}
+                  />
+                  {formData.has_client_secret && (
+                    <small style={{ color: '#16a34a', marginTop: 4, display: 'block' }}>✓ Secreto guardado en servidor. Déjalo vacío para conservarlo.</small>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Webhook Verify Token (Token de Validación)
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    placeholder="mimenu_verify_secret_123"
+                    value={formData.webhook_secret ?? ''}
+                    onChange={(e) => setFormData({ ...formData, webhook_secret: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Sección 2: Base de Conocimiento en Vivo */}
+              <div style={{ background: '#ffffff', padding: 24, borderRadius: 16, border: '1.5px solid #e2e8f0', boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Bot size={20} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                        2. Base de Conocimiento en Vivo
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                        Menú, horarios y promociones sincronizados
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Previsualizar Sucursal:
+                  </label>
+                  <select
+                    className="premium-select"
+                    value={selectedPreviewBranch}
+                    onChange={(e) => setSelectedPreviewBranch(e.target.value)}
+                  >
+                    <option value="">Sucursal predeterminada</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid #e2e8f0', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#334155' }}>
+                      📍 Sucursal: {knowledgePreview?.branch_name || 'Cargando...'}
+                    </span>
+                    <Badge variant="success">86'd Auto-Filtrado</Badge>
+                  </div>
+                  <div style={{ fontSize: '0.8125rem', color: '#475569', marginBottom: 6 }}>
+                    <strong>🕒 Horario:</strong> {knowledgePreview?.hours_text || 'Consultando...'}
+                  </div>
+                  <div style={{ fontSize: '0.8125rem', color: '#475569', marginBottom: 6 }}>
+                    <strong>🎟️ Promociones:</strong> {knowledgePreview?.promotions_text || 'Sin cupones activos.'}
+                  </div>
+                  <div style={{ fontSize: '0.8125rem', color: '#475569', marginBottom: 10 }}>
+                    <strong>🌐 Enlace Web:</strong>{' '}
+                    <a href={knowledgePreview?.storefront_url} target="_blank" rel="noreferrer" style={{ color: '#16a34a', fontWeight: 600 }}>
+                      {knowledgePreview?.storefront_url || 'https://mimenu.com'}
+                    </a>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 4 }}>
+                      Resumen del Catálogo Activo (Excluye items agotados):
+                    </span>
+                    <pre style={{ margin: 0, padding: 10, background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: '0.75rem', color: '#334155', maxHeight: 150, overflowY: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                      {knowledgePreview?.available_products_text || 'Cargando menú en vivo...'}
+                    </pre>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.75rem', color: '#15803d', background: '#f0fdf4', padding: '8px 12px', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                  ✓ El bot consulta directamente PostgreSQL en tiempo real. Cualquier cambio en precio o disponibilidad se refleja al instante sin reentrenar.
+                </div>
+              </div>
+            </div>
+
+            {/* Sección 3: Simulador Interactivo de Conversación */}
+            <div style={{ background: '#ffffff', padding: 24, borderRadius: 16, border: '1.5px solid #e2e8f0', boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <MessageSquare size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                      3. Simulador de Conversación WhatsApp (Sandbox Interactivo)
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                      Escribe un mensaje como si fueras un comensal y prueba las respuestas del asistente
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSimulateMessage('¿Qué tienen de comer y qué me recomiendas?')}
+                    style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#334155' }}
+                  >
+                    🍽️ Ver Menú
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSimulateMessage('¿Cuáles son sus horarios de servicio?')}
+                    style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#334155' }}
+                  >
+                    🕒 Horarios
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSimulateMessage('¿Tienen alguna promoción o cupón hoy?')}
+                    style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600, color: '#334155' }}
+                  >
+                    🎟️ Promociones
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSimulateMessage('Quiero 2 tacos al pastor y una gringa especial por favor')}
+                    style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid #86efac', background: '#f0fdf4', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 700, color: '#166534' }}
+                  >
+                    🛒 Pedido Asistido
+                  </button>
+                </div>
+              </div>
+
+              {/* Chat Viewport */}
+              <div style={{ background: '#efeae2', borderRadius: 14, padding: 18, minHeight: 180, maxHeight: 320, overflowY: 'auto', marginBottom: 16, border: '1px solid #d1d5db', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {simulateChatHistory.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 10px', color: '#64748b' }}>
+                    <Bot size={32} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
+                    <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600 }}>El simulador está listo</p>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.75rem' }}>Escribe una pregunta abajo o presiona uno de los botones rápidos para conversar con el asistente.</p>
+                  </div>
+                ) : (
+                  simulateChatHistory.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        alignSelf: item.sender === 'user' ? 'flex-end' : 'flex-start',
+                        maxWidth: '80%',
+                        background: item.sender === 'user' ? '#d9fdd3' : '#ffffff',
+                        padding: '10px 14px',
+                        borderRadius: 12,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                        fontSize: '0.875rem',
+                        color: '#111827',
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.7rem', fontWeight: 700, color: item.sender === 'user' ? '#15803d' : '#0369a1', marginBottom: 4 }}>
+                        {item.sender === 'user' ? '👤 Comensal' : '🤖 Asistente RestaurantOS'} · {item.time}
+                      </div>
+                      <div>{item.text}</div>
+                      {item.sender === 'bot' && item.parsedOrder?.is_order_intent && item.parsedOrder.matched_items?.length > 0 && (
+                        <div style={{ marginTop: 10, padding: '10px 12px', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 10, fontSize: '0.8rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#166534', fontWeight: 700 }}>
+                              <ShoppingCart size={14} /> Carrito Asistido ({item.parsedOrder.matched_items.length} productos)
+                            </div>
+                            <span style={{ fontWeight: 800, color: '#15803d', fontSize: '0.875rem' }}>
+                              ${(item.parsedOrder.total_cents / 100).toFixed(2)} MXN
+                            </span>
+                          </div>
+                          {item.parsedOrder.cart_url && (
+                            <a
+                              href={item.parsedOrder.cart_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#ffffff', background: '#16a34a', fontWeight: 700, textDecoration: 'none', padding: '6px 12px', borderRadius: 8, fontSize: '0.75rem', marginTop: 4, boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)' }}
+                            >
+                              <ExternalLink size={13} /> Abrir Carrito en Menú Digital
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Chat Input Bar */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input
+                  type="text"
+                  className="premium-input"
+                  placeholder="Escribe un mensaje de WhatsApp (ej. ¿Qué venden?)..."
+                  value={simulateMessage}
+                  onChange={(e) => setSimulateMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && simulateMessage.trim()) {
+                      simulateWhatsAppMutation.mutate({
+                        branch_id: selectedPreviewBranch,
+                        message: simulateMessage,
+                      });
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  variant="primary"
+                  disabled={!simulateMessage.trim() || simulateWhatsAppMutation.isPending}
+                  onClick={() =>
+                    simulateWhatsAppMutation.mutate({
+                      branch_id: selectedPreviewBranch,
+                      message: simulateMessage,
+                    })
+                  }
+                  style={{ background: '#16a34a', borderColor: '#15803d', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                >
+                  <Send size={16} />
+                  {simulateWhatsAppMutation.isPending ? 'Enviando...' : 'Enviar'}
+                </Button>
+              </div>
+            </div>
+
+            {/* 4. Notificaciones Proactivas de Estado (Tracking en Vivo & Smart Rating) */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, marginTop: 24, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ background: '#dbeafe', color: '#1d4ed8', padding: 8, borderRadius: 10 }}>
+                    <Zap size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                      4. Notificaciones Proactivas de Estado (Tracking &amp; Smart Rating)
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                      Previsualiza los mensajes transaccionales automatizados con enlaces de seguimiento en vivo y encuestas Smart Rating.
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="info" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                  PRD-FR-094 &amp; PRD-FR-735
+                </Badge>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Estado del Pedido
+                  </label>
+                  <select
+                    className="premium-input"
+                    value={simulateNotificationStatus}
+                    onChange={(e) => setSimulateNotificationStatus(e.target.value)}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="ACCEPTED">ACCEPTED (En Cocina)</option>
+                    <option value="READY">READY (Listo para Recoger / Despachar)</option>
+                    <option value="IN_DELIVERY">IN_DELIVERY (Repartidor en Camino)</option>
+                    <option value="DELIVERED">DELIVERED (Entregado con Smart Rating)</option>
+                    <option value="CANCELLED">CANCELLED (Cancelado)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Tipo de Entrega
+                  </label>
+                  <select
+                    className="premium-input"
+                    value={simulateNotificationOrderType}
+                    onChange={(e) => setSimulateNotificationOrderType(e.target.value)}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="delivery">Delivery (A Domicilio)</option>
+                    <option value="takeout">Takeout / Pickup (Para Llevar)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Nombre del Cliente
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    value={simulateNotificationName}
+                    onChange={(e) => setSimulateNotificationName(e.target.value)}
+                    placeholder="Ej. Carlos M."
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Folio
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    value={simulateNotificationFolio}
+                    onChange={(e) => setSimulateNotificationFolio(e.target.value)}
+                    placeholder="Ej. FOL-1042"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                <Button
+                  variant="primary"
+                  disabled={simulateNotificationMutation.isPending}
+                  onClick={() => {
+                    const branchName = knowledgePreview?.branch_name || 'Restaurante';
+                    simulateNotificationMutation.mutate({
+                      status: simulateNotificationStatus,
+                      customer_name: simulateNotificationName,
+                      folio: simulateNotificationFolio,
+                      order_type: simulateNotificationOrderType,
+                      branch_name: branchName,
+                    });
+                  }}
+                  style={{ background: '#2563eb', borderColor: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                >
+                  <Sparkles size={16} />
+                  {simulateNotificationMutation.isPending ? 'Simulando...' : 'Generar Vista Previa WhatsApp'}
+                </Button>
+              </div>
+
+              {simulatedNotificationPreview && (
+                <div style={{ background: '#efeae2', borderRadius: 12, padding: 16, border: '1px solid #d1d7db' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#54656f', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>MENSAJE SALIENTE SIMULADO (WHATSAPP CLOUD API)</span>
+                    <span style={{ background: '#22c55e', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: '0.75rem' }}>
+                      Estado: {simulatedNotificationPreview.status}
+                    </span>
+                  </div>
+                  <div style={{ background: '#d9fdd3', padding: '12px 16px', borderRadius: 8, maxWidth: 520, boxShadow: '0 1px 0.5px rgba(11,20,26,.13)', whiteSpace: 'pre-wrap', fontSize: '0.9rem', color: '#111b21', lineHeight: 1.5 }}>
+                    {simulatedNotificationPreview.message}
+                  </div>
+                  {simulatedNotificationPreview.smart_rating_url && (
+                    <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef3c7', border: '1px solid #fde047', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#92400e', fontWeight: 600 }}>
+                      <Sparkles size={14} color="#d97706" />
+                      Smart Rating Activo: Captura satisfacción 1-5 estrellas y promueve reseñas públicas en Google Maps.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Campañas de Marketing & Re-engagement (Marketing HSM & Opt-Out) */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, marginTop: 24, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ background: '#fef3c7', color: '#b45309', padding: 8, borderRadius: 10 }}>
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                      5. Campañas de Marketing &amp; Re-engagement (WhatsApp Cloud API)
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                      Reactiva clientes inactivos y premia a comensales VIP con cupones directos y cláusula obligatoria de desuscripción (Opt-Out).
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="info" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047' }}>
+                  PRD-FR-095 &amp; SDD-ADR-039
+                </Badge>
+              </div>
+
+              {/* CRM Segment Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
+                <div
+                  onClick={() => setSelectedCampaignSegment('churn_risk')}
+                  style={{
+                    border: selectedCampaignSegment === 'churn_risk' ? '2px solid #ef4444' : '1px solid #e2e8f0',
+                    background: selectedCampaignSegment === 'churn_risk' ? '#fef2f2' : '#f8fafc',
+                    borderRadius: 12,
+                    padding: 16,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#991b1b' }}>En Riesgo (Churn)</span>
+                    <Badge variant="danger">
+                      {campaignSegmentsData?.segments?.churn_risk?.count ?? 0}
+                    </Badge>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                    Clientes sin compras en más de 30 días.
+                  </p>
+                </div>
+
+                <div
+                  onClick={() => setSelectedCampaignSegment('vip')}
+                  style={{
+                    border: selectedCampaignSegment === 'vip' ? '2px solid #f59e0b' : '1px solid #e2e8f0',
+                    background: selectedCampaignSegment === 'vip' ? '#fffbeb' : '#f8fafc',
+                    borderRadius: 12,
+                    padding: 16,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#92400e' }}>Clientes VIP</span>
+                    <Badge variant="warning">
+                      {campaignSegmentsData?.segments?.vip?.count ?? 0}
+                    </Badge>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                    Comensales de alta recurrencia o consumo &gt; $500.
+                  </p>
+                </div>
+
+                <div
+                  onClick={() => setSelectedCampaignSegment('new_customers')}
+                  style={{
+                    border: selectedCampaignSegment === 'new_customers' ? '2px solid #10b981' : '1px solid #e2e8f0',
+                    background: selectedCampaignSegment === 'new_customers' ? '#ecfdf5' : '#f8fafc',
+                    borderRadius: 12,
+                    padding: 16,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#065f46' }}>Nuevos Clientes</span>
+                    <Badge variant="success">
+                      {campaignSegmentsData?.segments?.new_customers?.count ?? 0}
+                    </Badge>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                    Primer pedido en los últimos 14 días.
+                  </p>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Cupón de Descuento Promocional
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    value={campaignDiscountCode}
+                    onChange={(e) => setCampaignDiscountCode(e.target.value.toUpperCase())}
+                    placeholder="Ej. VUELVE10"
+                    style={{ width: '100%', textTransform: 'uppercase', fontWeight: 700 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Mensaje Personalizado (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    value={campaignCustomMessage}
+                    onChange={(e) => setCampaignCustomMessage(e.target.value)}
+                    placeholder="Dejar en blanco para usar copia inteligente de IA..."
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 16 }}>
+                <Button
+                  variant="secondary"
+                  disabled={previewCampaignMutation.isPending}
+                  onClick={() =>
+                    previewCampaignMutation.mutate({
+                      branch_id: selectedPreviewBranch,
+                      segment: selectedCampaignSegment,
+                      discount_code: campaignDiscountCode,
+                      custom_message: campaignCustomMessage || undefined,
+                    })
+                  }
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                >
+                  <Eye size={16} />
+                  {previewCampaignMutation.isPending ? 'Generando...' : 'Previsualizar Mensaje'}
+                </Button>
+
+                <Button
+                  variant="primary"
+                  disabled={sendCampaignMutation.isPending}
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      `¿Confirmas enviar esta campaña de WhatsApp al segmento "${selectedCampaignSegment}" con el código "${campaignDiscountCode}"?`
+                    );
+                    if (confirmed) {
+                      sendCampaignMutation.mutate({
+                        branch_id: selectedPreviewBranch,
+                        segment: selectedCampaignSegment,
+                        discount_code: campaignDiscountCode,
+                        custom_message: campaignCustomMessage || undefined,
+                      });
+                    }
+                  }}
+                  style={{ background: '#16a34a', borderColor: '#15803d', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                >
+                  <Send size={16} />
+                  {sendCampaignMutation.isPending ? 'Despachando...' : 'Despachar Campaña WhatsApp'}
+                </Button>
+              </div>
+
+              {/* Preview Box */}
+              {campaignPreviewData && (
+                <div style={{ background: '#efeae2', borderRadius: 12, padding: 16, border: '1px solid #d1d7db', marginTop: 12 }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#54656f', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>VISTA PREVIA DE MENSAJE PROMOCIONAL (META WHATSAPP)</span>
+                    <span style={{ background: '#0284c7', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: '0.75rem' }}>
+                      Audiencia estimada: {campaignPreviewData.total_eligible} comensales
+                    </span>
+                  </div>
+                  <div style={{ background: '#d9fdd3', padding: '12px 16px', borderRadius: 8, maxWidth: 540, boxShadow: '0 1px 0.5px rgba(11,20,26,.13)', whiteSpace: 'pre-wrap', fontSize: '0.9rem', color: '#111b21', lineHeight: 1.5 }}>
+                    {campaignPreviewData.sample_message}
+                  </div>
+                  <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#475569' }}>
+                    <Zap size={14} color="#64748b" />
+                    Cumple políticas de Meta: incluye cláusula de desuscripción y detección automática de STOP/BAJA.
+                  </div>
+                </div>
+              )}
+
+              {/* Results Report */}
+              {campaignDispatchResult && (
+                <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Check size={18} color="#16a34a" />
+                    <strong style={{ color: '#166534', fontSize: '0.95rem' }}>Resumen de Ejecución de Campaña</strong>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, fontSize: '0.85rem' }}>
+                    <div>Total Objetivos: <strong>{campaignDispatchResult.total_targets}</strong></div>
+                    <div>Enviados con Éxito: <strong style={{ color: '#16a34a' }}>{campaignDispatchResult.sent_count}</strong></div>
+                    <div>Omitidos (Opt-Out): <strong style={{ color: '#ea580c' }}>{campaignDispatchResult.skipped_count}</strong></div>
+                    <div>Fallidos: <strong style={{ color: '#dc2626' }}>{campaignDispatchResult.failed_count}</strong></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Uber Eats / Delivery Tabs */}
-        {selectedProvider !== 'FACTURAPI' && activeTab === 'config' && (
+        {selectedProvider !== 'FACTURAPI' && selectedProvider !== 'WHATSAPP_BUSINESS' && activeTab === 'config' && (
           <div style={{ padding: 28 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
               <div>
@@ -1144,10 +2080,10 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>
-                  Vinculación de Sucursales Físicas con {selectedProvider === 'UBER_EATS' ? 'Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'DiDi Food' : selectedProvider === 'RAPPI' ? 'Rappi' : selectedProvider}
+                  Vinculación de Sucursales con {selectedProvider === 'UBER_EATS' ? 'Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'DiDi Food' : selectedProvider === 'RAPPI' ? 'Rappi' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'WhatsApp Business' : selectedProvider}
                 </h2>
                 <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-                  Asocia el {selectedProvider === 'UBER_EATS' ? 'Store UUID' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID' : selectedProvider === 'RAPPI' ? 'Store ID de Rappi' : 'Store ID'} de cada tienda en la plataforma externa con tu sucursal en RestaurantOS.
+                  Asocia el {selectedProvider === 'UBER_EATS' ? 'Store UUID' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID' : selectedProvider === 'RAPPI' ? 'Store ID de Rappi' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'Phone Number ID de WhatsApp' : 'Store ID'} de cada tienda con tu sucursal en RestaurantOS.
                 </p>
               </div>
               <Button variant="primary" onClick={() => setMappingModalOpen(true)}>
@@ -1160,7 +2096,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                 <Building2 size={48} style={{ opacity: 0.3, margin: '0 auto 12px' }} />
                 <p style={{ fontWeight: 600, margin: '0 0 4px' }}>No hay sucursales vinculadas aún</p>
                 <p style={{ fontSize: '0.875rem', margin: 0 }}>
-                  Agrega una vinculación para que los pedidos de {selectedProvider === 'UBER_EATS' ? 'Uber' : selectedProvider === 'DIDI_FOOD' ? 'DiDi' : selectedProvider === 'RAPPI' ? 'Rappi' : 'Delivery'} se dirijan a la cocina correcta.
+                  Agrega una vinculación para que los pedidos de {selectedProvider === 'UBER_EATS' ? 'Uber' : selectedProvider === 'DIDI_FOOD' ? 'DiDi' : selectedProvider === 'RAPPI' ? 'Rappi' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'WhatsApp' : 'Delivery'} se dirijan a la sucursal correcta.
                 </p>
               </div>
             ) : (
@@ -1169,7 +2105,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   <tr>
                     <th>Sucursal Local</th>
                     <th>Código</th>
-                    <th>{selectedProvider === 'UBER_EATS' ? 'Store UUID Externo' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID' : selectedProvider === 'RAPPI' ? 'Store ID Rappi' : 'Store ID Externo'}</th>
+                    <th>{selectedProvider === 'UBER_EATS' ? 'Store UUID Externo' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID' : selectedProvider === 'RAPPI' ? 'Store ID Rappi' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'Phone Number ID de WhatsApp' : 'Store ID Externo'}</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                   </tr>
@@ -1204,7 +2140,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>
-                  Bitácora de Webhooks en Vivo ({selectedProvider === 'UBER_EATS' ? 'Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'DiDi Food' : selectedProvider})
+                  Bitácora de Webhooks en Vivo ({selectedProvider === 'UBER_EATS' ? 'Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'DiDi Food' : selectedProvider === 'RAPPI' ? 'Rappi' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'WhatsApp Business' : selectedProvider})
                 </h2>
                 <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
                   Monitorea las notificaciones HTTP enviadas por la plataforma en tiempo real.
@@ -1254,7 +2190,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
       <Modal
         isOpen={mappingModalOpen}
         onClose={() => setMappingModalOpen(false)}
-        title={`Vincular Sucursal con ${selectedProvider === 'UBER_EATS' ? 'Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'DiDi Food' : selectedProvider === 'RAPPI' ? 'Rappi' : selectedProvider}`}
+        title={`Vincular Sucursal con ${selectedProvider === 'UBER_EATS' ? 'Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'DiDi Food' : selectedProvider === 'RAPPI' ? 'Rappi' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'WhatsApp Business' : selectedProvider}`}
       >
         <div style={{ padding: '8px 0' }}>
           <div style={{ marginBottom: 16 }}>
@@ -1277,12 +2213,12 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
 
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-              {selectedProvider === 'UBER_EATS' ? 'Store UUID de Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID de DiDi Food' : selectedProvider === 'RAPPI' ? 'Store ID de Rappi' : 'Store ID Externo'}
+              {selectedProvider === 'UBER_EATS' ? 'Store UUID de Uber Eats' : selectedProvider === 'DIDI_FOOD' ? 'Shop ID / Store ID de DiDi Food' : selectedProvider === 'RAPPI' ? 'Store ID de Rappi' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'Phone Number ID de WhatsApp' : 'Store ID Externo'}
             </label>
             <input
               type="text"
               className="premium-input"
-              placeholder={selectedProvider === 'UBER_EATS' ? 'e.g. 7c32e189-9e8a-495f-9e84-18349281a812' : selectedProvider === 'DIDI_FOOD' ? 'e.g. didi_shop_guadalajara_01' : selectedProvider === 'RAPPI' ? 'e.g. rappi_store_guadalajara_01' : 'e.g. store_id_01'}
+              placeholder={selectedProvider === 'UBER_EATS' ? 'e.g. 7c32e189-9e8a-495f-9e84-18349281a812' : selectedProvider === 'DIDI_FOOD' ? 'e.g. didi_shop_guadalajara_01' : selectedProvider === 'RAPPI' ? 'e.g. rappi_store_guadalajara_01' : selectedProvider === 'WHATSAPP_BUSINESS' ? 'e.g. 109876543210987' : 'e.g. store_id_01'}
               value={newMappingStoreId}
               onChange={(e) => setNewMappingStoreId(e.target.value)}
             />
@@ -1367,6 +2303,97 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
               }
             >
               {simulateOrderMutation.isPending ? 'Enviando...' : 'Disparar Pedido'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Meta Embedded Signup */}
+      <Modal
+        isOpen={embeddedSignupOpen}
+        onClose={() => setEmbeddedSignupOpen(false)}
+        title="Conectar WhatsApp Business (Meta Embedded Signup)"
+      >
+        <div style={{ padding: '8px 0' }}>
+          <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: 16 }}>
+            Ingresa el código de autorización generado por el flujo de Meta Embedded Signup junto con el Phone Number ID de tu número oficial de WhatsApp.
+          </p>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+              Sucursal a Vincular
+            </label>
+            <select
+              className="premium-input"
+              value={signupBranchId}
+              onChange={(e) => setSignupBranchId(e.target.value)}
+            >
+              <option value="">Selecciona una sucursal...</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} ({b.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+              Meta Authorization Code (OAuth Code)
+            </label>
+            <input
+              type="text"
+              className="premium-input"
+              placeholder="AQD... (Código devuelto por Meta login)"
+              value={signupCode}
+              onChange={(e) => setSignupCode(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+              WhatsApp Business Account ID (WABA ID)
+            </label>
+            <input
+              type="text"
+              className="premium-input"
+              placeholder="e.g. 104928374829102"
+              value={signupWabaId}
+              onChange={(e) => setSignupWabaId(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+              Phone Number ID de WhatsApp
+            </label>
+            <input
+              type="text"
+              className="premium-input"
+              placeholder="e.g. 109876543210987"
+              value={signupPhoneNumberId}
+              onChange={(e) => setSignupPhoneNumberId(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <Button variant="secondary" onClick={() => setEmbeddedSignupOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!signupBranchId || !signupCode || !signupPhoneNumberId || exchangeEmbeddedSignupMutation.isPending}
+              onClick={() =>
+                exchangeEmbeddedSignupMutation.mutate({
+                  branch_id: signupBranchId,
+                  code: signupCode,
+                  waba_id: signupWabaId,
+                  phone_number_id: signupPhoneNumberId,
+                })
+              }
+              style={{ background: '#16a34a', borderColor: '#15803d' }}
+            >
+              {exchangeEmbeddedSignupMutation.isPending ? 'Vinculando...' : 'Completar Conexión'}
             </Button>
           </div>
         </div>

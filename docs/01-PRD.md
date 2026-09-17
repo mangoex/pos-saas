@@ -190,6 +190,10 @@ La implementación y certificación real de ambos proveedores se difiere de esta
 
 - `PRD-FR-090`: **Custom Checkout Mercado Pago**: El pago del paquete Lite ($349 MXN) se procesa nativamente en el Backoffice sin redirección. Falla si hay fuga de contexto (redirección externa a Mercado Pago).
 - `PRD-FR-091`: **Suscripción Preapproval**: Mercado Pago gestiona la recurrencia mensual. La plataforma consume webhooks idempotentes para actualizar la vigencia de la sucursal de forma inmutable.
+- `PRD-FR-092`: **WhatsApp Business Onboarding y Asistente de Menú**: Integración oficial como Tech Provider de Meta con Embedded Signup multi-tenant para vincular números y WABA en un clic, y webhook con asistente conversacional que utiliza como base de conocimiento el menú, horarios, disponibilidad y promociones en tiempo real.
+- `PRD-FR-093`: **WhatsApp Conversational Commerce y Carrito Asistido**: Detección de intención de compra por WhatsApp, matching determinista contra catálogo en vivo con soporte de cantidades y sinónimos, reporte transparente de productos agotados (86'd) y no reconocidos, cálculo de totales en enteros de centavos MXN, y generación de enlaces directos de pre-llenado de carrito web (`https://mimenu.com/<slug>/cart?items=...`) preservando la autoridad del checkout del storefront.
+- `PRD-FR-094`: **Notificaciones Proactivas de Estado de Pedido por WhatsApp**: Envío de avisos automatizados en tiempo real al teléfono del comensal conforme su orden cambia de estado (`ACCEPTED` / `IN_PRODUCTION`, `READY`, `IN_DELIVERY`, `DELIVERED`, `CANCELLED`), incluyendo enlaces de seguimiento en vivo (`/orders/<id>`) y solicitud de calificación Smart Rating al entregar, con omisión no bloqueante ante fallos o sucursales sin WhatsApp.
+- `PRD-FR-095`: **Campañas y Mensajes de Re-engagement por WhatsApp**: Envío de campañas de marketing autorizadas a clientes segmentados (riesgo de abandono/churn, VIPs, nuevos clientes) con cupones de descuento, personalización con platillos favoritos, política obligatoria de opt-out (STOP/BAJA) y exclusión automática e inmutable de números desuscritos.
 
 ---
 

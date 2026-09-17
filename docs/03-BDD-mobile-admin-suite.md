@@ -34,7 +34,7 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     Given un usuario administrador en la pestaña de "Sucursal"
     When consulta los enlaces y canales digitales del restaurante
     Then el sistema muestra el enlace al menú digital público con opciones para copiar, abrir y compartir por WhatsApp
-  @BDD-SC-501
+  @BDD-SC-502
   Scenario: Cobro y entrega integrada de pedidos desde el monitor móvil de comandas
     Given un usuario administrador en el monitor móvil de pedidos con una comanda en estado "Listos"
     And la comanda tiene cobro pendiente con un total positivo

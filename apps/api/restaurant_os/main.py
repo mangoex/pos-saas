@@ -100,6 +100,8 @@ def create_app() -> FastAPI:
     app.include_router(setup_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(domains_router, dependencies=[Depends(bind_support_audit_context)])
     app.include_router(subscriptions_router)
+    from restaurant_os.integrations.whatsapp.router import router as whatsapp_router
+    app.include_router(whatsapp_router)
 
     @app.exception_handler(AuthorizationError)
     async def authorization_error_handler(

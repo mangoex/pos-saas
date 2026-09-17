@@ -60,6 +60,12 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-082 | SDD SaaS y suplemento de cierre | BDD-SC-747 | TDD-TS-247 | Disenado |
 | PRD-FR-083 | SDD SaaS y suplemento de cierre | BDD-SC-748, BDD-SC-808 | TDD-TS-248, TDD-TS-308 | Disenado |
 | PRD-NFR-007 | SDD SaaS y suplemento de cierre | BDD-SC-749, BDD-SC-809 | TDD-TS-249, TDD-TS-309 | Disenado |
+| PRD-FR-090 | SDD Mercado Pago Checkout | BDD Mercado Pago Checkout | test_subscriptions.py | Disenado |
+| PRD-FR-091 | SDD Mercado Pago Suscripción | BDD Mercado Pago Suscripción | test_subscriptions_webhook.py | Disenado |
+| PRD-FR-092 | SDD-ADR-036 Integración WhatsApp Business y Asistente de Menú | BDD-SC-901, BDD-SC-902, BDD-SC-903, BDD-SC-904 | TDD-TS-320, TDD-TS-321, TDD-TS-322, TDD-TS-323, TDD-TC-320, TDD-TC-321, TDD-TC-322, TDD-TC-323, TDD-TC-324 | Implementado |
+| PRD-FR-093 | SDD-ADR-037 Conversational Commerce y Carrito Asistido por WhatsApp | BDD-SC-905, BDD-SC-906, BDD-SC-907, BDD-SC-908 | TDD-TS-324, TDD-TC-325, TDD-TC-326, TDD-TC-327, TDD-TC-328 | Implementado |
+| PRD-FR-094 | SDD-ADR-038 Notificaciones Proactivas de Pedidos por WhatsApp | BDD-SC-909, BDD-SC-910, BDD-SC-911, BDD-SC-912 | TDD-TS-325, TDD-TC-329, TDD-TC-330, TDD-TC-331, TDD-TC-332 | Implementado |
+| PRD-FR-095 | SDD-ADR-039 Campañas de Marketing y Opt-Out por WhatsApp | BDD-SC-913, BDD-SC-914, BDD-SC-915, BDD-SC-916 | TDD-TS-326, TDD-TC-333, TDD-TC-334, TDD-TC-335, TDD-TC-336 | Implementado |
 
 ## Evidencia histórica conservada
 
@@ -263,7 +269,7 @@ Estado permitido: `Propuesto`, `Disenado`, `Scaffold`, `Probado`, `Implementado`
 | PRD-FR-735 | Smart Rating de satisfacción en confirmación de pedido y retención de feedback privado | BDD-SC-475 | TDD-TS-105, TDD-TC-232 | Implementado |
 | PRD-FR-736 | SDD §45: venta cruzada determinista, complementaria y acotada al catálogo efectivo de la sucursal, sin autoridad sobre checkout | BDD-SC-484, BDD-SC-485, BDD-SC-486, BDD-SC-487, BDD-SC-488 | TDD-TS-107, TDD-TC-238, TDD-TC-239, TDD-TC-240, TDD-TC-241 | Implementado |
 | PRD-FR-737 | Auto-registro y vinculación de clientes por pedido (POS y App Móvil) y trazabilidad de calificaciones promedio y comentarios en directorio de clientes del Administrador | BDD-SC-489, BDD-SC-490, BDD-SC-491, BDD-SC-492, BDD-SC-493, BDD-SC-494 | TDD-TS-108, TDD-TC-242, TDD-TC-243, TDD-TC-244, TDD-TC-245, TDD-TC-246, TDD-TC-247 | Implementado |
-| PRD-FR-738 | Alerta móvil persistente en primer plano probada con feed mínimo autorizado, cursor estable por sucursal y fallback visual; audio en dispositivo real queda como QA posterior a publicación | BDD-SC-497, BDD-SC-498, BDD-SC-499, BDD-SC-500, BDD-SC-501, BDD-SC-815, BDD-SC-816, BDD-SC-817, BDD-SC-818 | TDD-TS-109, TDD-TC-250, TDD-TC-251, TDD-TC-252, TDD-TC-253, TDD-TC-254, TDD-TC-255, TDD-TC-256, TDD-TC-257, TDD-TC-258 | Probado |
+| PRD-FR-738 | Alerta móvil persistente en primer plano probada con feed mínimo autorizado, cursor estable por sucursal y fallback visual; audio en dispositivo real queda como QA posterior a publicación | BDD-SC-497, BDD-SC-498, BDD-SC-499, BDD-SC-500, BDD-SC-502, BDD-SC-815, BDD-SC-816, BDD-SC-817, BDD-SC-818 | TDD-TS-109, TDD-TC-250, TDD-TC-251, TDD-TC-252, TDD-TC-253, TDD-TC-254, TDD-TC-255, TDD-TC-256, TDD-TC-257, TDD-TC-258 | Probado |
 | PRD-FR-739 | SDD §5.4: borrador asistido público validado por Python y probado sin red real; proveedor, micrófono y TDD-TC-266 E2E quedan pendientes | BDD-SC-819, BDD-SC-820, BDD-SC-821, BDD-SC-822, BDD-SC-823, BDD-SC-824, BDD-SC-825 | TDD-TS-310, TDD-TC-259, TDD-TC-260, TDD-TC-261, TDD-TC-262, TDD-TC-263, TDD-TC-264, TDD-TC-265, TDD-TC-266 | Probado |
 
 Evidencia operativa de `PRD-FR-708` y `PRD-FR-718`: PCO-004 fue publicado mediante PR #24 y la
