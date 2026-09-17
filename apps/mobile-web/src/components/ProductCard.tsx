@@ -26,13 +26,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <article
-      className="product-card-modern"
+      className={`product-card-modern ${product.is_promo ? 'is-promo-active' : ''}`}
       onClick={() => onOpenDetail(product)}
       tabIndex={0}
       role="button"
       aria-label={`Ver detalles de ${product.name}`}
     >
       <div className="product-card-visual-wrapper">
+        {product.is_promo && (
+          <div className="product-card-promo-ribbon">
+            <span>🔥</span>
+            <span>{product.promo_badge_text || 'PROMOCIÓN'}</span>
+          </div>
+        )}
         {productImg ? (
           <img
             src={productImg}
@@ -101,9 +107,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         <div className="product-card-footer-row">
           <div className="product-card-price-group">
-            <span className="product-card-price-amount">
-              {formatMoney(product.price_cents)}
-            </span>
+            {product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents ? (
+              <div className="product-card-promo-pricing">
+                <span className="product-card-strikethrough-price">
+                  {formatMoney(product.price_cents)}
+                </span>
+                <span className="product-card-price-amount promo-highlight">
+                  {formatMoney(product.promo_price_cents)}
+                </span>
+              </div>
+            ) : (
+              <span className="product-card-price-amount">
+                {formatMoney(product.price_cents)}
+              </span>
+            )}
           </div>
 
           <button

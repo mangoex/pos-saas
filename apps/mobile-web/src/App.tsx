@@ -311,6 +311,9 @@ export const App: React.FC = () => {
 
   // Add to Cart
   const handleAddToCart = (product: Product, quantity: number, notes?: string, modifiers: SelectedModifier[] = []) => {
+    const basePriceCents = (product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents)
+      ? product.promo_price_cents
+      : product.price_cents;
     setCart((prev) => {
       const existingIndex = prev.findIndex(
         (item) => item.product.id === product.id
@@ -324,7 +327,7 @@ export const App: React.FC = () => {
         updated[existingIndex] = {
           ...current,
           quantity: newQty,
-          line_total_cents: newQty * (product.price_cents + modifiers.reduce((sum, modifier) => sum + modifier.price_delta_cents, 0)),
+          line_total_cents: newQty * (basePriceCents + modifiers.reduce((sum, modifier) => sum + modifier.price_delta_cents, 0)),
         };
         return updated;
       } else {
@@ -334,7 +337,7 @@ export const App: React.FC = () => {
           quantity,
           notes: notes || '',
           modifiers,
-          line_total_cents: quantity * (product.price_cents + modifiers.reduce((sum, modifier) => sum + modifier.price_delta_cents, 0)),
+          line_total_cents: quantity * (basePriceCents + modifiers.reduce((sum, modifier) => sum + modifier.price_delta_cents, 0)),
         };
         return [...prev, newItem];
       }
@@ -357,10 +360,13 @@ export const App: React.FC = () => {
           if (item.cart_id === cartId) {
             const newQty = item.quantity + delta;
             if (newQty <= 0) return null;
+            const basePriceCents = (item.product.is_promo && item.product.promo_price_cents && item.product.promo_price_cents < item.product.price_cents)
+              ? item.product.promo_price_cents
+              : item.product.price_cents;
             return {
               ...item,
               quantity: newQty,
-              line_total_cents: newQty * (item.product.price_cents + (item.modifiers ?? []).reduce((sum, modifier) => sum + modifier.price_delta_cents, 0)),
+              line_total_cents: newQty * (basePriceCents + (item.modifiers ?? []).reduce((sum, modifier) => sum + modifier.price_delta_cents, 0)),
             };
           }
           return item;
@@ -407,8 +413,9 @@ export const App: React.FC = () => {
   };
 
   // Filter visible categories: exclude empty categories and operational items (delivery fee, extras)
+  // Filter visible categories: exclude empty categories and operational items (delivery fee, extras)
   const visibleCategories = useMemo(() => {
-    return categories.filter((cat) => {
+    const list = categories.filter((cat) => {
       const isAll = cat.id === 'all';
       if (isAll) return products.length > 0;
 
@@ -419,6 +426,19 @@ export const App: React.FC = () => {
       const count = products.filter((p) => p.category_name === cat.name || p.category_id === cat.id).length;
       return count > 0;
     });
+
+    const hasPromos = products.some((p) => p.is_promo);
+    if (hasPromos) {
+      const allIndex = list.findIndex((c) => c.id === 'all');
+      const promoCategory: Category = { id: 'promotions', name: '🔥 Promociones' };
+      if (allIndex >= 0) {
+        list.splice(allIndex + 1, 0, promoCategory);
+      } else {
+        list.unshift(promoCategory);
+      }
+    }
+
+    return list;
   }, [categories, products]);
 
   // Ensure activeCategoryId stays valid among visible categories
@@ -435,7 +455,9 @@ export const App: React.FC = () => {
   const availableSizes = useMemo(() => {
     const sizeSet = new Set<string>();
     products.forEach((p) => {
-      if (activeCategoryId !== 'all' && activeCategoryId !== '') {
+      if (activeCategoryId === 'promotions') {
+        if (!p.is_promo) return;
+      } else if (activeCategoryId !== 'all' && activeCategoryId !== '') {
         const selectedCat = visibleCategories.find((c) => c.id === activeCategoryId);
         if (selectedCat && p.category_name !== selectedCat.name) {
           return;
@@ -458,7 +480,9 @@ export const App: React.FC = () => {
   const productsCountByCategory = useMemo(() => {
     const map: Record<string, number> = {};
     visibleCategories.forEach((cat) => {
-      if (cat.id === 'all') {
+      if (cat.id === 'promotions') {
+        map[cat.id] = products.filter((p) => p.is_promo).length;
+      } else if (cat.id === 'all') {
         map[cat.id] = products.length;
       } else {
         map[cat.id] = products.filter((p) => p.category_name === cat.name || p.category_id === cat.id).length;
@@ -478,7 +502,9 @@ export const App: React.FC = () => {
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       // Category filter
-      if (activeCategoryId !== 'all' && activeCategoryId !== '') {
+      if (activeCategoryId === 'promotions') {
+        if (!p.is_promo) return false;
+      } else if (activeCategoryId !== 'all' && activeCategoryId !== '') {
         const selectedCat = visibleCategories.find((c) => c.id === activeCategoryId);
         if (selectedCat && p.category_name !== selectedCat.name) {
           return false;

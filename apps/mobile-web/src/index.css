@@ -823,6 +823,50 @@ body {
   align-items: center;
 }
 
+.product-card-promo-ribbon {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  z-index: 3;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.product-card-modern.is-promo-active {
+  box-shadow: 0 2px 12px rgba(249, 115, 22, 0.15);
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.product-card-promo-pricing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.product-card-strikethrough-price {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+.product-card-price-amount.promo-highlight {
+  color: #ea580c;
+  font-weight: 800;
+}
+
 .product-card-like-btn {
   position: absolute;
   top: 6px;

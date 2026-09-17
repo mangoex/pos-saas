@@ -15,6 +15,9 @@ interface Product {
   category_name: string;
   price_cents: number | null;
   delivery_price_cents?: number | null;
+  is_promo?: boolean;
+  promo_price_cents?: number | null;
+  promo_badge_text?: string | null;
   station: string;
   status?: string;
   image_url?: string;
@@ -37,6 +40,9 @@ const emptyForm = {
   status: 'active',
   price_cents: 0,
   delivery_price_cents: null as number | null,
+  is_promo: false,
+  promo_price_cents: null as number | null,
+  promo_badge_text: 'PROMOCIÓN',
   image_url: '',
 };
 
@@ -277,6 +283,9 @@ const ProductsList = () => {
         status: product.status || 'active',
         price_cents: product.price_cents || 0,
         delivery_price_cents: product.delivery_price_cents ?? null,
+        is_promo: Boolean(product.is_promo),
+        promo_price_cents: product.promo_price_cents ?? null,
+        promo_badge_text: product.promo_badge_text || 'PROMOCIÓN',
         image_url: product.image_url || ''
       });
     } else {
@@ -400,6 +409,21 @@ const ProductsList = () => {
                           <Package size={18} />
                         </div>
                         {product.name}
+                        {product.is_promo && (
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            background: '#ffedd5',
+                            color: '#c2410c',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            🔥 {product.promo_badge_text || 'PROMO'}
+                          </span>
+                        )}
                         {product.status === 'inactive' && <Badge variant="default">Inactivo</Badge>}
                         {product.status === 'needs_review' && <Badge variant="warning">Requiere revisión</Badge>}
                         {product.catalog_scope === 'branch' && <Badge variant="info">De sucursal</Badge>}
@@ -413,7 +437,22 @@ const ProductsList = () => {
                        product.station === 'kitchen' || product.station === 'cocina' ? 'Cocina (Alimentos)' :
                        product.station === 'packing' ? 'Empaque' : 'Sin asignar'}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{product.price_cents == null ? 'No vendible' : `$${(product.price_cents / 100).toFixed(2)}`}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                      {product.price_cents == null ? (
+                        'No vendible'
+                      ) : product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents ? (
+                        <div>
+                          <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: '0.8rem', marginRight: 6 }}>
+                            ${(product.price_cents / 100).toFixed(2)}
+                          </span>
+                          <span style={{ color: '#ea580c', fontWeight: 700 }}>
+                            ${(product.promo_price_cents / 100).toFixed(2)}
+                          </span>
+                        </div>
+                      ) : (
+                        `$${(product.price_cents / 100).toFixed(2)}`
+                      )}
+                    </td>
                     <td style={{ textAlign: 'right', fontWeight: 600, color: product.delivery_price_cents ? '#0284c7' : '#64748b' }}>
                       {product.delivery_price_cents != null
                         ? `$${(product.delivery_price_cents / 100).toFixed(2)}`
@@ -612,6 +651,56 @@ const ProductsList = () => {
               }}
               placeholder="Opcional (si se omite, se usa precio de salón)"
             />
+          </div>
+          <div style={{
+            padding: '12px 14px',
+            borderRadius: 10,
+            background: formData.is_promo ? '#fff7ed' : '#f8fafc',
+            border: formData.is_promo ? '1px solid #fdba74' : '1px solid #e2e8f0',
+            transition: 'all 0.2s ease',
+          }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: formData.is_promo ? '#c2410c' : '#334155' }}>
+              <input
+                type="checkbox"
+                checked={formData.is_promo}
+                onChange={(e) => setFormData({ ...formData, is_promo: e.target.checked })}
+                style={{ width: 18, height: 18, accentColor: '#ea580c', cursor: 'pointer' }}
+              />
+              <span>🔥 Producto en promoción (destacar en menú digital)</span>
+            </label>
+
+            {formData.is_promo && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid #fed7aa' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.75rem', color: '#9a3412' }}>
+                    Etiqueta / Listón (Badge)
+                  </label>
+                  <Input
+                    value={formData.promo_badge_text || ''}
+                    onChange={(e: any) => setFormData({ ...formData, promo_badge_text: e.target.value })}
+                    placeholder="Ej. PROMOCIÓN, 2x1, -20%"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.75rem', color: '#9a3412' }}>
+                    Precio Promoción ($ MXN)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.50"
+                    value={formData.promo_price_cents ? (formData.promo_price_cents / 100).toString() : ''}
+                    onChange={(e: any) => {
+                      const val = parseFloat(e.target.value);
+                      setFormData({ ...formData, promo_price_cents: isNaN(val) ? null : Math.round(val * 100) });
+                    }}
+                    placeholder="Opcional (ej. 49.00)"
+                  />
+                </div>
+                <div style={{ gridColumn: 'span 2', fontSize: '0.75rem', color: '#c2410c' }}>
+                  💡 Se mostrará una banda llamativa en el menú digital. Si ingresas un precio promocional, aparecerá el precio normal tachado y este precio de oferta.
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>URL de imagen</label>
