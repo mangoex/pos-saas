@@ -823,6 +823,50 @@ body {
   align-items: center;
 }
 
+.product-card-promo-ribbon {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  z-index: 3;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.product-card-modern.is-promo-active {
+  box-shadow: 0 2px 12px rgba(249, 115, 22, 0.15);
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.product-card-promo-pricing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.product-card-strikethrough-price {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+.product-card-price-amount.promo-highlight {
+  color: #ea580c;
+  font-weight: 800;
+}
+
 .product-card-like-btn {
   position: absolute;
   top: 6px;
@@ -2859,4 +2903,84 @@ body {
 .btn-cart-restore-profile:hover {
   background: #e2e8f0;
   color: #0f172a;
+}
+
+.btn-detect-gps-address {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 14px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1.5px solid #93c5fd;
+  border-radius: var(--radius-md, 12px);
+  color: #1e40af;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+  transition: all 0.15s ease;
+}
+
+.btn-detect-gps-address:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #60a5fa;
+  transform: translateY(-1px);
+}
+
+.btn-detect-gps-address:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-detect-gps-address:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.gps-pill-auto {
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 800;
+}
+
+.gps-feedback-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 10px;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.gps-feedback-banner.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.gps-feedback-banner.error {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

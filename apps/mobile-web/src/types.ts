@@ -44,6 +44,9 @@ export interface Product {
   category_name?: string;
   category_id?: string;
   price_cents: number;
+  is_promo?: boolean;
+  promo_price_cents?: number | null;
+  promo_badge_text?: string | null;
   description?: string;
   station?: string;
   image_url?: string;

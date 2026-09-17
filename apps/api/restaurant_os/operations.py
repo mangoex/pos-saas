@@ -57,6 +57,7 @@ CASH_CONCEPT_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 INITIAL_OWNER_EMAILS = ("aniacuestas@gmail.com", "mangoex@gmail.com")
 logger = logging.getLogger(__name__)
 POS_HANDOFF_TTL_SECONDS = 60
+_UNSET = object()
 
 
 def _record_pco008_metric(
@@ -1220,6 +1221,9 @@ def create_product(
     image_url: str | None = None,
     actor_user_id: str | None = None,
     delivery_price_cents: int | None = None,
+    is_promo: bool = False,
+    promo_price_cents: int | None = None,
+    promo_badge_text: str | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -1256,6 +1260,8 @@ def create_product(
         raise BusinessError("invalid_price", "Price must be positive")
     if delivery_price_cents is not None and delivery_price_cents <= 0:
         raise BusinessError("invalid_delivery_price", "Delivery price must be positive")
+    if promo_price_cents is not None and promo_price_cents <= 0:
+        raise BusinessError("invalid_promo_price", "Promo price must be positive")
 
     existing = (
         session.execute(
@@ -1272,6 +1278,7 @@ def create_product(
 
     now = _now()
     category = _get_or_create_category(session, normalized_category, now, organization_id=org_id)
+    badge_val = promo_badge_text.strip() if (promo_badge_text and promo_badge_text.strip()) else ("PROMOCIÓN" if is_promo else None)
     product = {
         "id": _id(),
         "organization_id": org_id,
@@ -1283,6 +1290,9 @@ def create_product(
         "status": "active",
         "image_url": image_url.strip() if (image_url and image_url.strip()) else None,
         "delivery_price_cents": delivery_price_cents,
+        "is_promo": bool(is_promo),
+        "promo_price_cents": promo_price_cents,
+        "promo_badge_text": badge_val,
         "created_at": now,
         "updated_at": now,
     }
@@ -1331,6 +1341,9 @@ def create_product(
             "sku": normalized_sku,
             "price_cents": price_cents,
             "delivery_price_cents": delivery_price_cents,
+            "is_promo": bool(is_promo),
+            "promo_price_cents": promo_price_cents,
+            "promo_badge_text": product["promo_badge_text"],
             "station": station_val,
         },
         organization_id=org_id,
@@ -12551,6 +12564,9 @@ def update_product(
     status: str | None = None,
     actor_user_id: str | None = None,
     delivery_price_cents: int | None = None,
+    is_promo: bool | None = None,
+    promo_price_cents: Any = _UNSET,
+    promo_badge_text: Any = _UNSET,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -12607,6 +12623,25 @@ def update_product(
         update_data["status"] = normalized_status
     if delivery_price_cents is not None:
         update_data["delivery_price_cents"] = delivery_price_cents
+    if is_promo is not None:
+        update_data["is_promo"] = bool(is_promo)
+        if not is_promo and promo_price_cents is _UNSET:
+            update_data["promo_price_cents"] = None
+        if not is_promo and promo_badge_text is _UNSET:
+            update_data["promo_badge_text"] = None
+    if promo_price_cents is not _UNSET:
+        if promo_price_cents is not None:
+            val = int(promo_price_cents)
+            if val <= 0:
+                raise BusinessError("invalid_promo_price", "Promo price must be positive")
+            update_data["promo_price_cents"] = val
+        else:
+            update_data["promo_price_cents"] = None
+    if promo_badge_text is not _UNSET:
+        if promo_badge_text is not None and str(promo_badge_text).strip():
+            update_data["promo_badge_text"] = str(promo_badge_text).strip()
+        else:
+            update_data["promo_badge_text"] = "PROMOCIÓN" if update_data.get("is_promo") else None
 
     now = _now()
     if category_name is not None:
@@ -26288,6 +26323,10 @@ def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
                 "category_name": p.get("category_name") or "General",
                 "category_id": p.get("category_id"),
                 "price_cents": price_cents,
+                "delivery_price_cents": p.get("delivery_price_cents"),
+                "is_promo": bool(p.get("is_promo")),
+                "promo_price_cents": p.get("promo_price_cents"),
+                "promo_badge_text": p.get("promo_badge_text"),
                 "description": p.get("description") or "",
                 "image_url": p.get("image_url") or "",
                 "station": p.get("station") or "barra",

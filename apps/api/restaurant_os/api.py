@@ -66,6 +66,7 @@ from restaurant_os.operational_guard import OperationalRouteGuard
 
 invoicing_service = InvoicingService()
 from restaurant_os.operations import (
+    _UNSET,
     get_organization_profile,
     update_organization_profile,
     get_organization_qr_info,
@@ -1506,6 +1507,17 @@ def post_catalog_product(
         if payload.get("delivery_price_cents") is not None
         else None
     )
+    is_promo = bool(payload.get("is_promo", False))
+    promo_price_cents = (
+        int(payload["promo_price_cents"])
+        if payload.get("promo_price_cents") is not None
+        else None
+    )
+    promo_badge_text = (
+        str(payload["promo_badge_text"]).strip()
+        if payload.get("promo_badge_text") is not None
+        else None
+    )
     image_url = payload.get("image_url") if "image_url" in payload else None
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
@@ -1519,6 +1531,9 @@ def post_catalog_product(
             image_url,
             actor_id,
             delivery_price_cents=delivery_price_cents,
+            is_promo=is_promo,
+            promo_price_cents=promo_price_cents,
+            promo_badge_text=promo_badge_text,
         )
     )
 
@@ -4339,6 +4354,17 @@ def put_catalog_product(
         if payload.get("delivery_price_cents") is not None
         else None
     )
+    is_promo = bool(payload["is_promo"]) if "is_promo" in payload else None
+    promo_price_cents = (
+        int(payload["promo_price_cents"])
+        if payload.get("promo_price_cents") is not None
+        else (None if "promo_price_cents" in payload else _UNSET)
+    )
+    promo_badge_text = (
+        str(payload["promo_badge_text"]).strip()
+        if payload.get("promo_badge_text") is not None
+        else (None if "promo_badge_text" in payload else _UNSET)
+    )
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: update_product(
@@ -4353,6 +4379,9 @@ def put_catalog_product(
             status,
             actor_id,
             delivery_price_cents=delivery_price_cents,
+            is_promo=is_promo,
+            promo_price_cents=promo_price_cents,
+            promo_badge_text=promo_badge_text,
         )
     )
 

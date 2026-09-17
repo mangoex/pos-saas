@@ -81,7 +81,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     (sum, modifier) => sum + modifier.price_delta_cents,
     0,
   );
-  const totalCents = (product.price_cents + modifierDeltaCents) * quantity;
+  const effectiveBasePriceCents = (product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents)
+    ? product.promo_price_cents
+    : product.price_cents;
+  const totalCents = (effectiveBasePriceCents + modifierDeltaCents) * quantity;
   const iconMeta = getProductIconMeta(product);
   const productImg = product.image_url || getProductImage(product);
 
@@ -139,6 +142,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             borderBottom: `2px solid ${iconMeta.borderColor}`,
           }}
         >
+          {product.is_promo && (
+            <div className="product-card-promo-ribbon" style={{ top: 12, left: 12 }}>
+              <span>🔥</span>
+              <span>{product.promo_badge_text || 'PROMOCIÓN'}</span>
+            </div>
+          )}
           {productImg ? (
             <>
               <img
@@ -200,7 +209,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               <h2 className="product-modal-name">{product.name}</h2>
             </div>
             <div className="product-modal-price-tag">
-              {formatMoney(product.price_cents)}
+              {product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <span style={{ textDecoration: 'line-through', fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500, lineHeight: 1 }}>
+                    {formatMoney(product.price_cents)}
+                  </span>
+                  <span style={{ color: '#ea580c', fontWeight: 800 }}>
+                    {formatMoney(product.promo_price_cents)}
+                  </span>
+                </div>
+              ) : (
+                formatMoney(product.price_cents)
+              )}
             </div>
           </div>
 
