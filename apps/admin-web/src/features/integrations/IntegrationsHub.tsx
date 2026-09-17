@@ -26,6 +26,7 @@ import {
   Sparkles,
   ExternalLink,
   ShoppingCart,
+  RefreshCw,
 } from 'lucide-react';
 import '../../premium-catalogs.css';
 
@@ -34,6 +35,7 @@ interface ChannelConfig {
   is_enabled: boolean;
   environment: string;
   client_id: string;
+  config_id?: string;
   client_secret: string;
   webhook_secret: string;
   auto_accept: boolean;
@@ -192,6 +194,115 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
     skipped_count: number;
     failed_count: number;
   } | null>(null);
+
+  // Meta Message Templates & SDK State
+  const [campaignUseTemplate, setCampaignUseTemplate] = useState(true);
+  const [isLaunchingFb, setIsLaunchingFb] = useState(false);
+  const [showManualSignup, setShowManualSignup] = useState(false);
+
+  // Meta Message Templates (HSM) Query & Mutation
+  const { data: templatesData, refetch: refetchTemplates } = useQuery<{
+    waba_id: string;
+    total_standard: number;
+    templates: Array<{
+      name: string;
+      category: string;
+      language: string;
+      status: string;
+      registered: boolean;
+      description: string;
+    }>;
+  }>({
+    queryKey: ['integrations', 'whatsapp', 'templates'],
+    queryFn: () => fetchApi('/integrations/whatsapp/templates'),
+    enabled: selectedProvider === 'WHATSAPP_BUSINESS' && activeTab === 'config',
+  });
+
+  const syncTemplatesMutation = useMutation({
+    mutationFn: () => fetchApi('/integrations/whatsapp/templates/sync', { method: 'POST' }),
+    onSuccess: () => {
+      refetchTemplates();
+    },
+  });
+
+  useEffect(() => {
+    const handleMetaMessage = (event: MessageEvent) => {
+      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
+          if (data.event === 'FINISH' && data.data) {
+            if (data.data.phone_number_id) setSignupPhoneNumberId(String(data.data.phone_number_id));
+            if (data.data.waba_id) setSignupWabaId(String(data.data.waba_id));
+          }
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('message', handleMetaMessage);
+    return () => window.removeEventListener('message', handleMetaMessage);
+  }, []);
+
+  const handleLaunchMetaPopup = () => {
+    setIsLaunchingFb(true);
+    const appId = formData.client_id || '';
+    const configId = formData.config_id || '';
+
+    const launchLogin = () => {
+      if (!(window as any).FB) {
+        setIsLaunchingFb(false);
+        setShowManualSignup(true);
+        alert("El SDK de Meta no está disponible o fue bloqueado en este navegador. Puedes ingresar los datos manualmente.");
+        return;
+      }
+
+      (window as any).FB.login((response: any) => {
+        setIsLaunchingFb(false);
+        if (response.authResponse?.code) {
+          setSignupCode(response.authResponse.code);
+        }
+      }, {
+        config_id: configId || undefined,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          feature: 'whatsapp_embedded_signup',
+          version: 2,
+          sessionInfoVersion: 2,
+        }
+      });
+    };
+
+    if ((window as any).FB) {
+      launchLogin();
+    } else {
+      (window as any).fbAsyncInit = function() {
+        (window as any).FB.init({
+          appId: appId || 'dummy',
+          autoLogAppEvents: true,
+          xfbml: true,
+          version: 'v20.0'
+        });
+        launchLogin();
+      };
+      if (!document.getElementById('facebook-jssdk')) {
+        const script = document.createElement('script');
+        script.id = 'facebook-jssdk';
+        script.src = 'https://connect.facebook.net/es_LA/sdk.js';
+        script.async = true;
+        script.defer = true;
+        script.crossOrigin = 'anonymous';
+        script.onerror = () => {
+          setIsLaunchingFb(false);
+          setShowManualSignup(true);
+          alert("No se pudo cargar el SDK de Facebook. Ingresa las credenciales manualmente en el formulario.");
+        };
+        document.body.appendChild(script);
+      } else {
+        launchLogin();
+      }
+    }
+  };
 
   // Queries for Uber/Delivery Channels & WhatsApp
   const { data: config } = useQuery<ChannelConfig>({
@@ -427,7 +538,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
 
   // WhatsApp Marketing Campaign Preview Mutation
   const previewCampaignMutation = useMutation({
-    mutationFn: (payload: { branch_id: string; segment: string; discount_code: string; custom_message?: string }) =>
+    mutationFn: (payload: { branch_id?: string; segment: string; discount_code: string; custom_message?: string }) =>
       fetchApi<{
         segment: string;
         total_eligible: number;
@@ -450,7 +561,7 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
 
   // WhatsApp Marketing Campaign Dispatch Mutation
   const sendCampaignMutation = useMutation({
-    mutationFn: (payload: { branch_id: string; segment: string; discount_code: string; custom_message?: string }) =>
+    mutationFn: (payload: { branch_id?: string; segment: string; discount_code: string; custom_message?: string; use_template?: boolean }) =>
       fetchApi<{
         status: string;
         segment: string;
@@ -1366,6 +1477,22 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
 
                 <div style={{ marginBottom: 18 }}>
                   <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Meta Configuration ID (Embedded Signup Config ID)
+                  </label>
+                  <input
+                    type="text"
+                    className="premium-input"
+                    placeholder="e.g. 102938475610293 (ID del flujo en Meta App Dashboard)"
+                    value={formData.config_id ?? ''}
+                    onChange={(e) => setFormData({ ...formData, config_id: e.target.value })}
+                  />
+                  <small style={{ color: '#64748b', marginTop: 4, display: 'block' }}>
+                    Requerido para lanzar el diálogo oficial popup de Meta Embedded Signup en un clic.
+                  </small>
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                     Meta App Secret (Firma HMAC-SHA256)
                   </label>
                   <input
@@ -1851,36 +1978,50 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={campaignUseTemplate}
+                      onChange={(e) => setCampaignUseTemplate(e.target.checked)}
+                      style={{ accentColor: '#16a34a' }}
+                    />
+                    <span>Enviar como Plantilla Oficial de Meta (HSM Pre-Aprobada para entrega fuera de 24h)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
                 <Button
                   variant="secondary"
                   disabled={previewCampaignMutation.isPending}
                   onClick={() =>
                     previewCampaignMutation.mutate({
-                      branch_id: selectedPreviewBranch,
                       segment: selectedCampaignSegment,
                       discount_code: campaignDiscountCode,
                       custom_message: campaignCustomMessage || undefined,
                     })
                   }
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                   <Eye size={16} />
-                  {previewCampaignMutation.isPending ? 'Generando...' : 'Previsualizar Mensaje'}
+                  {previewCampaignMutation.isPending ? 'Cargando...' : 'Previsualizar Mensaje'}
                 </Button>
 
                 <Button
                   variant="primary"
                   disabled={sendCampaignMutation.isPending}
                   onClick={() => {
-                    const confirmed = window.confirm(
-                      `¿Confirmas enviar esta campaña de WhatsApp al segmento "${selectedCampaignSegment}" con el código "${campaignDiscountCode}"?`
-                    );
-                    if (confirmed) {
+                    if (
+                      window.confirm(
+                        `¿Estás seguro de enviar esta campaña por WhatsApp al segmento "${selectedCampaignSegment}"?`
+                      )
+                    ) {
                       sendCampaignMutation.mutate({
-                        branch_id: selectedPreviewBranch,
                         segment: selectedCampaignSegment,
                         discount_code: campaignDiscountCode,
                         custom_message: campaignCustomMessage || undefined,
+                        use_template: campaignUseTemplate,
                       });
                     }
                   }}
@@ -1925,6 +2066,96 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* 6. Plantillas Oficiales de Mensajes HSM (Meta Cloud API) */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, marginTop: 24, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ background: '#fdf4ff', color: '#a855f7', padding: 8, borderRadius: 10 }}>
+                    <MessageSquare size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                      6. Plantillas Oficiales de Mensajes HSM (Meta Cloud API)
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                      Meta exige plantillas pre-aprobadas para mensajes iniciados fuera de la ventana de 24 horas (seguimiento de órdenes y campañas).
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Badge variant="info" style={{ background: '#faf5ff', color: '#9333ea', border: '1px solid #e9d5ff' }}>
+                    PRD-FR-096 &amp; SDD-ADR-040
+                  </Badge>
+                  <Button
+                    variant="secondary"
+                    disabled={syncTemplatesMutation.isPending}
+                    onClick={() => syncTemplatesMutation.mutate()}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', borderColor: '#a855f7', color: '#7e22ce' }}
+                  >
+                    <RefreshCw size={14} className={syncTemplatesMutation.isPending ? 'animate-spin' : ''} />
+                    {syncTemplatesMutation.isPending ? 'Sincronizando...' : 'Sincronizar con Meta'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Templates Catalog Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
+                {(templatesData?.templates || [
+                  {
+                    name: 'restaurantos_order_update',
+                    category: 'UTILITY',
+                    language: 'es_MX',
+                    status: 'APPROVED',
+                    registered: true,
+                    description: 'Notificación transaccional de cambio de estado de pedido (Utilidad)',
+                  },
+                  {
+                    name: 'restaurantos_reengagement_offer',
+                    category: 'MARKETING',
+                    language: 'es_MX',
+                    status: 'APPROVED',
+                    registered: true,
+                    description: 'Campaña de reactivación y cupones con cláusula de Opt-Out (Marketing)',
+                  },
+                ]).map((tpl) => (
+                  <div
+                    key={tpl.name}
+                    style={{
+                      border: '1.5px solid #e2e8f0',
+                      borderRadius: 12,
+                      padding: 18,
+                      background: '#f8fafc',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div>
+                        <code style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>{tpl.name}</code>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, background: tpl.category === 'UTILITY' ? '#dbeafe' : '#fef3c7', color: tpl.category === 'UTILITY' ? '#1e40af' : '#92400e', padding: '2px 6px', borderRadius: 4 }}>
+                            {tpl.category}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: '#64748b', background: '#e2e8f0', padding: '2px 6px', borderRadius: 4 }}>
+                            {tpl.language}
+                          </span>
+                        </div>
+                      </div>
+                      <Badge variant={tpl.status === 'APPROVED' ? 'success' : tpl.status === 'PENDING' ? 'warning' : 'default'}>
+                        {tpl.status}
+                      </Badge>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 10px' }}>
+                      {tpl.description}
+                    </p>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', background: '#fff', border: '1px solid #cbd5e1', padding: '8px 10px', borderRadius: 6, fontStyle: 'italic' }}>
+                      {tpl.name === 'restaurantos_order_update'
+                        ? '¡Hola {{1}}! Tu pedido #{{2}} en {{3}} ahora está: {{4}}. Sigue el estado en vivo aquí: {{5}}'
+                        : '¡Hola {{1}}! En {{2}} te extrañamos. {{3}} Usa el cupón {{4}} en tu próxima compra: {{5}}. Para no recibir más promociones, responde STOP o BAJA. [Botón: STOP]'}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -2315,13 +2546,9 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
         title="Conectar WhatsApp Business (Meta Embedded Signup)"
       >
         <div style={{ padding: '8px 0' }}>
-          <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: 16 }}>
-            Ingresa el código de autorización generado por el flujo de Meta Embedded Signup junto con el Phone Number ID de tu número oficial de WhatsApp.
-          </p>
-
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-              Sucursal a Vincular
+              1. Selecciona la Sucursal a Vincular
             </label>
             <select
               className="premium-input"
@@ -2337,44 +2564,88 @@ export default function IntegrationsHub({ defaultProvider }: IntegrationsHubProp
             </select>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-              Meta Authorization Code (OAuth Code)
-            </label>
-            <input
-              type="text"
-              className="premium-input"
-              placeholder="AQD... (Código devuelto por Meta login)"
-              value={signupCode}
-              onChange={(e) => setSignupCode(e.target.value)}
-            />
+          {/* Tarjeta de Inicio de Popup Meta SDK */}
+          <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 12, padding: 18, marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Zap size={18} />
+              </div>
+              <div>
+                <strong style={{ color: '#1e40af', fontSize: '0.95rem' }}>Conexión Oficial con Meta (Popup Nativo)</strong>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#3b82f6' }}>Flujo interactivo con SDK oficial de Facebook</p>
+              </div>
+            </div>
+            <p style={{ margin: '0 0 14px', fontSize: '0.8125rem', color: '#334155', lineHeight: 1.4 }}>
+              Abre el diálogo emergente oficial de Meta para iniciar sesión con tu cuenta de Facebook, seleccionar tu cuenta de WhatsApp Business (WABA) y verificar tu número sin copiar códigos.
+            </p>
+            <Button
+              variant="primary"
+              onClick={handleLaunchMetaPopup}
+              disabled={isLaunchingFb || !signupBranchId}
+              style={{ background: '#2563eb', borderColor: '#1d4ed8', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, padding: '10px 16px' }}
+            >
+              <Zap size={16} />
+              {isLaunchingFb ? 'Abriendo Meta Login...' : '🚀 Iniciar Conexión Oficial con Meta (Popup)'}
+            </Button>
+            {!signupBranchId && (
+              <small style={{ color: '#ef4444', display: 'block', marginTop: 6, fontSize: '0.75rem' }}>
+                * Selecciona primero la sucursal arriba para habilitar el botón.
+              </small>
+            )}
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-              WhatsApp Business Account ID (WABA ID)
-            </label>
-            <input
-              type="text"
-              className="premium-input"
-              placeholder="e.g. 104928374829102"
-              value={signupWabaId}
-              onChange={(e) => setSignupWabaId(e.target.value)}
-            />
+            <button
+              type="button"
+              onClick={() => setShowManualSignup(!showManualSignup)}
+              style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.8125rem', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+            >
+              {showManualSignup ? '▲ Ocultar campos de credenciales manuales' : '▼ ¿Deseas verificar o ingresar los datos manualmente? (Modo Desarrollador)'}
+            </button>
           </div>
 
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-              Phone Number ID de WhatsApp
-            </label>
-            <input
-              type="text"
-              className="premium-input"
-              placeholder="e.g. 109876543210987"
-              value={signupPhoneNumberId}
-              onChange={(e) => setSignupPhoneNumberId(e.target.value)}
-            />
-          </div>
+          {(showManualSignup || signupCode || signupPhoneNumberId) && (
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+                  Meta Authorization Code (OAuth Code)
+                </label>
+                <input
+                  type="text"
+                  className="premium-input"
+                  placeholder="AQD... (Capturado automáticamente o devuelto por Meta login)"
+                  value={signupCode}
+                  onChange={(e) => setSignupCode(e.target.value)}
+                />
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+                  WhatsApp Business Account ID (WABA ID)
+                </label>
+                <input
+                  type="text"
+                  className="premium-input"
+                  placeholder="e.g. 104928374829102"
+                  value={signupWabaId}
+                  onChange={(e) => setSignupWabaId(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+                  Phone Number ID de WhatsApp
+                </label>
+                <input
+                  type="text"
+                  className="premium-input"
+                  placeholder="e.g. 109876543210987"
+                  value={signupPhoneNumberId}
+                  onChange={(e) => setSignupPhoneNumberId(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
             <Button variant="secondary" onClick={() => setEmbeddedSignupOpen(false)}>

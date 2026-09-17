@@ -136,3 +136,78 @@ def send_whatsapp_text_message(
     except (HTTPError, URLError, TimeoutError) as e:
         logger.error("Error sending WhatsApp message: %s", e)
         return {"error": str(e), "status": "failed"}
+
+
+def send_whatsapp_template_message(
+    phone_number_id: str,
+    to_phone: str,
+    template_name: str,
+    language_code: str = "es_MX",
+    body_parameters: list[str] | None = None,
+    access_token: str | None = None,
+    environment: str = "sandbox",
+) -> dict[str, Any]:
+    """Send an outbound pre-approved template message (HSM) via Meta WhatsApp Cloud API."""
+    clean_to = "".join(c for c in to_phone if c.isdigit())
+    if not clean_to or not template_name:
+        return {"status": "skipped", "reason": "empty_recipient_or_template"}
+
+    params = body_parameters or []
+    components: list[dict[str, Any]] = [
+        {
+            "type": "body",
+            "parameters": [{"type": "text", "text": str(p)} for p in params],
+        }
+    ]
+
+    # In sandbox/testing mode, simulate delivery without outgoing network call
+    if environment == "sandbox" or not access_token or access_token.startswith("EAAB_mock"):
+        logger.info(
+            "Simulated WhatsApp template %s to %s with params %s",
+            template_name,
+            clean_to,
+            params,
+        )
+        return {
+            "messaging_product": "whatsapp",
+            "contacts": [{"input": clean_to, "wa_id": clean_to}],
+            "messages": [{"id": f"wamid.simulated_tpl_{clean_to[:6]}"}],
+            "template": {
+                "name": template_name,
+                "language": {"code": language_code},
+                "components": components,
+            },
+            "simulated": True,
+        }
+
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": clean_to,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language_code},
+            "components": components,
+        },
+    }
+    import json
+
+    body_bytes = json.dumps(payload).encode("utf-8")
+    req = Request(
+        url,
+        data=body_bytes,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "RestaurantOS-WhatsApp-Adapter/1.0",
+        },
+    )
+    try:
+        with urlopen(req, timeout=5) as resp:
+            res: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+            return res
+    except (HTTPError, URLError, TimeoutError) as e:
+        logger.error("Error sending WhatsApp template message: %s", e)
+        return {"error": str(e), "status": "failed"}

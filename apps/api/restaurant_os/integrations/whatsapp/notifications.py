@@ -35,6 +35,7 @@ class WhatsAppNotificationService:
         notes: str | None = None,
         tracking_url: str | None = None,
         smart_rating_url: str | None = None,
+        use_template: bool = False,
     ) -> dict[str, Any]:
         """Send an outbound transactional notification according to order lifecycle."""
         # If organization_id or branch_id was omitted, resolve from order
@@ -173,14 +174,34 @@ class WhatsAppNotificationService:
                 f"👉 {resolved_tracking_url}"
             )
 
-        # 7. Dispatch message via WhatsApp adapter
-        meta_res = send_whatsapp_text_message(
-            phone_number_id=phone_number_id,
-            to_phone=raw_phone,
-            message_text=message,
-            access_token=channel_config.get("client_secret"),
-            environment=channel_config.get("environment", "sandbox"),
-        )
+        # 7. Dispatch message via WhatsApp adapter (template or text)
+        if use_template:
+            from .adapter import send_whatsapp_template_message
+
+            template_params = [
+                name,
+                folio,
+                branch_name,
+                normalized_status,
+                resolved_tracking_url,
+            ]
+            meta_res = send_whatsapp_template_message(
+                phone_number_id=phone_number_id,
+                to_phone=raw_phone,
+                template_name="restaurantos_order_update",
+                language_code="es_MX",
+                body_parameters=template_params,
+                access_token=channel_config.get("client_secret"),
+                environment=channel_config.get("environment", "sandbox"),
+            )
+        else:
+            meta_res = send_whatsapp_text_message(
+                phone_number_id=phone_number_id,
+                to_phone=raw_phone,
+                message_text=message,
+                access_token=channel_config.get("client_secret"),
+                environment=channel_config.get("environment", "sandbox"),
+            )
 
         return {
             "status": "sent",
@@ -190,7 +211,7 @@ class WhatsAppNotificationService:
             "new_status": normalized_status,
             "message": message,
             "meta_response": meta_res,
+            "template_used": "restaurantos_order_update" if use_template else None,
         }
 
     notify_order_status_change = notify_order_status_update
-

@@ -385,3 +385,18 @@ Decisión:
 3. **Gestión Inmediata de Bajas en Webhook**: Cuando un comensal envía palabras clave de desuscripción ("BAJA", "STOP", "CANCELAR", "NO MAS"), el webhook de WhatsApp registra inmediatamente la baja y el bot confirma al usuario. Los números con opt-out activo quedan permanentemente excluidos de envíos de marketing.
 4. **Preservación de Notificaciones Transaccionales**: La baja de marketing NO afecta las notificaciones transaccionales de utilidad (seguimiento de órdenes activas `ACCEPTED`, `READY`, `IN_DELIVERY`, etc.).
 5. **Despacho Controlado y No Bloqueante**: Las campañas se procesan por lote con control de tasa de envío y reporte de métricas (`total_targets`, `sent_count`, `skipped_count`, `failed_count`), garantizando que fallos individuales en Meta no impidan el procesamiento del resto del lote ni bloqueen el sistema.
+
+## SDD-ADR-040 — Arquitectura de Plantillas Oficiales de Meta (HSM), Sincronización WABA y Popup SDK para Embedded Signup
+
+Estado: Aprobada y adoptada para la Fase 5 de RestaurantOS (`mimenu`).
+
+Contexto:
+Meta WhatsApp Cloud API impone una estricta distinción entre conversaciones iniciadas por el usuario (ventana de servicio de 24 horas) y conversaciones iniciadas por el negocio (fuera de las 24 horas). Enviar texto libre a clientes inactivos o que realizaron pedidos sin interacción previa por WhatsApp genera el rechazo inmediato de la API (`Error 131047`). Asimismo, la experiencia de onboarding comercial mediante Embedded Signup debe ser fluida y autoservicio, evitando la transcripción manual de códigos OAuth, WABA IDs o Phone IDs.
+
+Decisión:
+1. **Popup Oficial de Meta SDK**: El frontend integra dinámicamente el SDK oficial de Facebook (`https://connect.facebook.net/en_US/sdk.js`), ejecutando `FB.login` con la configuración oficial de WhatsApp Embedded Signup (`whatsapp_embedded_signup`). Un listener de eventos `message` en `window` intercepta los datos de sesión (`phone_number_id`, `waba_id`) emitidos por el popup y los envía automáticamente al backend junto con el código OAuth, conservando el formulario manual como fallback de contingencia.
+2. **Plantillas HSM Estandarizadas (Message Templates)**: Se definen canónicamente dos plantillas oficiales:
+   - `restaurantos_order_update` (`CATEGORY: UTILITY`): Diseñada para notificaciones transaccionales de cambio de estado de pedidos con 5 variables posicionales (`[nombre, folio, sucursal, estado, enlace_tracking]`).
+   - `restaurantos_reengagement_offer` (`CATEGORY: MARKETING`): Diseñada para campañas de marketing con 5 variables posicionales (`[nombre, sucursal, producto_o_texto, cupón, enlace_tienda]`), acompañada de botón Quick Reply de baja (`STOP`).
+3. **Sincronización y Registro Automatizado vía Graph API**: El backend expone endpoints (`POST /integrations/whatsapp/templates/sync` y `GET /integrations/whatsapp/templates`) que consultan la WABA del restaurante en Meta Graph API (`/{WABA_ID}/message_templates`) y registran automáticamente las plantillas estándar faltantes, monitoreando su estado (`APPROVED`, `PENDING`, `REJECTED`).
+4. **Despacho Dual Estructurado (`type: template`)**: `WhatsAppNotificationService` y `WhatsAppCampaignService` generan payloads estructurados según el estándar de Meta Cloud API (`"type": "template"`), asegurando la entrega garantizada tanto dentro como fuera de la ventana de 24 horas.

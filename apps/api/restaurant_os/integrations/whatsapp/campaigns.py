@@ -257,6 +257,7 @@ class WhatsAppCampaignService:
         segment: str,
         discount_code: str = "VUELVE10",
         custom_message: str | None = None,
+        use_template: bool = False,
     ) -> dict[str, Any]:
         """Dispatch marketing campaign to all eligible customers in the segment."""
         # 1. Check WhatsApp channel integration
@@ -323,34 +324,64 @@ class WhatsAppCampaignService:
                 skipped_count += 1
                 continue
 
-            if custom_message:
-                body = (
-                    custom_message.replace("{name}", target["name"])
-                    .replace("{favorite_product}", target["favorite_product"])
-                    .replace("{discount_code}", discount_code)
-                    .replace("{branch_name}", branch_name)
-                )
-            else:
-                body = generate_churn_recovery_message(
-                    customer_name=target["name"],
-                    favorite_product_name=target["favorite_product"],
-                    discount_code=discount_code,
-                    restaurant_name=branch_name,
-                )
+            if use_template:
+                from .adapter import send_whatsapp_template_message
 
-            full_msg = f"{body}{store_link}{opt_out_footer}"
-            try:
-                send_whatsapp_text_message(
-                    phone_number_id=phone_number_id,
-                    to_phone=phone,
-                    message_text=full_msg,
-                    access_token=access_token,
-                    environment=env,
+                dish_or_custom = (
+                    custom_message
+                    if custom_message
+                    else f"¡Te extrañamos! ¿Qué tal unos {target['favorite_product']}?"
                 )
-                sent_count += 1
-            except Exception as e:
-                logger.error("Error sending marketing WhatsApp to %s: %s", phone, e)
-                failed_count += 1
+                template_params = [
+                    target["name"],
+                    branch_name,
+                    dish_or_custom,
+                    discount_code,
+                    storefront_url,
+                ]
+                try:
+                    send_whatsapp_template_message(
+                        phone_number_id=phone_number_id,
+                        to_phone=phone,
+                        template_name="restaurantos_reengagement_offer",
+                        language_code="es_MX",
+                        body_parameters=template_params,
+                        access_token=access_token,
+                        environment=env,
+                    )
+                    sent_count += 1
+                except Exception as e:
+                    logger.error("Error sending marketing template WhatsApp to %s: %s", phone, e)
+                    failed_count += 1
+            else:
+                if custom_message:
+                    body = (
+                        custom_message.replace("{name}", target["name"])
+                        .replace("{favorite_product}", target["favorite_product"])
+                        .replace("{discount_code}", discount_code)
+                        .replace("{branch_name}", branch_name)
+                    )
+                else:
+                    body = generate_churn_recovery_message(
+                        customer_name=target["name"],
+                        favorite_product_name=target["favorite_product"],
+                        discount_code=discount_code,
+                        restaurant_name=branch_name,
+                    )
+
+                full_msg = f"{body}{store_link}{opt_out_footer}"
+                try:
+                    send_whatsapp_text_message(
+                        phone_number_id=phone_number_id,
+                        to_phone=phone,
+                        message_text=full_msg,
+                        access_token=access_token,
+                        environment=env,
+                    )
+                    sent_count += 1
+                except Exception as e:
+                    logger.error("Error sending marketing WhatsApp to %s: %s", phone, e)
+                    failed_count += 1
 
         return {
             "status": "completed",
@@ -360,4 +391,5 @@ class WhatsAppCampaignService:
             "sent_count": sent_count,
             "skipped_count": skipped_count,
             "failed_count": failed_count,
+            "template_used": "restaurantos_reengagement_offer" if use_template else None,
         }

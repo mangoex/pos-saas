@@ -161,4 +161,33 @@ Feature: Envío de alertas de estado en tiempo real (aceptado, listo, en camino,
     Then el servicio de campañas omite el envío a dicho número de forma segura
     And el reporte de ejecución registra al destinatario como omitido por desuscripción previa
 
+@PRD-FR-096 @whatsapp @templates @embedded-signup
+Feature: BDD-FEAT-117 Gestión de Plantillas HSM y Popup Nativo de Meta Embedded Signup
 
+  @BDD-SC-917
+  Scenario: Sincronización y registro automático de plantillas UTILITY y MARKETING en Meta
+    Given una sucursal con WABA ID y credenciales de Meta configuradas
+    When el administrador solicita la sincronización de plantillas de mensaje
+    Then el sistema registra en Meta las plantillas oficiales "restaurantos_order_update" y "restaurantos_reengagement_offer" si no existen
+    And consulta el estado de aprobación de Meta retornando estado APPROVED
+
+  @BDD-SC-918
+  Scenario: Despacho de notificaciones de pedido mediante plantilla estructurada UTILITY
+    Given una orden de restaurante con comensal fuera de la ventana de servicio de 24 horas
+    When la orden transiciona a estado "ACCEPTED" o "READY"
+    Then el servicio despacha la notificación con formato oficial de plantilla "type: template"
+    And incluye los parámetros posicionales requeridos por la plantilla de utilidad
+
+  @BDD-SC-919
+  Scenario: Despacho de campañas de marketing mediante plantilla pre-aprobada MARKETING con Opt-Out
+    Given una campaña de re-engagement dirigida a clientes inactivos
+    When se ejecuta el despacho del lote de marketing
+    Then cada mensaje saliente se emite utilizando la plantilla "restaurantos_reengagement_offer"
+    And incluye las variables de cupón, platillo favorito y botón de desuscripción STOP
+
+  @BDD-SC-920
+  Scenario: Vinculación interactiva mediante Popup oficial de Meta SDK
+    Given un usuario administrador en el módulo de WhatsApp Business
+    When pulsa el botón de conexión con Meta Embedded Signup
+    Then el sistema invoca el diálogo emergente nativo FB.login de Meta
+    And escucha el evento de mensaje con los datos del WABA ID y Phone Number ID para completar la vinculación automáticamente

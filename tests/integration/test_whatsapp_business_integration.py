@@ -5,20 +5,19 @@ import hashlib
 import hmac
 import json
 import uuid
-from datetime import datetime, time, timezone
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from restaurant_os import models
 from restaurant_os.auth import create_session_token
 from restaurant_os.config import get_settings
 from restaurant_os.database import get_session
 from restaurant_os.main import create_app
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 app = create_app()
 
@@ -269,6 +268,7 @@ def auth_headers(test_db):
 
 def test_whatsapp_webhook_verification_handshake(test_db):
     """TDD-TC-321: Meta Webhook GET challenge verification."""
+
     def override_get_session():
         yield test_db
 
@@ -291,6 +291,7 @@ def test_whatsapp_webhook_verification_handshake(test_db):
 
 def test_whatsapp_webhook_signature_and_raw_log(test_db):
     """TDD-TC-322: Inbound webhook HMAC-SHA256 signature validation and immutable raw logging."""
+
     def override_get_session():
         yield test_db
 
@@ -310,13 +311,17 @@ def test_whatsapp_webhook_signature_and_raw_log(test_db):
                                 "display_phone_number": "5215512345678",
                                 "phone_number_id": TEST_PHONE_NUMBER_ID,
                             },
-                            "contacts": [{"profile": {"name": "Juan Perez"}, "wa_id": "5215599887766"}],
+                            "contacts": [
+                                {"profile": {"name": "Juan Perez"}, "wa_id": "5215599887766"}
+                            ],
                             "messages": [
                                 {
                                     "from": "5215599887766",
                                     "id": "wamid.HBgLMTIzNDU2Nzg5AA==",
                                     "timestamp": "1710000000",
-                                    "text": {"body": "Hola, ¿cuál es el menú y qué tienen de comer?"},
+                                    "text": {
+                                        "body": "Hola, ¿cuál es el menú y qué tienen de comer?"
+                                    },
                                     "type": "text",
                                 }
                             ],
@@ -348,11 +353,15 @@ def test_whatsapp_webhook_signature_and_raw_log(test_db):
     assert resp_ok.status_code == 200
 
     # Verify that payload was stored in integration_webhook_logs
-    log_row = test_db.execute(
-        models.integration_webhook_logs.select().where(
-            models.integration_webhook_logs.c.provider == "WHATSAPP_BUSINESS"
+    log_row = (
+        test_db.execute(
+            models.integration_webhook_logs.select().where(
+                models.integration_webhook_logs.c.provider == "WHATSAPP_BUSINESS"
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     assert log_row is not None
     assert log_row["provider"] == "WHATSAPP_BUSINESS"
     assert log_row["event_type"] == "messages"
@@ -361,6 +370,7 @@ def test_whatsapp_webhook_signature_and_raw_log(test_db):
 
 def test_whatsapp_embedded_signup_exchange(test_db, auth_headers):
     """TDD-TC-320: Embedded signup OAuth code exchange and credential persistence."""
+
     def override_get_session():
         yield test_db
 
@@ -398,9 +408,11 @@ def test_whatsapp_embedded_signup_exchange(test_db, auth_headers):
 
 
 def test_whatsapp_bot_menu_and_hours_context(test_db):
-    """TDD-TC-323: Bot response with active menu items, omitting unavailable items, and including store link."""
-    from restaurant_os.integrations.whatsapp.knowledge import WhatsAppKnowledgeService
+    """TDD-TC-323: Bot response with active menu items, omitting unavailable items,
+    and including store link.
+    """
     from restaurant_os.integrations.whatsapp.bot import WhatsAppBot
+    from restaurant_os.integrations.whatsapp.knowledge import WhatsAppKnowledgeService
 
     knowledge = WhatsAppKnowledgeService(test_db, ORGANIZATION_ID, BRANCH_ID)
     summary = knowledge.get_branch_knowledge_summary()
@@ -413,7 +425,9 @@ def test_whatsapp_bot_menu_and_hours_context(test_db):
     assert "Gringa Especial" not in summary["available_products_text"]
 
     # Storefront link must be present
-    assert "mimenu" in summary["storefront_url"].lower() or "menu" in summary["storefront_url"].lower()
+    assert (
+        "mimenu" in summary["storefront_url"].lower() or "menu" in summary["storefront_url"].lower()
+    )
 
     # Bot answer generation for a menu inquiry
     bot = WhatsAppBot(knowledge)
@@ -425,6 +439,7 @@ def test_whatsapp_bot_menu_and_hours_context(test_db):
 
 def test_whatsapp_multitenant_isolation_and_unmapped_number(test_db):
     """TDD-TC-324: Messages for an unknown or unmapped phone_number_id fail closed safely."""
+
     def override_get_session():
         yield test_db
 
@@ -474,6 +489,7 @@ def test_whatsapp_multitenant_isolation_and_unmapped_number(test_db):
 
 def test_whatsapp_store_mappings_and_logs_endpoints(test_db):
     """Verify listing and creating store mappings and listing logs for WhatsApp Business."""
+
     def override_get_session():
         yield test_db
 
@@ -496,6 +512,7 @@ def test_whatsapp_store_mappings_and_logs_endpoints(test_db):
 
 def test_whatsapp_knowledge_preview_endpoint(test_db):
     """Verify knowledge preview endpoint returns active menu, hours, and storefront url."""
+
     def override_get_session():
         yield test_db
 
@@ -515,14 +532,18 @@ def test_whatsapp_knowledge_preview_endpoint(test_db):
 
 
 def test_whatsapp_order_parser_intent_and_cart_link(test_db):
-    """TDD-TC-325: Verify parser detects order intent, quantities, cents arithmetic, and cart link."""
+    """TDD-TC-325: Verify parser detects order intent, quantities, cents arithmetic,
+    and cart link.
+    """
     from restaurant_os.integrations.whatsapp.knowledge import WhatsAppKnowledgeService
     from restaurant_os.integrations.whatsapp.order_parser import WhatsAppOrderParser
 
     knowledge = WhatsAppKnowledgeService(test_db, ORGANIZATION_ID, BRANCH_ID)
     parser = WhatsAppOrderParser(knowledge)
 
-    result = parser.parse_order_intent("Hola buenas tardes, quiero 2 órdenes de tacos al pastor por favor")
+    result = parser.parse_order_intent(
+        "Hola buenas tardes, quiero 2 órdenes de tacos al pastor por favor"
+    )
 
     assert result["is_order_intent"] is True
     assert len(result["matched_items"]) == 1
@@ -537,7 +558,9 @@ def test_whatsapp_order_parser_intent_and_cart_link(test_db):
 
 
 def test_whatsapp_order_parser_handles_86d_unavailable_items(test_db):
-    """TDD-TC-326: Verify parser flags 86'd (is_available=False) items and excludes them from total."""
+    """TDD-TC-326: Verify parser flags 86'd (is_available=False) items and
+    excludes them from total.
+    """
     from restaurant_os.integrations.whatsapp.knowledge import WhatsAppKnowledgeService
     from restaurant_os.integrations.whatsapp.order_parser import WhatsAppOrderParser
 
@@ -574,7 +597,9 @@ def test_whatsapp_order_parser_handles_unmatched_items(test_db):
 
 
 def test_whatsapp_bot_conversational_order_proposal(test_db):
-    """TDD-TC-328: Verify bot outputs itemized proposal with MXN formatting, 86'd warning, and cart link."""
+    """TDD-TC-328: Verify bot outputs itemized proposal with MXN formatting,
+    86'd warning, and cart link.
+    """
     from restaurant_os.integrations.whatsapp.bot import WhatsAppBot
     from restaurant_os.integrations.whatsapp.knowledge import WhatsAppKnowledgeService
 
@@ -633,7 +658,9 @@ def test_whatsapp_notification_order_accepted(test_db):
     from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
 
     order_id = str(uuid.uuid4())
-    _seed_test_order(test_db, order_id, "ACCEPTED", name="Juan Perez", phone="5512345678", folio="FOL-1042")
+    _seed_test_order(
+        test_db, order_id, "ACCEPTED", name="Juan Perez", phone="5512345678", folio="FOL-1042"
+    )
 
     service = WhatsAppNotificationService(test_db, ORGANIZATION_ID, BRANCH_ID)
     result = service.notify_order_status_update(order_id, "ACCEPTED")
@@ -657,18 +684,25 @@ def test_whatsapp_notification_ready_and_in_delivery(test_db):
     _seed_test_order(test_db, takeout_id, "READY", order_type="takeout")
     res_takeout = service.notify_order_status_update(takeout_id, "READY")
     assert res_takeout["status"] == "sent"
-    assert "recoger" in res_takeout["message"].lower() or "mostrador" in res_takeout["message"].lower()
+    assert (
+        "recoger" in res_takeout["message"].lower() or "mostrador" in res_takeout["message"].lower()
+    )
 
     # 2. Delivery order IN_DELIVERY
     delivery_id = str(uuid.uuid4())
     _seed_test_order(test_db, delivery_id, "IN_DELIVERY", order_type="delivery")
     res_delivery = service.notify_order_status_update(delivery_id, "IN_DELIVERY")
     assert res_delivery["status"] == "sent"
-    assert "repartidor" in res_delivery["message"].lower() or "camino" in res_delivery["message"].lower()
+    assert (
+        "repartidor" in res_delivery["message"].lower()
+        or "camino" in res_delivery["message"].lower()
+    )
 
 
 def test_whatsapp_notification_delivered_smart_rating(test_db):
-    """TDD-TC-331: Verify DELIVERED notification includes delivery confirmation and Smart Rating link."""
+    """TDD-TC-331: Verify DELIVERED notification includes delivery confirmation
+    and Smart Rating link.
+    """
     from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
 
     order_id = str(uuid.uuid4())
@@ -680,7 +714,11 @@ def test_whatsapp_notification_delivered_smart_rating(test_db):
     assert result["status"] == "sent"
     assert "entregado" in result["message"].lower()
     assert "calificar" in result["message"].lower() or "experiencia" in result["message"].lower()
-    assert "rating" in result["message"] or "review" in result["message"] or "feedback" in result["message"]
+    assert (
+        "rating" in result["message"]
+        or "review" in result["message"]
+        or "feedback" in result["message"]
+    )
 
 
 def test_whatsapp_notification_skipped_safely(test_db):
@@ -705,6 +743,7 @@ def test_whatsapp_notification_skipped_safely(test_db):
 
 def test_whatsapp_notify_and_simulate_endpoints(test_db):
     """Verify HTTP endpoints for proactive notifications and simulation preview."""
+
     def override_get_session():
         yield test_db
 
@@ -841,9 +880,9 @@ def test_whatsapp_campaign_dispatch_to_segment(test_db):
 
 def test_whatsapp_opt_out_registration_on_stop(test_db):
     """TDD-TC-335: Automatic opt-out registration when customer sends STOP or BAJA."""
+    from restaurant_os.integrations.whatsapp.bot import WhatsAppBot
     from restaurant_os.integrations.whatsapp.campaigns import WhatsAppCampaignService
     from restaurant_os.integrations.whatsapp.knowledge import WhatsAppKnowledgeService
-    from restaurant_os.integrations.whatsapp.bot import WhatsAppBot
 
     service = WhatsAppCampaignService(test_db, ORGANIZATION_ID, BRANCH_ID)
     phone = "5555667788"
@@ -861,7 +900,9 @@ def test_whatsapp_opt_out_registration_on_stop(test_db):
 
 
 def test_whatsapp_opted_out_numbers_excluded_from_campaign(test_db):
-    """TDD-TC-336: Exclude opted-out numbers from marketing campaigns while keeping order notifications."""
+    """TDD-TC-336: Exclude opted-out numbers from marketing campaigns
+    while keeping order notifications.
+    """
     from restaurant_os.integrations.whatsapp.campaigns import WhatsAppCampaignService
     from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
 
@@ -886,6 +927,7 @@ def test_whatsapp_opted_out_numbers_excluded_from_campaign(test_db):
 
 def test_whatsapp_campaign_http_endpoints(test_db):
     """Verify HTTP endpoints for campaign segments, preview, and send."""
+
     def override_get_session():
         yield test_db
 
@@ -928,5 +970,145 @@ def test_whatsapp_campaign_http_endpoints(test_db):
     assert send_data["sent_count"] >= 1
 
 
+def test_whatsapp_templates_sync_and_list(test_db):
+    """TDD-TC-337: Verify HSM template synchronization and listing via
+    WhatsAppTemplateService and HTTP endpoints.
+    """
+    from restaurant_os.integrations.whatsapp.templates import WhatsAppTemplateService
+
+    # 1. Service direct unit verification
+    templates = WhatsAppTemplateService.list_waba_templates(TEST_WABA_ID, environment="sandbox")
+    assert len(templates) >= 2
+    template_names = [t["name"] for t in templates]
+    assert "restaurantos_order_update" in template_names
+    assert "restaurantos_reengagement_offer" in template_names
+
+    sync_result = WhatsAppTemplateService.register_standard_templates(
+        TEST_WABA_ID, environment="sandbox"
+    )
+    assert sync_result["status"] == "success"
+    assert sync_result["waba_id"] == TEST_WABA_ID
+
+    summary = WhatsAppTemplateService.get_template_status_summary(
+        TEST_WABA_ID, environment="sandbox"
+    )
+    assert summary["total_standard"] == 2
+    assert all(t["status"] == "APPROVED" for t in summary["templates"])
+
+    # 2. HTTP endpoints verification
+    def override_get_session():
+        yield test_db
+
+    app.dependency_overrides[get_session] = override_get_session
+    client = TestClient(app)
+
+    get_resp = client.get(
+        f"/integrations/whatsapp/templates?branch_id={BRANCH_ID}",
+        headers={"X-Actor-User-Id": USER_ID},
+    )
+    assert get_resp.status_code == 200
+    get_data = get_resp.json()
+    assert "templates" in get_data
+    assert len(get_data["templates"]) == 2
+
+    post_resp = client.post(
+        f"/integrations/whatsapp/templates/sync?branch_id={BRANCH_ID}",
+        headers={"X-Actor-User-Id": USER_ID},
+    )
+    assert post_resp.status_code == 200
+    post_data = post_resp.json()
+    assert post_data["status"] == "success"
 
 
+def test_whatsapp_order_notification_via_template(test_db):
+    """TDD-TC-338: Structured utility template dispatch for 24h window bypass."""
+    import restaurant_os.integrations.whatsapp.adapter as wa_adapter
+    from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
+
+    order_id = str(uuid.uuid4())
+    _seed_test_order(
+        test_db, order_id, "ACCEPTED", name="Mauricio G.", phone="5511223344", folio="FOL-9988"
+    )
+
+    service = WhatsAppNotificationService(test_db, ORGANIZATION_ID, BRANCH_ID)
+
+    with patch(
+        "restaurant_os.integrations.whatsapp.adapter.send_whatsapp_template_message",
+        wraps=wa_adapter.send_whatsapp_template_message,
+    ) as mock_send:
+        result = service.notify_order_status_update(order_id, "ACCEPTED", use_template=True)
+        assert result["status"] == "sent"
+        assert result["template_used"] == "restaurantos_order_update"
+        assert mock_send.called
+        call_kwargs = mock_send.call_args[1]
+        assert call_kwargs["template_name"] == "restaurantos_order_update"
+        assert call_kwargs["language_code"] == "es_MX"
+        # 5 positional parameters: [customer_name, folio, branch_name, status, tracking_url]
+        assert "Mauricio G." in call_kwargs["body_parameters"]
+        assert "FOL-9988" in call_kwargs["body_parameters"]
+
+
+def test_whatsapp_campaign_dispatch_via_template(test_db):
+    """TDD-TC-339: Structured marketing template dispatch with discount code and opt-out."""
+    import restaurant_os.integrations.whatsapp.adapter as wa_adapter
+    from restaurant_os.integrations.whatsapp.campaigns import WhatsAppCampaignService
+
+    cid = str(uuid.uuid4())
+    _seed_test_customer(test_db, cid, phone="5566778899", name="Mariana R.", days_inactive=30)
+
+    service = WhatsAppCampaignService(test_db, ORGANIZATION_ID, BRANCH_ID)
+
+    with patch(
+        "restaurant_os.integrations.whatsapp.adapter.send_whatsapp_template_message",
+        wraps=wa_adapter.send_whatsapp_template_message,
+    ) as mock_send:
+        result = service.dispatch_campaign(
+            segment="churn_risk", discount_code="REGRESA15", use_template=True
+        )
+        assert result["status"] == "completed"
+        assert result["sent_count"] >= 1
+        assert mock_send.called
+        call_kwargs = mock_send.call_args[1]
+        assert call_kwargs["template_name"] == "restaurantos_reengagement_offer"
+        assert call_kwargs["language_code"] == "es_MX"
+        assert "REGRESA15" in call_kwargs["body_parameters"]
+
+
+def test_whatsapp_embedded_signup_config_and_sdk_params(test_db):
+    """TDD-TC-340: Configure and persist Meta Configuration ID for Embedded Signup SDK popup."""
+
+    def override_get_session():
+        yield test_db
+
+    app.dependency_overrides[get_session] = override_get_session
+    client = TestClient(app)
+
+    # 1. Update config with config_id
+    payload = {
+        "branch_id": BRANCH_ID,
+        "app_id": "app_987654321",
+        "config_id": "meta_cfg_778899",
+        "waba_id": TEST_WABA_ID,
+        "phone_number_id": TEST_PHONE_NUMBER_ID,
+        "app_secret": TEST_APP_SECRET,
+        "access_token": "EAAB_test_token_hsm",
+        "verify_token": TEST_VERIFY_TOKEN,
+        "environment": "sandbox",
+        "is_enabled": True,
+    }
+    put_resp = client.put(
+        "/integrations/whatsapp/config",
+        json=payload,
+        headers={"X-Actor-User-Id": USER_ID},
+    )
+    assert put_resp.status_code == 200
+
+    # 2. Retrieve config and verify config_id is returned
+    get_resp = client.get(
+        f"/integrations/whatsapp/config?branch_id={BRANCH_ID}",
+        headers={"X-Actor-User-Id": USER_ID},
+    )
+    assert get_resp.status_code == 200
+    cfg_data = get_resp.json()
+    assert cfg_data["app_id"] == "app_987654321"
+    assert cfg_data["config_id"] == "meta_cfg_778899"

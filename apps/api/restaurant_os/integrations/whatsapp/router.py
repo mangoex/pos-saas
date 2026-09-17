@@ -109,15 +109,22 @@ def get_whatsapp_config(
             "is_enabled": False,
             "environment": "sandbox",
             "client_id": "",
+            "config_id": "",
             "webhook_secret": "",
             "connected_numbers": [dict(s) for s in stores],
         }
+
+    raw_client_id = row["client_id"] or ""
+    app_id = raw_client_id.split(":::")[0] if ":::" in raw_client_id else raw_client_id
+    config_id = raw_client_id.split(":::")[1] if ":::" in raw_client_id else ""
 
     return {
         "id": row["id"],
         "is_enabled": bool(row["is_enabled"]),
         "environment": row["environment"],
-        "client_id": row["client_id"] or "",
+        "client_id": app_id,
+        "app_id": app_id,
+        "config_id": config_id,
         "has_client_secret": bool(row["client_secret"]),
         "webhook_secret": row["webhook_secret"] or "",
         "connected_numbers": [dict(s) for s in stores],
@@ -151,8 +158,29 @@ def put_whatsapp_config(
         values["is_enabled"] = bool(payload["is_enabled"])
     if "environment" in payload:
         values["environment"] = str(payload["environment"])
-    if "client_id" in payload:
-        values["client_id"] = str(payload["client_id"])
+    if "client_id" in payload or "app_id" in payload or "config_id" in payload:
+        curr_raw = existing["client_id"] if existing and existing["client_id"] else ""
+        curr_app = curr_raw.split(":::")[0] if ":::" in curr_raw else curr_raw
+        curr_cfg = curr_raw.split(":::")[1] if ":::" in curr_raw else ""
+
+        if "client_id" in payload:
+            new_app = str(payload.get("client_id") or "").strip()
+        elif "app_id" in payload:
+            new_app = str(payload.get("app_id") or "").strip()
+        else:
+            new_app = curr_app
+
+        new_cfg = (
+            str(payload.get("config_id") or "").strip()
+            if "config_id" in payload
+            else curr_cfg
+        )
+
+        if new_cfg:
+            values["client_id"] = f"{new_app}:::{new_cfg}"
+        else:
+            values["client_id"] = new_app
+
     if payload.get("client_secret"):
         values["client_secret"] = str(payload["client_secret"])
     if "webhook_secret" in payload:
@@ -551,12 +579,14 @@ def post_whatsapp_order_notify(
 
     from .notifications import WhatsAppNotificationService
 
+    use_template = bool(payload.get("use_template", False))
     notifier = WhatsAppNotificationService(session)
     return notifier.notify_order_status_change(
         order_id=order_id,
         new_status=new_status,
         tracking_url=tracking_url,
         smart_rating_url=smart_rating_url,
+        use_template=use_template,
     )
 
 
@@ -727,10 +757,86 @@ def post_whatsapp_campaign_send(
 
     from .campaigns import WhatsAppCampaignService
 
+    use_template = bool(payload.get("use_template", False))
     svc = WhatsAppCampaignService(session, org_id, branch_id)
     return svc.dispatch_campaign(
-        segment=segment, discount_code=discount_code, custom_message=custom_message
+        segment=segment,
+        discount_code=discount_code,
+        custom_message=custom_message,
+        use_template=use_template,
     )
 
 
+@router.get("/integrations/whatsapp/templates")
+@router.get("/api/v1/integrations/whatsapp/templates")
+def get_whatsapp_templates(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id, org_id = _resolve_actor_org(session, actor_user_id, authorization)
+    from .templates import WhatsAppTemplateService
 
+    channel_config = session.execute(
+        sa.select(models.channel_integrations).where(
+            models.channel_integrations.c.organization_id == org_id,
+            models.channel_integrations.c.provider == "WHATSAPP_BUSINESS",
+        )
+    ).mappings().first()
+
+    waba_id = "default_waba"
+    access_token = None
+    env = "sandbox"
+    if channel_config:
+        access_token = channel_config.get("client_secret")
+        env = channel_config.get("environment", "sandbox")
+        store = session.execute(
+            sa.select(models.channel_store_mappings).where(
+                models.channel_store_mappings.c.organization_id == org_id,
+                models.channel_store_mappings.c.provider == "WHATSAPP_BUSINESS",
+            )
+        ).mappings().first()
+        if store:
+            waba_id = str(store.get("external_store_id") or "default_waba")
+
+    return WhatsAppTemplateService.get_template_status_summary(
+        waba_id=waba_id, access_token=access_token, environment=env
+    )
+
+
+@router.post("/integrations/whatsapp/templates/sync")
+@router.post("/api/v1/integrations/whatsapp/templates/sync")
+def post_whatsapp_templates_sync(
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id, org_id = _resolve_actor_org(session, actor_user_id, authorization)
+    require_permission(session, actor_id, "admin.manage")
+    from .templates import WhatsAppTemplateService
+
+    channel_config = session.execute(
+        sa.select(models.channel_integrations).where(
+            models.channel_integrations.c.organization_id == org_id,
+            models.channel_integrations.c.provider == "WHATSAPP_BUSINESS",
+        )
+    ).mappings().first()
+
+    waba_id = "default_waba"
+    access_token = None
+    env = "sandbox"
+    if channel_config:
+        access_token = channel_config.get("client_secret")
+        env = channel_config.get("environment", "sandbox")
+        store = session.execute(
+            sa.select(models.channel_store_mappings).where(
+                models.channel_store_mappings.c.organization_id == org_id,
+                models.channel_store_mappings.c.provider == "WHATSAPP_BUSINESS",
+            )
+        ).mappings().first()
+        if store:
+            waba_id = str(store.get("external_store_id") or "default_waba")
+
+    return WhatsAppTemplateService.register_standard_templates(
+        waba_id=waba_id, access_token=access_token, environment=env
+    )

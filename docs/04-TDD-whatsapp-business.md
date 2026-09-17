@@ -82,4 +82,20 @@
 - Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_opted_out_numbers_excluded_from_campaign`
 - Propósito: Validar que un cliente con opt-out activo sea omitido de manera segura (`status="skipped"`, `reason="opted_out"`) en cualquier campaña publicitaria posterior, sin bloquear las notificaciones de pedidos activos.
 
+## TDD-TS-327 Suite de Plantillas HSM y Meta SDK Popup
 
+### TDD-TC-337 Sincronización y registro de plantillas HSM en Meta WABA
+- Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_templates_sync_and_list`
+- Propósito: Validar que el servicio de plantillas registre y sincronice con Meta WABA las plantillas estándar `restaurantos_order_update` y `restaurantos_reengagement_offer`, reportando estado `APPROVED`.
+
+### TDD-TC-338 Despacho estructurado de notificación con plantilla de utilidad
+- Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_order_notification_via_template`
+- Propósito: Verificar que al enviar notificaciones transaccionales fuera de 24h, el payload emitido a Meta Cloud API use `"type": "template"` con los parámetros posicionales requeridos.
+
+### TDD-TC-339 Despacho estructurado de campaña con plantilla de marketing
+- Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_campaign_dispatch_via_template`
+- Propósito: Comprobar que el despacho de campañas masivas utilice la plantilla oficial de marketing con variables de descuento, platillo favorito y botón de desuscripción STOP.
+
+### TDD-TC-340 Configuración de Embedded Signup con Meta Configuration ID
+- Archivo: `tests/integration/test_whatsapp_business_integration.py::test_whatsapp_embedded_signup_config_and_sdk_params`
+- Propósito: Validar que la configuración de WhatsApp acepte y persista el `config_id` de Meta Embedded Signup y exponga los parámetros requeridos para el popup nativo de `FB.login`.

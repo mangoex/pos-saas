@@ -66,6 +66,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-093 | SDD-ADR-037 Conversational Commerce y Carrito Asistido por WhatsApp | BDD-SC-905, BDD-SC-906, BDD-SC-907, BDD-SC-908 | TDD-TS-324, TDD-TC-325, TDD-TC-326, TDD-TC-327, TDD-TC-328 | Implementado |
 | PRD-FR-094 | SDD-ADR-038 Notificaciones Proactivas de Pedidos por WhatsApp | BDD-SC-909, BDD-SC-910, BDD-SC-911, BDD-SC-912 | TDD-TS-325, TDD-TC-329, TDD-TC-330, TDD-TC-331, TDD-TC-332 | Implementado |
 | PRD-FR-095 | SDD-ADR-039 Campañas de Marketing y Opt-Out por WhatsApp | BDD-SC-913, BDD-SC-914, BDD-SC-915, BDD-SC-916 | TDD-TS-326, TDD-TC-333, TDD-TC-334, TDD-TC-335, TDD-TC-336 | Implementado |
+| PRD-FR-096 | SDD-ADR-040 Plantillas HSM y Popup Nativo de Meta Embedded Signup | BDD-SC-917, BDD-SC-918, BDD-SC-919, BDD-SC-920 | TDD-TS-327, TDD-TC-337, TDD-TC-338, TDD-TC-339, TDD-TC-340 | Implementado |
 
 ## Evidencia histórica conservada
 
