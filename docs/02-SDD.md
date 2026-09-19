@@ -344,7 +344,7 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
   1. **Pedidos (`orders`)**: Monitor de pedidos en tiempo real (`MobileOrdersMonitor`) con filtrado por estado (Activos, Listos, Todos) y modal interactivo para aceptación y despacho.
   2. **Caja (`cash`)**: Control de turno de caja (`MobileCashShiftTab`). Si está cerrada: formulario de apertura con fondo inicial en efectivo (`POST /cash/shifts/open`). Si está abierta: resumen en tiempo real de apertura, saldo y ventas, movimientos de caja (`POST /cash/movements`) y cierre operativo (`POST /cash/shifts/{id}/close-operationally`).
   3. **Menú (`menu`)**: Gestión compacta de catálogo (`MobileMenuManagerTab`), creación y edición ágil de categorías y platillos, conmutador inmediato de disponibilidad activo/agotado (`PUT /catalog/products/{id}`), y asignación de imágenes mediante cámara/galería o presets de alta calidad.
-  4. **Sucursal (`settings`)**: Configuración operativa (`MobileBranchSettingsTab`) de estado de sucursal, recepción de pedidos por WhatsApp, enlace directo y códigos para compartir el menú móvil digital, y enlace para alternar a la versión completa de escritorio.
+  4. **Sucursal (`settings`)**: Configuración operativa (`MobileBranchSettingsTab`) de estado de sucursal, recepción de pedidos por WhatsApp y enlace directo y códigos para compartir el menú móvil digital.
 - Los comandos de apertura, movimiento y cierre construyen una intención estable a partir del payload. Una falla sin confirmación conserva su `Idempotency-Key`; la clave se descarta sólo tras éxito confirmado o al cambiar el payload. El movimiento manual captura una referencia de evidencia real del operador y no usa valores sintéticos.
 - Un coordinador de alertas se monta una sola vez en `MobileAdminShell`, separado de la vista de Pedidos.
   Consulta únicamente intenciones públicas `PENDING_REVIEW` de la sucursal autorizada y mantiene un cursor
@@ -358,6 +358,7 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
   Cada lote reconciliado reproduce una secuencia audible y conserva los IDs exactos en el badge hasta
   reconocimiento humano, evitando tanto pérdida visual como una tormenta sonora por lote.
   Este contrato cubre únicamente admin-web abierta; Web Push queda en un incremento separado.
+- **Módulo de Guías Rápidas en Video (`MobileHelpVideosModal`)**: Acceso ergonómico en la esquina superior derecha de la suite móvil. Despliega un panel inferior con carrusel horizontal estilo historias/reels (`scroll-snap-type: x mandatory`), portadas de alta definición ultraligeras y reproductor vertical integrado bajo demanda para 8 guías operativas oficiales (configuración de nombre y enlace, edición de productos y categorías, creación de menú, envíos a domicilio, cupones de descuento, aceptación de pedidos y pedidos por voz).
 - Señales acotadas deben permitir responder cuántas novedades se detectaron, cuántas se deduplicaron y
   por qué el audio no estaba disponible, sin incluir PII ni IDs como etiquetas de métricas. El coordinador
   publica esos contadores y razones mediante `restaurantos:mobile-order-alert` para consumo de telemetría.

@@ -8,7 +8,7 @@ import {
   ExternalLink,
   MessageSquare,
   Star,
-  Monitor,
+  PlaySquare,
   CheckCircle2,
   AlertCircle,
   Phone,
@@ -40,6 +40,7 @@ interface MobileBranchSettingsTabProps {
   onSwitchToDesktop?: () => void;
   onOpenOnboarding?: () => void;
   onboardingPending?: boolean;
+  onOpenHelpVideos?: () => void;
 }
 
 export interface DeliveryTier {
@@ -92,9 +93,10 @@ import { SubscriptionCheckout } from '../../../../../packages/ui/src/components/
 export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = ({
   branchId,
   branchName: _branchName,
-  onSwitchToDesktop,
+  onSwitchToDesktop: _onSwitchToDesktop,
   onOpenOnboarding,
   onboardingPending,
+  onOpenHelpVideos,
 }) => {
   const queryClient = useQueryClient();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -345,6 +347,32 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
             </div>
           </div>
         </div>
+
+        {onOpenHelpVideos && (
+          <button
+            type="button"
+            onClick={onOpenHelpVideos}
+            aria-label="Tutoriales y videos de ayuda"
+            title="Guías en video"
+            style={{
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              background: 'rgba(245, 158, 11, 0.12)',
+              color: '#fbbf24',
+              borderRadius: 10,
+              padding: '7px 11px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+            }}
+          >
+            <PlaySquare size={16} color="#fbbf24" />
+            <span>Tutoriales</span>
+          </button>
+        )}
       </header>
 
       <main style={{ padding: '16px 14px', maxWidth: 640, margin: '0 auto' }}>
@@ -1556,53 +1584,6 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                 {updateBranchMutation.isPending ? 'Guardando...' : 'Guardar Configuración'}
               </button>
             </form>
-
-            {/* Switch to desktop mode */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderRadius: 14,
-                padding: 16,
-                border: '1px solid #e2e8f0',
-                textAlign: 'center',
-              }}
-            >
-              <Monitor size={24} color="#64748b" style={{ margin: '0 auto 6px' }} />
-              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
-                ¿Necesitas funciones avanzadas?
-              </div>
-              <p style={{ fontSize: '0.775rem', color: '#64748b', margin: '0 0 12px' }}>
-                Facturación electrónica CFDI 4.0, compras por XML, auditoría y reportes detallados en versión PC.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    localStorage.setItem('restaurantos_force_desktop', 'true');
-                  } catch {
-                    // ignore
-                  }
-                  if (onSwitchToDesktop) {
-                    onSwitchToDesktop();
-                  } else {
-                    window.location.reload();
-                  }
-                }}
-                style={{
-                  padding: '10px 16px',
-                  backgroundColor: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: 10,
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  color: '#334155',
-                  cursor: 'pointer',
-                  width: '100%',
-                }}
-              >
-                Ver Versión Completa de Escritorio
-              </button>
-            </div>
 
             {/* Cerrar Sesión */}
             <div style={{ marginTop: 8 }}>

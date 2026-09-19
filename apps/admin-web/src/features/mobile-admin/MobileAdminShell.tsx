@@ -8,6 +8,7 @@ import { MobileCashShiftTab } from './MobileCashShiftTab';
 import { MobileMenuManagerTab } from './MobileMenuManagerTab';
 import { MobileBranchSettingsTab } from './MobileBranchSettingsTab';
 import { OnboardingWizardModal } from '../onboarding/OnboardingWizardModal';
+import { MobileHelpVideosModal } from './MobileHelpVideosModal';
 
 interface MobileAdminShellProps {
   branchId: string;
@@ -95,6 +96,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   );
   const [onboardingStatus, setOnboardingStatus] = useState<string | null>(null);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
   useEffect(() => {
     fetchApi<{ step: 'business' | 'menu' | 'register' | 'complete' }>('/saas/onboarding')
@@ -186,17 +188,29 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
       <div style={{ minHeight: '100vh', paddingBottom: 88 }}>
         {currentTab === 'orders' && (
           <MobileTabErrorBoundary tabName="Pedidos">
-            <MobileOrdersMonitor branchId={branchId} branchName={branchName} />
+            <MobileOrdersMonitor
+              branchId={branchId}
+              branchName={branchName}
+              onOpenHelpVideos={() => setIsHelpModalOpen(true)}
+            />
           </MobileTabErrorBoundary>
         )}
         {currentTab === 'cash' && (
           <MobileTabErrorBoundary tabName="Caja">
-            <MobileCashShiftTab branchId={branchId} branchName={branchName} />
+            <MobileCashShiftTab
+              branchId={branchId}
+              branchName={branchName}
+              onOpenHelpVideos={() => setIsHelpModalOpen(true)}
+            />
           </MobileTabErrorBoundary>
         )}
         {currentTab === 'menu' && (
           <MobileTabErrorBoundary tabName="Menú">
-            <MobileMenuManagerTab branchId={branchId} branchName={branchName} />
+            <MobileMenuManagerTab
+              branchId={branchId}
+              branchName={branchName}
+              onOpenHelpVideos={() => setIsHelpModalOpen(true)}
+            />
           </MobileTabErrorBoundary>
         )}
         {currentTab === 'settings' && (
@@ -207,6 +221,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
               onSwitchToDesktop={onSwitchToDesktop}
               onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
               onboardingPending={onboardingStatus !== 'complete'}
+              onOpenHelpVideos={() => setIsHelpModalOpen(true)}
             />
           </MobileTabErrorBoundary>
         )}
@@ -221,6 +236,12 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
           setIsOnboardingModalOpen(false);
           setOnboardingStatus('complete');
         }}
+      />
+
+      {/* Help Videos Reels Modal for Mobile */}
+      <MobileHelpVideosModal
+        isOpen={isHelpModalOpen}
+        onClose={() => setIsHelpModalOpen(false)}
       />
 
       {/* Fixed Bottom Navigation Bar */}

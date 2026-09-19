@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ChefHat,
   QrCode,
+  PlaySquare,
 } from 'lucide-react';
 import { MobileOrderDetailModal } from './MobileOrderDetailModal';
 import { MobileMenuQrModal } from './MobileMenuQrModal';
@@ -39,6 +40,7 @@ interface OrderItem {
 interface MobileOrdersMonitorProps {
   branchId: string;
   branchName?: string;
+  onOpenHelpVideos?: () => void;
 }
 
 type OrderFilter = 'ACTIVE' | 'READY' | 'ALL';
@@ -49,9 +51,9 @@ const isToday = (dateStr?: string): boolean => {
   if (isNaN(orderDate.getTime())) return false;
   const today = new Date();
   return (
-    orderDate.getFullYear() === today.getFullYear() &&
+    orderDate.getDate() === today.getDate() &&
     orderDate.getMonth() === today.getMonth() &&
-    orderDate.getDate() === today.getDate()
+    orderDate.getFullYear() === today.getFullYear()
   );
 };
 
@@ -64,6 +66,7 @@ const getElapsedMinutes = (dateStr: string) => {
 export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   branchId,
   branchName,
+  onOpenHelpVideos,
 }) => {
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -261,6 +264,28 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
           </button>
+
+          {onOpenHelpVideos && (
+            <button
+              type="button"
+              onClick={onOpenHelpVideos}
+              aria-label="Tutoriales y videos de ayuda"
+              title="Guías en video"
+              style={{
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#fbbf24',
+                borderRadius: 8,
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <PlaySquare size={16} color="#fbbf24" />
+            </button>
+          )}
         </div>
       </header>
 

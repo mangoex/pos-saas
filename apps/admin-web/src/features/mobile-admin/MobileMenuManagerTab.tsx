@@ -15,11 +15,13 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
+  PlaySquare,
 } from 'lucide-react';
 
 interface MobileMenuManagerTabProps {
   branchId: string;
   branchName?: string;
+  onOpenHelpVideos?: () => void;
 }
 
 interface Product {
@@ -91,6 +93,7 @@ function getEmojiFallback(name: string, category: string): string {
 export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   branchId: _branchId,
   branchName,
+  onOpenHelpVideos,
 }) => {
   const queryClient = useQueryClient();
   const [activeSubTab, setActiveSubTab] = useState<'products' | 'categories'>('products');
@@ -462,25 +465,49 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => (activeSubTab === 'products' ? openProductModal() : openCategoryModal())}
-          style={{
-            border: 'none',
-            background: '#3b82f6',
-            color: '#ffffff',
-            borderRadius: 8,
-            padding: '8px 12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: 700,
-          }}
-        >
-          <Plus size={16} />
-          {activeSubTab === 'products' ? 'Platillo' : 'Categoría'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onOpenHelpVideos && (
+            <button
+              type="button"
+              onClick={onOpenHelpVideos}
+              aria-label="Tutoriales y videos de ayuda"
+              title="Guías en video"
+              style={{
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#fbbf24',
+                borderRadius: 8,
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <PlaySquare size={16} color="#fbbf24" />
+            </button>
+          )}
+
+          <button
+            onClick={() => (activeSubTab === 'products' ? openProductModal() : openCategoryModal())}
+            style={{
+              border: 'none',
+              background: '#3b82f6',
+              color: '#ffffff',
+              borderRadius: 8,
+              padding: '8px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+            }}
+          >
+            <Plus size={16} />
+            {activeSubTab === 'products' ? 'Platillo' : 'Categoría'}
+          </button>
+        </div>
       </header>
 
       {/* Subtabs Pill Switcher */}

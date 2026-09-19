@@ -20,11 +20,13 @@ import {
   DollarSign,
   ArrowDownRight,
   ArrowUpRight,
+  PlaySquare,
 } from 'lucide-react';
 
 interface MobileCashShiftTabProps {
   branchId: string;
   branchName?: string;
+  onOpenHelpVideos?: () => void;
 }
 
 interface CashShift {
@@ -53,6 +55,7 @@ const PRESET_AMOUNTS = [200, 500, 1000, 1500, 2000];
 export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
   branchId,
   branchName,
+  onOpenHelpVideos,
 }) => {
   const registerId = 'CAJA-01';
   const [shift, setShift] = useState<CashShift | null>(null);
@@ -295,24 +298,48 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => void loadShift()}
-          disabled={refreshing}
-          aria-label="Refrescar caja"
-          style={{
-            border: 'none',
-            background: '#1e293b',
-            color: '#ffffff',
-            borderRadius: 8,
-            padding: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-          }}
-        >
-          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => void loadShift()}
+            disabled={refreshing}
+            aria-label="Refrescar caja"
+            style={{
+              border: 'none',
+              background: '#1e293b',
+              color: '#ffffff',
+              borderRadius: 8,
+              padding: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+
+          {onOpenHelpVideos && (
+            <button
+              type="button"
+              onClick={onOpenHelpVideos}
+              aria-label="Tutoriales y videos de ayuda"
+              title="Guías en video"
+              style={{
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#fbbf24',
+                borderRadius: 8,
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <PlaySquare size={16} color="#fbbf24" />
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Main content */}
