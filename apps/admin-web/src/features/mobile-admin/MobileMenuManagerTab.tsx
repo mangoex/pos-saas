@@ -718,7 +718,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {filteredProducts.map((product) => {
                 const isAvailable = product.status !== 'inactive';
                 const emoji = getEmojiFallback(product.name, product.category_name);
@@ -729,144 +729,233 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 return (
                   <div
                     key={product.id}
+                    onClick={() => openProductModal(product)}
                     style={{
                       backgroundColor: '#ffffff',
-                      borderRadius: 14,
-                      padding: 12,
-                      border: product.is_promo ? '1.5px solid #fb923c' : '1px solid #e2e8f0',
-                      boxShadow: product.is_promo ? '0 2px 8px rgba(234,88,12,0.12)' : '0 2px 4px rgba(0,0,0,0.03)',
+                      borderRadius: 16,
+                      padding: 16,
+                      border: product.is_promo ? '1.5px solid #f97316' : '1px solid #e2e8f0',
+                      boxShadow: product.is_promo ? '0 4px 14px rgba(249, 115, 22, 0.12)' : '0 2px 8px rgba(15, 23, 42, 0.05)',
                       display: 'flex',
+                      flexDirection: 'column',
                       gap: 12,
-                      alignItems: 'center',
-                      opacity: isAvailable ? 1 : 0.65,
+                      opacity: isAvailable ? 1 : 0.75,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    {/* Thumbnail */}
-                    <div
-                      style={{
-                        width: 54,
-                        height: 54,
-                        borderRadius: 10,
-                        backgroundColor: product.is_promo ? '#fff7ed' : '#f1f5f9',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {product.image_url ? (
-                        <img
-                          src={product.image_url}
-                          alt={product.name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <span style={{ fontSize: '1.75rem' }}>{emoji}</span>
-                      )}
-                    </div>
+                    {/* Top Row: Thumbnail + Info */}
+                    <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                      {/* Large Thumbnail */}
+                      <div
+                        style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: 14,
+                          backgroundColor: product.is_promo ? '#fff7ed' : '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          position: 'relative',
+                        }}
+                      >
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              filter: isAvailable ? 'none' : 'grayscale(0.6)',
+                            }}
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: '2.4rem' }}>{emoji}</span>
+                        )}
 
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span
+                        {!isAvailable && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                              color: '#ffffff',
+                              fontSize: '0.62rem',
+                              fontWeight: 800,
+                              textAlign: 'center',
+                              padding: '2px 0',
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            Agotado
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {/* Badges */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              backgroundColor: '#f1f5f9',
+                              color: '#475569',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                            }}
+                          >
+                            {product.category_name || 'Sin categoría'}
+                          </span>
+                          <span
+                            style={{
+                              backgroundColor: product.station === 'drinks' ? '#e0f2fe' : '#fef3c7',
+                              color: product.station === 'drinks' ? '#0369a1' : '#b45309',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                            }}
+                          >
+                            {product.station === 'drinks' ? '🥤 Barra' : '🍳 Cocina'}
+                          </span>
+                          {product.is_promo && (
+                            <span
+                              style={{
+                                backgroundColor: '#ea580c',
+                                color: '#ffffff',
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: 6,
+                                letterSpacing: '0.03em',
+                              }}
+                            >
+                              🔥 {product.promo_badge_text || 'PROMO'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Title */}
+                        <div
                           style={{
-                            fontSize: '0.95rem',
+                            fontSize: '1.05rem',
                             fontWeight: 800,
                             color: '#0f172a',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
+                            lineHeight: 1.3,
+                            marginTop: 2,
+                            wordBreak: 'break-word',
                           }}
                         >
                           {product.name}
-                        </span>
-                        {product.is_promo && (
-                          <span
-                            style={{
-                              backgroundColor: '#ea580c',
-                              color: '#ffffff',
-                              fontSize: '0.65rem',
-                              fontWeight: 800,
-                              padding: '2px 6px',
-                              borderRadius: 6,
-                              letterSpacing: '0.04em',
-                              flexShrink: 0,
-                            }}
-                          >
-                            🔥 {product.promo_badge_text || 'PROMO'}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: 6, marginTop: 2 }}>
-                        <span>{product.category_name || 'Sin categoría'}</span>
-                        <span>•</span>
-                        <span style={{ fontWeight: 600, color: product.station === 'drinks' ? '#0284c7' : '#d97706' }}>
-                          {product.station === 'drinks' ? 'Barra' : 'Cocina'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        {product.is_promo && product.promo_price_cents ? (
-                          <>
-                            <span style={{ color: '#ea580c' }}>
-                              ${(product.promo_price_cents / 100).toFixed(2)}
-                            </span>
-                            <span style={{ fontSize: '0.75rem', textDecoration: 'line-through', color: '#94a3b8', fontWeight: 500 }}>
+                        </div>
+
+                        {/* Price */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            gap: 6,
+                            marginTop: 4,
+                          }}
+                        >
+                          {product.is_promo && product.promo_price_cents ? (
+                            <>
+                              <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#ea580c' }}>
+                                ${(product.promo_price_cents / 100).toFixed(2)}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '0.85rem',
+                                  textDecoration: 'line-through',
+                                  color: '#94a3b8',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                ${priceFormatted}
+                              </span>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
                               ${priceFormatted}
                             </span>
-                          </>
-                        ) : (
-                          <span>${priceFormatted}</span>
-                        )}
-                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>MXN</span>
+                          )}
+                          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>MXN</span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Actions: Toggle Availability & Edit */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    {/* Bottom Action Bar */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        paddingTop: 12,
+                        borderTop: '1px solid #f1f5f9',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Availability Button */}
                       <button
                         type="button"
                         onClick={() => toggleAvailabilityMutation.mutate(product)}
                         style={{
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
+                          flex: 1,
+                          height: 42,
+                          padding: '0 14px',
+                          borderRadius: 10,
+                          border: isAvailable ? '1px solid #bbf7d0' : '1px solid #fecaca',
+                          backgroundColor: isAvailable ? '#f0fdf4' : '#fef2f2',
+                          color: isAvailable ? '#15803d' : '#b91c1c',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 4,
-                          padding: '4px 6px',
-                          borderRadius: 8,
-                          backgroundColor: isAvailable ? '#dcfce7' : '#fee2e2',
-                          color: isAvailable ? '#15803d' : '#b91c1c',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
+                          justifyContent: 'center',
+                          gap: 8,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        {isAvailable ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                        {isAvailable ? 'Disponible' : 'Agotado'}
+                        {isAvailable ? <ToggleRight size={20} color="#16a34a" /> : <ToggleLeft size={20} color="#dc2626" />}
+                        <span>{isAvailable ? 'Disponible' : 'Agotado'}</span>
                       </button>
 
+                      {/* Edit Button */}
                       <button
                         type="button"
                         onClick={() => openProductModal(product)}
                         style={{
-                          border: 'none',
-                          background: '#f1f5f9',
-                          color: '#475569',
-                          borderRadius: 6,
-                          padding: '4px 8px',
+                          height: 42,
+                          padding: '0 18px',
+                          borderRadius: 10,
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: '#f8fafc',
+                          color: '#1e293b',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 4,
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
+                          justifyContent: 'center',
+                          gap: 6,
                           cursor: 'pointer',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        <Edit2 size={12} /> Editar
+                        <Edit2 size={15} color="#475569" />
+                        <span>Editar</span>
                       </button>
                     </div>
                   </div>
@@ -884,13 +973,13 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
           <div
             style={{
               backgroundColor: '#ffffff',
-              borderRadius: 14,
-              padding: '14px',
+              borderRadius: 16,
+              padding: 16,
               border: '2px solid #3b82f6',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.08)',
+              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.1)',
               display: 'flex',
               flexDirection: 'column',
-              gap: 12,
+              gap: 14,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
@@ -900,19 +989,19 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,
-                    padding: '3px 8px',
+                    padding: '4px 10px',
                     backgroundColor: '#eff6ff',
                     color: '#1d4ed8',
-                    borderRadius: 6,
-                    fontSize: '0.72rem',
+                    borderRadius: 8,
+                    fontSize: '0.75rem',
                     fontWeight: 800,
                     letterSpacing: '0.02em',
                     textTransform: 'uppercase',
                   }}
                 >
-                  <Sparkles size={12} /> Categoría Principal
+                  <Sparkles size={13} /> Categoría Principal
                 </span>
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
                   • Portada del Menú
                 </span>
               </div>
@@ -924,28 +1013,29 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                   border: 'none',
                   background: '#eff6ff',
                   color: '#1d4ed8',
-                  borderRadius: 8,
-                  padding: '6px 12px',
+                  borderRadius: 10,
+                  height: 38,
+                  padding: '0 14px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 5,
-                  fontSize: '0.8rem',
+                  gap: 6,
+                  fontSize: '0.82rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                 }}
               >
-                <Edit2 size={13} /> Editar portada
+                <Edit2 size={14} /> Editar portada
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
               {/* Cover / Header photo preview thumbnail */}
               <div
                 onClick={openMenuHomeModal}
                 style={{
-                  width: 76,
-                  height: 54,
-                  borderRadius: 10,
+                  width: 84,
+                  height: 62,
+                  borderRadius: 12,
                   backgroundColor: '#f1f5f9',
                   border: '1px solid #e2e8f0',
                   overflow: 'hidden',
@@ -965,17 +1055,17 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                   />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#94a3b8' }}>
-                    <Camera size={18} />
-                    <span style={{ fontSize: '0.6rem', fontWeight: 700, marginTop: 2 }}>Sin foto</span>
+                    <Camera size={20} />
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, marginTop: 2 }}>Sin foto</span>
                   </div>
                 )}
               </div>
 
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
                   {menuHome?.name || 'Todos'}
                 </div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2, lineHeight: 1.35 }}>
+                <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 3, lineHeight: 1.35 }}>
                   Muestra todos los platillos ({products.length}) en la cabecera principal del menú web.
                 </div>
               </div>
@@ -1040,30 +1130,35 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {sortedCategories.map((cat) => {
                 const count = products.filter((p) => p.category_name === cat.name).length;
                 return (
                   <div
                     key={cat.id}
+                    onClick={() => openCategoryModal(cat)}
                     style={{
                       backgroundColor: '#ffffff',
-                      borderRadius: 12,
-                      padding: '12px 14px',
+                      borderRadius: 16,
+                      padding: 16,
                       border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 10,
+                      flexDirection: 'column',
+                      gap: 12,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                    {/* Top Row: Thumbnail + Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                       <div
                         style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 8,
+                          width: 64,
+                          height: 64,
+                          borderRadius: 12,
                           backgroundColor: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
                           overflow: 'hidden',
                           display: 'flex',
                           alignItems: 'center',
@@ -1076,40 +1171,94 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                             src={cat.image_url}
                             alt={cat.name}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
                           />
                         ) : (
-                          <Tag size={18} color="#94a3b8" />
+                          <Tag size={26} color="#94a3b8" />
                         )}
                       </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div
+                          style={{
+                            fontSize: '1.05rem',
+                            fontWeight: 800,
+                            color: '#0f172a',
+                            lineHeight: 1.25,
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           {cat.name}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
-                          {count} platillos • Orden: {cat.display_order ?? 0}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                          <span
+                            style={{
+                              backgroundColor: '#f1f5f9',
+                              color: '#334155',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                            }}
+                          >
+                            🍽️ {count} {count === 1 ? 'platillo' : 'platillos'}
+                          </span>
+                          <span
+                            style={{
+                              backgroundColor: '#f8fafc',
+                              color: '#64748b',
+                              fontSize: '0.74rem',
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                              border: '1px solid #e2e8f0',
+                            }}
+                          >
+                            Orden #{cat.display_order ?? 0}
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => openCategoryModal(cat)}
+                    {/* Bottom Action / Quick Row */}
+                    <div
                       style={{
-                        border: 'none',
-                        background: '#f1f5f9',
-                        color: '#475569',
-                        borderRadius: 6,
-                        padding: '6px 10px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 4,
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        flexShrink: 0,
+                        justifyContent: 'space-between',
+                        paddingTop: 10,
+                        borderTop: '1px solid #f1f5f9',
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <Edit2 size={13} /> Editar
-                    </button>
+                      <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        Toca para editar detalles o foto
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => openCategoryModal(cat)}
+                        style={{
+                          height: 38,
+                          padding: '0 16px',
+                          borderRadius: 10,
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: '#f8fafc',
+                          color: '#1e293b',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Edit2 size={14} color="#475569" />
+                        <span>Editar</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })}
