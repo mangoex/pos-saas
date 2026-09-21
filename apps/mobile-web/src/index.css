@@ -2989,24 +2989,32 @@ body {
    PICKUP SCHEDULER (L, M, M, J, V, S, D & TIME PICKER)
 -------------------------------------------------------------------------- */
 .pickup-schedule-section {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   background: #ffffff;
   border: 1.5px solid #fed7aa;
   border-radius: var(--radius-md, 14px);
-  padding: 14px;
+  padding: 12px;
   box-shadow: 0 2px 8px rgba(234, 88, 12, 0.05);
+  overflow: hidden;
 }
 
 .pickup-days-container {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   justify-content: space-between;
 }
 
 .pickup-day-btn {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
-  padding: 8px 2px;
-  border-radius: 10px;
+  box-sizing: border-box;
+  padding: 6px 1px;
+  border-radius: 8px;
   border: 1.5px solid #e2e8f0;
   background: #ffffff;
   color: #334155;
@@ -3042,28 +3050,29 @@ body {
 }
 
 .pickup-day-letter {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 800;
   line-height: 1;
 }
 
 .pickup-day-number {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   line-height: 1.1;
   opacity: 0.9;
 }
 
 .pickup-day-today-pill {
-  font-size: 0.58rem;
+  font-size: 0.55rem;
   font-weight: 800;
   background: #ffedd5;
   color: #c2410c;
-  padding: 1px 4px;
+  padding: 1px 3px;
   border-radius: 4px;
-  margin-top: 2px;
+  margin-top: 1px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .pickup-day-btn.selected .pickup-day-today-pill {
@@ -3071,24 +3080,38 @@ body {
   color: #ffffff;
 }
 
+.pickup-time-section-block {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .pickup-time-input-wrap {
   position: relative;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pickup-time-field {
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   padding: 10px 14px;
   border-radius: 10px;
   border: 1.5px solid #cbd5e1;
   background: #f8fafc;
   font-family: inherit;
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
   color: #0f172a;
   outline: none;
   transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  display: block;
 }
 
 .pickup-time-field:focus {
@@ -3102,6 +3125,9 @@ body {
   gap: 6px;
   margin-top: 8px;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pickup-quick-chip-btn {
@@ -3124,13 +3150,26 @@ body {
 
 .pickup-summary-badge {
   margin-top: 10px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
   background: #fff7ed;
   border: 1px solid #fed7aa;
   color: #9a3412;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.pickup-summary-badge span {
+  width: 100%;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }

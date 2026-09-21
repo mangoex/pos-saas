@@ -942,7 +942,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </div>
 
                   {/* Pickup Time Selector */}
-                  <div style={{ marginTop: 12 }}>
+                  <div className="pickup-time-section-block">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <label htmlFor="pickup-time-input" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Clock size={15} color="#ea580c" />

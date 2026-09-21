@@ -4258,7 +4258,7 @@ def get_order_detail(
             "cash_shift_id": None,
             "folio": f"WEB-{intent['public_reference'][-6:]}",
             "channel": "PUBLIC_INTENT",
-            "status": "PENDING",
+            "status": "REJECTED" if intent.get("status") == "REJECTED" else "PENDING",
             "service_type": intent["order_type"],
             "order_type": intent["order_type"],
             "total_cents": intent["total_cents"],
@@ -4907,7 +4907,7 @@ def list_order_accounts(
             .where(
                 models.public_order_intents.c.organization_id == organization_id,
                 models.public_order_intents.c.branch_id == branch_id,
-                models.public_order_intents.c.status == "PENDING_REVIEW",
+                models.public_order_intents.c.status.in_(["PENDING_REVIEW", "REJECTED"]),
             )
             .order_by(models.public_order_intents.c.created_at.desc())
         )
@@ -4917,6 +4917,7 @@ def list_order_accounts(
             addr = dict(intent.get("delivery_address_snapshot") or {})
             cust_name = cust.get("name")
             order_notes = intent.get("order_notes") or cust.get("order_notes") or addr.get("notes") or ""
+            intent_status = "REJECTED" if intent.get("status") == "REJECTED" else "PENDING"
             items.append(
                 {
                     "id": intent["id"],
@@ -4924,7 +4925,7 @@ def list_order_accounts(
                     "branch_id": intent["branch_id"],
                     "cash_shift_id": None,
                     "register_code": "WEB",
-                    "status": "PENDING",
+                    "status": intent_status,
                     "service_type": intent["order_type"],
                     "total_cents": intent["total_cents"],
                     "currency": intent["currency"],

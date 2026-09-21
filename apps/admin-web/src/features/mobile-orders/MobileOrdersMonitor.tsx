@@ -187,6 +187,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: 'Rechazado desde administración móvil' }),
       });
+      setFilter('HISTORY');
       await loadOrders(true);
       window.dispatchEvent(new Event('restaurantos:orders-changed'));
     } catch (err: any) {
@@ -686,6 +687,10 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         onOrderUpdated={() => void loadOrders()}
         onOrderAccepted={() => {
           setFilter('PREP');
+          void loadOrders();
+        }}
+        onOrderRejected={() => {
+          setFilter('HISTORY');
           void loadOrders();
         }}
         branchName={branchName}

@@ -61,4 +61,24 @@ test('MobileOrdersMonitor displays order notes and pickup schedule on order card
   const source = readFileSync(join(root, 'apps/admin-web/src/features/mobile-orders/MobileOrdersMonitor.tsx'), 'utf8');
 
   assert.match(source, /order\.order_notes \|\| \(order as any\)\.notes/);
+  assert.match(source, /setFilter\('HISTORY'\)/);
+  assert.match(source, /onOrderRejected=/);
+});
+
+test('MobileOrderDetailModal supports order rejection and displays REJECTED banner in history', () => {
+  const source = readFileSync(join(root, 'apps/admin-web/src/features/mobile-orders/MobileOrderDetailModal.tsx'), 'utf8');
+
+  assert.match(source, /handleRejectOrder/);
+  assert.match(source, /Rechazar/);
+  assert.match(source, /Pedido Rechazado \(No cobrado ni preparado\)/);
+});
+
+test('Mobile digital menu ensures pickup time container and badge do not overflow viewport', () => {
+  const css = readFileSync(join(root, 'apps/mobile-web/src/index.css'), 'utf8');
+
+  assert.match(css, /\.pickup-schedule-section\s*\{[^}]*box-sizing:\s*border-box/);
+  assert.match(css, /\.pickup-schedule-section\s*\{[^}]*overflow:\s*hidden/);
+  assert.match(css, /\.pickup-time-section-block\s*\{[^}]*box-sizing:\s*border-box/);
+  assert.match(css, /\.pickup-time-field\s*\{[^}]*max-width:\s*100%/);
+  assert.match(css, /\.pickup-summary-badge\s*\{[^}]*overflow-wrap:\s*anywhere/);
 });

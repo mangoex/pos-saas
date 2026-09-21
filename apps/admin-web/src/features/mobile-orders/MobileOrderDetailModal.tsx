@@ -8,6 +8,7 @@ import {
   MapPin,
   Utensils,
   CheckCircle,
+  XCircle,
   AlertCircle,
   Bike,
   ShoppingBag,
@@ -71,6 +72,7 @@ interface MobileOrderDetailModalProps {
   onClose: () => void;
   onOrderUpdated?: () => void;
   onOrderAccepted?: () => void;
+  onOrderRejected?: () => void;
   branchName?: string;
 }
 
@@ -80,6 +82,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
   onClose,
   onOrderUpdated,
   onOrderAccepted,
+  onOrderRejected,
   branchName,
 }) => {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -98,35 +101,32 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     }
 
     let active = true;
-    const fetchDetail = async () => {
-      setLoading(true);
-      setError(null);
-      setNotice(null);
-      try {
-        const data = await fetchApi<OrderDetail>(`/orders/${encodeURIComponent(orderId)}`);
-        if (active) {
-          setDetail(data);
-          const intent = (data.payment_method_intent || data.payment_method || '').toLowerCase();
-          if (intent.includes('card') || intent.includes('tarjeta')) {
-            setPaymentMethod('card');
-          } else if (intent.includes('transfer')) {
-            setPaymentMethod('transfer');
-          } else {
-            setPaymentMethod('cash');
-          }
-        }
-      } catch (err) {
-        if (active) {
-          setError(err instanceof ApiError ? err.message : 'No se pudo cargar el detalle del pedido.');
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
+    setLoading(true);
+    setError(null);
+    setNotice(null);
 
-    void fetchDetail();
+    fetchApi(`/orders/${encodeURIComponent(orderId)}`)
+      .then((data: any) => {
+        if (!active) return;
+        setDetail(data);
+        if (data.payment_method_intent) {
+          setPaymentMethod(
+            data.payment_method_intent === 'card'
+              ? 'card'
+              : data.payment_method_intent === 'transfer'
+                ? 'transfer'
+                : 'cash'
+          );
+        }
+      })
+      .catch((err: any) => {
+        if (!active) return;
+        setError(err instanceof ApiError ? err.message : 'No se pudo cargar el detalle del pedido.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
     return () => {
       active = false;
     };
@@ -155,6 +155,37 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
           : typeof err === 'string'
             ? err
             : 'Error al aceptar el pedido.';
+      setError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectOrder = async () => {
+    if (!orderId) return;
+    const confirmReject = window.confirm('¿Estás seguro de que deseas rechazar este pedido? Se moverá al historial como rechazado.');
+    if (!confirmReject) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await fetchApi(`/orders/${encodeURIComponent(orderId)}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Rechazado desde detalle móvil' }),
+      });
+      if (onOrderRejected) {
+        onOrderRejected();
+      } else if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      onClose();
+    } catch (err: any) {
+      const msg =
+        typeof err?.message === 'string'
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Error al rechazar el pedido.';
       setError(msg);
     } finally {
       setActionLoading(false);
@@ -447,26 +478,34 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                 borderRadius: 6,
                 backgroundColor:
                   isCompleted
-                    ? detail?.payment_status === 'CONFIRMED'
-                      ? '#dcfce7'
-                      : '#fef3c7'
+                    ? ['REJECTED', 'CANCELLED'].includes(detail?.status?.toUpperCase() || '')
+                      ? '#fef2f2'
+                      : detail?.payment_status === 'CONFIRMED'
+                        ? '#dcfce7'
+                        : '#fef3c7'
                     : isReadyOrInPrep
                       ? '#dcfce7'
                       : '#e0f2fe',
                 color:
                   isCompleted
-                    ? detail?.payment_status === 'CONFIRMED'
-                      ? '#166534'
-                      : '#b45309'
+                    ? ['REJECTED', 'CANCELLED'].includes(detail?.status?.toUpperCase() || '')
+                      ? '#dc2626'
+                      : detail?.payment_status === 'CONFIRMED'
+                        ? '#166534'
+                        : '#b45309'
                     : isReadyOrInPrep
                       ? '#166534'
                       : '#0369a1',
               }}
             >
               {isCompleted
-                ? detail?.payment_status === 'CONFIRMED'
-                  ? 'Entregado y Pagado'
-                  : 'Entregado (Por Cobrar)'
+                ? detail?.status?.toUpperCase() === 'REJECTED'
+                  ? 'Rechazado'
+                  : detail?.status?.toUpperCase() === 'CANCELLED'
+                    ? 'Cancelado'
+                    : detail?.payment_status === 'CONFIRMED'
+                      ? 'Entregado y Pagado'
+                      : 'Entregado (Por Cobrar)'
                 : isReadyOrInPrep
                   ? detail?.payment_status === 'CONFIRMED'
                     ? 'Listo (Pagado)'
@@ -826,28 +865,52 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
           }}
         >
           {isUnaccepted && (
-            <button
-              onClick={handleAcceptOrder}
-              disabled={actionLoading}
-              style={{
-                width: '100%',
-                backgroundColor: '#10b981',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 10,
-                padding: '12px',
-                fontWeight: 700,
-                fontSize: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                cursor: 'pointer',
-              }}
-            >
-              <CheckCircle size={18} />
-              {actionLoading ? 'Aceptando...' : 'Aceptar Pedido'}
-            </button>
+            <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+              <button
+                onClick={handleRejectOrder}
+                disabled={actionLoading}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#fef2f2',
+                  color: '#dc2626',
+                  border: '1.5px solid #fecaca',
+                  borderRadius: 10,
+                  padding: '12px',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                <XCircle size={18} />
+                {actionLoading ? 'Procesando...' : 'Rechazar'}
+              </button>
+              <button
+                onClick={handleAcceptOrder}
+                disabled={actionLoading}
+                style={{
+                  flex: 2,
+                  backgroundColor: '#10b981',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '12px',
+                  fontWeight: 700,
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                <CheckCircle size={18} />
+                {actionLoading ? 'Aceptando...' : 'Aceptar Pedido'}
+              </button>
+            </div>
           )}
 
           {/* Payment Method Selector if not yet confirmed */}
@@ -948,7 +1011,47 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
           )}
 
           {isCompleted && (
-            detail?.payment_status === 'CONFIRMED' ? (
+            detail?.status?.toUpperCase() === 'REJECTED' ? (
+              <div
+                style={{
+                  width: '100%',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#991b1b',
+                  borderRadius: 10,
+                  padding: '12px',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <XCircle size={18} color="#dc2626" />
+                Pedido Rechazado (No cobrado ni preparado)
+              </div>
+            ) : detail?.status?.toUpperCase() === 'CANCELLED' ? (
+              <div
+                style={{
+                  width: '100%',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#991b1b',
+                  borderRadius: 10,
+                  padding: '12px',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <XCircle size={18} color="#dc2626" />
+                Pedido Cancelado
+              </div>
+            ) : detail?.payment_status === 'CONFIRMED' ? (
               <div
                 style={{
                   width: '100%',

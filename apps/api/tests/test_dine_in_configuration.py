@@ -9,7 +9,10 @@ from restaurant_os.operations import (
     ORGANIZATION_ID,
     BusinessError,
     create_public_order_intent,
+    get_order_detail,
+    list_order_accounts,
     list_public_branches,
+    reject_public_order_intent,
     update_branch,
 )
 from sqlalchemy import create_engine
@@ -141,3 +144,65 @@ def test_public_order_intent_blocks_dine_in_when_disabled(session: Any) -> None:
         .one()
     )
     assert intent["order_notes"] == "📅 Recoger: Hoy a las 15:30"
+
+
+def test_rejected_public_intent_appears_in_order_accounts_as_rejected(session: Any) -> None:
+    _enable_public_key(session)
+    payload = {
+        "customer_name": "Carlos Gomez",
+        "customer_phone": "6679876543",
+        "order_type": "takeout",
+        "lines": [{"product_id": BURGER_ID, "quantity": 1}],
+        "order_notes": "📅 Recoger: Mañana a las 14:00",
+    }
+    result, created = create_public_order_intent(
+        session, PUBLIC_KEY, payload, "idemp-takeout-reject-001"
+    )
+    assert created is True
+    assert result["status"] == "PENDING_REVIEW"
+
+    intent = (
+        session.execute(
+            sa.select(models.public_order_intents).where(
+                models.public_order_intents.c.public_reference == result["public_reference"]
+            )
+        )
+        .mappings()
+        .one()
+    )
+    intent_id = intent["id"]
+
+    # Before rejection, it shows up as PENDING in list_order_accounts
+    accounts_before = list_order_accounts(
+        session,
+        {"branch_id": BRANCH_ID},
+        actor_user_id=ADMIN_USER_ID,
+    )
+    matching_before = next((a for a in accounts_before["items"] if a["id"] == intent_id), None)
+    assert matching_before is not None
+    assert matching_before["status"] == "PENDING"
+
+    # Reject the public intent
+    reject_res, _ = reject_public_order_intent(
+        session,
+        intent_id=intent_id,
+        expected_version=int(intent["version"]),
+        reason="No tenemos ingredientes disponibles",
+        idempotency_key="idemp-reject-001",
+        actor_user_id=ADMIN_USER_ID,
+    )
+    assert reject_res["status"] == "REJECTED"
+
+    # After rejection, it MUST appear in list_order_accounts with status REJECTED (for Historial)
+    accounts_after = list_order_accounts(
+        session,
+        {"branch_id": BRANCH_ID},
+        actor_user_id=ADMIN_USER_ID,
+    )
+    matching_after = next((a for a in accounts_after["items"] if a["id"] == intent_id), None)
+    assert matching_after is not None
+    assert matching_after["status"] == "REJECTED"
+
+    # get_order_detail should also return REJECTED status
+    detail = get_order_detail(session, intent_id, actor_user_id=ADMIN_USER_ID)
+    assert detail["status"] == "REJECTED"
