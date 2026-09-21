@@ -102,12 +102,35 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   const fetchPendingCount = useCallback(async () => {
     if (!branchId) return;
     try {
-      const res = await fetchApi<{ count: number }>(
-        `/orders/pending-count?branch_id=${encodeURIComponent(branchId)}`
-      );
-      if (typeof res?.count === 'number') {
-        setPendingOrdersCount(res.count);
+      let items: any[] = [];
+      try {
+        const res = await fetchApi<{ items: any[] }>(
+          `/orders/accounts?branch_id=${encodeURIComponent(branchId)}&limit=100`
+        );
+        items = Array.isArray(res?.items) ? res.items : [];
+      } catch {
+        const fallback = await fetchApi<any[]>(
+          `/orders?branch_id=${encodeURIComponent(branchId)}`
+        );
+        items = Array.isArray(fallback) ? fallback : [];
       }
+
+      const today = new Date();
+      const activeCount = items.filter((item) => {
+        if (!item.created_at) return false;
+        const d = new Date(item.created_at);
+        if (isNaN(d.getTime())) return false;
+        const isSameDay =
+          d.getDate() === today.getDate() &&
+          d.getMonth() === today.getMonth() &&
+          d.getFullYear() === today.getFullYear();
+        if (!isSameDay) return false;
+
+        const status = (item.status || '').toUpperCase();
+        return !['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
+      }).length;
+
+      setPendingOrdersCount(activeCount);
     } catch {
       // silent fallback
     }
@@ -122,11 +145,20 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   }, [fetchPendingCount]);
 
   useEffect(() => {
-    const handleOrdersChanged = () => {
-      void fetchPendingCount();
+    const handleActiveCountEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<number>;
+      if (typeof customEvent.detail === 'number') {
+        setPendingOrdersCount(customEvent.detail);
+      } else {
+        void fetchPendingCount();
+      }
     };
-    window.addEventListener('restaurantos:orders-changed', handleOrdersChanged);
-    return () => window.removeEventListener('restaurantos:orders-changed', handleOrdersChanged);
+    window.addEventListener('restaurantos:active-orders-count', handleActiveCountEvent);
+    window.addEventListener('restaurantos:orders-changed', handleActiveCountEvent);
+    return () => {
+      window.removeEventListener('restaurantos:active-orders-count', handleActiveCountEvent);
+      window.removeEventListener('restaurantos:orders-changed', handleActiveCountEvent);
+    };
   }, [fetchPendingCount]);
 
   useEffect(() => {
@@ -223,6 +255,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
               branchId={branchId}
               branchName={branchName}
               onOpenHelpVideos={() => setIsHelpModalOpen(true)}
+              onActiveOrdersCountChange={setPendingOrdersCount}
             />
           </MobileTabErrorBoundary>
         )}

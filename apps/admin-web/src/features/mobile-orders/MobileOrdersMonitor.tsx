@@ -45,6 +45,7 @@ interface MobileOrdersMonitorProps {
   branchId: string;
   branchName?: string;
   onOpenHelpVideos?: () => void;
+  onActiveOrdersCountChange?: (count: number) => void;
 }
 
 type OrderFilter = 'NEW' | 'PREP' | 'HISTORY';
@@ -71,6 +72,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   branchId,
   branchName,
   onOpenHelpVideos,
+  onActiveOrdersCountChange,
 }) => {
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -112,6 +114,16 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       
       setOrders(todayOrders);
       setLastUpdated(new Date());
+
+      const activeCount = todayOrders.filter((order) => {
+        const status = (order.status || '').toUpperCase();
+        return !['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
+      }).length;
+
+      if (onActiveOrdersCountChange) {
+        onActiveOrdersCountChange(activeCount);
+      }
+      window.dispatchEvent(new CustomEvent('restaurantos:active-orders-count', { detail: activeCount }));
     } catch (err) {
       if (!isSilent) {
         setError(err instanceof ApiError ? err.message : 'Error al consultar comandas.');
@@ -120,7 +132,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [branchId]);
+  }, [branchId, onActiveOrdersCountChange]);
 
   // Initial load
   useEffect(() => {
@@ -368,7 +380,20 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         </div>
 
         {/* Filter Tabs */}
-        <div style={{ display: 'flex', gap: 24, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 28,
+            marginBottom: 16,
+            overflowX: 'auto',
+            paddingBottom: 4,
+            whiteSpace: 'nowrap',
+            borderBottom: '1px solid #e2e8f0',
+            width: '100%',
+          }}
+        >
           <button
             onClick={() => setFilter('NEW')}
             style={{
