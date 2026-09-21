@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Tag,
   Percent,
+  Utensils,
 } from 'lucide-react';
 
 import '../../premium-catalogs.css';
@@ -61,6 +62,7 @@ interface Branch {
   phone?: string;
   google_review_url?: string;
   whatsapp_ordering_enabled?: boolean;
+  dine_in_enabled?: boolean;
   delivery_fee_enabled?: boolean;
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
@@ -103,6 +105,7 @@ const emptyForm = {
   phone: '',
   google_review_url: '',
   whatsapp_ordering_enabled: false,
+  dine_in_enabled: true,
   delivery_fee_enabled: true,
   free_delivery_min_pesos: '',
   delivery_tiers: defaultDeliveryTiers,
@@ -215,6 +218,7 @@ const BranchesList = () => {
         phone: branch.phone || '',
         google_review_url: branch.google_review_url || '',
         whatsapp_ordering_enabled: Boolean(branch.whatsapp_ordering_enabled),
+        dine_in_enabled: branch.dine_in_enabled !== false,
         delivery_fee_enabled: branch.delivery_fee_enabled !== false,
         free_delivery_min_pesos: branch.free_delivery_min_cents != null && branch.free_delivery_min_cents > 0
           ? String(branch.free_delivery_min_cents / 100)
@@ -680,6 +684,32 @@ const BranchesList = () => {
                 Los comensales que califiquen con 4 o 5 estrellas al confirmar su pedido serán invitados a compartir su reseña pública en este enlace.
               </p>
             </div>
+          </section>
+
+          {/* Modalidad de Consumo: Comer aquí */}
+          <section className="branch-form-section">
+            <div className="branch-form-section-header">
+              <h3 className="branch-form-section-title">
+                <Utensils size={18} color="#ea580c" />
+                Comer en el Establecimiento
+              </h3>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0' }}>
+              <input
+                type="checkbox"
+                id="branch-dine-in-enabled"
+                checked={formData.dine_in_enabled}
+                onChange={(e) => setFormData({ ...formData, dine_in_enabled: e.target.checked })}
+                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#ea580c' }}
+              />
+              <label htmlFor="branch-dine-in-enabled" style={{ fontSize: '0.88rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                Permitir pedidos para "Comer aquí" en el menú digital
+              </label>
+            </div>
+            <span className="branch-input-helper">
+              Si se desmarca, los comensales no verán la opción de "Comer aquí" en su menú digital (solo Llevar y Envío si está habilitado).
+            </span>
           </section>
 
           {/* 5. Costos de Envío a Domicilio */}

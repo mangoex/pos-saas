@@ -1017,6 +1017,7 @@ def create_branch(
     google_review_url: str | None = None,
     whatsapp_ordering_enabled: bool | None = None,
     delivery_fee_enabled: bool | None = None,
+    dine_in_enabled: bool | None = None,
     delivery_tiers: list[dict[str, Any]] | None = None,
     free_delivery_min_cents: int | None = None,
     coupons: list[dict[str, Any]] | None = None,
@@ -1092,6 +1093,9 @@ def create_branch(
         "delivery_fee_enabled": bool(delivery_fee_enabled)
         if delivery_fee_enabled is not None
         else False,
+        "dine_in_enabled": bool(dine_in_enabled)
+        if dine_in_enabled is not None
+        else True,
         "delivery_tiers": list(delivery_tiers) if isinstance(delivery_tiers, list) else [],
         "free_delivery_min_cents": int(free_delivery_min_cents)
         if free_delivery_min_cents is not None and free_delivery_min_cents != ""
@@ -11663,6 +11667,7 @@ def update_branch(
     google_review_url: str | None = None,
     whatsapp_ordering_enabled: bool | None = None,
     delivery_fee_enabled: bool | None = None,
+    dine_in_enabled: bool | None = None,
     delivery_tiers: list[dict[str, Any]] | None = None,
     free_delivery_min_cents: int | None = None,
     coupons: list[dict[str, Any]] | None = None,
@@ -11723,6 +11728,8 @@ def update_branch(
         update_data["whatsapp_ordering_enabled"] = bool(whatsapp_ordering_enabled)
     if delivery_fee_enabled is not None:
         update_data["delivery_fee_enabled"] = bool(delivery_fee_enabled)
+    if dine_in_enabled is not None:
+        update_data["dine_in_enabled"] = bool(dine_in_enabled)
     if delivery_tiers is not None:
         update_data["delivery_tiers"] = list(delivery_tiers) if isinstance(delivery_tiers, list) else []
     if free_delivery_min_cents is not None:
@@ -11758,6 +11765,8 @@ def update_branch(
             update_data["whatsapp_ordering_enabled"] = bool(extra_payload["whatsapp_ordering_enabled"])
         if "delivery_fee_enabled" in extra_payload and "delivery_fee_enabled" not in update_data:
             update_data["delivery_fee_enabled"] = bool(extra_payload["delivery_fee_enabled"])
+        if "dine_in_enabled" in extra_payload and "dine_in_enabled" not in update_data:
+            update_data["dine_in_enabled"] = bool(extra_payload["dine_in_enabled"])
         if "delivery_tiers" in extra_payload and "delivery_tiers" not in update_data:
             t_val = extra_payload["delivery_tiers"]
             update_data["delivery_tiers"] = list(t_val) if isinstance(t_val, list) else []
@@ -11886,6 +11895,7 @@ def list_public_branches(
             models.branches.c.google_review_url,
             models.branches.c.whatsapp_ordering_enabled,
             models.branches.c.delivery_fee_enabled,
+            models.branches.c.dine_in_enabled,
             models.branches.c.delivery_tiers,
             models.branches.c.free_delivery_min_cents,
             models.branches.c.coupons,
@@ -25921,6 +25931,7 @@ def _branch_detail(
                 models.branches.c.timezone,
                 models.branches.c.status,
                 models.branches.c.delivery_fee_enabled,
+                models.branches.c.dine_in_enabled,
                 models.branches.c.delivery_tiers,
                 models.branches.c.free_delivery_min_cents,
                 models.branches.c.coupons,
@@ -25965,6 +25976,7 @@ def _branch_detail(
         "timezone": row["timezone"],
         "status": row["status"],
         "delivery_fee_enabled": bool(row["delivery_fee_enabled"]) if row["delivery_fee_enabled"] is not None else True,
+        "dine_in_enabled": bool(row["dine_in_enabled"]) if row.get("dine_in_enabled") is not None else True,
         "delivery_tiers": list(row["delivery_tiers"]) if isinstance(row["delivery_tiers"], list) else [],
         "free_delivery_min_cents": row["free_delivery_min_cents"],
         "coupons": list(row["coupons"]) if isinstance(row.get("coupons"), list) else [],
@@ -26805,6 +26817,7 @@ def create_public_order_intent(
                 models.public_order_keys,
                 models.branches.c.organization_id,
                 models.branches.c.delivery_fee_enabled,
+                models.branches.c.dine_in_enabled,
                 models.branches.c.delivery_tiers,
                 models.branches.c.free_delivery_min_cents,
                 models.branches.c.coupons,
@@ -26835,6 +26848,8 @@ def create_public_order_intent(
         "order_notes": str(payload.get("order_notes") or "").strip() or None,
         "delivery_address": payload.get("delivery_address"),
     }
+    if normalized["order_type"] in ("dine-in", "dine_in") and configured.get("dine_in_enabled") is False:
+        raise BusinessError("dine_in_disabled", "Comer aquí no está disponible en esta sucursal")
     if payload.get("coupon_code"):
         normalized["coupon_code"] = str(payload["coupon_code"]).strip().upper()
     if payload.get("table_number"):

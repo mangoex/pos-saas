@@ -582,6 +582,25 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                            </>
                          )}
                       </div>
+
+                      {/* Scheduled Pickup or Notes Badge */}
+                      {Boolean(order.order_notes || (order as any).notes) && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            backgroundColor: '#fffbeb',
+                            border: '1px solid #fde68a',
+                            color: '#92400e',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {order.order_notes || (order as any).notes}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ textAlign: 'right' }}>

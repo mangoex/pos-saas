@@ -1,9 +1,23 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag, Navigation } from 'lucide-react';
+import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag, Navigation, Calendar, Clock } from 'lucide-react';
 import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Product } from '../types';
 import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile, validateBranchCoupon } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
 import { requestBrowserCoordinates, reverseGeocode, formatGpsAddressNotes } from '../utils/geolocation';
+
+const weekDayLetters = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const weekDayFullNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+interface PickupDayOption {
+  index: number;
+  letter: string;
+  name: string;
+  dateNumber: number;
+  monthName: string;
+  isPast: boolean;
+  isToday: boolean;
+  disabled: boolean;
+}
 
 const getRecommendationIcon = (product: Product, size: number = 38) => {
   const category = (product.category_name || '').toLowerCase();
@@ -124,7 +138,60 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
   };
 
-  const [orderType, setOrderType] = useState<OrderType>(initialOrderType);
+  const [orderType, setOrderType] = useState<OrderType>(() => {
+    if (initialOrderType === 'dine-in' && selectedBranch?.dine_in_enabled === false) {
+      return 'takeaway';
+    }
+    return initialOrderType;
+  });
+
+  // Pickup scheduling state (L, M, M, J, V, S, D and time)
+  const currentDayIndex = useMemo(() => {
+    return (new Date().getDay() + 6) % 7;
+  }, []);
+
+  const weekDayOptions = useMemo<PickupDayOption[]>(() => {
+    const now = new Date();
+    const todayIndex = (now.getDay() + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - todayIndex);
+
+    return weekDayLetters.map((letter, idx) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + idx);
+      const isPast = idx < todayIndex;
+      const isToday = idx === todayIndex;
+      const monthName = d.toLocaleDateString('es-MX', { month: 'short' });
+      return {
+        index: idx,
+        letter,
+        name: weekDayFullNames[idx],
+        dateNumber: d.getDate(),
+        monthName,
+        isPast,
+        isToday,
+        disabled: isPast,
+      };
+    });
+  }, []);
+
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
+    return (new Date().getDay() + 6) % 7;
+  });
+
+  const selectedDay = useMemo(() => {
+    return weekDayOptions.find((d) => d.index === selectedDayIndex) || weekDayOptions[currentDayIndex] || weekDayOptions[0];
+  }, [weekDayOptions, selectedDayIndex, currentDayIndex]);
+
+  const [pickupTime, setPickupTime] = useState<string>(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 30);
+    const roundedMinutes = Math.ceil(d.getMinutes() / 5) * 5;
+    d.setMinutes(roundedMinutes);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  });
   const [tableNumber, setTableNumber] = useState('');
   const [name, setName] = useState(initialProfile?.name || '');
   const [phone, setPhone] = useState(initialProfile?.phone || '');
@@ -283,7 +350,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     if (orderType === 'delivery' && selectedBranch?.delivery_fee_enabled === false) {
       setOrderType('takeaway');
     }
-  }, [orderType, selectedBranch?.delivery_fee_enabled]);
+    if (orderType === 'dine-in' && selectedBranch?.dine_in_enabled === false) {
+      setOrderType('takeaway');
+    }
+  }, [orderType, selectedBranch?.delivery_fee_enabled, selectedBranch?.dine_in_enabled]);
 
   useEffect(() => {
     setAiRecs([]);
@@ -389,6 +459,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       }
     }
 
+    let finalOrderNotes = orderNotes.trim();
+    if (orderType === 'takeaway') {
+      const dayLabel = selectedDay.isToday
+        ? `Hoy (${selectedDay.name} ${selectedDay.dateNumber} ${selectedDay.monthName})`
+        : `${selectedDay.name} ${selectedDay.dateNumber} ${selectedDay.monthName}`;
+      const pickupScheduleNote = `📅 Recoger: ${dayLabel} a las ${pickupTime || 'lo antes posible'}`;
+      finalOrderNotes = [pickupScheduleNote, finalOrderNotes].filter(Boolean).join(' | ');
+    }
+
     const orderInfo: CustomerOrderInfo = {
       name: name.trim(),
       phone: phone.trim(),
@@ -400,7 +479,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       address_notes: addressNotes.trim(),
       payment_method: paymentMethod,
       cash_amount: paymentMethod === 'cash' ? cashAmount.trim() : undefined,
-      order_notes: orderNotes.trim(),
+      order_notes: finalOrderNotes,
       delivery_fee_cents: deliveryFeeCents,
       coupon_code: appliedCoupon ? appliedCoupon.code : undefined,
       discount_cents: discountCents > 0 ? discountCents : undefined,
@@ -645,18 +724,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="cart-form-section">
                 <label className="cart-form-section-label">Modalidad de consumo</label>
                 <div className="social-mode-selector-container" role="tablist" aria-label="Modalidad de consumo">
-                  <button
-                    type="button"
-                    className={`social-mode-card-btn ${orderType === 'dine-in' ? 'active' : ''}`}
-                    onClick={() => setOrderType('dine-in')}
-                    role="tab"
-                    aria-selected={orderType === 'dine-in'}
-                  >
-                    <div className="social-mode-icon-circle">
-                      <Utensils size={18} />
-                    </div>
-                    <span className="social-mode-card-label">Comer aquí</span>
-                  </button>
+                  {selectedBranch?.dine_in_enabled !== false && (
+                    <button
+                      type="button"
+                      className={`social-mode-card-btn ${orderType === 'dine-in' ? 'active' : ''}`}
+                      onClick={() => setOrderType('dine-in')}
+                      role="tab"
+                      aria-selected={orderType === 'dine-in'}
+                    >
+                      <div className="social-mode-icon-circle">
+                        <Utensils size={18} />
+                      </div>
+                      <span className="social-mode-card-label">Comer aquí</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -821,6 +902,95 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       value={tableNumber}
                       onChange={(e) => setTableNumber(e.target.value)}
                     />
+                  </div>
+                </div>
+              )}
+
+              {/* Scheduled Pickup Selector (Days of week + Time) if takeaway mode */}
+              {orderType === 'takeaway' && (
+                <div className="cart-form-section pickup-schedule-section">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Calendar size={18} color="#ea580c" />
+                    <label className="cart-form-section-label" style={{ marginBottom: 0 }}>
+                      Día y hora para recoger
+                    </label>
+                  </div>
+                  <p style={{ margin: '0 0 10px', fontSize: '0.775rem', color: '#64748b' }}>
+                    Selecciona el día y la hora estimada en que pasarás por tu pedido.
+                  </p>
+
+                  {/* Day of Week Selector: L, M, M, J, V, S, D */}
+                  <div className="pickup-days-container" role="radiogroup" aria-label="Día de recolección">
+                    {weekDayOptions.map((opt) => {
+                      const isSelected = selectedDayIndex === opt.index;
+                      return (
+                        <button
+                          key={opt.index}
+                          type="button"
+                          disabled={opt.disabled}
+                          onClick={() => !opt.disabled && setSelectedDayIndex(opt.index)}
+                          className={`pickup-day-btn ${isSelected ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''} ${opt.isToday ? 'is-today' : ''}`}
+                          title={opt.disabled ? `${opt.name} (Día pasado no disponible)` : opt.name}
+                          aria-label={opt.name}
+                        >
+                          <span className="pickup-day-letter">{opt.letter}</span>
+                          <span className="pickup-day-number">{opt.dateNumber}</span>
+                          {opt.isToday && <span className="pickup-day-today-pill">Hoy</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pickup Time Selector */}
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <label htmlFor="pickup-time-input" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Clock size={15} color="#ea580c" />
+                        Hora estimada de recolección
+                      </label>
+                      <span style={{ fontSize: '0.75rem', color: '#ea580c', fontWeight: 600 }}>
+                        {selectedDay.isToday ? 'Hoy' : selectedDay.name}
+                      </span>
+                    </div>
+
+                    <div className="pickup-time-input-wrap">
+                      <input
+                        id="pickup-time-input"
+                        type="time"
+                        value={pickupTime}
+                        onChange={(e) => setPickupTime(e.target.value)}
+                        className="pickup-time-field"
+                        required={orderType === 'takeaway'}
+                      />
+                    </div>
+
+                    {/* Quick presets for today */}
+                    {selectedDay.isToday && (
+                      <div className="pickup-quick-chips">
+                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Rápido:</span>
+                        {[20, 30, 45, 60].map((mins) => (
+                          <button
+                            key={mins}
+                            type="button"
+                            className="pickup-quick-chip-btn"
+                            onClick={() => {
+                              const d = new Date();
+                              d.setMinutes(d.getMinutes() + mins);
+                              const hh = String(d.getHours()).padStart(2, '0');
+                              const mm = String(d.getMinutes()).padStart(2, '0');
+                              setPickupTime(`${hh}:${mm}`);
+                            }}
+                          >
+                            +{mins < 60 ? `${mins} min` : '1 hora'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Selected Summary Badge */}
+                    <div className="pickup-summary-badge">
+                      <span>📅 Pasarás a recoger: <strong>{selectedDay.isToday ? 'Hoy' : selectedDay.name} ({selectedDay.dateNumber} {selectedDay.monthName}) a las {pickupTime || '--:--'} hrs</strong></span>
+                    </div>
                   </div>
                 </div>
               )}

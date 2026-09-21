@@ -114,6 +114,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         "google_review_url",
         "whatsapp_ordering_enabled",
         "delivery_fee_enabled",
+        "dine_in_enabled",
         "delivery_tiers",
         "free_delivery_min_cents",
         "coupons",

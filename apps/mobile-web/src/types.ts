@@ -102,6 +102,7 @@ export interface BranchInfo {
   google_review_url?: string | null;
   mobile_theme?: 'light' | 'dark' | string;
   whatsapp_ordering_enabled?: boolean;
+  dine_in_enabled?: boolean;
   delivery_fee_enabled?: boolean;
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;

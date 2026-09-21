@@ -118,6 +118,12 @@ branches = sa.Table(
         nullable=False,
         server_default=sa.false(),
     ),
+    sa.Column(
+        "dine_in_enabled",
+        sa.Boolean(),
+        nullable=False,
+        server_default=sa.true(),
+    ),
     sa.Column("delivery_tiers", sa.JSON(), nullable=False, server_default="[]"),
     sa.Column("free_delivery_min_cents", sa.Integer(), nullable=True),
     sa.Column(

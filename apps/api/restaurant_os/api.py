@@ -808,6 +808,7 @@ def post_branch(
             phone=payload.get("phone"),
             google_review_url=payload.get("google_review_url"),
             whatsapp_ordering_enabled=payload.get("whatsapp_ordering_enabled"),
+            dine_in_enabled=payload.get("dine_in_enabled"),
         )
     )
 

@@ -21,6 +21,7 @@ import {
   ArrowUp,
   Tag,
   CircleDollarSign,
+  Utensils,
 } from 'lucide-react';
 
 interface OrgProfile {
@@ -69,6 +70,7 @@ interface Branch {
   phone?: string;
   google_review_url?: string;
   whatsapp_ordering_enabled?: boolean;
+  dine_in_enabled?: boolean;
   delivery_fee_enabled?: boolean;
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
@@ -153,6 +155,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [googleReviewUrl, setGoogleReviewUrl] = useState('');
   const [isOpenForOrders, setIsOpenForOrders] = useState(true);
+  const [dineInEnabled, setDineInEnabled] = useState(true);
   const [deliveryFeeEnabled, setDeliveryFeeEnabled] = useState(true);
   const [freeDeliveryMinPesos, setFreeDeliveryMinPesos] = useState('');
   const [deliveryTiers, setDeliveryTiers] = useState<DeliveryTier[]>([]);
@@ -170,6 +173,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       setWhatsappEnabled(Boolean(currentBranch.whatsapp_ordering_enabled));
       setGoogleReviewUrl(currentBranch.google_review_url || '');
       setIsOpenForOrders(currentBranch.status !== 'inactive');
+      setDineInEnabled(currentBranch.dine_in_enabled !== false);
       setDeliveryFeeEnabled(currentBranch.delivery_fee_enabled !== false);
       setFreeDeliveryMinPesos(
         currentBranch.free_delivery_min_cents != null && currentBranch.free_delivery_min_cents > 0
@@ -275,6 +279,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       whatsapp_ordering_enabled: whatsappEnabled,
       google_review_url: googleReviewUrl.trim(),
       status: isOpenForOrders ? 'active' : 'inactive',
+      dine_in_enabled: dineInEnabled,
       delivery_fee_enabled: deliveryFeeEnabled,
       delivery_tiers: deliveryTiers,
       free_delivery_min_cents: freeDeliveryMinPesos.trim() ? Math.round(parseFloat(freeDeliveryMinPesos) * 100) : null,
@@ -1014,6 +1019,51 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                     outline: 'none',
                   }}
                 />
+              </div>
+
+              {/* Card: Modalidad de Consumo: Comer aquí */}
+              <div
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: 16,
+                  padding: 16,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                  marginBottom: 18,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Utensils size={20} color="#ea580c" />
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    Comer en el Establecimiento
+                  </h3>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 0',
+                  }}
+                >
+                  <div style={{ paddingRight: 12 }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
+                      Comer aquí
+                    </div>
+                    <div style={{ fontSize: '0.775rem', color: '#64748b' }}>
+                      {dineInEnabled
+                        ? 'Activado: Los clientes pueden elegir "Comer aquí" desde el menú digital.'
+                        : 'Desactivado: Esta opción no aparecerá en el menú digital de los clientes.'}
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={dineInEnabled}
+                    onChange={(e) => setDineInEnabled(e.target.checked)}
+                    style={{ width: 22, height: 22, cursor: 'pointer', accentColor: '#ea580c', flexShrink: 0 }}
+                  />
+                </div>
               </div>
 
               {/* Card: Costos de Envío a Domicilio */}
