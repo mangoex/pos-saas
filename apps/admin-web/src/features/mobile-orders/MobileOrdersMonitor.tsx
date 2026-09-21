@@ -13,6 +13,9 @@ import {
   ChefHat,
   QrCode,
   PlaySquare,
+  Menu,
+  Store,
+  ChevronDown
 } from 'lucide-react';
 import { MobileOrderDetailModal } from './MobileOrderDetailModal';
 import { MobileMenuQrModal } from './MobileMenuQrModal';
@@ -43,7 +46,7 @@ interface MobileOrdersMonitorProps {
   onOpenHelpVideos?: () => void;
 }
 
-type OrderFilter = 'ACTIVE' | 'READY' | 'ALL';
+type OrderFilter = 'NEW' | 'PREP' | 'READY' | 'HISTORY';
 
 const isToday = (dateStr?: string): boolean => {
   if (!dateStr) return false;
@@ -72,7 +75,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [filter, setFilter] = useState<OrderFilter>('ACTIVE');
+  const [filter, setFilter] = useState<OrderFilter>('NEW');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -137,25 +140,34 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     setIsDetailOpen(true);
   };
 
-  const isOrderPending = (order: OrderItem) => {
+  const isOrderNew = (order: OrderItem): boolean => {
     const status = (order.status || '').toUpperCase();
     if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
-    return ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(status) || (order.is_public_intent && status !== 'ACCEPTED');
+    return ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(status) || !!(order.is_public_intent && status !== 'ACCEPTED');
+  };
+
+  const isOrderPrep = (order: OrderItem) => {
+    const status = (order.status || '').toUpperCase();
+    if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
+    return ['ACCEPTED', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION'].includes(status);
   };
 
   const isOrderReady = (order: OrderItem) => {
     const status = (order.status || '').toUpperCase();
-    if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
-    return ['ACCEPTED', 'READY', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'IN_DELIVERY'].includes(status);
+    return ['READY', 'IN_DELIVERY'].includes(status);
+  };
+  
+  const isOrderHistory = (order: OrderItem) => {
+    const status = (order.status || '').toUpperCase();
+    return ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
   };
 
   const filteredOrders = orders.filter((order) => {
-    const matchesFilter =
-      filter === 'ALL'
-        ? true
-        : filter === 'READY'
-          ? isOrderReady(order)
-          : isOrderPending(order);
+    let matchesFilter = false;
+    if (filter === 'NEW') matchesFilter = isOrderNew(order);
+    else if (filter === 'PREP') matchesFilter = isOrderPrep(order);
+    else if (filter === 'READY') matchesFilter = isOrderReady(order);
+    else if (filter === 'HISTORY') matchesFilter = isOrderHistory(order);
 
     if (!matchesFilter) return false;
 
@@ -173,9 +185,6 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     return folio.includes(q) || cust.includes(q);
   });
 
-  const activeCount = orders.filter(isOrderPending).length;
-  const readyCount = orders.filter(isOrderReady).length;
-
   return (
     <div
       style={{
@@ -192,100 +201,37 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           position: 'sticky',
           top: 0,
           zIndex: 100,
-          backgroundColor: '#0f172a',
-          color: '#ffffff',
+          backgroundColor: '#ffffff',
           padding: '12px 16px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          flexDirection: 'column',
+          gap: 16,
+          boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
-            style={{
-              backgroundColor: '#0284c7',
-              borderRadius: 8,
-              padding: 6,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button 
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            onClick={() => {}}
           >
-            <ChefHat size={20} color="#ffffff" />
+            <Menu size={24} color="#334155" />
+          </button>
+          
+          <div style={{ display: 'flex', alignItems: 'center', fontSize: '1.4rem', fontWeight: 900 }}>
+             <span style={{ color: '#ff5722' }}>mi</span><span style={{ color: '#1e293b' }}>menu</span><span style={{ color: '#1e293b' }}>.onl</span>
           </div>
-          <div>
-            <div style={{ fontSize: '1rem', fontWeight: 800, lineHeight: 1.1 }}>
-              Monitor de Pedidos
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-              {branchName || 'Sucursal Principal'}
-            </div>
+          
+          <div style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>
+            MG
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => setIsQrModalOpen(true)}
-            aria-label="Ver y compartir código QR del menú"
-            title="Código QR del menú"
-            style={{
-              border: 'none',
-              background: '#1e293b',
-              color: '#38bdf8',
-              borderRadius: 8,
-              padding: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-            }}
-          >
-            <QrCode size={18} />
-          </button>
-
-          <button
-            onClick={() => void loadOrders()}
-            disabled={refreshing}
-            aria-label="Refrescar pedidos"
-            style={{
-              border: 'none',
-              background: '#1e293b',
-              color: '#ffffff',
-              borderRadius: 8,
-              padding: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-
-          {onOpenHelpVideos && (
-            <button
-              type="button"
-              onClick={onOpenHelpVideos}
-              aria-label="Tutoriales y videos de ayuda"
-              title="Guías en video"
-              style={{
-                border: '1px solid rgba(245, 158, 11, 0.4)',
-                background: 'rgba(245, 158, 11, 0.12)',
-                color: '#fbbf24',
-                borderRadius: 8,
-                padding: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
-            >
-              <PlaySquare size={16} color="#fbbf24" />
-            </button>
-          )}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+           <button style={{ display: 'flex', alignItems: 'center', gap: 6, backgroundColor: '#f1f5f9', border: 'none', padding: '6px 16px', borderRadius: 20, fontSize: '0.9rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+              <Store size={16} />
+              {branchName || 'Sucursal Centro'}
+              <ChevronDown size={16} />
+           </button>
         </div>
       </header>
 
@@ -326,85 +272,70 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           />
         </div>
 
-        {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        {/* Filter Tabs */}
+        <div style={{ display: 'flex', gap: 24, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>
           <button
-            onClick={() => setFilter('ACTIVE')}
+            onClick={() => setFilter('NEW')}
             style={{
-              flex: 1,
-              padding: '8px 12px',
-              borderRadius: 8,
+              background: 'none',
               border: 'none',
+              padding: '0 4px 8px',
+              fontSize: '1rem',
               fontWeight: 700,
-              fontSize: '0.85rem',
-              backgroundColor: filter === 'ACTIVE' ? '#0284c7' : '#e2e8f0',
-              color: filter === 'ACTIVE' ? '#ffffff' : '#475569',
+              color: filter === 'NEW' ? '#ff5722' : '#94a3b8',
+              borderBottom: filter === 'NEW' ? '3px solid #ff5722' : '3px solid transparent',
               cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
             }}
           >
-            Activos
-            <span
-              style={{
-                backgroundColor: filter === 'ACTIVE' ? '#0369a1' : '#cbd5e1',
-                borderRadius: 10,
-                padding: '2px 6px',
-                fontSize: '0.75rem',
-              }}
-            >
-              {activeCount}
-            </span>
+            Pedidos
+          </button>
+          
+          <button
+            onClick={() => setFilter('PREP')}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '0 4px 8px',
+              fontSize: '1rem',
+              fontWeight: 700,
+              color: filter === 'PREP' ? '#ff5722' : '#94a3b8',
+              borderBottom: filter === 'PREP' ? '3px solid #ff5722' : '3px solid transparent',
+              cursor: 'pointer',
+            }}
+          >
+            Preparación
           </button>
 
           <button
             onClick={() => setFilter('READY')}
             style={{
-              flex: 1,
-              padding: '8px 12px',
-              borderRadius: 8,
+              background: 'none',
               border: 'none',
+              padding: '0 4px 8px',
+              fontSize: '1rem',
               fontWeight: 700,
-              fontSize: '0.85rem',
-              backgroundColor: filter === 'READY' ? '#10b981' : '#e2e8f0',
-              color: filter === 'READY' ? '#ffffff' : '#475569',
+              color: filter === 'READY' ? '#ff5722' : '#94a3b8',
+              borderBottom: filter === 'READY' ? '3px solid #ff5722' : '3px solid transparent',
               cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
             }}
           >
             Listos
-            <span
-              style={{
-                backgroundColor: filter === 'READY' ? '#059669' : '#cbd5e1',
-                borderRadius: 10,
-                padding: '2px 6px',
-                fontSize: '0.75rem',
-              }}
-            >
-              {readyCount}
-            </span>
           </button>
 
           <button
-            onClick={() => setFilter('ALL')}
+            onClick={() => setFilter('HISTORY')}
             style={{
-              flex: 1,
-              padding: '8px 12px',
-              borderRadius: 8,
+              background: 'none',
               border: 'none',
+              padding: '0 4px 8px',
+              fontSize: '1rem',
               fontWeight: 700,
-              fontSize: '0.85rem',
-              backgroundColor: filter === 'ALL' ? '#334155' : '#e2e8f0',
-              color: filter === 'ALL' ? '#ffffff' : '#475569',
+              color: filter === 'HISTORY' ? '#ff5722' : '#94a3b8',
+              borderBottom: filter === 'HISTORY' ? '3px solid #ff5722' : '3px solid transparent',
               cursor: 'pointer',
             }}
           >
-            Todos ({orders.length})
+            Historial
           </button>
         </div>
 
@@ -450,11 +381,13 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
               No hay pedidos en esta sección
             </div>
             <p style={{ fontSize: '0.85rem', margin: '6px 0 0', color: '#64748b' }}>
-              {filter === 'ACTIVE'
-                ? 'No hay pedidos pendientes por aceptar hoy.'
-                : filter === 'READY'
-                  ? 'No hay pedidos listos o en preparación hoy.'
-                  : 'No hay pedidos registrados el día de hoy.'}
+              {filter === 'NEW'
+                ? 'No hay pedidos nuevos por aceptar hoy.'
+                : filter === 'PREP'
+                  ? 'No hay pedidos en preparación.'
+                  : filter === 'READY'
+                    ? 'No hay pedidos listos.'
+                    : 'No hay historial de pedidos el día de hoy.'}
             </p>
           </div>
         ) : (
@@ -462,17 +395,33 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
             {filteredOrders.map((order) => {
               const elapsed = getElapsedMinutes(order.created_at);
               const status = (order.status || '').toUpperCase();
+              
               const isReady = isOrderReady(order);
-              const isDelivered = ['DELIVERED', 'CLOSED'].includes(status);
+              const isDelivered = isOrderHistory(order);
+              const isPrep = isOrderPrep(order);
+              const isNew = isOrderNew(order);
 
-              const isDineIn =
-                order.service_type?.toLowerCase() === 'dine-in' ||
-                order.order_type?.toLowerCase() === 'dine-in' ||
-                order.service_type?.toLowerCase() === 'local';
-
-              const isDelivery =
-                order.service_type?.toLowerCase() === 'delivery' ||
-                order.order_type?.toLowerCase() === 'delivery';
+              let statusBg = '#f1f5f9';
+              let statusColor = '#475569';
+              let statusLabel = 'Desconocido';
+              
+              if (isNew) {
+                statusBg = '#fef3c7';
+                statusColor = '#d97706';
+                statusLabel = 'Nuevo';
+              } else if (isPrep) {
+                statusBg = '#e0f2fe';
+                statusColor = '#2563eb';
+                statusLabel = 'En preparación';
+              } else if (isReady) {
+                statusBg = '#dcfce7';
+                statusColor = '#16a34a';
+                statusLabel = 'Listo';
+              } else if (isDelivered) {
+                statusBg = '#f1f5f9';
+                statusColor = '#475569';
+                statusLabel = 'Entregado';
+              }
 
               const customerName =
                 order.customer_label ||
@@ -480,7 +429,8 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                 order.owner_name ||
                 'Cliente';
 
-              const formattedTotal = ((order.total_cents || 0) / 100).toFixed(2);
+              const formattedTotal = ((order.total_cents || 0) / 100).toFixed(0);
+              const items = (order as any).items || [];
 
               return (
                 <div
@@ -488,213 +438,86 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                   onClick={() => handleSelectOrder(order.id)}
                   style={{
                     backgroundColor: '#ffffff',
-                    borderRadius: 12,
-                    padding: '14px 16px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                    border: isReady
-                      ? '1.5px solid #86efac'
-                      : isDelivered
-                        ? '1px solid #e2e8f0'
-                        : '1.5px solid #93c5fd',
+                    borderRadius: 16,
+                    padding: '16px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                    border: '1px solid #f1f5f9',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 8,
-                    transition: 'transform 0.1s ease',
+                    gap: 12,
+                    marginBottom: 12,
                   }}
                 >
-                  {/* Card Header: Folio, Service Modality, Elapsed Time */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span
+                  {/* Card Header: Folio, Elapsed Time */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>
+                      #{order.folio}
+                    </span>
+                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                      {elapsed < 1 ? 'Ahora' : `Hace ${elapsed} min`}
+                    </span>
+                  </div>
+
+                  {/* Card Body: Customer & Status Badge */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '1.1rem', color: '#334155' }}>
+                      {customerName}
+                      
+                      {/* Items Mock/Display */}
+                      <div style={{ marginTop: 8, fontSize: '0.9rem', color: '#64748b', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                         {items.length > 0 ? items.map((it: any, i: number) => (
+                           <div key={i}>{it.quantity || 1} x {it.name || 'Producto'}</div>
+                         )) : (
+                           <>
+                             <div>1 x Consumo</div>
+                           </>
+                         )}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div
                         style={{
-                          fontWeight: 800,
-                          fontSize: '1.05rem',
-                          color: '#0f172a',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          backgroundColor: statusBg,
+                          color: statusColor,
+                          padding: '4px 10px',
+                          borderRadius: 20,
+                          marginBottom: 16,
                         }}
                       >
-                        #{order.folio}
-                      </span>
-                      {order.is_public_intent && (
-                        <span
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: 700,
-                            backgroundColor: '#eff6ff',
-                            color: '#1d4ed8',
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                          }}
-                        >
-                          🌐 WEB
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Elapsed Time Badge */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        color:
-                          elapsed > 25
-                            ? '#b91c1c'
-                            : elapsed > 12
-                              ? '#c2410c'
-                              : '#15803d',
-                        backgroundColor:
-                          elapsed > 25
-                            ? '#fef2f2'
-                            : elapsed > 12
-                              ? '#fff7ed'
-                              : '#f0fdf4',
-                        padding: '2px 8px',
-                        borderRadius: 6,
-                      }}
-                    >
-                      <Clock size={12} />
-                      <span>{elapsed < 1 ? 'Ahora' : `Hace ${elapsed}m`}</span>
+                        {isNew && <span style={{ fontSize: '0.9rem' }}>👋</span>}
+                        {isReady && <CheckCircle2 size={14} />}
+                        {statusLabel}
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#0f172a' }}>
+                        ${formattedTotal}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Card Body: Customer & Service Modality */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.925rem', fontWeight: 600, color: '#334155' }}>
-                      {customerName}
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: '0.8rem',
-                        color: '#64748b',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      {isDineIn ? (
-                        <>
-                          <Utensils size={14} color="#0284c7" />
-                          <span>Comer Aquí</span>
-                        </>
-                      ) : isDelivery ? (
-                        <>
-                          <Bike size={14} color="#059669" />
-                          <span>A Domicilio</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingBag size={14} color="#d97706" />
-                          <span>Para Llevar</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Customer Notes snippet */}
-                  {order.order_notes && (
-                    <div
-                      style={{
-                        fontSize: '0.78rem',
-                        color: '#92400e',
-                        backgroundColor: '#fffbeb',
-                        border: '1px solid #fef3c7',
-                        padding: '4px 8px',
-                        borderRadius: 6,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <span>📝</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.order_notes}</span>
+                  {/* Actions for New Orders */}
+                  {isNew && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); /* handle reject */ }}
+                        style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid #fca5a5', color: '#ef4444', backgroundColor: '#fef2f2', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}
+                      >
+                        Rechazar
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); /* handle accept */ }}
+                        style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', color: '#ffffff', backgroundColor: '#22c55e', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}
+                      >
+                        Aceptar
+                      </button>
                     </div>
                   )}
-
-                  {/* Card Footer: Total, Status & Arrow */}
-                  <div
-                    style={{
-                      paddingTop: 8,
-                      borderTop: '1px dashed #f1f5f9',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>
-                      ${formattedTotal} <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>MXN</span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {order.payment_status === 'CONFIRMED' ? (
-                        <span
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: 700,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            backgroundColor: '#dcfce7',
-                            color: '#166534',
-                          }}
-                        >
-                          ✓ Pagado
-                        </span>
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: 700,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            backgroundColor: '#fef3c7',
-                            color: '#b45309',
-                          }}
-                        >
-                          Por cobrar
-                        </span>
-                      )}
-                      <span
-                        style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          padding: '3px 8px',
-                          borderRadius: 6,
-                          backgroundColor: isDelivered
-                            ? '#f1f5f9'
-                            : isReady
-                              ? '#dcfce7'
-                              : '#e0f2fe',
-                          color: isDelivered
-                            ? '#475569'
-                            : isReady
-                              ? '#166534'
-                              : '#0369a1',
-                        }}
-                      >
-                        {isDelivered ? 'Entregado' : isReady ? 'Listo' : 'Por Aceptar'}
-                      </span>
-                      <ChevronRight size={16} color="#94a3b8" />
-                    </div>
-                  </div>
                 </div>
               );
             })}
