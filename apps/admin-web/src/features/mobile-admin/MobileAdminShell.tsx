@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChefHat, CircleDollarSign, Utensils, Store, Sparkles, ClipboardList, MoreHorizontal } from 'lucide-react';
+import { ChefHat, CircleDollarSign, Utensils, Store, Sparkles, ClipboardList, Settings } from 'lucide-react';
 import { fetchApi } from '@restaurantos/api-client';
 import { MobileOrdersMonitor } from '../mobile-orders/MobileOrdersMonitor';
 import { MobileOrderAlertsCoordinator } from '../mobile-orders/MobileOrderAlertsCoordinator';
@@ -358,7 +358,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
           </span>
         </button>
 
-        {/* Tab 4: Más */}
+        {/* Tab 4: Config */}
         <button
           type="button"
           onClick={() => handleTabChange('settings')}
@@ -377,9 +377,9 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
             padding: 0,
           }}
         >
-          <MoreHorizontal size={24} color={currentTab === 'settings' ? '#ff5722' : '#94a3b8'} />
+          <Settings size={24} color={currentTab === 'settings' ? '#ff5722' : '#94a3b8'} />
           <span style={{ fontSize: '0.75rem', fontWeight: currentTab === 'settings' ? 700 : 500 }}>
-            Más
+            Config
           </span>
         </button>
       </nav>

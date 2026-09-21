@@ -27698,6 +27698,69 @@ def accept_pending_order(
     return get_order_detail(session, order_id, actor_id)
 
 
+def reject_pending_order(
+    session: Session,
+    order_id: str,
+    reason: str = "Rechazado desde administración móvil",
+    actor_user_id: str | None = None,
+) -> dict[str, Any]:
+    actor_id = _actor_user_id(actor_user_id)
+    order = (
+        session.execute(sa.select(models.orders).where(models.orders.c.id == order_id))
+        .mappings()
+        .first()
+    )
+    if not order:
+        raise NotFoundError("order_not_found", "Order was not found")
+    require_permission(session, actor_id, "orders.create", order["branch_id"])
+    if order["status"] in {"CANCELLED", "REJECTED"}:
+        return get_order_detail(session, order_id, actor_id)
+
+    now = _now()
+    session.execute(
+        models.orders.update()
+        .where(models.orders.c.id == order_id)
+        .values(
+            status="REJECTED",
+        )
+    )
+    session.execute(
+        models.order_events.insert().values(
+            id=_id(),
+            order_id=order_id,
+            event_type="ORDER_REJECTED",
+            payload={"reason": reason},
+            created_at=now,
+        )
+    )
+    _audit(
+        session,
+        action="order.rejected",
+        entity_type="order",
+        entity_id=order_id,
+        payload={
+            "order_id": order_id,
+            "previous_status": order["status"],
+            "new_status": "REJECTED",
+            "reason": reason,
+        },
+        branch_id=order["branch_id"],
+        actor_user_id=actor_id,
+    )
+    session.commit()
+    try:
+        from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
+
+        WhatsAppNotificationService(session).notify_order_status_change(order_id, "REJECTED")
+    except Exception as notify_exc:
+        logger.warning(
+            "WhatsApp order status notification failed for reject %s: %s",
+            order_id,
+            notify_exc,
+        )
+    return get_order_detail(session, order_id, actor_id)
+
+
 def get_organization_profile(session: Session, organization_id: str) -> dict[str, Any]:
     org = session.execute(
         sa.select(models.organizations).where(models.organizations.c.id == organization_id)

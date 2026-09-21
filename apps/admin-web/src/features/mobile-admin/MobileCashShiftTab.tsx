@@ -20,7 +20,7 @@ import {
   DollarSign,
   ArrowDownRight,
   ArrowUpRight,
-  PlaySquare,
+  HelpCircle,
 } from 'lucide-react';
 
 interface MobileCashShiftTabProps {
@@ -336,7 +336,7 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                 cursor: 'pointer',
               }}
             >
-              <PlaySquare size={16} color="#fbbf24" />
+              <HelpCircle size={16} color="#fbbf24" />
             </button>
           )}
         </div>

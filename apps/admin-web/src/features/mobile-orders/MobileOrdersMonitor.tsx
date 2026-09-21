@@ -13,6 +13,7 @@ import {
   ChefHat,
   QrCode,
   PlaySquare,
+  HelpCircle,
   Menu,
   Store,
   ChevronDown
@@ -140,6 +141,47 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     setIsDetailOpen(true);
   };
 
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const handleAcceptOrder = async (e: React.MouseEvent, orderId: string) => {
+    e.stopPropagation();
+    if (actionLoadingId) return;
+    setActionLoadingId(orderId);
+    setError(null);
+    try {
+      await fetchApi(`/orders/${encodeURIComponent(orderId)}/accept`, {
+        method: 'POST',
+      });
+      setFilter('PREP');
+      await loadOrders(true);
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'Error al aceptar el pedido.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRejectOrder = async (e: React.MouseEvent, orderId: string) => {
+    e.stopPropagation();
+    if (actionLoadingId) return;
+    const confirmReject = window.confirm('¿Estás seguro de que deseas rechazar este pedido? Se moverá al historial como rechazado.');
+    if (!confirmReject) return;
+    setActionLoadingId(orderId);
+    setError(null);
+    try {
+      await fetchApi(`/orders/${encodeURIComponent(orderId)}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Rechazado desde administración móvil' }),
+      });
+      await loadOrders(true);
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'Error al rechazar el pedido.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const isOrderNew = (order: OrderItem): boolean => {
     const status = (order.status || '').toUpperCase();
     if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
@@ -211,18 +253,70 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <button 
+            type="button"
             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
             onClick={() => {}}
           >
             <Menu size={24} color="#334155" />
           </button>
           
-          <div style={{ display: 'flex', alignItems: 'center', fontSize: '1.4rem', fontWeight: 900 }}>
-             <span style={{ color: '#ff5722' }}>mi</span><span style={{ color: '#1e293b' }}>menu</span><span style={{ color: '#1e293b' }}>.onl</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '1.35rem', fontWeight: 900 }}>
+               <span style={{ color: '#ff5722' }}>mi</span><span style={{ color: '#1e293b' }}>menu</span><span style={{ color: '#1e293b' }}>.onl</span>
+            </div>
+            {onOpenHelpVideos && (
+              <button
+                type="button"
+                onClick={onOpenHelpVideos}
+                aria-label="Tutoriales y videos de ayuda"
+                title="Videos de ayuda"
+                style={{
+                  border: '1.5px solid #ff5722',
+                  background: '#fff7ed',
+                  color: '#ff5722',
+                  borderRadius: '50%',
+                  width: 26,
+                  height: 26,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontWeight: 800,
+                  boxShadow: '0 1px 3px rgba(255, 87, 34, 0.2)',
+                }}
+              >
+                <HelpCircle size={17} color="#ff5722" />
+              </button>
+            )}
           </div>
           
-          <div style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>
-            MG
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setIsQrModalOpen(true)}
+              aria-label="Ver y compartir código QR del menú"
+              title="Código QR del menú"
+              style={{
+                border: '1px solid #fed7aa',
+                background: '#fff7ed',
+                color: '#ea580c',
+                borderRadius: 8,
+                padding: '5px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '0.78rem',
+              }}
+            >
+              <QrCode size={16} color="#ea580c" />
+              <span>QR</span>
+            </button>
+            <div style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>
+              MG
+            </div>
           </div>
         </div>
 
@@ -418,9 +512,15 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                 statusColor = '#16a34a';
                 statusLabel = 'Listo';
               } else if (isDelivered) {
-                statusBg = '#f1f5f9';
-                statusColor = '#475569';
-                statusLabel = 'Entregado';
+                if (['CANCELLED', 'REJECTED'].includes(status)) {
+                  statusBg = '#fef2f2';
+                  statusColor = '#dc2626';
+                  statusLabel = status === 'REJECTED' ? 'Rechazado' : 'Cancelado';
+                } else {
+                  statusBg = '#f1f5f9';
+                  statusColor = '#475569';
+                  statusLabel = 'Entregado';
+                }
               }
 
               const customerName =
@@ -505,16 +605,42 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                   {isNew && (
                     <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                       <button 
-                        onClick={(e) => { e.stopPropagation(); /* handle reject */ }}
-                        style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid #fca5a5', color: '#ef4444', backgroundColor: '#fef2f2', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}
+                        type="button"
+                        disabled={actionLoadingId === order.id}
+                        onClick={(e) => void handleRejectOrder(e, order.id)}
+                        style={{
+                          flex: 1,
+                          padding: '10px 0',
+                          borderRadius: 10,
+                          border: '1px solid #fca5a5',
+                          color: '#ef4444',
+                          backgroundColor: '#fef2f2',
+                          fontWeight: 600,
+                          fontSize: '0.95rem',
+                          cursor: 'pointer',
+                          opacity: actionLoadingId === order.id ? 0.6 : 1,
+                        }}
                       >
-                        Rechazar
+                        {actionLoadingId === order.id ? 'Rechazando...' : 'Rechazar'}
                       </button>
                       <button 
-                        onClick={(e) => { e.stopPropagation(); /* handle accept */ }}
-                        style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', color: '#ffffff', backgroundColor: '#22c55e', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}
+                        type="button"
+                        disabled={actionLoadingId === order.id}
+                        onClick={(e) => void handleAcceptOrder(e, order.id)}
+                        style={{
+                          flex: 1,
+                          padding: '10px 0',
+                          borderRadius: 10,
+                          border: 'none',
+                          color: '#ffffff',
+                          backgroundColor: '#22c55e',
+                          fontWeight: 600,
+                          fontSize: '0.95rem',
+                          cursor: 'pointer',
+                          opacity: actionLoadingId === order.id ? 0.6 : 1,
+                        }}
                       >
-                        Aceptar
+                        {actionLoadingId === order.id ? 'Aceptando...' : 'Aceptar'}
                       </button>
                     </div>
                   )}
@@ -532,7 +658,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         onClose={() => setIsDetailOpen(false)}
         onOrderUpdated={() => void loadOrders()}
         onOrderAccepted={() => {
-          setFilter('READY');
+          setFilter('PREP');
           void loadOrders();
         }}
         branchName={branchName}

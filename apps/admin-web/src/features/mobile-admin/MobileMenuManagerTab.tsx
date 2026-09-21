@@ -15,7 +15,7 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
-  PlaySquare,
+  HelpCircle,
 } from 'lucide-react';
 
 interface MobileMenuManagerTabProps {
@@ -484,7 +484,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 cursor: 'pointer',
               }}
             >
-              <PlaySquare size={16} color="#fbbf24" />
+              <HelpCircle size={16} color="#fbbf24" />
             </button>
           )}
 

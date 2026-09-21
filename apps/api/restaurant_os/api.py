@@ -78,6 +78,7 @@ from restaurant_os.operations import (
     ReportingProjectionService,
     UserCashCutService,
     accept_pending_order,
+    reject_pending_order,
     accept_public_order_intent,
     acknowledge_print_attempt,
     add_customer_address,
@@ -3807,6 +3808,43 @@ def accept_order_endpoint(
             )
             return result
         return accept_pending_order(session, order_id, actor_id)
+
+    return _business_response(operation)
+
+
+@router.post("/orders/{order_id}/reject")
+def reject_order_endpoint(
+    order_id: str,
+    session: SessionDep,
+    payload: dict[str, Any] | None = None,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    raw_reason = str((payload or {}).get("reason", "Rechazado desde administración móvil")).strip()
+    reason = raw_reason if len(raw_reason) >= 10 else "Rechazado desde administración móvil"
+
+    def operation() -> dict[str, Any]:
+        intent = (
+            session.execute(
+                sa.select(models.public_order_intents).where(
+                    models.public_order_intents.c.id == order_id
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if intent:
+            result, _ = reject_public_order_intent(
+                session,
+                intent_id=order_id,
+                expected_version=int(intent["version"]),
+                reason=reason,
+                idempotency_key=f"pos-reject-{order_id}-{intent['version']}",
+                actor_user_id=actor_id,
+            )
+            return result
+        return reject_pending_order(session, order_id, reason, actor_id)
 
     return _business_response(operation)
 

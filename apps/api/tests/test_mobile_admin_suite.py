@@ -616,3 +616,90 @@ def test_mobile_order_payment_and_fulfillment(test_db):
     )
     assert open_shift is not None
     assert open_shift["register_code"] == "CAJA-01"
+
+
+def test_mobile_order_accept_and_reject(test_db):
+    """TDD-TC-255: Validate accept and reject order operations from mobile admin."""
+
+    def override_get_session():
+        yield test_db
+
+    app.dependency_overrides[get_session] = override_get_session
+    client = TestClient(app)
+    headers = _auth_headers(test_db)
+
+    prods = client.get("/api/v1/catalog/products", headers=headers).json()
+    assert len(prods) >= 1
+    target_product = prods[0]
+
+    # Open cash shift
+    client.post(
+        "/api/v1/cash/shifts/open",
+        headers={**headers, "Idempotency-Key": "shift-open-mobile-acc-rej"},
+        json={
+            "branch_id": operations.BRANCH_ID,
+            "register_id": "CAJA-01",
+            "opening_cash_cents": 50000,
+        },
+    )
+
+    # 1. Create order 1 for accept
+    create_resp1 = client.post(
+        "/api/v1/orders",
+        headers={**headers, "Idempotency-Key": "order-accept-test-001"},
+        json={
+            "lines": [{"product_id": target_product["id"], "quantity": 1}],
+            "branch_id": operations.BRANCH_ID,
+            "order_type": "takeout",
+            "owner_name": "Cliente Aceptar",
+            "payment_method_intent": "cash",
+        },
+    )
+    assert create_resp1.status_code == 200
+    order1 = create_resp1.json()
+    order1_id = order1["id"]
+
+    # Manually set to PENDING to simulate mobile intake if created as ACCEPTED or draft
+    test_db.execute(
+        models.orders.update().where(models.orders.c.id == order1_id).values(status="PENDING")
+    )
+    test_db.commit()
+
+    # Accept order 1
+    accept_resp = client.post(f"/api/v1/orders/{order1_id}/accept", headers=headers)
+    assert accept_resp.status_code == 200
+    assert accept_resp.json()["status"] == "ACCEPTED"
+
+    # 2. Create order 2 for reject
+    create_resp2 = client.post(
+        "/api/v1/orders",
+        headers={**headers, "Idempotency-Key": "order-reject-test-002"},
+        json={
+            "lines": [{"product_id": target_product["id"], "quantity": 1}],
+            "branch_id": operations.BRANCH_ID,
+            "order_type": "takeout",
+            "owner_name": "Cliente Rechazar",
+            "payment_method_intent": "cash",
+        },
+    )
+    assert create_resp2.status_code == 200
+    order2 = create_resp2.json()
+    order2_id = order2["id"]
+
+    test_db.execute(
+        models.orders.update().where(models.orders.c.id == order2_id).values(status="PENDING")
+    )
+    test_db.commit()
+
+    # Reject order 2
+    reject_resp = client.post(
+        f"/api/v1/orders/{order2_id}/reject",
+        headers=headers,
+        json={"reason": "Rechazado por alta demanda"},
+    )
+    assert reject_resp.status_code == 200
+    assert reject_resp.json()["status"] == "REJECTED"
+
+    # Verify order 2 detail has status REJECTED
+    detail2 = client.get(f"/api/v1/orders/{order2_id}", headers=headers).json()
+    assert detail2["status"] == "REJECTED"

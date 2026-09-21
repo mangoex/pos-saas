@@ -8,7 +8,7 @@ import {
   ExternalLink,
   MessageSquare,
   Star,
-  PlaySquare,
+  HelpCircle,
   CheckCircle2,
   AlertCircle,
   Phone,
@@ -369,8 +369,8 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
               boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
             }}
           >
-            <PlaySquare size={16} color="#fbbf24" />
-            <span>Tutoriales</span>
+            <HelpCircle size={16} color="#fbbf24" />
+            <span>Ayuda</span>
           </button>
         )}
       </header>
