@@ -959,6 +959,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         type="time"
                         value={pickupTime}
                         onChange={(e) => setPickupTime(e.target.value)}
+                        onClick={(e) => {
+                          try {
+                            (e.target as any)?.showPicker?.();
+                          } catch {}
+                        }}
                         className="pickup-time-field"
                         required={orderType === 'takeaway'}
                       />

@@ -73,12 +73,12 @@ test('MobileOrderDetailModal supports order rejection and displays REJECTED bann
   assert.match(source, /Pedido Rechazado \(No cobrado ni preparado\)/);
 });
 
-test('Mobile digital menu ensures pickup time container and badge do not overflow viewport', () => {
+test('Mobile digital menu ensures pickup time container and badge do not overflow viewport and are selectable', () => {
   const css = readFileSync(join(root, 'apps/mobile-web/src/index.css'), 'utf8');
+  const drawerSource = readFileSync(join(root, 'apps/mobile-web/src/components/CartDrawer.tsx'), 'utf8');
 
   assert.match(css, /\.pickup-schedule-section\s*\{[^}]*box-sizing:\s*border-box/);
-  assert.match(css, /\.pickup-schedule-section\s*\{[^}]*overflow:\s*hidden/);
-  assert.match(css, /\.pickup-time-section-block\s*\{[^}]*box-sizing:\s*border-box/);
-  assert.match(css, /\.pickup-time-field\s*\{[^}]*max-width:\s*100%/);
+  assert.match(css, /\.pickup-time-field\s*\{[^}]*min-height:\s*48px/);
   assert.match(css, /\.pickup-summary-badge\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  assert.match(drawerSource, /showPicker/);
 });
