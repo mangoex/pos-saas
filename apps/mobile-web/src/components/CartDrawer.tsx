@@ -16,6 +16,7 @@ interface PickupDayOption {
   monthName: string;
   isPast: boolean;
   isToday: boolean;
+  isClosed?: boolean;
   disabled: boolean;
 }
 
@@ -150,6 +151,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return (new Date().getDay() + 6) % 7;
   }, []);
 
+  const scheduleByDay = useMemo(() => {
+    const map = new Map<number, any>();
+    if (selectedBranch?.service_schedule && Array.isArray(selectedBranch.service_schedule)) {
+      for (const s of selectedBranch.service_schedule) {
+        map.set(s.day_index, s);
+      }
+    }
+    return map;
+  }, [selectedBranch?.service_schedule]);
+
   const weekDayOptions = useMemo<PickupDayOption[]>(() => {
     const now = new Date();
     const todayIndex = (now.getDay() + 6) % 7;
@@ -162,6 +173,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       const isPast = idx < todayIndex;
       const isToday = idx === todayIndex;
       const monthName = d.toLocaleDateString('es-MX', { month: 'short' });
+      const daySchedule = scheduleByDay.get(idx);
+      const isClosed = daySchedule ? daySchedule.is_open === false : false;
+      const disabled = isPast || isClosed;
       return {
         index: idx,
         letter,
@@ -170,18 +184,34 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         monthName,
         isPast,
         isToday,
-        disabled: isPast,
+        isClosed,
+        disabled,
       };
     });
-  }, []);
+  }, [scheduleByDay]);
 
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
     return (new Date().getDay() + 6) % 7;
   });
 
+  // Automatically fall back to first non-disabled day if today or selected day is closed
+  useEffect(() => {
+    const currentOpt = weekDayOptions.find((d) => d.index === selectedDayIndex);
+    if (currentOpt?.disabled) {
+      const firstAvailable = weekDayOptions.find((d) => !d.disabled);
+      if (firstAvailable) {
+        setSelectedDayIndex(firstAvailable.index);
+      }
+    }
+  }, [weekDayOptions, selectedDayIndex]);
+
   const selectedDay = useMemo(() => {
     return weekDayOptions.find((d) => d.index === selectedDayIndex) || weekDayOptions[currentDayIndex] || weekDayOptions[0];
   }, [weekDayOptions, selectedDayIndex, currentDayIndex]);
+
+  const currentDaySchedule = useMemo(() => {
+    return scheduleByDay.get(selectedDayIndex) || null;
+  }, [scheduleByDay, selectedDayIndex]);
 
   const [pickupTime, setPickupTime] = useState<string>(() => {
     const d = new Date();
@@ -461,6 +491,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
     let finalOrderNotes = orderNotes.trim();
     if (orderType === 'takeaway') {
+      if (selectedDay.disabled) {
+        setFormError(`El día seleccionado (${selectedDay.name}) se encuentra cerrado para pedidos.`);
+        return;
+      }
+      if (currentDaySchedule && currentDaySchedule.is_open) {
+        const openT = currentDaySchedule.open_time || '09:00';
+        const closeT = currentDaySchedule.close_time || '22:00';
+        if (pickupTime && (pickupTime < openT || pickupTime > closeT)) {
+          setFormError(`El horario de atención para ${selectedDay.name} es de ${openT} a ${closeT} hrs. Por favor elige una hora dentro de este rango.`);
+          return;
+        }
+      }
       const dayLabel = selectedDay.isToday
         ? `Hoy (${selectedDay.name} ${selectedDay.dateNumber} ${selectedDay.monthName})`
         : `${selectedDay.name} ${selectedDay.dateNumber} ${selectedDay.monthName}`;
@@ -930,12 +972,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           disabled={opt.disabled}
                           onClick={() => !opt.disabled && setSelectedDayIndex(opt.index)}
                           className={`pickup-day-btn ${isSelected ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''} ${opt.isToday ? 'is-today' : ''}`}
-                          title={opt.disabled ? `${opt.name} (Día pasado no disponible)` : opt.name}
+                          title={opt.disabled ? `${opt.name} (${opt.isPast ? 'Día pasado no disponible' : 'Cerrado por horario'})` : opt.name}
                           aria-label={opt.name}
                         >
                           <span className="pickup-day-letter">{opt.letter}</span>
                           <span className="pickup-day-number">{opt.dateNumber}</span>
                           {opt.isToday && <span className="pickup-day-today-pill">Hoy</span>}
+                          {opt.isClosed && !opt.isPast && (
+                            <span style={{ fontSize: '0.52rem', color: '#94a3b8', fontWeight: 700, lineHeight: 1 }}>Cerrado</span>
+                          )}
                         </button>
                       );
                     })}
@@ -957,6 +1002,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <input
                         id="pickup-time-input"
                         type="time"
+                        min={currentDaySchedule?.is_open ? currentDaySchedule.open_time : undefined}
+                        max={currentDaySchedule?.is_open ? currentDaySchedule.close_time : undefined}
                         value={pickupTime}
                         onChange={(e) => setPickupTime(e.target.value)}
                         onClick={(e) => {
@@ -973,28 +1020,46 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     {selectedDay.isToday && (
                       <div className="pickup-quick-chips">
                         <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Rápido:</span>
-                        {[20, 30, 45, 60].map((mins) => (
-                          <button
-                            key={mins}
-                            type="button"
-                            className="pickup-quick-chip-btn"
-                            onClick={() => {
-                              const d = new Date();
-                              d.setMinutes(d.getMinutes() + mins);
-                              const hh = String(d.getHours()).padStart(2, '0');
-                              const mm = String(d.getMinutes()).padStart(2, '0');
-                              setPickupTime(`${hh}:${mm}`);
-                            }}
-                          >
-                            +{mins < 60 ? `${mins} min` : '1 hora'}
-                          </button>
-                        ))}
+                        {[15, 30, 45, 60]
+                          .filter((mins) => {
+                            if (!currentDaySchedule?.close_time) return true;
+                            const d = new Date();
+                            d.setMinutes(d.getMinutes() + mins);
+                            const hh = String(d.getHours()).padStart(2, '0');
+                            const mm = String(d.getMinutes()).padStart(2, '0');
+                            return `${hh}:${mm}` <= currentDaySchedule.close_time;
+                          })
+                          .map((mins) => (
+                            <button
+                              key={mins}
+                              type="button"
+                              className="pickup-quick-chip-btn"
+                              onClick={() => {
+                                const d = new Date();
+                                d.setMinutes(d.getMinutes() + mins);
+                                const hh = String(d.getHours()).padStart(2, '0');
+                                const mm = String(d.getMinutes()).padStart(2, '0');
+                                setPickupTime(`${hh}:${mm}`);
+                              }}
+                            >
+                              +{mins < 60 ? `${mins} min` : '1 hora'}
+                            </button>
+                          ))}
                       </div>
                     )}
 
                     {/* Selected Summary Badge */}
                     <div className="pickup-summary-badge">
-                      <span>📅 Pasarás a recoger: <strong>{selectedDay.isToday ? 'Hoy' : selectedDay.name} ({selectedDay.dateNumber} {selectedDay.monthName}) a las {pickupTime || '--:--'} hrs</strong></span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+                        <span>
+                          📅 Pasarás a recoger: <strong>{selectedDay.isToday ? 'Hoy' : selectedDay.name} ({selectedDay.dateNumber} {selectedDay.monthName}) a las {pickupTime || '--:--'} hrs</strong>
+                        </span>
+                        {currentDaySchedule?.is_open && (
+                          <span style={{ fontSize: '0.72rem', color: '#c2410c', fontWeight: 500 }}>
+                            ⏰ Horario de servicio {selectedDay.isToday ? 'hoy' : selectedDay.name}: {currentDaySchedule.open_time} a {currentDaySchedule.close_time} hrs
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -159,6 +159,7 @@ from restaurant_os.operations import (
     get_customer_feedbacks,
     get_ingredient_variation,
     get_open_cash_shift,
+    reconcile_branch_auto_cash_shift,
     get_order_detail,
     get_public_catalog,
     get_branch_trending_dishes,
@@ -1636,6 +1637,7 @@ def get_current_cash_shift(
         )
         if not authorized_branch_id:
             raise BusinessError("cash_shift_current_payload_invalid", "branch_id is required")
+        reconcile_branch_auto_cash_shift(session, authorized_branch_id, register_id)
         shift = get_open_cash_shift(
             session, register_code=register_id, branch_id=authorized_branch_id, actor_user_id=actor_id
         )

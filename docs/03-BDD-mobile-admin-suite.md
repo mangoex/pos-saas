@@ -73,4 +73,25 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     When el administrador activa o recupera la alarma
     Then la interfaz no declara Alarma lista hasta confirmar estado running
     And conserva una alerta visual y una acción explícita de reactivación
+
+  @BDD-SC-819
+  Scenario: Configuración de horarios de servicio semanal y apertura/cierre automático de caja
+    Given un usuario administrador en la pestaña de "Caja" del shell móvil
+    When despliega la sección "Horarios y Caja Automática"
+    And configura los horarios de apertura y cierre para cada día de la semana (L, M, M, J, V, S, D) o los marca como "Cerrado"
+    And activa la opción "Apertura y Cierre Automático de Caja" con un fondo inicial predeterminado de "$500.00 MXN"
+    Then el sistema persiste los horarios y preferencias mediante "PUT /branches/{id}"
+    And el motor de reconciliación abre el turno de caja automáticamente si la hora local de la sucursal está dentro del horario de servicio
+    And si el administrador cierra manualmente el turno durante el horario de servicio, el sistema no vuelve a reabrir automáticamente en el mismo día
+    And al finalizar el horario de servicio o en días cerrados, el turno se cierra operativamente de forma automática
+    And el administrador conserva la facultad de abrir y cerrar turnos manualmente en cualquier momento
+
+  @BDD-SC-820
+  Scenario: Restricción de pedidos para recoger y llevar según horario de servicio configurado
+    Given un cliente navegando el menú digital público con intención de pedir para recoger o llevar
+    When despliega el selector de fecha y hora en el carrito
+    Then los días de la semana marcados como cerrado quedan deshabilitados visual y funcionalmente con la etiqueta "(Cerrado)"
+    And el campo de hora queda acotado entre la hora de apertura y la hora de cierre del día seleccionado
+    And las sugerencias rápidas de tiempo se filtran para no rebasar la hora límite de cierre
+    And el sistema valida antes de enviar el pedido que el horario seleccionado corresponda a un día abierto y dentro del rango de servicio
 ```

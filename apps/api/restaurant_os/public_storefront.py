@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from restaurant_os import models
 from restaurant_os.database import get_session
+from restaurant_os.operations import reconcile_branch_auto_cash_shift
 
 router = APIRouter(prefix="/api/v1/public/storefronts", tags=["storefronts"])
 host_context_router = APIRouter(prefix="/api/v1/public", tags=["storefronts"])
@@ -118,6 +119,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         "delivery_tiers",
         "free_delivery_min_cents",
         "coupons",
+        "service_schedule",
     )
     branches = []
     for branch in branch_rows:
@@ -134,6 +136,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         )
         if len(keys) != 1:
             raise HTTPException(409, detail={"code": "storefront_setup_required"})
+        reconcile_branch_auto_cash_shift(session, branch["id"])
         has_active_shift = bool(
             session.execute(
                 sa.select(models.cash_shifts.c.id).where(

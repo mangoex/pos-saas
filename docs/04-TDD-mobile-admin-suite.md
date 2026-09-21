@@ -39,3 +39,11 @@
 ### TDD-TC-258 Regresión del monitor de pedidos
 - Archivo: `tests/frontend/test_mobile_admin_orders_monitor.mjs`
 - Propósito: confirmar que listado, filtros, aceptación, cobro y entrega permanecen independientes del coordinador global de alertas.
+
+### TDD-TC-259 Horarios de servicio de sucursal y reconciliación de caja automática
+- Archivo: `apps/api/tests/test_branch_service_schedule_and_auto_cash.py`
+- Propósito: Validar que `service_schedule`, `auto_cash_shift_enabled` y `auto_cash_opening_cents` se persisten en la sucursal, y que `reconcile_branch_auto_cash_shift` abre automáticamente el turno de caja con fondo predeterminado ($500.00 MXN) dentro de horario y cierra operativamente fuera de horario o en día de descanso, respetando cierres manuales previos del día y turnos manuales en horas extra.
+
+### TDD-TC-260 Restricción de días y horas de servicio en selector para recoger del menú digital
+- Archivo: `tests/frontend/test_service_schedule_and_pickup_restrictions.mjs`
+- Propósito: Comprobar que en el checkout del menú digital (`CartDrawer`), los días marcados como cerrado (`is_open: false`) quedan deshabilitados en el selector de días (L, M, M, J, V, S, D), el selector de hora queda restringido al rango `[open_time, close_time]` del día elegido, los chips rápidos se filtran para no rebasar el horario, y la validación de envío rechaza pedidos fuera de servicio.

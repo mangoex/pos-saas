@@ -3033,6 +3033,230 @@ def _normalize_operational_close_record(record: dict[str, Any]) -> dict[str, Any
     return normalized
 
 
+def _find_system_actor_for_branch(session: Session, branch_id: str, organization_id: str) -> str:
+    user_id = session.scalar(
+        sa.select(models.users.c.id)
+        .join(models.user_roles, models.user_roles.c.user_id == models.users.c.id)
+        .join(models.roles, models.roles.c.id == models.user_roles.c.role_id)
+        .where(
+            models.users.c.organization_id == organization_id,
+            models.users.c.status == "active",
+            sa.func.lower(models.roles.c.name).in_(("admin", "owner", "caja", "cajero")),
+        )
+        .order_by(models.users.c.created_at.asc())
+        .limit(1)
+    )
+    if user_id:
+        return str(user_id)
+    any_user = session.scalar(
+        sa.select(models.users.c.id)
+        .where(
+            models.users.c.organization_id == organization_id,
+            models.users.c.status == "active",
+        )
+        .order_by(models.users.c.created_at.asc())
+        .limit(1)
+    )
+    return str(any_user) if any_user else "00000000-0000-0000-0000-000000000001"
+
+
+def _normalize_service_schedule(schedule: Any) -> list[dict[str, Any]]:
+    if not isinstance(schedule, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        try:
+            day_idx = int(item.get("day_index", 0))
+        except (ValueError, TypeError):
+            continue
+        if day_idx < 0 or day_idx > 6:
+            continue
+        is_open = bool(item.get("is_open", False))
+        open_time = str(item.get("open_time", "09:00")).strip()
+        close_time = str(item.get("close_time", "22:00")).strip()
+        name = str(item.get("day_name") or day_names[day_idx])
+        normalized.append(
+            {
+                "day_index": day_idx,
+                "day_name": name,
+                "is_open": is_open,
+                "open_time": open_time,
+                "close_time": close_time,
+            }
+        )
+    normalized.sort(key=lambda x: x["day_index"])
+    return normalized
+
+
+def reconcile_branch_auto_cash_shift(
+    session: Session,
+    branch_id: str,
+    register_code: str = DEFAULT_REGISTER,
+    now_dt: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Reconcile open/closed state of cash shift according to branch's service_schedule."""
+    try:
+        branch = (
+            session.execute(sa.select(models.branches).where(models.branches.c.id == branch_id))
+            .mappings()
+            .first()
+        )
+        if not branch:
+            return None
+        if not branch.get("auto_cash_shift_enabled"):
+            return None
+        schedule = branch.get("service_schedule")
+        if not isinstance(schedule, list) or len(schedule) == 0:
+            return None
+
+        tz_name = branch.get("timezone") or "America/Chihuahua"
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("America/Chihuahua")
+
+        if now_dt:
+            local_now = (
+                now_dt.astimezone(tz)
+                if now_dt.tzinfo
+                else now_dt.replace(tzinfo=timezone.utc).astimezone(tz)
+            )
+        else:
+            local_now = datetime.now(tz)
+
+        current_weekday = local_now.weekday()
+        today_entry = next(
+            (
+                s
+                for s in schedule
+                if isinstance(s, dict) and s.get("day_index") == current_weekday
+            ),
+            None,
+        )
+        if not today_entry:
+            return None
+
+        is_open = bool(today_entry.get("is_open", False))
+        open_time = str(today_entry.get("open_time", "09:00")).strip()
+        close_time = str(today_entry.get("close_time", "22:00")).strip()
+        curr_hm = local_now.strftime("%H:%M")
+
+        in_schedule = False
+        if is_open:
+            if open_time <= close_time:
+                in_schedule = open_time <= curr_hm < close_time
+            else:
+                in_schedule = curr_hm >= open_time or curr_hm < close_time
+
+        current_shift = get_open_cash_shift(
+            session, register_code=register_code, branch_id=branch_id
+        )
+
+        if in_schedule:
+            if current_shift:
+                return current_shift
+
+            start_of_day_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            start_of_day_utc = start_of_day_local.astimezone(timezone.utc)
+            recent_closed = session.execute(
+                sa.select(models.cash_shifts.c.id)
+                .where(
+                    models.cash_shifts.c.branch_id == branch_id,
+                    models.cash_shifts.c.register_code == register_code,
+                    models.cash_shifts.c.closed_at.is_not(None),
+                    models.cash_shifts.c.closed_at >= start_of_day_utc,
+                )
+                .limit(1)
+            ).first()
+            if recent_closed:
+                return None
+
+            opening_cents = int(branch.get("auto_cash_opening_cents") or 50000)
+            system_actor = _find_system_actor_for_branch(
+                session, branch_id, str(branch["organization_id"])
+            )
+            new_shift = open_cash_shift(
+                session,
+                opening_cash_cents=opening_cents,
+                register_code=register_code,
+                branch_id=branch_id,
+                actor_user_id=system_actor,
+            )
+            _audit(
+                session,
+                action="cash_shift.auto_opened",
+                entity_type="cash_shift",
+                entity_id=new_shift["id"],
+                payload={
+                    "reason": "service_schedule",
+                    "day_index": current_weekday,
+                    "open_time": open_time,
+                    "close_time": close_time,
+                    "auto_cash_opening_cents": opening_cents,
+                },
+                branch_id=branch_id,
+                organization_id=str(branch["organization_id"]),
+                actor_user_id=system_actor,
+            )
+            session.commit()
+            return new_shift
+        else:
+            if not current_shift:
+                return None
+
+            opened_at_val = current_shift.get("opened_at")
+            if opened_at_val:
+                opened_dt = (
+                    opened_at_val
+                    if opened_at_val.tzinfo
+                    else opened_at_val.replace(tzinfo=timezone.utc)
+                )
+                opened_local = opened_dt.astimezone(tz)
+                opened_hm = opened_local.strftime("%H:%M")
+                if (
+                    open_time <= close_time
+                    and opened_hm >= close_time
+                    and opened_local.date() == local_now.date()
+                ):
+                    return current_shift
+
+            system_actor = _find_system_actor_for_branch(
+                session, branch_id, str(branch["organization_id"])
+            )
+            auto_key = f"auto-close:{current_shift['id']}:{local_now.strftime('%Y%m%d%H%M')}"
+            close_cash_shift_operationally(
+                session,
+                cash_shift_id=current_shift["id"],
+                idempotency_key=auto_key,
+                actor_user_id=system_actor,
+            )
+            _audit(
+                session,
+                action="cash_shift.auto_closed",
+                entity_type="cash_shift",
+                entity_id=current_shift["id"],
+                payload={
+                    "reason": "service_schedule_ended",
+                    "day_index": current_weekday,
+                    "close_time": close_time,
+                },
+                branch_id=branch_id,
+                organization_id=str(branch["organization_id"]),
+                actor_user_id=system_actor,
+            )
+            session.commit()
+            return None
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "reconcile_branch_auto_cash_shift failed: %s", exc
+        )
+        session.rollback()
+        return None
+
+
 def close_cash_shift_with_cut(
     session: Session,
     counted_cash_cents: int,
@@ -11672,6 +11896,9 @@ def update_branch(
     delivery_tiers: list[dict[str, Any]] | None = None,
     free_delivery_min_cents: int | None = None,
     coupons: list[dict[str, Any]] | None = None,
+    service_schedule: list[dict[str, Any]] | None = None,
+    auto_cash_shift_enabled: bool | None = None,
+    auto_cash_opening_cents: int | None = None,
     extra_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
@@ -11739,6 +11966,30 @@ def update_branch(
         )
     if coupons is not None:
         update_data["coupons"] = _normalize_branch_coupons(coupons)
+
+    if service_schedule is not None:
+        update_data["service_schedule"] = _normalize_service_schedule(service_schedule)
+    elif extra_payload and "service_schedule" in extra_payload:
+        update_data["service_schedule"] = _normalize_service_schedule(extra_payload["service_schedule"])
+
+    if auto_cash_shift_enabled is not None:
+        update_data["auto_cash_shift_enabled"] = bool(auto_cash_shift_enabled)
+    elif extra_payload and "auto_cash_shift_enabled" in extra_payload:
+        update_data["auto_cash_shift_enabled"] = bool(extra_payload["auto_cash_shift_enabled"])
+
+    if auto_cash_opening_cents is not None:
+        try:
+            val = int(auto_cash_opening_cents) if auto_cash_opening_cents != "" else 50000
+            update_data["auto_cash_opening_cents"] = max(0, val)
+        except (ValueError, TypeError):
+            update_data["auto_cash_opening_cents"] = 50000
+    elif extra_payload and "auto_cash_opening_cents" in extra_payload:
+        try:
+            raw_val = extra_payload["auto_cash_opening_cents"]
+            val = int(raw_val) if raw_val is not None and raw_val != "" else 50000
+            update_data["auto_cash_opening_cents"] = max(0, val)
+        except (ValueError, TypeError):
+            update_data["auto_cash_opening_cents"] = 50000
 
     if extra_payload:
         for k in (
@@ -11900,6 +12151,7 @@ def list_public_branches(
             models.branches.c.delivery_tiers,
             models.branches.c.free_delivery_min_cents,
             models.branches.c.coupons,
+            models.branches.c.service_schedule,
             models.branches.c.status,
             models.public_order_keys.c.public_key,
         )

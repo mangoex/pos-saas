@@ -81,6 +81,14 @@ export interface BranchCoupon {
   show_in_checkout?: boolean;
 }
 
+export interface DaySchedule {
+  day_index: number;
+  day_name: string;
+  is_open: boolean;
+  open_time: string;
+  close_time: string;
+}
+
 export interface BranchInfo {
   id: string;
   name: string;
@@ -107,6 +115,7 @@ export interface BranchInfo {
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
   coupons?: BranchCoupon[];
+  service_schedule?: DaySchedule[];
   has_active_shift?: boolean;
 }
 

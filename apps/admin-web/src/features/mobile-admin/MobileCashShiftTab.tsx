@@ -21,7 +21,28 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   HelpCircle,
+  Calendar,
+  Copy,
+  Save,
 } from 'lucide-react';
+
+export interface DayScheduleForm {
+  day_index: number;
+  day_name: string;
+  is_open: boolean;
+  open_time: string;
+  close_time: string;
+}
+
+const DEFAULT_SCHEDULE: DayScheduleForm[] = [
+  { day_index: 0, day_name: 'Lunes', is_open: true, open_time: '09:00', close_time: '22:00' },
+  { day_index: 1, day_name: 'Martes', is_open: true, open_time: '09:00', close_time: '22:00' },
+  { day_index: 2, day_name: 'Miércoles', is_open: true, open_time: '09:00', close_time: '22:00' },
+  { day_index: 3, day_name: 'Jueves', is_open: true, open_time: '09:00', close_time: '22:00' },
+  { day_index: 4, day_name: 'Viernes', is_open: true, open_time: '09:00', close_time: '23:00' },
+  { day_index: 5, day_name: 'Sábado', is_open: true, open_time: '10:00', close_time: '23:00' },
+  { day_index: 6, day_name: 'Domingo', is_open: false, open_time: '10:00', close_time: '20:00' },
+];
 
 interface MobileCashShiftTabProps {
   branchId: string;
@@ -129,6 +150,99 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
   useEffect(() => {
     void loadReport(reportDate);
   }, [loadReport, reportDate]);
+
+  // Schedule and auto cash configuration state
+  const [scheduleDays, setScheduleDays] = useState<DayScheduleForm[]>(DEFAULT_SCHEDULE);
+  const [autoCashShiftEnabled, setAutoCashShiftEnabled] = useState(false);
+  const [autoCashOpeningPesos, setAutoCashOpeningPesos] = useState('500');
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [scheduleSuccessMessage, setScheduleSuccessMessage] = useState<string | null>(null);
+  const [scheduleErrorMessage, setScheduleErrorMessage] = useState<string | null>(null);
+  const [isScheduleCollapsed, setIsScheduleCollapsed] = useState(false);
+
+  const loadBranchSchedule = useCallback(async () => {
+    if (!branchId) return;
+    try {
+      const branches = await fetchApi<any[]>('/branches');
+      const target = branches.find((b) => b.id === branchId) || branches[0];
+      if (target) {
+        if (target.service_schedule && Array.isArray(target.service_schedule) && target.service_schedule.length > 0) {
+          const merged = DEFAULT_SCHEDULE.map((def) => {
+            const found = target.service_schedule.find((s: any) => s.day_index === def.day_index);
+            return found
+              ? {
+                  day_index: def.day_index,
+                  day_name: def.day_name,
+                  is_open: Boolean(found.is_open),
+                  open_time: found.open_time || def.open_time,
+                  close_time: found.close_time || def.close_time,
+                }
+              : def;
+          });
+          setScheduleDays(merged);
+        } else {
+          setScheduleDays(DEFAULT_SCHEDULE);
+        }
+        setAutoCashShiftEnabled(Boolean(target.auto_cash_shift_enabled));
+        const cents = target.auto_cash_opening_cents != null ? target.auto_cash_opening_cents : 50000;
+        setAutoCashOpeningPesos(String(cents / 100));
+      }
+    } catch {
+      // Retain defaults on fetch failure
+    }
+  }, [branchId]);
+
+  useEffect(() => {
+    void loadBranchSchedule();
+  }, [loadBranchSchedule]);
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSchedule(true);
+    setScheduleErrorMessage(null);
+    setScheduleSuccessMessage(null);
+    try {
+      const amountNum = parseFloat(autoCashOpeningPesos);
+      const openingCents = isNaN(amountNum) || amountNum < 0 ? 50000 : Math.round(amountNum * 100);
+
+      for (const day of scheduleDays) {
+        if (day.is_open && day.open_time === day.close_time) {
+          setScheduleErrorMessage(`El horario de apertura y cierre para ${day.day_name} no puede ser igual.`);
+          setIsSavingSchedule(false);
+          return;
+        }
+      }
+
+      await fetchApi(`/branches/${encodeURIComponent(branchId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          service_schedule: scheduleDays,
+          auto_cash_shift_enabled: autoCashShiftEnabled,
+          auto_cash_opening_cents: openingCents,
+        }),
+      });
+
+      setScheduleSuccessMessage('¡Horarios de servicio y caja automática guardados correctamente!');
+      setTimeout(() => setScheduleSuccessMessage(null), 4000);
+      void loadShift(true);
+    } catch (err: any) {
+      setScheduleErrorMessage(err?.message || 'Error al guardar configuración de horarios.');
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  const handleCopyScheduleToAllOpenDays = () => {
+    const firstOpen = scheduleDays.find((d) => d.is_open);
+    if (!firstOpen) return;
+    setScheduleDays((prev) =>
+      prev.map((d) =>
+        d.is_open
+          ? { ...d, open_time: firstOpen.open_time, close_time: firstOpen.close_time }
+          : d
+      )
+    );
+  };
 
   const navigateDay = (offset: number) => {
     const d = new Date(reportDate + 'T12:00:00');
@@ -1125,6 +1239,416 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                 </div>
               );
             })()
+          )}
+        </section>
+
+        {/* Sección: Horarios de Servicio y Caja Automática */}
+        <section
+          style={{
+            backgroundColor: '#ffffff',
+            borderRadius: 16,
+            padding: '16px 18px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+            border: '1px solid #e2e8f0',
+            marginTop: 18,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+            onClick={() => setIsScheduleCollapsed((prev) => !prev)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#fff7ed',
+                  color: '#ea580c',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Calendar size={20} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  Horarios y Caja Automática
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
+                  Apertura/cierre programado y días de atención
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#64748b',
+                cursor: 'pointer',
+                padding: 4,
+              }}
+              aria-label={isScheduleCollapsed ? 'Expandir horarios' : 'Contraer horarios'}
+            >
+              {isScheduleCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+            </button>
+          </div>
+
+          {!isScheduleCollapsed && (
+            <form onSubmit={handleSaveSchedule} style={{ marginTop: 16 }}>
+              {scheduleSuccessMessage && (
+                <div
+                  style={{
+                    backgroundColor: '#dcfce7',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    color: '#15803d',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    marginBottom: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>{scheduleSuccessMessage}</span>
+                </div>
+              )}
+
+              {scheduleErrorMessage && (
+                <div
+                  style={{
+                    backgroundColor: '#fee2e2',
+                    border: '1px solid #fecaca',
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    color: '#b91c1c',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    marginBottom: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  <span>{scheduleErrorMessage}</span>
+                </div>
+              )}
+
+              {/* Toggle: Apertura y Cierre Automático */}
+              <div
+                style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  marginBottom: 14,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label
+                    htmlFor="auto-cash-shift-toggle"
+                    style={{ fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', cursor: 'pointer' }}
+                  >
+                    Apertura y Cierre Automático de Caja
+                  </label>
+                  <input
+                    id="auto-cash-shift-toggle"
+                    type="checkbox"
+                    checked={autoCashShiftEnabled}
+                    onChange={(e) => setAutoCashShiftEnabled(e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#ea580c' }}
+                  />
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>
+                  Abre la caja automáticamente según el horario de inicio y la cierra al finalizar la jornada. Puedes seguir abriendo y cerrando manualmente en cualquier momento.
+                </p>
+              </div>
+
+              {/* Fondo inicial predeterminado */}
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  htmlFor="auto-cash-opening-input"
+                  style={{
+                    display: 'block',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: '#334155',
+                    marginBottom: 6,
+                  }}
+                >
+                  Fondo Inicial Automático ($ MXN)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span
+                    style={{
+                      position: 'absolute',
+                      left: 12,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      color: '#64748b',
+                    }}
+                  >
+                    $
+                  </span>
+                  <input
+                    id="auto-cash-opening-input"
+                    type="number"
+                    min="0"
+                    step="50"
+                    value={autoCashOpeningPesos}
+                    onChange={(e) => setAutoCashOpeningPesos(e.target.value)}
+                    placeholder="500.00"
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '10px 12px 10px 30px',
+                      fontSize: '0.95rem',
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      border: '1.5px solid #cbd5e1',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                  Fondo en efectivo con el que se iniciará automáticamente el turno cada día (predeterminado: $500).
+                </span>
+              </div>
+
+              {/* Días y Horarios */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>
+                    Días y Horarios de Servicio
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyScheduleToAllOpenDays}
+                    style={{
+                      border: '1px solid #fed7aa',
+                      background: '#fff7ed',
+                      color: '#ea580c',
+                      borderRadius: 8,
+                      padding: '4px 8px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      cursor: 'pointer',
+                    }}
+                    title="Copiar horario del primer día abierto a todos los demás"
+                  >
+                    <Copy size={12} />
+                    Copiar a todos
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {scheduleDays.map((day, idx) => (
+                    <div
+                      key={day.day_index}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 12,
+                        border: day.is_open ? '1.5px solid #fed7aa' : '1px solid #e2e8f0',
+                        backgroundColor: day.is_open ? '#fffaf5' : '#f8fafc',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: 13,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                              backgroundColor: day.is_open ? '#ea580c' : '#cbd5e1',
+                              color: '#ffffff',
+                            }}
+                          >
+                            {day.day_name.charAt(0)}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '0.85rem',
+                              fontWeight: 700,
+                              color: day.is_open ? '#0f172a' : '#94a3b8',
+                            }}
+                          >
+                            {day.day_name}
+                          </span>
+                        </div>
+
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: day.is_open ? '#15803d' : '#64748b',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span>{day.is_open ? 'Abierto' : 'Cerrado / Descanso'}</span>
+                          <input
+                            type="checkbox"
+                            checked={day.is_open}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setScheduleDays((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, is_open: checked } : item))
+                              );
+                            }}
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#ea580c' }}
+                          />
+                        </label>
+                      </div>
+
+                      {day.is_open && (
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 10,
+                            marginTop: 10,
+                            paddingTop: 8,
+                            borderTop: '1px dashed #fed7aa',
+                          }}
+                        >
+                          <div>
+                            <label
+                              style={{
+                                display: 'block',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                color: '#475569',
+                                marginBottom: 4,
+                              }}
+                            >
+                              Hora Apertura
+                            </label>
+                            <input
+                              type="time"
+                              value={day.open_time}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setScheduleDays((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, open_time: val } : item))
+                                );
+                              }}
+                              required={day.is_open}
+                              style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                padding: '6px 8px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: '0.85rem',
+                                fontWeight: 700,
+                                color: '#0f172a',
+                                backgroundColor: '#ffffff',
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              style={{
+                                display: 'block',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                color: '#475569',
+                                marginBottom: 4,
+                              }}
+                            >
+                              Hora Cierre
+                            </label>
+                            <input
+                              type="time"
+                              value={day.close_time}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setScheduleDays((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, close_time: val } : item))
+                                );
+                              }}
+                              required={day.is_open}
+                              style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                padding: '6px 8px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: '0.85rem',
+                                fontWeight: 700,
+                                color: '#0f172a',
+                                backgroundColor: '#ffffff',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botón Guardar */}
+              <button
+                type="submit"
+                disabled={isSavingSchedule}
+                style={{
+                  width: '100%',
+                  marginTop: 14,
+                  padding: '12px 16px',
+                  borderRadius: 12,
+                  backgroundColor: '#ea580c',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: 800,
+                  cursor: isSavingSchedule ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  boxShadow: '0 2px 4px rgba(234, 88, 12, 0.2)',
+                }}
+              >
+                {isSavingSchedule ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Guardando Horarios...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    <span>Guardar Horarios y Caja Automática</span>
+                  </>
+                )}
+              </button>
+            </form>
           )}
         </section>
       </main>
