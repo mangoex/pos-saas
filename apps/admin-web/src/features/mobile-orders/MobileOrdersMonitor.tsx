@@ -47,7 +47,7 @@ interface MobileOrdersMonitorProps {
   onOpenHelpVideos?: () => void;
 }
 
-type OrderFilter = 'NEW' | 'PREP' | 'READY' | 'HISTORY';
+type OrderFilter = 'NEW' | 'PREP' | 'HISTORY';
 
 const isToday = (dateStr?: string): boolean => {
   if (!dateStr) return false;
@@ -154,6 +154,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       });
       setFilter('PREP');
       await loadOrders(true);
+      window.dispatchEvent(new Event('restaurantos:orders-changed'));
     } catch (err: any) {
       setError(err instanceof ApiError ? err.message : 'Error al aceptar el pedido.');
     } finally {
@@ -175,6 +176,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         body: JSON.stringify({ reason: 'Rechazado desde administración móvil' }),
       });
       await loadOrders(true);
+      window.dispatchEvent(new Event('restaurantos:orders-changed'));
     } catch (err: any) {
       setError(err instanceof ApiError ? err.message : 'Error al rechazar el pedido.');
     } finally {
@@ -191,7 +193,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   const isOrderPrep = (order: OrderItem) => {
     const status = (order.status || '').toUpperCase();
     if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
-    return ['ACCEPTED', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION'].includes(status);
+    return ['ACCEPTED', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'READY', 'IN_DELIVERY'].includes(status);
   };
 
   const isOrderReady = (order: OrderItem) => {
@@ -208,7 +210,6 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     let matchesFilter = false;
     if (filter === 'NEW') matchesFilter = isOrderNew(order);
     else if (filter === 'PREP') matchesFilter = isOrderPrep(order);
-    else if (filter === 'READY') matchesFilter = isOrderReady(order);
     else if (filter === 'HISTORY') matchesFilter = isOrderHistory(order);
 
     if (!matchesFilter) return false;
@@ -401,22 +402,6 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           </button>
 
           <button
-            onClick={() => setFilter('READY')}
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: '0 4px 8px',
-              fontSize: '1rem',
-              fontWeight: 700,
-              color: filter === 'READY' ? '#ff5722' : '#94a3b8',
-              borderBottom: filter === 'READY' ? '3px solid #ff5722' : '3px solid transparent',
-              cursor: 'pointer',
-            }}
-          >
-            Listos
-          </button>
-
-          <button
             onClick={() => setFilter('HISTORY')}
             style={{
               background: 'none',
@@ -479,9 +464,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                 ? 'No hay pedidos nuevos por aceptar hoy.'
                 : filter === 'PREP'
                   ? 'No hay pedidos en preparación.'
-                  : filter === 'READY'
-                    ? 'No hay pedidos listos.'
-                    : 'No hay historial de pedidos el día de hoy.'}
+                  : 'No hay historial de pedidos el día de hoy.'}
             </p>
           </div>
         ) : (

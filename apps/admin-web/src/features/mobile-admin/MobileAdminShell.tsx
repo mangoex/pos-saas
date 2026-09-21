@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChefHat, CircleDollarSign, Utensils, Store, Sparkles, ClipboardList, Settings } from 'lucide-react';
 import { fetchApi } from '@restaurantos/api-client';
@@ -97,6 +97,37 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   const [onboardingStatus, setOnboardingStatus] = useState<string | null>(null);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
+
+  const fetchPendingCount = useCallback(async () => {
+    if (!branchId) return;
+    try {
+      const res = await fetchApi<{ count: number }>(
+        `/orders/pending-count?branch_id=${encodeURIComponent(branchId)}`
+      );
+      if (typeof res?.count === 'number') {
+        setPendingOrdersCount(res.count);
+      }
+    } catch {
+      // silent fallback
+    }
+  }, [branchId]);
+
+  useEffect(() => {
+    void fetchPendingCount();
+    const interval = window.setInterval(() => {
+      void fetchPendingCount();
+    }, 8_000);
+    return () => window.clearInterval(interval);
+  }, [fetchPendingCount]);
+
+  useEffect(() => {
+    const handleOrdersChanged = () => {
+      void fetchPendingCount();
+    };
+    window.addEventListener('restaurantos:orders-changed', handleOrdersChanged);
+    return () => window.removeEventListener('restaurantos:orders-changed', handleOrdersChanged);
+  }, [fetchPendingCount]);
 
   useEffect(() => {
     fetchApi<{ step: 'business' | 'menu' | 'register' | 'complete' }>('/saas/onboarding')
@@ -286,22 +317,30 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
         >
           <div style={{ position: 'relative' }}>
             <ClipboardList size={24} color={currentTab === 'orders' ? '#ff5722' : '#94a3b8'} />
-            <div style={{
-              position: 'absolute',
-              top: -4,
-              right: -8,
-              backgroundColor: '#ef4444',
-              color: 'white',
-              fontSize: '0.65rem',
-              fontWeight: 'bold',
-              borderRadius: '50%',
-              width: 16,
-              height: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1.5px solid white'
-            }}>3</div>
+            {pendingOrdersCount > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -8,
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  fontSize: '0.65rem',
+                  fontWeight: 'bold',
+                  borderRadius: '50%',
+                  minWidth: 16,
+                  height: 16,
+                  padding: '0 3px',
+                  boxSizing: 'border-box',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1.5px solid white',
+                }}
+              >
+                {pendingOrdersCount > 99 ? '99+' : pendingOrdersCount}
+              </div>
+            )}
           </div>
           <span style={{ fontSize: '0.75rem', fontWeight: currentTab === 'orders' ? 700 : 500 }}>
             Pedidos
