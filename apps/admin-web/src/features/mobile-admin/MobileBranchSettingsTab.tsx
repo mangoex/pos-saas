@@ -141,6 +141,8 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
 
   const currentBranch = branches.find((b) => b.id === branchId) || branches[0];
 
+  const [branchName, setBranchName] = useState('');
+
   const { data: linksData } = useQuery<LinksResponse>({
     queryKey: ['saas-links'],
     queryFn: () => fetchApi('/saas/links'),
@@ -171,6 +173,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
 
   useEffect(() => {
     if (currentBranch) {
+      setBranchName(currentBranch.name || '');
       setBranchPhone(currentBranch.phone || '');
       setWhatsappEnabled(Boolean(currentBranch.whatsapp_ordering_enabled));
       setGoogleReviewUrl(currentBranch.google_review_url || '');
@@ -277,7 +280,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
     e.preventDefault();
     setError(null);
     updateBranchMutation.mutate({
-      name: currentBranch?.name,
+      name: branchName.trim() || currentBranch?.name,
       phone: branchPhone.trim(),
       whatsapp_ordering_enabled: whatsappEnabled,
       google_review_url: googleReviewUrl.trim(),
@@ -874,6 +877,58 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
 
             {/* Form Settings */}
             <form onSubmit={handleSaveSettings}>
+              {/* Card: Detalles de Sucursal */}
+              <div
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: 16,
+                  padding: 16,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                  marginBottom: 14,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Store size={20} color="#3b82f6" />
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    Detalles de la Sucursal
+                  </h3>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      color: '#475569',
+                      marginBottom: 6,
+                    }}
+                  >
+                    Nombre de Sucursal
+                  </label>
+                  <input
+                    type="text"
+                    value={branchName}
+                    onChange={(e) => setBranchName(e.target.value)}
+                    placeholder="Ej. Matriz, Centro, Norte..."
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '10px 14px',
+                      fontSize: '0.95rem',
+                      borderRadius: 10,
+                      border: '1px solid #cbd5e1',
+                      outline: 'none',
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                  <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                    Este es el nombre comercial con el que los clientes identificarán esta ubicación.
+                  </p>
+                </div>
+              </div>
+
               {/* Card: Operating State & WhatsApp */}
               <div
                 style={{
