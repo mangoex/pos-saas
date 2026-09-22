@@ -16,6 +16,7 @@ import {
   ToggleLeft,
   ToggleRight,
   HelpCircle,
+  Trash2,
 } from 'lucide-react';
 
 interface MobileMenuManagerTabProps {
@@ -116,6 +117,8 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     status: 'active',
   });
   const [productModalError, setProductModalError] = useState<string | null>(null);
+  const [modifiersText, setModifiersText] = useState('');
+  const [existingModifierGroupIds, setExistingModifierGroupIds] = useState<string[]>([]);
 
   // Category Modal State
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -233,15 +236,22 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       };
 
       if (editingProduct) {
-        return fetchApi(`/catalog/products/${editingProduct.id}`, {
+        const res = await fetchApi(`/catalog/products/${editingProduct.id}`, {
           method: 'PUT',
           body: JSON.stringify(payload),
         });
+        await saveModifiers(editingProduct.id);
+        return res;
       }
-      return fetchApi('/catalog/products', {
+      const res: any = await fetchApi('/catalog/products', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+      const newId = res?.id || res?.data?.id;
+      if (newId && modifiersText.trim()) {
+        await saveModifiers(newId);
+      }
+      return res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -252,6 +262,62 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       setProductModalError(err?.message || err?.detail?.message || 'Error al guardar producto');
     },
   });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      return fetchApi(`/catalog/products/${productId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setIsProductModalOpen(false);
+      showToast('Producto eliminado');
+    },
+    onError: (err: any) => {
+      setProductModalError(err?.message || err?.detail?.message || 'Error al eliminar producto');
+    },
+  });
+
+  const saveModifiers = async (productId: string) => {
+    // Delete existing modifier groups first
+    for (const groupId of existingModifierGroupIds) {
+      try {
+        await fetchApi(`/modifier-groups/${groupId}`, { method: 'DELETE' });
+      } catch {
+        // ignore if already deleted
+      }
+    }
+    // Parse lines from textarea
+    const lines = modifiersText.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return;
+    // Create a new modifier group
+    const groupRes: any = await fetchApi(`/products/${productId}/modifier-groups`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Extras',
+        is_required: false,
+        minimum_selections: 0,
+        maximum_selections: lines.length,
+      }),
+    });
+    const groupId = groupRes?.id || groupRes?.data?.id;
+    if (!groupId) return;
+    // Create each option
+    for (const line of lines) {
+      const parts = line.split(',');
+      const name = parts[0]?.trim();
+      if (!name) continue;
+      const priceStr = parts[1]?.trim();
+      const priceCents = priceStr ? Math.round((parseFloat(priceStr) || 0) * 100) : 0;
+      await fetchApi(`/modifier-groups/${groupId}/options`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          price_delta_cents: priceCents,
+          effect_type: 'surcharge',
+        }),
+      });
+    }
+  };
 
   const saveCategoryMutation = useMutation({
     mutationFn: async (form: typeof categoryForm) => {
@@ -329,6 +395,27 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         image_url: product.image_url || '',
         status: product.status || 'active',
       });
+      // Load existing modifiers
+      fetchApi(`/products/${product.id}/modifier-groups`)
+        .then((groups: any) => {
+          const list = Array.isArray(groups) ? groups : (groups?.data || []);
+          const groupIds: string[] = [];
+          const lines: string[] = [];
+          for (const g of list) {
+            if (g.id) groupIds.push(g.id);
+            for (const opt of (g.options || [])) {
+              if (opt.status && opt.status !== 'active') continue;
+              const pricePesos = (opt.price_delta_cents || 0) / 100;
+              lines.push(pricePesos > 0 ? `${opt.name}, ${pricePesos}` : opt.name);
+            }
+          }
+          setExistingModifierGroupIds(groupIds);
+          setModifiersText(lines.join('\n'));
+        })
+        .catch(() => {
+          setExistingModifierGroupIds([]);
+          setModifiersText('');
+        });
     } else {
       setEditingProduct(null);
       setProductForm({
@@ -343,6 +430,8 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         image_url: '',
         status: 'active',
       });
+      setModifiersText('');
+      setExistingModifierGroupIds([]);
     }
     setIsProductModalOpen(true);
   };
@@ -1660,6 +1749,38 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 </div>
               </div>
 
+              {/* Modifiers */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                  Modificadores (extras con cargo)
+                </label>
+                <p style={{ margin: '0 0 6px', fontSize: '0.75rem', color: '#64748b' }}>
+                  Un modificador por línea: <strong>nombre, precio</strong>. Sin precio = gratis.
+                </p>
+                <textarea
+                  placeholder={`Leche de avena, 10\nExtra matcha, 10\nMiel de agave, 20\nSin azúcar`}
+                  value={modifiersText}
+                  onChange={(e) => setModifiersText(e.target.value)}
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '10px 12px',
+                    fontSize: '0.9rem',
+                    borderRadius: 10,
+                    border: '1px solid #e2e8f0',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    outline: 'none',
+                  }}
+                />
+                {modifiersText.trim() && (
+                  <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#64748b' }}>
+                    {modifiersText.split('\n').filter(l => l.trim()).length} modificador(es) configurado(s)
+                  </div>
+                )}
+              </div>
+
               <button
                 type="submit"
                 disabled={saveProductMutation.isPending}
@@ -1678,6 +1799,37 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               >
                 {saveProductMutation.isPending ? 'Guardando...' : editingProduct ? 'Guardar Cambios' : 'Crear Platillo'}
               </button>
+
+              {editingProduct && (
+                <button
+                  type="button"
+                  disabled={deleteProductMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm(`¿Eliminar "${editingProduct.name}"? Esta acción no se puede deshacer.`)) {
+                      deleteProductMutation.mutate(editingProduct.id);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginTop: 10,
+                    backgroundColor: '#fef2f2',
+                    color: '#dc2626',
+                    border: '1px solid #fecaca',
+                    borderRadius: 12,
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Trash2 size={16} />
+                  {deleteProductMutation.isPending ? 'Eliminando...' : 'Eliminar Platillo'}
+                </button>
+              )}
             </form>
           </div>
         </div>
