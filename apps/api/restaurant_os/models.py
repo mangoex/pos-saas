@@ -146,6 +146,12 @@ branches = sa.Table(
         server_default="50000",
     ),
     sa.Column(
+        "color_palette",
+        sa.String(32),
+        nullable=False,
+        server_default="orange",
+    ),
+    sa.Column(
         "accepts_cash_payments",
         sa.Boolean(),
         nullable=False,

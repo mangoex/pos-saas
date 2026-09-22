@@ -120,6 +120,7 @@ export interface BranchInfo {
   whatsapp_ordering_enabled?: boolean;
   dine_in_enabled?: boolean;
   delivery_fee_enabled?: boolean;
+  color_palette?: string;
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
   coupons?: BranchCoupon[];

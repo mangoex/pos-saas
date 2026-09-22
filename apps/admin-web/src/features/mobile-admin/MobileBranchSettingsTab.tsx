@@ -75,6 +75,7 @@ interface Branch {
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
   coupons?: BranchCoupon[];
+  color_palette?: string;
 }
 
 interface LinksResponse {
@@ -160,6 +161,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [freeDeliveryMinPesos, setFreeDeliveryMinPesos] = useState('');
   const [deliveryTiers, setDeliveryTiers] = useState<DeliveryTier[]>([]);
   const [coupons, setCoupons] = useState<BranchCoupon[]>([]);
+  const [colorPalette, setColorPalette] = useState('orange');
 
   // Alias / Public link customization state
   const [aliasInput, setAliasInput] = useState('');
@@ -195,6 +197,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
           ? currentBranch.coupons
           : defaultBranchCoupons
       );
+      setColorPalette(currentBranch.color_palette || 'orange');
     }
   }, [currentBranch]);
 
@@ -281,6 +284,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       status: isOpenForOrders ? 'active' : 'inactive',
       dine_in_enabled: dineInEnabled,
       delivery_fee_enabled: deliveryFeeEnabled,
+      color_palette: colorPalette,
       delivery_tiers: deliveryTiers,
       free_delivery_min_cents: freeDeliveryMinPesos.trim() ? Math.round(parseFloat(freeDeliveryMinPesos) * 100) : null,
       coupons: coupons
@@ -1612,6 +1616,60 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Card: Apariencia del Menú Digital */}
+              <div
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: 16,
+                  padding: 16,
+                  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
+                  marginBottom: 16,
+                }}
+              >
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 800, margin: '0 0 12px', color: '#0f172a' }}>
+                  Apariencia del Menú Digital
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0 0 16px', lineHeight: 1.4 }}>
+                  Elige la paleta de colores para esta sucursal.
+                </p>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {[
+                    { id: 'orange', name: 'Naranja', colors: ['#ea580c', '#f97316', '#fdba74', '#fff7ed'] },
+                    { id: 'green', name: 'Verde', colors: ['#059669', '#10b981', '#6ee7b7', '#ecfdf5'] },
+                    { id: 'blue', name: 'Azul', colors: ['#2563eb', '#3b82f6', '#93c5fd', '#eff6ff'] },
+                    { id: 'tinto', name: 'Tinto', colors: ['#881337', '#9f1239', '#f43f5e', '#fff1f2'] },
+                  ].map((theme) => (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() => setColorPalette(theme.id)}
+                      style={{
+                        background: 'none',
+                        border: `2px solid ${colorPalette === theme.id ? '#0f172a' : '#e2e8f0'}`,
+                        borderRadius: 12,
+                        padding: 10,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        transition: 'all 0.2s',
+                        backgroundColor: colorPalette === theme.id ? '#f8fafc' : '#ffffff',
+                      }}
+                    >
+                      <div style={{ flex: 1, display: 'flex', height: 28, borderRadius: 8, overflow: 'hidden' }}>
+                        {theme.colors.map((c, i) => (
+                          <div key={i} style={{ flex: 1, backgroundColor: c }} />
+                        ))}
+                      </div>
+                      <span style={{ fontSize: '0.85rem', fontWeight: colorPalette === theme.id ? 800 : 600, color: '#0f172a', width: 60, textAlign: 'left' }}>
+                        {theme.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <button

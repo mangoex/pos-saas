@@ -45,6 +45,39 @@
   --app-max-width: 480px;
 }
 
+[data-theme="orange"],
+[data-theme="foodie"] {
+  --accent-primary: #f97316;
+  --accent-primary-hover: #ea580c;
+  --accent-orange-light: #fff7ed;
+  --accent-orange-soft: rgba(249, 115, 22, 0.12);
+  --shadow-float: 0 16px 36px rgba(249, 115, 22, 0.24);
+}
+
+[data-theme="green"] {
+  --accent-primary: #10b981;
+  --accent-primary-hover: #059669;
+  --accent-orange-light: #ecfdf5;
+  --accent-orange-soft: rgba(16, 185, 129, 0.12);
+  --shadow-float: 0 16px 36px rgba(16, 185, 129, 0.24);
+}
+
+[data-theme="blue"] {
+  --accent-primary: #3b82f6;
+  --accent-primary-hover: #2563eb;
+  --accent-orange-light: #eff6ff;
+  --accent-orange-soft: rgba(59, 130, 246, 0.12);
+  --shadow-float: 0 16px 36px rgba(59, 130, 246, 0.24);
+}
+
+[data-theme="tinto"] {
+  --accent-primary: #9f1239;
+  --accent-primary-hover: #881337;
+  --accent-orange-light: #fff1f2;
+  --accent-orange-soft: rgba(159, 18, 57, 0.12);
+  --shadow-float: 0 16px 36px rgba(159, 18, 57, 0.24);
+}
+
 /* Reset & Base */
 *, *::before, *::after {
   box-sizing: border-box;

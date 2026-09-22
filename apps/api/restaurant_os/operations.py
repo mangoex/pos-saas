@@ -12017,6 +12017,9 @@ def update_branch(
     elif extra_payload and "accepts_cash_payments" in extra_payload:
         update_data["accepts_cash_payments"] = bool(extra_payload["accepts_cash_payments"])
 
+    if extra_payload and "color_palette" in extra_payload:
+        update_data["color_palette"] = str(extra_payload["color_palette"]).strip()
+
     if accepts_card_payments is not None:
         update_data["accepts_card_payments"] = bool(accepts_card_payments)
     elif extra_payload and "accepts_card_payments" in extra_payload:

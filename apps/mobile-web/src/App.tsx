@@ -58,7 +58,7 @@ export const App: React.FC = () => {
 
   // Visual Theme (Light vs Warm Dark)
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'foodie');
+    document.documentElement.setAttribute('data-theme', 'orange');
   }, []);
 
   const [likedProductIds, setLikedProductIds] = useState<Set<string>>(new Set());
@@ -270,7 +270,8 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (!organization) return;
-    document.documentElement.setAttribute('data-theme', organization.mobile_theme === 'dark' ? 'dark' : 'foodie');
+    const palette = selectedBranch?.color_palette || 'orange';
+    document.documentElement.setAttribute('data-theme', organization.mobile_theme === 'dark' ? 'dark' : palette);
     document.title = `${organization.name} | Menú Digital`;
     let manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!manifest) {
