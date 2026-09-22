@@ -101,6 +101,7 @@ def list_branches(session: Session, organization_id: str | None = None) -> list[
             models.branches.c.delivery_tiers,
             models.branches.c.free_delivery_min_cents,
             models.branches.c.coupons,
+            models.branches.c.color_palette,
             models.branches.c.service_schedule,
             models.branches.c.auto_cash_shift_enabled,
             models.branches.c.auto_cash_opening_cents,

@@ -624,47 +624,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
         )}
 
         {/* Toast */}
-        {toastMessage && (
-          <div
-            style={{
-              backgroundColor: '#dcfce7',
-              border: '1px solid #bbf7d0',
-              borderRadius: 12,
-              padding: '10px 14px',
-              color: '#15803d',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              marginBottom: 14,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <CheckCircle2 size={18} />
-            <span>{toastMessage}</span>
-          </div>
-        )}
 
-        {error && (
-          <div
-            style={{
-              backgroundColor: '#fee2e2',
-              border: '1px solid #fecaca',
-              borderRadius: 12,
-              padding: '10px 14px',
-              color: '#b91c1c',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              marginBottom: 14,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <AlertCircle size={18} />
-            <span>{error}</span>
-          </div>
-        )}
 
         {branchesLoading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Cargando sucursal...</div>
@@ -1800,6 +1760,48 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   ))}
                 </div>
               </div>
+
+              {toastMessage && (
+                <div
+                  style={{
+                    backgroundColor: '#dcfce7',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    color: '#15803d',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    marginBottom: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <CheckCircle2 size={18} />
+                  <span>{toastMessage}</span>
+                </div>
+              )}
+
+              {error && (
+                <div
+                  style={{
+                    backgroundColor: '#fee2e2',
+                    border: '1px solid #fecaca',
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    color: '#b91c1c',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    marginBottom: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
 
               <button
                 type="submit"
