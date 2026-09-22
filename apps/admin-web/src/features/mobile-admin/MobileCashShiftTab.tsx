@@ -1528,25 +1528,40 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                       {day.is_open && (
                         <div
                           style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: 10,
-                            marginTop: 10,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                            marginTop: 8,
                             paddingTop: 8,
                             borderTop: '1px dashed #fed7aa',
                           }}
                         >
-                          <div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                              backgroundColor: '#ffffff',
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #fed7aa',
+                              boxSizing: 'border-box',
+                            }}
+                          >
                             <label
                               style={{
-                                display: 'block',
-                                fontSize: '0.7rem',
+                                fontSize: '0.75rem',
                                 fontWeight: 700,
                                 color: '#475569',
-                                marginBottom: 4,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                flexShrink: 0,
                               }}
                             >
-                              Hora Apertura
+                              <Clock size={13} color="#ea580c" />
+                              <span>Hora Apertura</span>
                             </label>
                             <input
                               type="time"
@@ -1557,32 +1572,57 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                                   prev.map((item, i) => (i === idx ? { ...item, open_time: val } : item))
                                 );
                               }}
+                              onClick={(e) => {
+                                try {
+                                  (e.target as any)?.showPicker?.();
+                                } catch {}
+                              }}
                               required={day.is_open}
                               style={{
-                                width: '100%',
+                                width: '130px',
+                                maxWidth: '50%',
+                                height: '34px',
                                 boxSizing: 'border-box',
-                                padding: '6px 8px',
-                                borderRadius: 8,
+                                padding: '4px 6px',
+                                borderRadius: 6,
                                 border: '1px solid #cbd5e1',
                                 fontSize: '0.85rem',
                                 fontWeight: 700,
                                 color: '#0f172a',
-                                backgroundColor: '#ffffff',
+                                backgroundColor: '#f8fafc',
+                                textAlign: 'center',
+                                cursor: 'pointer',
+                                outline: 'none',
                               }}
                             />
                           </div>
 
-                          <div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                              backgroundColor: '#ffffff',
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #fed7aa',
+                              boxSizing: 'border-box',
+                            }}
+                          >
                             <label
                               style={{
-                                display: 'block',
-                                fontSize: '0.7rem',
+                                fontSize: '0.75rem',
                                 fontWeight: 700,
                                 color: '#475569',
-                                marginBottom: 4,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                flexShrink: 0,
                               }}
                             >
-                              Hora Cierre
+                              <Clock size={13} color="#ea580c" />
+                              <span>Hora Cierre</span>
                             </label>
                             <input
                               type="time"
@@ -1593,17 +1633,27 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                                   prev.map((item, i) => (i === idx ? { ...item, close_time: val } : item))
                                 );
                               }}
+                              onClick={(e) => {
+                                try {
+                                  (e.target as any)?.showPicker?.();
+                                } catch {}
+                              }}
                               required={day.is_open}
                               style={{
-                                width: '100%',
+                                width: '130px',
+                                maxWidth: '50%',
+                                height: '34px',
                                 boxSizing: 'border-box',
-                                padding: '6px 8px',
-                                borderRadius: 8,
+                                padding: '4px 6px',
+                                borderRadius: 6,
                                 border: '1px solid #cbd5e1',
                                 fontSize: '0.85rem',
                                 fontWeight: 700,
                                 color: '#0f172a',
-                                backgroundColor: '#ffffff',
+                                backgroundColor: '#f8fafc',
+                                textAlign: 'center',
+                                cursor: 'pointer',
+                                outline: 'none',
                               }}
                             />
                           </div>

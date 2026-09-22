@@ -26,6 +26,8 @@ test('MobileCashShiftTab provides Horarios y Caja Automática section with 7 day
   assert.match(source, /Cerrado \/ Descanso/);
   assert.match(source, /Hora Apertura/);
   assert.match(source, /Hora Cierre/);
+  assert.match(source, /flexDirection:\s*'column'/);
+  assert.match(source, /showPicker/);
   assert.match(source, /Guardar Horarios y Caja Automática/);
 });
 
