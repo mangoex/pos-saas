@@ -831,7 +831,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <div className="social-mode-icon-circle">
                       <ShoppingBag size={18} />
                     </div>
-                    <span className="social-mode-card-label">Llevar</span>
+                    <span className="social-mode-card-label">Recoger</span>
                   </button>
 
                   {selectedBranch?.delivery_fee_enabled !== false && (
@@ -1101,6 +1101,35 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         )}
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pickup Address if takeaway mode */}
+              {orderType === 'takeaway' && selectedBranch && (
+                <div className="cart-form-section">
+                  <div className="cart-customer-section-header">
+                    <label className="cart-form-section-label" style={{ marginBottom: 0 }}>
+                      Dirección de Recolección
+                    </label>
+                  </div>
+                  <div style={{ marginTop: 12, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.85rem', color: '#334155', lineHeight: 1.5 }}>
+                    <strong>{selectedBranch.name}</strong><br />
+                    {selectedBranch.street} {selectedBranch.exterior_number} {selectedBranch.interior_number ? `Int. ${selectedBranch.interior_number}` : ''}<br />
+                    {selectedBranch.neighborhood && `Col. ${selectedBranch.neighborhood}, `}{selectedBranch.city}, {selectedBranch.state} {selectedBranch.postal_code}<br />
+                    {selectedBranch.cross_streets && <small style={{ color: '#64748b', display: 'block', marginTop: 4 }}>Entre: {selectedBranch.cross_streets}</small>}
+                    {(selectedBranch.latitude && selectedBranch.longitude) ? (
+                      <div style={{ marginTop: 10 }}>
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${selectedBranch.latitude},${selectedBranch.longitude}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}
+                        >
+                          📍 Ver en Google Maps
+                        </a>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               )}

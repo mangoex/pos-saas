@@ -67,6 +67,16 @@ interface Branch {
   name: string;
   code: string;
   status: string;
+  street?: string;
+  exterior_number?: string;
+  interior_number?: string;
+  neighborhood?: string;
+  postal_code?: string;
+  city?: string;
+  state?: string;
+  cross_streets?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   phone?: string;
   google_review_url?: string;
   whatsapp_ordering_enabled?: boolean;
@@ -165,6 +175,17 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [coupons, setCoupons] = useState<BranchCoupon[]>([]);
   const [colorPalette, setColorPalette] = useState('orange');
 
+  const [street, setStreet] = useState('');
+  const [exteriorNumber, setExteriorNumber] = useState('');
+  const [interiorNumber, setInteriorNumber] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [crossStreets, setCrossStreets] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+
   // Alias / Public link customization state
   const [aliasInput, setAliasInput] = useState('');
   const [aliasError, setAliasError] = useState<string | null>(null);
@@ -174,6 +195,16 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   useEffect(() => {
     if (currentBranch) {
       setBranchName(currentBranch.name || '');
+      setStreet(currentBranch.street || '');
+      setExteriorNumber(currentBranch.exterior_number || '');
+      setInteriorNumber(currentBranch.interior_number || '');
+      setNeighborhood(currentBranch.neighborhood || '');
+      setPostalCode(currentBranch.postal_code || '');
+      setCity(currentBranch.city || '');
+      setState(currentBranch.state || '');
+      setCrossStreets(currentBranch.cross_streets || '');
+      setLatitude(currentBranch.latitude ? String(currentBranch.latitude) : '');
+      setLongitude(currentBranch.longitude ? String(currentBranch.longitude) : '');
       setBranchPhone(currentBranch.phone || '');
       setWhatsappEnabled(Boolean(currentBranch.whatsapp_ordering_enabled));
       setGoogleReviewUrl(currentBranch.google_review_url || '');
@@ -281,6 +312,16 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
     setError(null);
     updateBranchMutation.mutate({
       name: branchName.trim() || currentBranch?.name,
+      street: street.trim(),
+      exterior_number: exteriorNumber.trim(),
+      interior_number: interiorNumber.trim(),
+      neighborhood: neighborhood.trim(),
+      postal_code: postalCode.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      cross_streets: crossStreets.trim(),
+      latitude: latitude.trim(),
+      longitude: longitude.trim(),
       phone: branchPhone.trim(),
       whatsapp_ordering_enabled: whatsappEnabled,
       google_review_url: googleReviewUrl.trim(),
@@ -923,9 +964,69 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                       backgroundColor: '#ffffff',
                     }}
                   />
-                  <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                  <p style={{ margin: '6px 0 16px', fontSize: '0.75rem', color: '#64748b' }}>
                     Este es el nombre comercial con el que los clientes identificarán esta ubicación.
                   </p>
+
+                  <h4 style={{ margin: '12px 0', fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>
+                    Domicilio y Ubicación
+                  </h4>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Calle</label>
+                      <input type="text" value={street} onChange={(e) => setStreet(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>No. Ext.</label>
+                        <input type="text" value={exteriorNumber} onChange={(e) => setExteriorNumber(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>No. Int.</label>
+                        <input type="text" value={interiorNumber} onChange={(e) => setInteriorNumber(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Colonia</label>
+                      <input type="text" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>C.P.</label>
+                      <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Ciudad</label>
+                      <input type="text" value={city} onChange={(e) => setCity(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Estado</label>
+                      <input type="text" value={state} onChange={(e) => setState(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Entre calles o referencias</label>
+                    <input type="text" value={crossStreets} onChange={(e) => setCrossStreets(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Latitud (Google Maps)</label>
+                      <input type="text" value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="Ej. 20.6766" style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Longitud</label>
+                      <input type="text" value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="Ej. -103.3475" style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                  </div>
+
                 </div>
               </div>
 

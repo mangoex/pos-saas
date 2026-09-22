@@ -85,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
             title="Para llevar"
           >
             <ShoppingBag size={13} />
-            <span>Llevar</span>
+            <span>Recoger</span>
           </button>
 
           <button
