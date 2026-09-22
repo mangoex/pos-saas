@@ -1021,6 +1021,9 @@ def create_branch(
     delivery_tiers: list[dict[str, Any]] | None = None,
     free_delivery_min_cents: int | None = None,
     coupons: list[dict[str, Any]] | None = None,
+    accepts_cash_payments: bool | None = None,
+    accepts_card_payments: bool | None = None,
+    bank_transfer_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -1103,6 +1106,9 @@ def create_branch(
         "coupons": _normalize_branch_coupons(coupons)
         if coupons is not None
         else list(DEFAULT_BRANCH_COUPONS),
+        "accepts_cash_payments": True if accepts_cash_payments is None else bool(accepts_cash_payments),
+        "accepts_card_payments": False if accepts_card_payments is None else bool(accepts_card_payments),
+        "bank_transfer_info": _normalize_bank_transfer_info(bank_transfer_info),
         "created_at": now,
         "updated_at": now,
     }
@@ -3089,6 +3095,18 @@ def _normalize_service_schedule(schedule: Any) -> list[dict[str, Any]]:
         )
     normalized.sort(key=lambda x: x["day_index"])
     return normalized
+
+
+def _normalize_bank_transfer_info(info: Any) -> dict[str, Any]:
+    if not isinstance(info, dict):
+        return {}
+    return {
+        "bank_name": str(info.get("bank_name") or "").strip(),
+        "account_holder": str(info.get("account_holder") or "").strip(),
+        "account_number": str(info.get("account_number") or "").strip(),
+        "clabe": str(info.get("clabe") or "").strip(),
+        "is_enabled": bool(info.get("is_enabled", False)),
+    }
 
 
 def reconcile_branch_auto_cash_shift(
@@ -11899,6 +11917,9 @@ def update_branch(
     service_schedule: list[dict[str, Any]] | None = None,
     auto_cash_shift_enabled: bool | None = None,
     auto_cash_opening_cents: int | None = None,
+    accepts_cash_payments: bool | None = None,
+    accepts_card_payments: bool | None = None,
+    bank_transfer_info: dict[str, Any] | None = None,
     extra_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
@@ -11990,6 +12011,21 @@ def update_branch(
             update_data["auto_cash_opening_cents"] = max(0, val)
         except (ValueError, TypeError):
             update_data["auto_cash_opening_cents"] = 50000
+
+    if accepts_cash_payments is not None:
+        update_data["accepts_cash_payments"] = bool(accepts_cash_payments)
+    elif extra_payload and "accepts_cash_payments" in extra_payload:
+        update_data["accepts_cash_payments"] = bool(extra_payload["accepts_cash_payments"])
+
+    if accepts_card_payments is not None:
+        update_data["accepts_card_payments"] = bool(accepts_card_payments)
+    elif extra_payload and "accepts_card_payments" in extra_payload:
+        update_data["accepts_card_payments"] = bool(extra_payload["accepts_card_payments"])
+
+    if bank_transfer_info is not None:
+        update_data["bank_transfer_info"] = _normalize_bank_transfer_info(bank_transfer_info)
+    elif extra_payload and "bank_transfer_info" in extra_payload:
+        update_data["bank_transfer_info"] = _normalize_bank_transfer_info(extra_payload["bank_transfer_info"])
 
     if extra_payload:
         for k in (
@@ -12152,6 +12188,9 @@ def list_public_branches(
             models.branches.c.free_delivery_min_cents,
             models.branches.c.coupons,
             models.branches.c.service_schedule,
+            models.branches.c.accepts_cash_payments,
+            models.branches.c.accepts_card_payments,
+            models.branches.c.bank_transfer_info,
             models.branches.c.status,
             models.public_order_keys.c.public_key,
         )
@@ -12174,6 +12213,9 @@ def list_public_branches(
     for r in rows:
         b = dict(r)
         b["mobile_theme"] = org_theme
+        b["accepts_cash_payments"] = bool(b["accepts_cash_payments"]) if b.get("accepts_cash_payments") is not None else True
+        b["accepts_card_payments"] = bool(b.get("accepts_card_payments", False))
+        b["bank_transfer_info"] = dict(b["bank_transfer_info"]) if isinstance(b.get("bank_transfer_info"), dict) else {}
         if include_public_key and not b.get("public_key"):
             generated_key = f"pk_{str(b['id']).replace('-', '')[:24]}"
             try:

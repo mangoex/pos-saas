@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag, Navigation, Calendar, Clock } from 'lucide-react';
+import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag, Navigation, Calendar, Clock, Copy, Check, Building2 } from 'lucide-react';
 import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Product } from '../types';
 import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile, validateBranchCoupon } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
@@ -284,8 +284,48 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [orderNotes, setOrderNotes] = useState('');
   const [formError, setFormError] = useState('');
   const [aiRecs, setAiRecs] = useState<Array<{ product_id: string; product_name: string; price_cents: number; reason: string }>>([]);
+  const [clabeCopied, setClabeCopied] = useState(false);
 
-  // Coupon state
+  // Payment methods availability based on branch configuration
+  const isCashEnabled = selectedBranch?.accepts_cash_payments !== false;
+  const isCardEnabled = selectedBranch?.accepts_card_payments === true;
+  const bankInfo = selectedBranch?.bank_transfer_info;
+  const isTransferEnabled = Boolean(
+    bankInfo &&
+      bankInfo.is_enabled !== false &&
+      bankInfo.bank_name?.trim() &&
+      (bankInfo.clabe?.trim() || bankInfo.account_number?.trim())
+  );
+
+  // Auto-fallback paymentMethod to available option
+  useEffect(() => {
+    if (paymentMethod === 'cash' && !isCashEnabled) {
+      if (isCardEnabled) setPaymentMethod('card');
+      else if (isTransferEnabled) setPaymentMethod('transfer');
+    } else if (paymentMethod === 'card' && !isCardEnabled) {
+      if (isCashEnabled) setPaymentMethod('cash');
+      else if (isTransferEnabled) setPaymentMethod('transfer');
+    } else if (paymentMethod === 'transfer' && !isTransferEnabled) {
+      if (isCashEnabled) setPaymentMethod('cash');
+      else if (isCardEnabled) setPaymentMethod('card');
+    }
+  }, [paymentMethod, isCashEnabled, isCardEnabled, isTransferEnabled]);
+
+  const handleCopyClabe = (val: string) => {
+    if (!val) return;
+    try {
+      navigator.clipboard?.writeText(val);
+      setClabeCopied(true);
+      setTimeout(() => setClabeCopied(false), 2500);
+    } catch {}
+  };
+
+  // Coupon state and branch configuration check
+  const hasConfiguredCoupons = Boolean(
+    selectedBranch?.coupons &&
+      Array.isArray(selectedBranch.coupons) &&
+      selectedBranch.coupons.some((c) => c.is_active && Boolean(c.code?.trim()))
+  );
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
@@ -1252,35 +1292,41 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="cart-form-section">
                 <label className="cart-form-section-label">Forma de Pago</label>
                 <div className="cart-payment-methods-grid">
-                  <button
-                    type="button"
-                    className={`cart-payment-method-pill ${paymentMethod === 'cash' ? 'active' : ''}`}
-                    onClick={() => setPaymentMethod('cash')}
-                  >
-                    <Banknote size={18} />
-                    <span>Efectivo</span>
-                  </button>
+                  {isCashEnabled && (
+                    <button
+                      type="button"
+                      className={`cart-payment-method-pill ${paymentMethod === 'cash' ? 'active' : ''}`}
+                      onClick={() => setPaymentMethod('cash')}
+                    >
+                      <Banknote size={18} />
+                      <span>Efectivo</span>
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    className={`cart-payment-method-pill ${paymentMethod === 'card' ? 'active' : ''}`}
-                    onClick={() => setPaymentMethod('card')}
-                  >
-                    <CreditCard size={18} />
-                    <span>Tarjeta (Terminal)</span>
-                  </button>
+                  {isCardEnabled && (
+                    <button
+                      type="button"
+                      className={`cart-payment-method-pill ${paymentMethod === 'card' ? 'active' : ''}`}
+                      onClick={() => setPaymentMethod('card')}
+                    >
+                      <CreditCard size={18} />
+                      <span>Tarjeta (Terminal)</span>
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    className={`cart-payment-method-pill ${paymentMethod === 'transfer' ? 'active' : ''}`}
-                    onClick={() => setPaymentMethod('transfer')}
-                  >
-                    <ArrowRightLeft size={18} />
-                    <span>Transferencia</span>
-                  </button>
+                  {isTransferEnabled && (
+                    <button
+                      type="button"
+                      className={`cart-payment-method-pill ${paymentMethod === 'transfer' ? 'active' : ''}`}
+                      onClick={() => setPaymentMethod('transfer')}
+                    >
+                      <ArrowRightLeft size={18} />
+                      <span>Transferencia</span>
+                    </button>
+                  )}
                 </div>
 
-                {paymentMethod === 'cash' && (
+                {paymentMethod === 'cash' && isCashEnabled && (
                   <div style={{ marginTop: '10px' }}>
                     <input
                       type="text"
@@ -1289,6 +1335,93 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       value={cashAmount}
                       onChange={(e) => setCashAmount(e.target.value)}
                     />
+                  </div>
+                )}
+
+                {paymentMethod === 'transfer' && isTransferEnabled && bankInfo && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: '14px 16px',
+                      backgroundColor: '#f8fafc',
+                      border: '1.5px solid #e2e8f0',
+                      borderRadius: 14,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <Building2 size={18} color="#7c3aed" />
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>
+                        Datos para Transferencia
+                      </strong>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.84rem' }}>
+                      {bankInfo.bank_name && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#64748b' }}>Banco:</span>
+                          <strong style={{ color: '#0f172a' }}>{bankInfo.bank_name}</strong>
+                        </div>
+                      )}
+                      {bankInfo.account_holder && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#64748b' }}>Titular:</span>
+                          <strong style={{ color: '#0f172a' }}>{bankInfo.account_holder}</strong>
+                        </div>
+                      )}
+                      {bankInfo.account_number && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#64748b' }}>Cuenta:</span>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+                            {bankInfo.account_number}
+                          </span>
+                        </div>
+                      )}
+                      {bankInfo.clabe && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginTop: 4,
+                            paddingTop: 8,
+                            borderTop: '1px dashed #cbd5e1',
+                          }}
+                        >
+                          <div>
+                            <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
+                              CLABE Interbancaria:
+                            </span>
+                            <span style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace', fontSize: '0.92rem' }}>
+                              {bankInfo.clabe}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyClabe(bankInfo.clabe || '')}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              border: '1px solid #c4b5fd',
+                              background: clabeCopied ? '#f5f3ff' : '#ffffff',
+                              color: '#7c3aed',
+                              padding: '5px 10px',
+                              borderRadius: 8,
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {clabeCopied ? <Check size={14} /> : <Copy size={14} />}
+                            <span>{clabeCopied ? '¡Copiada!' : 'Copiar'}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p style={{ margin: '10px 0 0', fontSize: '0.73rem', color: '#64748b', lineHeight: 1.3 }}>
+                      💡 Realiza tu transferencia por el total del pedido y muestra o envía tu comprobante al recibir/recoger.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1312,157 +1445,159 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               )}
 
               {/* Coupon input & discount badge */}
-              <div className="cart-form-section" style={{ marginBottom: 14 }}>
-                <label className="cart-form-section-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Tag size={16} color="#059669" />
-                  <span>¿Tienes un cupón de descuento?</span>
-                </label>
-                {appliedCoupon ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      backgroundColor: '#ecfdf5',
-                      border: '1px solid #a7f3d0',
-                      borderRadius: 12,
-                      padding: '10px 14px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '1.2rem' }}>🎉</span>
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#065f46' }}>
-                          Cupón {appliedCoupon.code} aplicado
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: '#047857' }}>
-                          {appliedCoupon.discount_percentage}% de descuento (-{formatMoney(discountCents)})
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveCoupon}
+              {hasConfiguredCoupons && (
+                <div className="cart-form-section" style={{ marginBottom: 14 }}>
+                  <label className="cart-form-section-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Tag size={16} color="#059669" />
+                    <span>¿Tienes un cupón de descuento?</span>
+                  </label>
+                  {appliedCoupon ? (
+                    <div
                       style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#059669',
-                        fontWeight: 700,
-                        fontSize: '0.8rem',
-                        cursor: 'pointer',
-                        padding: '4px 8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: '#ecfdf5',
+                        border: '1px solid #a7f3d0',
+                        borderRadius: 12,
+                        padding: '10px 14px',
                       }}
                     >
-                      Quitar
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    {suggestedCheckoutCoupon && (
-                      <div
-                        style={{
-                          marginBottom: 10,
-                          padding: '10px 12px',
-                          backgroundColor: '#ecfdf5',
-                          border: '1px dashed #86efac',
-                          borderRadius: 10,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                          <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🏷️</span>
-                          <div style={{ fontSize: '0.8rem', color: '#166534', minWidth: 0 }}>
-                            <span>Promoción sugerida: </span>
-                            <strong style={{ letterSpacing: '0.04em' }}>{suggestedCheckoutCoupon.code}</strong>
-                            <span> ({suggestedCheckoutCoupon.discount_percentage}% OFF)</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: '1.2rem' }}>🎉</span>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#065f46' }}>
+                            Cupón {appliedCoupon.code} aplicado
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#047857' }}>
+                            {appliedCoupon.discount_percentage}% de descuento (-{formatMoney(discountCents)})
                           </div>
                         </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveCoupon}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#059669',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          padding: '4px 8px',
+                        }}
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      {suggestedCheckoutCoupon && (
+                        <div
+                          style={{
+                            marginBottom: 10,
+                            padding: '10px 12px',
+                            backgroundColor: '#ecfdf5',
+                            border: '1px dashed #86efac',
+                            borderRadius: 10,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🏷️</span>
+                            <div style={{ fontSize: '0.8rem', color: '#166534', minWidth: 0 }}>
+                              <span>Promoción sugerida: </span>
+                              <strong style={{ letterSpacing: '0.04em' }}>{suggestedCheckoutCoupon.code}</strong>
+                              <span> ({suggestedCheckoutCoupon.discount_percentage}% OFF)</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCouponInput(suggestedCheckoutCoupon.code);
+                              handleApplyCoupon(undefined, suggestedCheckoutCoupon.code);
+                            }}
+                            disabled={isValidatingCoupon}
+                            style={{
+                              padding: '5px 12px',
+                              backgroundColor: '#059669',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: 8,
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: isValidatingCoupon ? 'not-allowed' : 'pointer',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
+                            Aplicar
+                          </button>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="text"
+                          placeholder={
+                            suggestedCheckoutCoupon
+                              ? `Ingresa cupón (ej. ${suggestedCheckoutCoupon.code})`
+                              : 'Ingresa tu cupón'
+                          }
+                          value={couponInput}
+                          onChange={(e) => {
+                            setCouponInput(e.target.value.toUpperCase());
+                            if (couponError) setCouponError('');
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleApplyCoupon();
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '10px 12px',
+                            borderRadius: 10,
+                            border: couponError ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                            fontSize: '0.88rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            textTransform: 'uppercase',
+                            outline: 'none',
+                          }}
+                        />
                         <button
                           type="button"
-                          onClick={() => {
-                            setCouponInput(suggestedCheckoutCoupon.code);
-                            handleApplyCoupon(undefined, suggestedCheckoutCoupon.code);
-                          }}
-                          disabled={isValidatingCoupon}
+                          onClick={() => handleApplyCoupon()}
+                          disabled={isValidatingCoupon || !couponInput.trim()}
                           style={{
-                            padding: '5px 12px',
-                            backgroundColor: '#059669',
+                            padding: '0 16px',
+                            backgroundColor: '#0f172a',
                             color: '#ffffff',
                             border: 'none',
-                            borderRadius: 8,
-                            fontSize: '0.78rem',
+                            borderRadius: 10,
+                            fontSize: '0.85rem',
                             fontWeight: 700,
-                            cursor: isValidatingCoupon ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
+                            cursor: isValidatingCoupon || !couponInput.trim() ? 'not-allowed' : 'pointer',
+                            opacity: isValidatingCoupon || !couponInput.trim() ? 0.6 : 1,
                             flexShrink: 0,
                           }}
                         >
-                          Aplicar
+                          {isValidatingCoupon ? 'Validando…' : 'Aplicar'}
                         </button>
                       </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        type="text"
-                        placeholder={
-                          suggestedCheckoutCoupon
-                            ? `Ingresa cupón (ej. ${suggestedCheckoutCoupon.code})`
-                            : 'Ingresa tu cupón'
-                        }
-                        value={couponInput}
-                        onChange={(e) => {
-                          setCouponInput(e.target.value.toUpperCase());
-                          if (couponError) setCouponError('');
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleApplyCoupon();
-                          }
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          border: couponError ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                          fontSize: '0.88rem',
-                          fontWeight: 700,
-                          letterSpacing: '0.04em',
-                          textTransform: 'uppercase',
-                          outline: 'none',
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleApplyCoupon()}
-                        disabled={isValidatingCoupon || !couponInput.trim()}
-                        style={{
-                          padding: '0 16px',
-                          backgroundColor: '#0f172a',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: 10,
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          cursor: isValidatingCoupon || !couponInput.trim() ? 'not-allowed' : 'pointer',
-                          opacity: isValidatingCoupon || !couponInput.trim() ? 0.6 : 1,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {isValidatingCoupon ? 'Validando…' : 'Aplicar'}
-                      </button>
+                      {couponError && (
+                        <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#ef4444', fontWeight: 500 }}>
+                          {couponError}
+                        </p>
+                      )}
                     </div>
-                    {couponError && (
-                      <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#ef4444', fontWeight: 500 }}>
-                        {couponError}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {/* Financial summary breakdown */}
               <div className="cart-financial-summary-card">

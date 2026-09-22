@@ -24,6 +24,8 @@ import {
   Calendar,
   Copy,
   Save,
+  CreditCard,
+  Building2,
 } from 'lucide-react';
 
 export interface DayScheduleForm {
@@ -160,6 +162,23 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
   const [scheduleErrorMessage, setScheduleErrorMessage] = useState<string | null>(null);
   const [isScheduleCollapsed, setIsScheduleCollapsed] = useState(false);
 
+  // Payment methods configuration state
+  const [acceptsCashPayments, setAcceptsCashPayments] = useState(true);
+  const [acceptsCardPayments, setAcceptsCardPayments] = useState(false);
+  const [bankTransferInfo, setBankTransferInfo] = useState<{
+    bank_name: string;
+    account_holder: string;
+    account_number: string;
+    clabe: string;
+    is_enabled: boolean;
+  }>({
+    bank_name: '',
+    account_holder: '',
+    account_number: '',
+    clabe: '',
+    is_enabled: false,
+  });
+
   const loadBranchSchedule = useCallback(async () => {
     if (!branchId) return;
     try {
@@ -186,6 +205,22 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
         setAutoCashShiftEnabled(Boolean(target.auto_cash_shift_enabled));
         const cents = target.auto_cash_opening_cents != null ? target.auto_cash_opening_cents : 50000;
         setAutoCashOpeningPesos(String(cents / 100));
+
+        if (target.accepts_cash_payments !== undefined && target.accepts_cash_payments !== null) {
+          setAcceptsCashPayments(Boolean(target.accepts_cash_payments));
+        } else {
+          setAcceptsCashPayments(true);
+        }
+        setAcceptsCardPayments(Boolean(target.accepts_card_payments));
+        if (target.bank_transfer_info && typeof target.bank_transfer_info === 'object') {
+          setBankTransferInfo({
+            bank_name: target.bank_transfer_info.bank_name || '',
+            account_holder: target.bank_transfer_info.account_holder || '',
+            account_number: target.bank_transfer_info.account_number || '',
+            clabe: target.bank_transfer_info.clabe || '',
+            is_enabled: Boolean(target.bank_transfer_info.is_enabled),
+          });
+        }
       }
     } catch {
       // Retain defaults on fetch failure
@@ -219,14 +254,17 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
           service_schedule: scheduleDays,
           auto_cash_shift_enabled: autoCashShiftEnabled,
           auto_cash_opening_cents: openingCents,
+          accepts_cash_payments: acceptsCashPayments,
+          accepts_card_payments: acceptsCardPayments,
+          bank_transfer_info: bankTransferInfo,
         }),
       });
 
-      setScheduleSuccessMessage('¡Horarios de servicio y caja automática guardados correctamente!');
+      setScheduleSuccessMessage('¡Horarios de servicio y métodos de pago guardados correctamente!');
       setTimeout(() => setScheduleSuccessMessage(null), 4000);
       void loadShift(true);
     } catch (err: any) {
-      setScheduleErrorMessage(err?.message || 'Error al guardar configuración de horarios.');
+      setScheduleErrorMessage(err?.message || 'Error al guardar configuración de horarios y métodos de pago.');
     } finally {
       setIsSavingSchedule(false);
     }
@@ -1661,6 +1699,236 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Métodos de Cobro y Pagos */}
+              <div
+                style={{
+                  marginTop: 18,
+                  marginBottom: 16,
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: 14,
+                  padding: '16px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <CreditCard size={18} color="#ea580c" />
+                  <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>
+                    Métodos de Cobro y Pagos
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 14px', fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>
+                  Configura qué formas de pago estarán disponibles para tus clientes en el menú digital y pedidos móviles.
+                </p>
+
+                {/* 1. Efectivo */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                    marginBottom: 10,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label
+                      htmlFor="accepts-cash-toggle"
+                      style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <DollarSign size={16} color="#16a34a" />
+                      <span>Pago en Efectivo</span>
+                    </label>
+                    <input
+                      id="accepts-cash-toggle"
+                      type="checkbox"
+                      checked={acceptsCashPayments}
+                      onChange={(e) => setAcceptsCashPayments(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#16a34a' }}
+                    />
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.73rem', color: '#64748b' }}>
+                    Acepta pagos en efectivo al entregar o recoger. Marcado por defecto. Si se desmarca, no se mostrará la opción en el carrito.
+                  </p>
+                </div>
+
+                {/* 2. Tarjeta con Terminal */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                    marginBottom: 10,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label
+                      htmlFor="accepts-card-toggle"
+                      style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <CreditCard size={16} color="#2563eb" />
+                      <span>Pago con Tarjeta de Crédito / Débito</span>
+                    </label>
+                    <input
+                      id="accepts-card-toggle"
+                      type="checkbox"
+                      checked={acceptsCardPayments}
+                      onChange={(e) => setAcceptsCardPayments(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#2563eb' }}
+                    />
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.73rem', color: '#64748b' }}>
+                    Marca si dispones de terminal de cobro con tarjeta en el establecimiento. Si está marcado, se mostrará en el carrito de pago.
+                  </p>
+                </div>
+
+                {/* 3. Transferencia Bancaria */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label
+                      htmlFor="accepts-transfer-toggle"
+                      style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Building2 size={16} color="#7c3aed" />
+                      <span>Transferencia Bancaria</span>
+                    </label>
+                    <input
+                      id="accepts-transfer-toggle"
+                      type="checkbox"
+                      checked={bankTransferInfo.is_enabled}
+                      onChange={(e) =>
+                        setBankTransferInfo((prev) => ({ ...prev, is_enabled: e.target.checked }))
+                      }
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#7c3aed' }}
+                    />
+                  </div>
+                  <p style={{ margin: '0 0 10px', fontSize: '0.73rem', color: '#64748b' }}>
+                    Si se activa y se completan los datos bancarios, el cliente verá la opción de transferencia y tus datos en el carrito para pagar.
+                  </p>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr',
+                      gap: 8,
+                      paddingTop: 8,
+                      borderTop: '1px dashed #cbd5e1',
+                    }}
+                  >
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Banco
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. BBVA, Santander, Banorte, Nu"
+                        value={bankTransferInfo.bank_name}
+                        onChange={(e) =>
+                          setBankTransferInfo((prev) => ({ ...prev, bank_name: e.target.value }))
+                        }
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          border: '1px solid #cbd5e1',
+                          fontSize: '0.82rem',
+                          color: '#0f172a',
+                          backgroundColor: '#ffffff',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                        Nombre del Beneficiario / Titular
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Nombre completo o razón social"
+                        value={bankTransferInfo.account_holder}
+                        onChange={(e) =>
+                          setBankTransferInfo((prev) => ({ ...prev, account_holder: e.target.value }))
+                        }
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          border: '1px solid #cbd5e1',
+                          fontSize: '0.82rem',
+                          color: '#0f172a',
+                          backgroundColor: '#ffffff',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          Número de Cuenta (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="10 dígitos"
+                          value={bankTransferInfo.account_number}
+                          onChange={(e) =>
+                            setBankTransferInfo((prev) => ({ ...prev, account_number: e.target.value }))
+                          }
+                          style={{
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: '6px 10px',
+                            borderRadius: 8,
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.82rem',
+                            color: '#0f172a',
+                            backgroundColor: '#ffffff',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: 3 }}>
+                          CLABE Interbancaria
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={18}
+                          placeholder="18 dígitos"
+                          value={bankTransferInfo.clabe}
+                          onChange={(e) =>
+                            setBankTransferInfo((prev) => ({ ...prev, clabe: e.target.value.replace(/\D/g, '') }))
+                          }
+                          style={{
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: '6px 10px',
+                            borderRadius: 8,
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.82rem',
+                            color: '#0f172a',
+                            backgroundColor: '#ffffff',
+                            outline: 'none',
+                            fontFamily: 'monospace',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 

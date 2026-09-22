@@ -94,4 +94,22 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     And el campo de hora queda acotado entre la hora de apertura y la hora de cierre del día seleccionado
     And las sugerencias rápidas de tiempo se filtran para no rebasar la hora límite de cierre
     And el sistema valida antes de enviar el pedido que el horario seleccionado corresponda a un día abierto y dentro del rango de servicio
+
+  @BDD-SC-821
+  Scenario: Configuración de métodos de pago aceptados y datos bancarios en caja móvil
+    Given un usuario administrador en la pestaña de "Caja" del shell móvil
+    When despliega la sección de configuración de métodos de cobro abajo de horarios
+    And configura la aceptación de tarjeta con terminal, efectivodad por defecto o transferencia bancaria con Banco, Nombre, Cuenta y CLABE
+    Then el sistema persiste los métodos de cobro y datos bancarios mediante "PUT /branches/{id}"
+    And expone estos valores en el catálogo público de la sucursal para sincronizar el menú digital
+
+  @BDD-SC-822
+  Scenario: Presentación condicional de métodos de pago, cupones y datos de transferencia en carrito digital
+    Given un cliente en el carrito de compras del menú digital público
+    When la sucursal no tiene códigos de cupón activos configurados
+    Then no se muestra la opción "¿Tienes un cupón de descuento?" en el carrito
+    And las opciones de pago (Efectivo, Tarjeta, Transferencia) se muestran únicamente si están habilitadas en la sucursal
+    And si no se configuraron datos de cuenta bancaria la opción de transferencia no se muestra
+    And al seleccionar transferencia bancaria habiendo datos configurados se despliegan el banco, titular, cuenta y CLABE para pago
+    And los productos en el carrito se presentan en tarjetas amplias y accesibles
 ```

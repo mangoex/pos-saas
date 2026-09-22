@@ -120,6 +120,9 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         "free_delivery_min_cents",
         "coupons",
         "service_schedule",
+        "accepts_cash_payments",
+        "accepts_card_payments",
+        "bank_transfer_info",
     )
     branches = []
     for branch in branch_rows:

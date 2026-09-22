@@ -104,6 +104,9 @@ def list_branches(session: Session, organization_id: str | None = None) -> list[
             models.branches.c.service_schedule,
             models.branches.c.auto_cash_shift_enabled,
             models.branches.c.auto_cash_opening_cents,
+            models.branches.c.accepts_cash_payments,
+            models.branches.c.accepts_card_payments,
+            models.branches.c.bank_transfer_info,
             models.business_units.c.name.label("business_unit_name"),
             models.business_units.c.unit_type.label("business_unit_type"),
             models.legal_entities.c.name.label("legal_entity_name"),
@@ -132,6 +135,9 @@ def list_branches(session: Session, organization_id: str | None = None) -> list[
         if item.get("longitude") is not None:
             item["longitude"] = float(item["longitude"])
         item["coupons"] = list(item["coupons"]) if isinstance(item.get("coupons"), list) else []
+        item["accepts_cash_payments"] = bool(item["accepts_cash_payments"]) if item.get("accepts_cash_payments") is not None else True
+        item["accepts_card_payments"] = bool(item.get("accepts_card_payments", False))
+        item["bank_transfer_info"] = dict(item["bank_transfer_info"]) if isinstance(item.get("bank_transfer_info"), dict) else {}
         result.append(item)
     return result
 

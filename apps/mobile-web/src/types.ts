@@ -89,6 +89,14 @@ export interface DaySchedule {
   close_time: string;
 }
 
+export interface BankTransferInfo {
+  bank_name?: string;
+  account_holder?: string;
+  account_number?: string;
+  clabe?: string;
+  is_enabled?: boolean;
+}
+
 export interface BranchInfo {
   id: string;
   name: string;
@@ -117,6 +125,9 @@ export interface BranchInfo {
   coupons?: BranchCoupon[];
   service_schedule?: DaySchedule[];
   has_active_shift?: boolean;
+  accepts_cash_payments?: boolean;
+  accepts_card_payments?: boolean;
+  bank_transfer_info?: BankTransferInfo;
 }
 
 export interface StorefrontOrganization {

@@ -47,3 +47,11 @@
 ### TDD-TC-260 Restricción de días y horas de servicio en selector para recoger del menú digital
 - Archivo: `tests/frontend/test_service_schedule_and_pickup_restrictions.mjs`
 - Propósito: Comprobar que en el checkout del menú digital (`CartDrawer`), los días marcados como cerrado (`is_open: false`) quedan deshabilitados en el selector de días (L, M, M, J, V, S, D), el selector de hora queda restringido al rango `[open_time, close_time]` del día elegido, los chips rápidos se filtran para no rebasar el horario, y la validación de envío rechaza pedidos fuera de servicio.
+
+### TDD-TC-261 Persistencia y exposición de métodos de cobro y datos bancarios de sucursal
+- Archivo: `apps/api/tests/test_branch_payment_methods_and_storefront.py`
+- Propósito: Comprobar que `accepts_cash_payments`, `accepts_card_payments` y `bank_transfer_info` se persisten mediante `update_branch`, se devuelven en `list_branches` y se exponen en `resolve_storefront` para consumo público.
+
+### TDD-TC-262 Presentación condicional de métodos de pago, cupones y datos de transferencia en carrito digital
+- Archivo: `tests/frontend/test_cart_payment_methods_and_coupons.mjs`
+- Propósito: Verificar que el carrito oculta el formulario de cupón cuando no hay promociones activas, restringe los métodos de pago (Efectivo, Tarjeta, Transferencia) según la configuración de la sucursal, muestra los datos bancarios al elegir transferencia y aplica estilo amplio a las tarjetas de productos.
