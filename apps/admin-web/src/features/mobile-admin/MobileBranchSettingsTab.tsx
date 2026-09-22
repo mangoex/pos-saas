@@ -167,7 +167,6 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [branchPhone, setBranchPhone] = useState('');
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [googleReviewUrl, setGoogleReviewUrl] = useState('');
-  const [isOpenForOrders, setIsOpenForOrders] = useState(true);
   const [dineInEnabled, setDineInEnabled] = useState(true);
   const [deliveryFeeEnabled, setDeliveryFeeEnabled] = useState(true);
   const [freeDeliveryMinPesos, setFreeDeliveryMinPesos] = useState('');
@@ -208,7 +207,6 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       setBranchPhone(currentBranch.phone || '');
       setWhatsappEnabled(Boolean(currentBranch.whatsapp_ordering_enabled));
       setGoogleReviewUrl(currentBranch.google_review_url || '');
-      setIsOpenForOrders(currentBranch.status !== 'inactive');
       setDineInEnabled(currentBranch.dine_in_enabled !== false);
       setDeliveryFeeEnabled(currentBranch.delivery_fee_enabled !== false);
       setFreeDeliveryMinPesos(
@@ -325,7 +323,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       phone: branchPhone.trim(),
       whatsapp_ordering_enabled: whatsappEnabled,
       google_review_url: googleReviewUrl.trim(),
-      status: isOpenForOrders ? 'active' : 'inactive',
+      status: currentBranch?.status || 'active',
       dine_in_enabled: dineInEnabled,
       delivery_fee_enabled: deliveryFeeEnabled,
       color_palette: colorPalette,
@@ -1048,31 +1046,6 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   </h3>
                 </div>
 
-                {/* Open/Close Toggle */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px 0',
-                    borderBottom: '1px solid #f1f5f9',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-                      Recepción de Pedidos
-                    </div>
-                    <div style={{ fontSize: '0.775rem', color: '#64748b' }}>
-                      {isOpenForOrders ? 'Sucursal abierta para vender' : 'Sucursal pausada (Cerrada)'}
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={isOpenForOrders}
-                    onChange={(e) => setIsOpenForOrders(e.target.checked)}
-                    style={{ width: 22, height: 22, cursor: 'pointer', accentColor: '#16a34a' }}
-                  />
-                </div>
 
                 {/* WhatsApp Ordering Toggle */}
                 <div

@@ -754,53 +754,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               )}
 
-              {/* Branch Information card */}
-              <div className="cart-form-section">
-                <label className="cart-form-section-label">Sucursal de Preparación</label>
-                <div className="cart-branch-card-modern">
-                  <div className="cart-branch-left">
-                    <div className="cart-branch-icon-badge">
-                      <MapPin size={18} />
-                    </div>
-                    <div className="cart-branch-info-col">
-                      <div className="cart-branch-name-row">
-                        <span className="cart-branch-name-title">
-                          {selectedBranch ? selectedBranch.name : 'Sucursal asignada'}
-                        </span>
-                        {selectedBranch?.distance_km !== undefined && selectedBranch?.distance_km !== null && (
-                          <span className="cart-branch-distance-pill">
-                            {selectedBranch.distance_km < 0.1
-                              ? 'Estás aquí'
-                              : selectedBranch.distance_km < 1
-                              ? `${Math.round(selectedBranch.distance_km * 1000)}m`
-                              : `${selectedBranch.distance_km}km`}
-                          </span>
-                        )}
-                      </div>
-                      {selectedBranch?.street && (
-                        <span className="cart-branch-address-sub">
-                          {selectedBranch.street} {selectedBranch.exterior_number ? `#${selectedBranch.exterior_number}` : ''}
-                          {selectedBranch.neighborhood ? `, Col. ${selectedBranch.neighborhood}` : ''}
-                        </span>
-                      )}
-                      {selectedBranch?.cross_streets && (
-                        <span className="cart-branch-cross-streets">
-                          🛣️ Entre: {selectedBranch.cross_streets}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {onOpenBranchSelector && (
-                    <button
-                      type="button"
-                      onClick={onOpenBranchSelector}
-                      className="btn-cart-change-branch"
-                    >
-                      Cambiar
-                    </button>
-                  )}
-                </div>
-              </div>
+
 
               {/* Order Mode selector (Social Style like Image 3) */}
               <div className="cart-form-section">
