@@ -946,7 +946,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               {orderType === 'takeaway' && (
                 <div className="cart-form-section pickup-schedule-section">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Calendar size={18} color="#ea580c" />
+                    <Calendar size={18} color="var(--accent-primary)" />
                     <label className="cart-form-section-label" style={{ marginBottom: 0 }}>
                       Día y hora para recoger
                     </label>
@@ -984,10 +984,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <div className="pickup-time-section-block">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <label htmlFor="pickup-time-input" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Clock size={15} color="#ea580c" />
+                        <Clock size={15} color="var(--accent-primary)" />
                         Hora estimada de recolección
                       </label>
-                      <span style={{ fontSize: '0.75rem', color: '#ea580c', fontWeight: 600 }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 600 }}>
                         {selectedDay.isToday ? 'Hoy' : selectedDay.name}
                       </span>
                     </div>
@@ -1049,7 +1049,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           📅 Pasarás a recoger: <strong>{selectedDay.isToday ? 'Hoy' : selectedDay.name} ({selectedDay.dateNumber} {selectedDay.monthName}) a las {pickupTime || '--:--'} hrs</strong>
                         </span>
                         {currentDaySchedule?.is_open && (
-                          <span style={{ fontSize: '0.72rem', color: '#c2410c', fontWeight: 500 }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--accent-primary)', fontWeight: 500 }}>
                             ⏰ Horario de servicio {selectedDay.isToday ? 'hoy' : selectedDay.name}: {currentDaySchedule.open_time} a {currentDaySchedule.close_time} hrs
                           </span>
                         )}
@@ -1075,7 +1075,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     style={{ marginTop: 12, textDecoration: 'none', display: 'flex', cursor: (selectedBranch.latitude && selectedBranch.longitude) ? 'pointer' : 'default' }}
                   >
                     <div className="cart-returning-customer-avatar">
-                      <MapPin size={20} color="#3b82f6" />
+                      <MapPin size={20} color="var(--accent-primary)" />
                     </div>
                     <div className="cart-returning-customer-info">
                       <div className="cart-returning-customer-name-row">
@@ -1116,7 +1116,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   {isReturningCustomer && !isEditingCustomer && street ? (
                     <div className="cart-returning-customer-card">
                       <div className="cart-returning-customer-avatar">
-                        <MapPin size={20} color="#f59e0b" />
+                        <MapPin size={20} color="var(--accent-primary)" />
                       </div>
                       <div className="cart-returning-customer-info">
                         <div className="cart-returning-customer-name-row">
