@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Phone,
   Power,
+  MapPin,
   Sparkles,
   Globe,
   Bike,
@@ -976,11 +977,37 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Latitud (Google Maps)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Latitud</label>
+                      </div>
                       <input type="text" value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="Ej. 20.6766" style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Longitud</label>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Longitud</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (navigator.geolocation) {
+                              navigator.geolocation.getCurrentPosition(
+                                (pos) => {
+                                  setLatitude(String(pos.coords.latitude));
+                                  setLongitude(String(pos.coords.longitude));
+                                },
+                                (err) => alert("No se pudo obtener la ubicación. Activa los permisos del navegador.")
+                              );
+                            } else {
+                              alert("Geolocalización no soportada");
+                            }
+                          }}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 700, padding: 0
+                          }}
+                          title="Usar ubicación actual"
+                        >
+                          <MapPin size={14} /> Usar actual
+                        </button>
+                      </div>
                       <input type="text" value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="Ej. -103.3475" style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: '0.9rem', borderRadius: 8, border: '1px solid #cbd5e1', outline: 'none' }} />
                     </div>
                   </div>

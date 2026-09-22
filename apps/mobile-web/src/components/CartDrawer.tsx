@@ -1067,24 +1067,31 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       Dirección de Recolección
                     </label>
                   </div>
-                  <div style={{ marginTop: 12, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.85rem', color: '#334155', lineHeight: 1.5 }}>
-                    <strong>{selectedBranch.name}</strong><br />
-                    {selectedBranch.street} {selectedBranch.exterior_number} {selectedBranch.interior_number ? `Int. ${selectedBranch.interior_number}` : ''}<br />
-                    {selectedBranch.neighborhood && `Col. ${selectedBranch.neighborhood}, `}{selectedBranch.city}, {selectedBranch.state} {selectedBranch.postal_code}<br />
-                    {selectedBranch.cross_streets && <small style={{ color: '#64748b', display: 'block', marginTop: 4 }}>Entre: {selectedBranch.cross_streets}</small>}
-                    {(selectedBranch.latitude && selectedBranch.longitude) ? (
-                      <div style={{ marginTop: 10 }}>
-                        <a 
-                          href={`https://www.google.com/maps/search/?api=1&query=${selectedBranch.latitude},${selectedBranch.longitude}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}
-                        >
-                          📍 Ver en Google Maps
-                        </a>
+                  <a
+                    href={(selectedBranch.latitude && selectedBranch.longitude) ? `https://www.google.com/maps/search/?api=1&query=${selectedBranch.latitude},${selectedBranch.longitude}` : undefined}
+                    target={(selectedBranch.latitude && selectedBranch.longitude) ? "_blank" : undefined}
+                    rel={(selectedBranch.latitude && selectedBranch.longitude) ? "noopener noreferrer" : undefined}
+                    className="cart-returning-customer-card"
+                    style={{ marginTop: 12, textDecoration: 'none', display: 'flex', cursor: (selectedBranch.latitude && selectedBranch.longitude) ? 'pointer' : 'default' }}
+                  >
+                    <div className="cart-returning-customer-avatar">
+                      <MapPin size={20} color="#3b82f6" />
+                    </div>
+                    <div className="cart-returning-customer-info">
+                      <div className="cart-returning-customer-name-row">
+                        <span className="cart-returning-customer-name" style={{ color: '#0f172a' }}>{selectedBranch.name}</span>
+                        {(selectedBranch.latitude && selectedBranch.longitude) && (
+                          <span className="cart-returning-customer-badge address">Abrir Mapa</span>
+                        )}
                       </div>
-                    ) : null}
-                  </div>
+                      <span className="cart-returning-customer-phone" style={{ color: '#64748b' }}>
+                        {selectedBranch.street} {selectedBranch.exterior_number} {selectedBranch.interior_number ? `Int. ${selectedBranch.interior_number}` : ''}
+                        <br />
+                        {selectedBranch.neighborhood && `Col. ${selectedBranch.neighborhood}, `}{selectedBranch.city}, {selectedBranch.state}
+                      </span>
+                      {selectedBranch.cross_streets && <span className="cart-returning-customer-phone" style={{ marginTop: 4, color: '#64748b' }}>Entre: {selectedBranch.cross_streets}</span>}
+                    </div>
+                  </a>
                 </div>
               )}
 
