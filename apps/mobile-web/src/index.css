@@ -3405,6 +3405,34 @@ body {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  min-width: 0;
+}
+
+@media (max-width: 380px) {
+  .pickup-days-container { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .pickup-day-btn { min-width: 0; min-height: 64px; }
+}
+
+.pickup-time-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.pickup-time-heading svg { flex-shrink: 0; }
+
+.pickup-grace-notice {
+  margin: 16px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--accent-orange-light);
+  color: var(--text-main);
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .pickup-time-input-wrap {
@@ -3412,10 +3440,15 @@ body {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .pickup-time-field {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
   height: 48px;
   min-height: 48px;
   box-sizing: border-box;
@@ -3432,6 +3465,9 @@ body {
   display: block;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
+/* Safari's native time control otherwise keeps an intrinsic width on narrow cards. */
+.pickup-time-field::-webkit-date-and-time-value { min-width: 0; text-align: center; }
 
 .pickup-time-field:focus {
   border-color: var(--accent-primary);
@@ -3470,7 +3506,7 @@ body {
 
 .pickup-summary-badge {
   margin-top: 10px;
-  padding: 8px 12px;
+  padding: 14px;
   border-radius: 10px;
   background: var(--accent-orange-light);
   border: 1px solid var(--accent-primary);
@@ -3484,7 +3520,7 @@ body {
   box-sizing: border-box;
   overflow-wrap: anywhere;
   word-break: break-word;
-  line-height: 1.4;
+  line-height: 1.6;
 }
 
 .pickup-summary-badge span {

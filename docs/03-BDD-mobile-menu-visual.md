@@ -16,6 +16,7 @@ Feature: Explorar el menú conservando sus funciones y colores configurados
     When busco, cambio categoría o pulso Ver menú
     Then se conservan los filtros y el acceso al listado
     And puedo cambiar sucursal y actualizar mi ubicación
+    And las portadas y círculos muestran fotografías cargadas desde el admin (JPEG, PNG, WEBP o GIF incrustados) y enlaces HTTP válidos
 
   @BDD-SC-942
   Scenario: Comprar desde las tarjetas verticales
@@ -30,4 +31,5 @@ Feature: Explorar el menú conservando sus funciones y colores configurados
     When exploro el menú con teclado o tacto
     Then nombres, precios y acciones son legibles sin desbordar la página
     And Menú, Dictar, Favoritos y Carrito permanecen accesibles
+    And el campo de hora nativo y su resumen permanecen dentro de la tarjeta al recoger
 ```

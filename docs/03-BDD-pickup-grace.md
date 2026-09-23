@@ -8,6 +8,7 @@ Feature: Configurar tolerancia informativa por sucursal
     Given un administrador autorizado en Config móvil
     When guarda 30 en Recoger encima de Comer en el Establecimiento
     Then al recargar conserva 30 y queda auditoría de sucursal
+    And la etiqueta y el valor de Recoger son legibles sobre la tarjeta blanca del admin
     And el cliente que elige Recoger ve 30 minutos después de su hora programada
   @BDD-SC-945
   Scenario: Eliminar o conservar configuración opcional

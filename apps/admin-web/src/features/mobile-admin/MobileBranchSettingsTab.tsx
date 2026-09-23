@@ -1155,11 +1155,11 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
 
               <section aria-labelledby="pickup-settings-title" style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, border: '1px solid #e2e8f0', marginBottom: 18 }}>
                 <h3 id="pickup-settings-title" style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#0f172a' }}>Recoger</h3>
-                <label htmlFor="pickup-grace-minutes" style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Tiempo disponible después de la hora programada (minutos)</label>
+                <label htmlFor="pickup-grace-minutes" style={{ display: 'block', fontWeight: 600, marginBottom: 8, color: '#334155', lineHeight: 1.5 }}>Tiempo disponible después de la hora programada (minutos)</label>
                 <input id="pickup-grace-minutes" type="text" inputMode="numeric"
                   value={pickupGraceMinutes} onChange={(e) => setPickupGraceMinutes(e.target.value)}
                   aria-describedby="pickup-grace-help" placeholder="Sin tiempo configurado"
-                  style={{ width: '100%', minHeight: 44, padding: '10px 12px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 10, fontSize: 16 }} />
+                  style={{ width: '100%', minHeight: 44, padding: '10px 12px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 10, fontSize: 16, color: '#0f172a', backgroundColor: '#fff', colorScheme: 'light' }} />
                 <p id="pickup-grace-help" style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#475569' }}>
                   Indica cuántos minutos respetarás el pedido después de la hora programada. Déjalo vacío para no mostrar el aviso al cliente. Guarda la configuración para aplicar el cambio.
                 </p>

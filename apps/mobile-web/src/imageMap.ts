@@ -6,6 +6,11 @@ export function getProductImage(product: { sku?: string; name?: string; category
 /** Generic category artwork has no restaurant-specific photographs or claims. */
 export function getCategoryImageUrl(value: string | null | undefined): string {
   if (!value) return '';
+  // Match raster uploads accepted by the catalog API; never accept embedded SVG/HTML.
+  const trimmed = value.trim();
+  if (trimmed.startsWith('data:')) {
+    return trimmed.length <= 2 * 1024 * 1024 && /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(trimmed) ? trimmed : '';
+  }
   try {
     const url = new URL(value.trim());
     return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? value.trim() : '';

@@ -1083,7 +1083,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                   {/* Pickup Time Selector */}
                   <div className="pickup-time-section-block">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div className="pickup-time-heading">
                       <label htmlFor="pickup-time-input" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Clock size={15} color="var(--accent-primary)" />
                         Hora estimada de recolección
@@ -1144,13 +1144,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     )}
 
                     {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes) && (
-                      <p role="status" style={{ padding: 12, borderRadius: 12, background: 'var(--accent-orange-light)', color: 'var(--text-main)', fontSize: '0.875rem', lineHeight: 1.5 }}>
+                      <p role="status" className="pickup-grace-notice">
                         {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes)}
                       </p>
                     )}
                     {/* Selected Summary Badge */}
                     <div className="pickup-summary-badge">
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', minWidth: 0 }}>
                         <span>
                           📅 Pasarás a recoger: <strong>{selectedDay.isToday ? 'Hoy' : selectedDay.name} ({selectedDay.dateNumber} {selectedDay.monthName}) a las {pickupTime || '--:--'} hrs</strong>
                         </span>

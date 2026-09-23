@@ -7,7 +7,8 @@ import { branch } from './mobile-cart-fixture.mjs';
 const require = createRequire(resolve('apps/admin-web/package.json'));
 const { createServer } = await import(pathToFileURL(require.resolve('vite')).href);
 const { default: react } = await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href);
-branch.pickup_grace_minutes = null;
+branch.pickup_grace_minutes = process.env.QA_UPLOADED_COVERS === '1' ? 30 : null;
+branch.service_schedule = Array.from({length: 7}, (_, day_index) => ({day_index, is_open:true, open_time:'00:00', close_time:'23:59'}));
 const entry = '/@fs/' + resolve('tests/browser/pickup-settings-entry.tsx').replaceAll('\\', '/');
 const server = await createServer({
   resolve: { alias: Object.fromEntries(['react', 'react-dom', '@tanstack/react-query'].map(name => [name, dirname(require.resolve(`${name}/package.json`))])) },
@@ -16,7 +17,7 @@ const server = await createServer({
       vite.middlewares.use(async (req, res, next) => {
         if (req.url === '/qa-pickup') {
           res.setHeader('Content-Type', 'text/html');
-          return res.end(await vite.transformIndexHtml(req.url, `<html><head><meta name="viewport" content="width=device-width,initial-scale=1" /></head><body style="margin:0;font-family:Arial"><div id="root"></div><script type="module" src="${entry}"></script></body></html>`));
+          return res.end(await vite.transformIndexHtml(req.url, `<html><head><meta name="viewport" content="width=device-width,initial-scale=1" /></head><body style="margin:0;font-family:Arial;color:#fff"><div id="root"></div><script type="module" src="${entry}"></script></body></html>`));
         }
         if (!req.url?.startsWith('/api/')) return next();
         let body = {};

@@ -3,6 +3,9 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+const uploadedCover = process.env.QA_UPLOADED_COVERS === '1'
+  ? `data:image/jpeg;base64,${readFileSync(resolve('apps/mobile-web/src/assets/products/bebidas_bar.jpg')).toString('base64')}` : null;
 const require = createRequire(resolve('apps/mobile-web/package.json'));
 const { createServer } = await import(pathToFileURL(require.resolve('vite')).href);
 const group = { id: 'extras', name: 'Extras', is_required: false, minimum_selections: 0, maximum_selections: 2, options: [
@@ -25,7 +28,7 @@ const server = await createServer({
         const palette = ['orange', 'green', 'blue', 'tinto'].find(color => req.url.includes(color)) || 'orange';
         body = { organization: { id: `qa-org-${req.url.split('/').at(-1)}`, name: 'Menú QA', public_slug: 'qa', mobile_theme: 'dark' }, branches: [{ ...branch, color_palette: palette }], selected_branch_id: branch.id };
       }
-      else if (req.url.includes('catalog')) body = { items: products.map((product, index) => ({ ...product, ...(index === 0 ? { image_url: 'http://127.0.0.1:4174/menu/src/assets/products/bebidas_bar.jpg' } : {}) })), categories: [{ id: 'coffee-category', name: 'Cafetería', image_url: 'http://127.0.0.1:4174/menu/src/assets/products/bebidas_bar.jpg' }], has_active_shift: true };
+      else if (req.url.includes('catalog')) body = { items: products.map((product, index) => ({ ...product, ...(index === 0 ? { image_url: uploadedCover || 'http://127.0.0.1:4174/menu/src/assets/products/bebidas_bar.jpg' } : {}) })), menu_home: { name: 'Portada QA', image_url: uploadedCover }, categories: [{ id: 'coffee-category', name: 'Cafetería', image_url: uploadedCover || 'http://127.0.0.1:4174/menu/src/assets/products/bebidas_bar.jpg' }], has_active_shift: true };
       else if (req.url.includes('trending')) body = { trending_dishes: [] };
       else if (req.url.includes('community-photos')) body = { photos: [] };
       else if (req.url.includes('recommendations')) body = { recommendations: [] };
