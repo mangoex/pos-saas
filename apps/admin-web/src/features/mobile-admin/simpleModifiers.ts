@@ -8,6 +8,7 @@ export interface SimpleModifierOption {
 export interface SimpleModifiersProductSnapshot {
   id: string;
   name: string;
+  description?: string | null;
   sku: string;
   category_name: string;
   station: string;
@@ -40,6 +41,7 @@ export type ProductSnapshotFields = Omit<SimpleModifiersProductSnapshot, 'id'>;
 export function productSnapshotToForm(product: SimpleModifiersProductSnapshot) {
   return {
     name: product.name,
+    description: product.description ?? '',
     sku: product.sku,
     category_name: product.category_name,
     station: product.station,
@@ -55,6 +57,7 @@ export function productSnapshotToForm(product: SimpleModifiersProductSnapshot) {
 export function buildProductFieldsForSave(
   form: {
     name: string;
+    description: string;
     sku: string;
     category_name: string;
     station: string;
@@ -69,6 +72,7 @@ export function buildProductFieldsForSave(
 ): ProductSnapshotFields | Partial<ProductSnapshotFields> {
   const next: ProductSnapshotFields = {
     name: form.name.trim(),
+    description: form.description.trim(),
     sku: form.sku.trim(),
     category_name: form.category_name.trim(),
     station: form.station,
@@ -90,9 +94,10 @@ export function buildChangedProductFields(
 ): Partial<ProductSnapshotFields> {
   const changed: Partial<ProductSnapshotFields> = {};
   for (const key of [
-    'name', 'sku', 'category_name', 'station', 'price_cents', 'image_url', 'status',
+    'name', 'description', 'sku', 'category_name', 'station', 'price_cents', 'image_url', 'status',
     'is_promo', 'promo_price_cents', 'promo_badge_text',
   ] as const) {
+    if (key === 'description' && (next[key] ?? '') === (baseline[key] ?? '')) continue;
     if (next[key] !== baseline[key]) changed[key] = next[key] as never;
   }
   return changed;
@@ -200,6 +205,7 @@ function parseSimpleModifiersProductSnapshot(value: unknown): SimpleModifiersPro
   const isNullableMoney = (amount: unknown) => amount === null || (Number.isSafeInteger(amount) && Number(amount) >= 0);
   if (
     typeof product.id !== 'string' || !product.id || typeof product.name !== 'string' ||
+    !(product.description == null || typeof product.description === 'string') ||
     typeof product.sku !== 'string' || typeof product.category_name !== 'string' ||
     typeof product.station !== 'string' || !isNullableMoney(product.price_cents) ||
     !(product.image_url === null || typeof product.image_url === 'string') ||

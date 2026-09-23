@@ -1538,6 +1538,7 @@ def post_catalog_product(
             promo_price_cents=promo_price_cents,
             promo_badge_text=promo_badge_text,
             simple_modifiers=payload.get("simple_modifiers", _UNSET),
+            description=payload.get("description", _UNSET),
         )
     )
 
@@ -4425,6 +4426,7 @@ def put_catalog_product(
             promo_price_cents=promo_price_cents,
             promo_badge_text=promo_badge_text,
             simple_modifiers=payload.get("simple_modifiers", _UNSET),
+            description=payload.get("description", _UNSET),
         )
     )
 

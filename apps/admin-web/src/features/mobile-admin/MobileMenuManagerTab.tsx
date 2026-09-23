@@ -38,6 +38,7 @@ interface MobileMenuManagerTabProps {
 interface Product {
   id: string;
   name: string;
+  description?: string | null;
   sku: string;
   category_name: string;
   price_cents: number | null;
@@ -116,6 +117,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState({
     name: '',
+    description: '',
     sku: '',
     category_name: '',
     station: 'kitchen',
@@ -398,6 +400,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       setEditingProduct(product);
       setProductForm({
         name: product.name,
+        description: product.description ?? '',
         sku: product.sku,
         category_name: product.category_name || (sortedCategories[0]?.name || ''),
         station: product.station || 'kitchen',
@@ -418,6 +421,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       setEditingProduct(null);
       setProductForm({
         name: '',
+        description: 'Producto de catálogo.',
         sku: newDraftProductSku(),
         category_name: (selectedCategory !== 'ALL' && selectedCategory !== 'PROMOS') ? selectedCategory : (sortedCategories[0]?.name || ''),
         station: 'kitchen',
@@ -1470,6 +1474,16 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                   }}
                 />
               </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label htmlFor="product-description" style={{ display: 'block', fontWeight: 700, color: '#334155', marginBottom: 8 }}>Descripción del producto</label>
+                  <textarea id="product-description" rows={4} maxLength={360}
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    aria-describedby="product-description-help"
+                    style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', minHeight: 100, padding: 12, border: '1px solid #cbd5e1', borderRadius: 12, fontSize: 16, lineHeight: 1.5, color: '#0f172a', backgroundColor: '#fff' }} />
+                  <p id="product-description-help" style={{ margin: '6px 0 0', fontSize: 12, lineHeight: 1.5, color: '#475569' }}>Edita o amplía el texto que verá el cliente en el menú. {productForm.description.length}/360 caracteres.</p>
+                </div>
 
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>

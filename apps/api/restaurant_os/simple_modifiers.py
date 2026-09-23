@@ -136,6 +136,7 @@ def read_simple_modifiers(
             for key in (
                 "id",
                 "name",
+                "description",
                 "sku",
                 "category_name",
                 "station",

@@ -63,9 +63,14 @@ try {
   });
   assert.deepEqual(loadedResponse.product, productSnapshot);
   assert.deepEqual(helper.productSnapshotToForm(loadedResponse.product), {
-    name: 'Tacos de asada', sku: '1234567890123456', category_name: 'Tacos', station: 'kitchen',
+    name: 'Tacos de asada', description: '', sku: '1234567890123456', category_name: 'Tacos', station: 'kitchen',
     price: '34.99', is_promo: false, promo_price: '', promo_badge_text: '', image_url: '', status: 'active',
   });
+  const described = { ...productSnapshot, description: 'Texto propuesto' };
+  const describedForm = helper.productSnapshotToForm(described);
+  assert.equal(describedForm.description, 'Texto propuesto');
+  assert.deepEqual(helper.buildProductFieldsForSave({ ...describedForm, description: 'Texto ampliado' }, 3499, null, described), { description: 'Texto ampliado' });
+  assert.deepEqual(helper.buildProductFieldsForSave({ ...describedForm, description: '' }, 3499, null, described), { description: '' });
   const promoBaseline = {
     ...productSnapshot,
     is_promo: true,

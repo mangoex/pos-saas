@@ -1221,6 +1221,14 @@ def create_business_unit(
     return business_unit
 
 
+def _product_description(value: Any) -> str:
+    if not isinstance(value, str) or len(value) > 360:
+        raise BusinessError(
+            "invalid_product_description", "La descripción debe ser texto de hasta 360 caracteres."
+        )
+    return value.strip()
+
+
 def create_product(
     session: Session,
     name: str,
@@ -1235,6 +1243,7 @@ def create_product(
     promo_price_cents: int | None = None,
     promo_badge_text: str | None = None,
     simple_modifiers: Any = _UNSET,
+    description: Any = _UNSET,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -1299,7 +1308,7 @@ def create_product(
         "category_id": category["id"],
         "name": normalized_name,
         "sku": normalized_sku,
-        "description": "Producto de catálogo.",
+        "description": "Producto de catálogo." if description is _UNSET else _product_description(description),
         "station": station_val,
         "status": "active",
         "image_url": image_url.strip() if (image_url and image_url.strip()) else None,
@@ -12902,6 +12911,7 @@ def update_product(
     promo_price_cents: Any = _UNSET,
     promo_badge_text: Any = _UNSET,
     simple_modifiers: Any = _UNSET,
+    description: Any = _UNSET,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -12930,6 +12940,8 @@ def update_product(
         raise BusinessError("invalid_price", "Price must be positive integer cents")
 
     update_data: dict[str, Any] = {}
+    if description is not _UNSET:
+        update_data["description"] = _product_description(description)
     if name is not None:
         normalized_name = name.strip()
         if not normalized_name:
