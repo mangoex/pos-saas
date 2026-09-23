@@ -10,11 +10,29 @@ import test from 'node:test';
 const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'restaurantos-mobile-web-'));
+const mobileOrderLocks = new Map();
+const mockMobileOrderLocks = {
+  request(name, callback) {
+    const previous = mobileOrderLocks.get(name) ?? Promise.resolve();
+    let release;
+    const current = new Promise((resolveLock) => { release = resolveLock; });
+    mobileOrderLocks.set(name, current);
+    return previous.then(callback).finally(() => {
+      release();
+      if (mobileOrderLocks.get(name) === current) mobileOrderLocks.delete(name);
+    });
+  },
+};
+const testNavigator = globalThis.navigator ?? {};
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: testNavigator });
+Object.defineProperty(testNavigator, 'locks', { configurable: true, value: mockMobileOrderLocks });
 
 let buildWhatsAppLink;
 let fetchMobileMenu;
 let fetchOrderUpsellRecommendations;
 let submitMobileOrder;
+let hasPendingMobileOrder;
+let mobileOrderTimestamp;
 let getSavedCustomerProfile;
 let saveCustomerProfile;
 let MIMENU_CUSTOMER_PROFILE_KEY;
@@ -44,6 +62,8 @@ try {
   fetchMobileMenu = mobileApi.fetchMobileMenu;
   fetchOrderUpsellRecommendations = mobileApi.fetchOrderUpsellRecommendations;
   submitMobileOrder = mobileApi.submitMobileOrder;
+  hasPendingMobileOrder = mobileApi.hasPendingMobileOrder;
+  mobileOrderTimestamp = mobileApi.mobileOrderTimestamp;
   getSavedCustomerProfile = mobileApi.getSavedCustomerProfile;
   saveCustomerProfile = mobileApi.saveCustomerProfile;
   MIMENU_CUSTOMER_PROFILE_KEY = mobileApi.MIMENU_CUSTOMER_PROFILE_KEY;
@@ -159,7 +179,7 @@ test('Mobile order rejects every non-persisted response without fabricating a fo
   global.fetch = originalFetch;
 });
 
-test('Public intent retries retain their key except persisted success and explicit conflict', async () => {
+test('Public intent retries retain pending state except persisted success', async () => {
   const info = {
     name: 'Cliente de prueba', phone: '5511223344', order_type: 'takeaway',
     address_street: '', address_number: '', address_neighborhood: '', address_notes: '',
@@ -186,27 +206,265 @@ test('Public intent retries retain their key except persisted success and explic
   assert.equal('id' in persisted, false);
   assert.equal('created_at' in persisted, false);
   assert.equal(storage.has(key), false);
-
-  storage.set(key, 'retry-after-conflict');
-  global.fetch = async () => ({ ok: false, status: 409, json: async () => ({ detail: { code: 'idempotency_conflict' } }) });
-  await assert.rejects(invoke);
-  assert.equal(storage.has(key), false);
+  assert.equal(hasPendingMobileOrder('public-key'), false);
 
   for (const response of [
     { ok: false, status: 500, text: async () => 'server error' },
+    { ok: false, status: 422, json: async () => ({}) },
+    { ok: false, status: 422, json: async () => ({ code: 'unknown' }) },
     { ok: true, status: 200, json: async () => ({ public_reference: 'PI-002', status: 'PENDING_REVIEW', total_cents: 'invalid' }) },
   ]) {
-    storage.set(key, 'retain-retry-key');
     global.fetch = async () => response;
     await assert.rejects(invoke);
-    assert.equal(storage.get(key), 'retain-retry-key');
+    assert.equal(hasPendingMobileOrder('public-key'), true);
   }
-  storage.set(key, 'retain-timeout-key');
   global.fetch = async () => { throw new Error('timeout'); };
   await assert.rejects(invoke);
-  assert.equal(storage.get(key), 'retain-timeout-key');
+  assert.equal(hasPendingMobileOrder('public-key'), true);
+
+  global.fetch = async () => ({ ok: false, status: 409, json: async () => ({ detail: { code: 'idempotency_conflict' } }) });
+  await assert.rejects(invoke);
+  assert.equal(hasPendingMobileOrder('public-key'), true);
+
+  for (const [status, code] of [[429, 'public_order_rate_limited'], [503, 'public_order_unavailable']]) {
+    global.fetch = async () => ({ ok: false, status, json: async () => ({ detail: { code } }) });
+    await assert.rejects(invoke);
+    assert.equal(hasPendingMobileOrder('public-key'), true);
+  }
+
+  global.fetch = async () => ({ ok: false, status: 422, json: async () => ({ detail: { code: 'public_order_schema_invalid' } }) });
+  await assert.rejects(invoke);
+  assert.equal(hasPendingMobileOrder('public-key'), false);
   global.fetch = originalFetch;
   global.localStorage = originalStorage;
+});
+
+test('Uncertain mobile order retries its original body and receipt after inputs change', async () => {
+  const originalInfo = {
+    name: 'Cliente original', phone: '5511223344', order_type: 'takeaway',
+    address_street: '', address_number: '', address_neighborhood: '', address_notes: '',
+    payment_method: 'cash', cash_amount: '200', order_notes: 'Sin cubiertos',
+  };
+  const originalItems = [{
+    cart_id: 'line-original',
+    product: { id: 'prod-1', name: 'Jugo original', price_cents: 6500 },
+    quantity: 2,
+    notes: 'Sin popote',
+    modifiers: [{ option_id: 'extra-1', selection_kind: 'modifier', name: 'Avena', price_delta_cents: 500 }],
+    line_total_cents: 14000,
+  }];
+  const changedInfo = { ...originalInfo, name: 'Cliente editado', phone: '5588776655', order_notes: 'Con cubiertos' };
+  const changedItems = [{ ...originalItems[0], cart_id: 'line-edited', quantity: 1 }];
+  const originalFetch = global.fetch;
+  const originalStorage = global.localStorage;
+  const storage = new Map();
+  global.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  };
+  const requests = [];
+  global.fetch = async (_url, options) => {
+    requests.push({ body: options.body, key: options.headers['Idempotency-Key'] });
+    if (requests.length === 1) throw new Error('timeout');
+    return { ok: true, status: 201, json: async () => ({ public_reference: 'PI-RECOVERED', status: 'PENDING_REVIEW', version: 1, total_cents: 14500 }) };
+  };
+  try {
+    await assert.rejects(() => submitMobileOrder(originalInfo, originalItems, 'branch-1', 'Sucursal original', undefined, 'public-key', '5215500000001', true));
+    assert.equal(hasPendingMobileOrder('public-key'), true);
+    const persistedKey = requests[0].key;
+
+    // A fresh invocation over the same storage models a page reload.
+    const recovered = await submitMobileOrder(changedInfo, changedItems, 'branch-1', 'Sucursal editada', undefined, 'public-key', '5215500000002', true);
+    assert.equal(requests[1].body, requests[0].body);
+    assert.equal(requests[1].key, persistedKey);
+    assert.equal(recovered.public_reference, 'PI-RECOVERED');
+    assert.deepEqual(recovered.customer_info, originalInfo);
+    assert.deepEqual(recovered.items, originalItems);
+    assert.ok(recovered.whatsapp_url.startsWith('https://wa.me/5215500000001?text='));
+    assert.match(decodeURIComponent(recovered.whatsapp_url), /SUCURSAL ORIGINAL/);
+    assert.equal(hasPendingMobileOrder('public-key'), false);
+  } finally {
+    global.fetch = originalFetch;
+    global.localStorage = originalStorage;
+  }
+});
+
+test('Legacy idempotency key without its original payload blocks submission and stays pending', async () => {
+  const originalFetch = global.fetch;
+  const originalStorage = global.localStorage;
+  const storage = new Map([['restaurantos_public_order_key:public-key', 'legacy-attempt-key']]);
+  global.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  };
+  let requests = 0;
+  global.fetch = async () => { requests += 1; throw new Error('must not send'); };
+  try {
+    assert.equal(hasPendingMobileOrder('public-key'), true);
+    await assert.rejects(
+      () => submitMobileOrder({ name: 'Cliente', phone: '5511223344', order_type: 'takeaway', address_street: '', address_number: '', address_neighborhood: '', address_notes: '', payment_method: 'cash' }, [], 'branch-1', undefined, undefined, 'public-key'),
+      (error) => error.code === 'pending_mobile_order_legacy',
+    );
+    assert.equal(requests, 0);
+    assert.equal(storage.get('restaurantos_public_order_key:public-key'), 'legacy-attempt-key');
+  } finally {
+    global.fetch = originalFetch;
+    global.localStorage = originalStorage;
+  }
+});
+
+test('Queued cross-tab submit cannot create a second order after the first succeeds', async () => {
+  const originalInfo = {
+    name: 'Cliente A', phone: '5511223344', order_type: 'takeaway',
+    address_street: '', address_number: '', address_neighborhood: '', address_notes: '', payment_method: 'cash',
+  };
+  const changedInfo = { ...originalInfo, name: 'Cliente B' };
+  const items = [{ cart_id: 'line-1', product: { id: 'prod-1', name: 'Jugo', price_cents: 6500 }, quantity: 1, line_total_cents: 6500 }];
+  const originalFetch = global.fetch;
+  const originalStorage = global.localStorage;
+  const storage = new Map();
+  global.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  };
+  let releaseFetch;
+  let markStarted;
+  const started = new Promise((resolveStarted) => { markStarted = resolveStarted; });
+  const held = new Promise((resolveFetch) => { releaseFetch = resolveFetch; });
+  let requestCount = 0;
+  global.fetch = async () => {
+    requestCount += 1;
+    markStarted();
+    await held;
+    return { ok: true, status: 201, json: async () => ({ public_reference: 'PI-ONCE', status: 'PENDING_REVIEW', version: 1, total_cents: 6500 }) };
+  };
+  try {
+    const first = submitMobileOrder(originalInfo, items, 'branch-1', undefined, undefined, 'public-key');
+    await started;
+    const second = submitMobileOrder(changedInfo, items, 'branch-1', undefined, undefined, 'public-key');
+    const third = submitMobileOrder(changedInfo, items, 'branch-1', undefined, undefined, 'public-key');
+    releaseFetch();
+    const firstResult = await first;
+    assert.equal(firstResult.public_reference, 'PI-ONCE');
+    await assert.rejects(second, (error) => error.code === 'mobile_order_already_completed');
+    await assert.rejects(third, (error) => error.code === 'mobile_order_already_completed');
+    assert.equal(requestCount, 1);
+  } finally {
+    global.fetch = originalFetch;
+    global.localStorage = originalStorage;
+  }
+});
+
+test('A stale cart epoch cannot resubmit after another tab completed the order', async () => {
+  const info = {
+    name: 'Cliente A', phone: '5511223344', order_type: 'takeaway',
+    address_street: '', address_number: '', address_neighborhood: '', address_notes: '', payment_method: 'cash',
+  };
+  const items = [{ cart_id: 'line-1', product: { id: 'prod-1', name: 'Jugo', price_cents: 6500 }, quantity: 1, line_total_cents: 6500 }];
+  const originalFetch = global.fetch;
+  const originalStorage = global.localStorage;
+  const storage = new Map();
+  global.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  };
+  let requestCount = 0;
+  global.fetch = async () => {
+    requestCount += 1;
+    return { ok: true, status: 201, json: async () => ({ public_reference: 'PI-ONCE', status: 'PENDING_REVIEW', version: 1, total_cents: 6500 }) };
+  };
+  try {
+    const staleCartEpoch = mobileOrderTimestamp() - 1000;
+    await submitMobileOrder(info, items, 'branch-1', undefined, undefined, 'public-key', undefined, undefined, staleCartEpoch);
+    await assert.rejects(
+      () => submitMobileOrder(info, items, 'branch-1', undefined, undefined, 'public-key', undefined, undefined, staleCartEpoch),
+      (error) => error.code === 'mobile_order_already_completed',
+    );
+    assert.equal(requestCount, 1);
+  } finally {
+    global.fetch = originalFetch;
+    global.localStorage = originalStorage;
+  }
+});
+
+test('Cleanup failure after persisted success replays the original key despite completion fence', async () => {
+  const originalFetch = global.fetch;
+  const originalStorage = global.localStorage;
+  const storage = new Map();
+  let failCleanup = true;
+  global.localStorage = {
+    getItem: key => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: key => { if (failCleanup && key.startsWith('restaurantos_pending_mobile_order:')) throw new Error('storage'); storage.delete(key); },
+  };
+  const calls = [];
+  global.fetch = async (_url, options) => {
+    calls.push(options);
+    return { ok: true, status: 201, json: async () => ({ public_reference: 'PI-SAME', status: 'PENDING_REVIEW', version: 1, total_cents: 5500 }) };
+  };
+  const info = { name: 'QA', phone: '5551234567', order_type: 'takeaway', address_street: '', address_number: '', address_neighborhood: '', address_notes: '', payment_method: 'cash' };
+  const epoch = mobileOrderTimestamp();
+  try {
+    await assert.rejects(() => submitMobileOrder(info, [], 'branch', undefined, undefined, 'cleanup-key', undefined, undefined, epoch), error => error.code === 'pending_mobile_order_cleanup_failed');
+    failCleanup = false;
+    const result = await submitMobileOrder({ ...info, name: 'Changed' }, [], 'branch', undefined, undefined, 'cleanup-key', undefined, undefined, epoch);
+    assert.equal(result.customer_info.name, 'QA');
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].body, calls[1].body);
+    assert.equal(calls[0].headers['Idempotency-Key'], calls[1].headers['Idempotency-Key']);
+    assert.equal(hasPendingMobileOrder('cleanup-key'), false);
+  } finally { global.fetch = originalFetch; global.localStorage = originalStorage; }
+});
+
+test('Mobile order is not sent when local recovery storage fails', async () => {
+  const originalFetch = global.fetch;
+  const originalStorage = global.localStorage;
+  let requests = 0;
+  global.localStorage = {
+    getItem: () => null,
+    setItem: () => { throw new Error('quota'); },
+    removeItem: () => {},
+  };
+  global.fetch = async () => { requests += 1; throw new Error('must not send'); };
+  try {
+    await assert.rejects(
+      () => submitMobileOrder({ name: 'Cliente', phone: '5511223344', order_type: 'takeaway', address_street: '', address_number: '', address_neighborhood: '', address_notes: '', payment_method: 'cash' }, [], 'branch-1', undefined, undefined, 'public-key'),
+      (error) => error.code === 'pending_mobile_order_storage_unavailable',
+    );
+    assert.equal(requests, 0);
+  } finally {
+    global.fetch = originalFetch;
+    global.localStorage = originalStorage;
+  }
+});
+
+test('Keyed mobile order fails closed when cross-tab locking is unavailable', async () => {
+  const originalFetch = global.fetch;
+  const originalStorage = global.localStorage;
+  const originalLocks = globalThis.navigator.locks;
+  Object.defineProperty(globalThis.navigator, 'locks', { configurable: true, value: undefined });
+  global.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+  };
+  let requests = 0;
+  global.fetch = async () => { requests += 1; throw new Error('must not send'); };
+  try {
+    await assert.rejects(
+      () => submitMobileOrder({ name: 'Cliente', phone: '5511223344', order_type: 'takeaway', address_street: '', address_number: '', address_neighborhood: '', address_notes: '', payment_method: 'cash' }, [], 'branch-1', undefined, undefined, 'public-key'),
+      (error) => error.code === 'mobile_order_lock_unavailable',
+    );
+    assert.equal(requests, 0);
+  } finally {
+    global.fetch = originalFetch;
+    global.localStorage = originalStorage;
+    Object.defineProperty(globalThis.navigator, 'locks', { configurable: true, value: originalLocks });
+  }
 });
 
 test('Public intent sends selected catalog modifiers, not synthetic size notes or client totals', async () => {
@@ -258,7 +516,8 @@ test('Pending public-intent modal is semantically distinct from an operational o
 test('Product modal uses only catalog modifier groups and enforces their boundaries', () => {
   const source = readFileSync(join(root, 'apps/mobile-web/src/components/ProductModal.tsx'), 'utf8');
   assert.doesNotMatch(source, /\['Regular', 'Mediano', 'Grande'\]/);
-  assert.match(source, /group\.minimum_selections/);
+  // Cardinalities moved to the shared validator, executed by the cart regression suite.
+  assert.match(source, /validateCartDraft\(product, quantity, selectedModifierList\)/);
   assert.match(source, /group\.maximum_selections/);
   assert.match(source, /option_id: option\.id/);
   assert.match(source, /setModifierText/);

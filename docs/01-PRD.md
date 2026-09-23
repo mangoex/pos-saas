@@ -169,6 +169,11 @@ La implementación y certificación real de ambos proveedores se difiere de esta
 
 - `PRD-FR-060`: **Menú Digital Responsivo (PWA)**: Catálogo digital público y atractivo disponible en URL única por restaurante (`https://menu.pos-saas.com/{slug}`), compatible con smartphones y códigos QR en mesas.
 - `PRD-FR-061`: **Personalización de Platillos en Menú Web**: El comensal puede elegir opciones, modificadores y extras con recálculo dinámico de precio.
+  Incremento MOB-CART-001: hacer visibles los productos personalizables en
+  las tarjetas del menú y las líneas de Tu Pedido, y permitir editar una línea del carrito antes
+  de enviar la intención. El agregado rápido conserva su comportamiento para opciones opcionales;
+  las selecciones obligatorias siguen requiriendo confirmación. Cancelar no modifica el carrito.
+  El diseño detallado y sus decisiones están en `02-SDD-mobile-cart-personalization.md`.
 - `PRD-FR-062`: **Carrito y Checkout para WhatsApp**: Carrito interactivo con selección de tipo de entrega (Para recoger en sucursal o A domicilio con dirección) y notas especiales.
 - `PRD-FR-063`: **Generación de Pedido Formateado a WhatsApp**: Al finalizar el pedido, el sistema genera la orden en estado pendiente en el POS y abre automáticamente WhatsApp con un mensaje estructurado y listo para enviar al número del restaurante:
   ```text

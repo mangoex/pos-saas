@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag, Navigation, Calendar, Clock, Copy, Check, Building2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { X, Plus, Minus, Trash2, Banknote, CreditCard, ArrowRightLeft, Send, ShoppingBag, MapPin, User, Phone, CheckCircle2, Utensils, Bike, Sparkles, Coffee, CupSoda, Sandwich, Salad, Wheat, Package, Tag, Navigation, Calendar, Clock, Copy, Check, Building2, Pencil } from 'lucide-react';
 import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Product } from '../types';
 import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile, validateBranchCoupon } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
 import { requestBrowserCoordinates, reverseGeocode, formatGpsAddressNotes } from '../utils/geolocation';
+import { currentModifiers, hasCustomizationOptions, hasSelectedCustomization } from '../utils/cartPersonalization';
 
 const weekDayLetters = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const weekDayFullNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -70,6 +71,13 @@ interface CartDrawerProps {
   onSubmitOrder: (info: CustomerOrderInfo) => void;
   isSubmitting: boolean;
   submitError: string | null;
+  onEditItem: (cartId: string) => void;
+  catalogReady: boolean;
+  editingItem: boolean;
+  editingBlockedReason?: string;
+  onRetryCatalog?: () => void;
+  onRetryPendingOrder?: () => void;
+  onStartNewOrder?: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -86,8 +94,31 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onSubmitOrder,
   isSubmitting,
   submitError,
+  onEditItem,
+  catalogReady,
+  editingItem,
+  editingBlockedReason,
+  onRetryCatalog,
+  onRetryPendingOrder,
+  onStartNewOrder,
 }) => {
   const isBranchClosed = hasActiveShift === false || selectedBranch?.has_active_shift === false;
+  const cartControlsBlocked = isSubmitting || Boolean(editingBlockedReason);
+  const lastEditTriggerRef = useRef<HTMLElement | null>(null);
+
+  const handleEditItem = (event: React.MouseEvent<HTMLElement>, cartId: string) => {
+    lastEditTriggerRef.current = event.currentTarget;
+    onEditItem(cartId);
+  };
+
+  useEffect(() => {
+    if (editingItem || !lastEditTriggerRef.current) return;
+    const trigger = lastEditTriggerRef.current;
+    window.requestAnimationFrame(() => {
+      if (trigger.isConnected) trigger.focus();
+      if (lastEditTriggerRef.current === trigger) lastEditTriggerRef.current = null;
+    });
+  }, [editingItem]);
   const initialProfile = useMemo(() => getSavedCustomerProfile(), []);
   const [isReturningCustomer] = useState(
     Boolean(initialProfile?.name && initialProfile?.phone),
@@ -580,7 +611,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   };
 
   return (
-    <div className="product-modal-backdrop" onClick={onClose}>
+    <div
+      className={`product-modal-backdrop cart-drawer-backdrop ${editingItem ? 'is-editing-cart-item' : ''}`}
+      onClick={onClose}
+      aria-hidden={editingItem}
+      inert={editingItem}
+    >
       <div
         className="product-modal-bottom-sheet cart-drawer-sheet"
         onClick={(e) => e.stopPropagation()}
@@ -629,13 +665,41 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             <>
               {/* Cart items list */}
               <section className="cart-items-modern-list" aria-label="Platillos en el carrito">
+                {!catalogReady && (
+                  <div className="cart-catalog-retry-notice" role="alert">
+                    <span>No pudimos cargar el catálogo. Tu pedido se conserva; vuelve a intentarlo para revisar opciones.</span>
+                    {onRetryCatalog && (
+                      <button type="button" onClick={onRetryCatalog} disabled={isSubmitting}>
+                        Reintentar
+                      </button>
+                    )}
+                  </div>
+                )}
+                {editingBlockedReason && (
+                  <div className="cart-catalog-retry-notice" role="status">{editingBlockedReason}</div>
+                )}
+                {onStartNewOrder && <button type="button" className="cart-edit-personalization-btn" disabled={isSubmitting} onClick={onStartNewOrder}>Vaciar carrito para iniciar otro pedido</button>}
                 {items.map((item) => {
                   const iconMeta = getProductIconMeta(item.product);
                   const itemImg = item.product.image_url || getProductImage(item.product);
+                  const catalogProduct = allProducts.find((product) => product.id === item.product.id);
+                  const catalogOptionIds = new Set((catalogProduct?.modifier_groups ?? []).flatMap((group) => group.options.map((option) => option.id)));
+                  const currentSelectedModifiers = catalogProduct
+                    ? currentModifiers(catalogProduct, item.modifiers ?? []).filter((modifier) => catalogOptionIds.has(modifier.option_id))
+                    : [];
+                  const hasCurrentOptions = Boolean(catalogReady && catalogProduct && hasCustomizationOptions(catalogProduct));
+                  const hasCurrentSelections = hasCurrentOptions && hasSelectedCustomization(currentSelectedModifiers);
+                  const itemCanOpenEditor = catalogReady && Boolean(catalogProduct) && !cartControlsBlocked;
                   return (
                     <div key={item.cart_id} className="cart-item-modern-card">
-                      <div
+                      <button
+                        type="button"
                         className="cart-item-thumbnail-avatar"
+                        data-cart-edit-trigger={item.cart_id}
+                        onClick={(event) => handleEditItem(event, item.cart_id)}
+                        disabled={!itemCanOpenEditor}
+                        aria-label={`Editar producto ${item.product.name}`}
+                        title={!catalogReady ? 'Espera a que el catálogo esté disponible' : editingBlockedReason || undefined}
                         style={{
                           background: iconMeta.bgGradient,
                           borderColor: iconMeta.borderColor,
@@ -644,17 +708,27 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         {itemImg ? (
                           <img
                             src={itemImg}
-                            alt={item.product.name}
+                            alt=""
                             className="cart-item-thumbnail-img"
                             onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
                           />
                         ) : (
                           <span className="cart-item-thumbnail-emoji">{iconMeta.emoji}</span>
                         )}
-                      </div>
+                      </button>
 
                       <div className="cart-item-details">
-                        <span className="cart-item-name">{item.product.name}</span>
+                        <button
+                          type="button"
+                          className="cart-item-name-trigger"
+                          data-cart-edit-trigger={item.cart_id}
+                          onClick={(event) => handleEditItem(event, item.cart_id)}
+                          disabled={!itemCanOpenEditor}
+                          aria-label={`Editar producto ${item.product.name}`}
+                          title={!catalogReady ? 'Espera a que el catálogo esté disponible' : editingBlockedReason || undefined}
+                        >
+                          <span className="cart-item-name">{item.product.name}</span>
+                        </button>
                         <span className="cart-item-price-tag">
                           {formatMoney(item.line_total_cents)}
                         </span>
@@ -676,6 +750,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             type="button"
                             className="cart-stepper-btn"
                             onClick={() => onUpdateQuantity(item.cart_id, -1)}
+                            disabled={cartControlsBlocked}
                             aria-label="Disminuir cantidad"
                           >
                             <Minus size={13} />
@@ -685,6 +760,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             type="button"
                             className="cart-stepper-btn"
                             onClick={() => onUpdateQuantity(item.cart_id, 1)}
+                            disabled={cartControlsBlocked}
                             aria-label="Aumentar cantidad"
                           >
                             <Plus size={13} />
@@ -695,10 +771,33 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           type="button"
                           className="cart-item-delete-btn"
                           onClick={() => onRemoveItem(item.cart_id)}
+                          disabled={cartControlsBlocked}
                           aria-label={`Eliminar ${item.product.name}`}
                         >
                           <Trash2 size={16} />
                         </button>
+                      </div>
+                      {hasCurrentOptions && (
+                        <div className="cart-item-personalization-state">
+                          <span>{hasCurrentSelections ? 'Personalización agregada' : 'Sin personalizar'}</span>
+                        </div>
+                      )}
+                      <div className="cart-item-edit-row">
+                        <button
+                          type="button"
+                          className="cart-item-edit-btn"
+                          data-cart-edit-trigger={item.cart_id}
+                          onClick={(event) => handleEditItem(event, item.cart_id)}
+                          disabled={!itemCanOpenEditor}
+                          title={!catalogReady ? 'Espera a que el catálogo esté disponible' : editingBlockedReason || undefined}
+                          aria-label={`${hasCurrentOptions ? (hasCurrentSelections ? 'Editar personalización de' : 'Personaliza') : 'Editar producto'} ${item.product.name}`}
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                          {hasCurrentOptions ? (hasCurrentSelections ? 'Editar personalización' : 'Personaliza tu producto') : 'Editar producto'}
+                        </button>
+                        {catalogReady && !catalogProduct && (
+                          <span className="cart-item-catalog-missing" role="status">Producto sin catálogo vigente; puedes quitarlo del pedido.</span>
+                        )}
                       </div>
                     </div>
                   );
@@ -742,6 +841,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             type="button"
                             className="cart-upsell-quick-add-btn"
                             onClick={() => onQuickAddProduct && onQuickAddProduct(prod)}
+                            disabled={cartControlsBlocked}
                             aria-label={`Agregar ${prod.name} al pedido`}
                           >
                             <Plus size={14} />
@@ -1647,11 +1747,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </div>
                 )}
                 {submitError && <p className="cart-form-error-alert" role="alert">{submitError}</p>}
+                {editingBlockedReason && onRetryPendingOrder && (
+                  <button
+                    type="button"
+                    className="btn-cart-submit-order cart-retry-pending-order"
+                    onClick={onRetryPendingOrder}
+                    disabled={isSubmitting}
+                  >
+                    <Send size={18} />
+                    <span>{isSubmitting ? 'Reintentando envío…' : 'Reintentar envío original'}</span>
+                  </button>
+                )}
                 <button
                   type="submit"
                   className={`btn-cart-submit-order ${isBranchClosed ? 'disabled-closed' : ''}`}
-                  disabled={isSubmitting || items.length === 0 || isBranchClosed}
-                  title={isBranchClosed ? 'Sucursal cerrada por el momento' : undefined}
+                  disabled={isSubmitting || items.length === 0 || isBranchClosed || Boolean(editingBlockedReason)}
+                  title={isBranchClosed ? 'Sucursal cerrada por el momento' : editingBlockedReason || undefined}
                 >
                   <Send size={18} />
                   <span>

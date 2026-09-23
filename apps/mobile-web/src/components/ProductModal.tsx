@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Heart, Plus, Minus, ShoppingBag, Flame, Clock, ChefHat, Share2, Check } from 'lucide-react';
-import { Product, SelectedModifier, CommunityPhoto } from '../types';
+import { Product, SelectedModifier, CommunityPhoto, CartItem } from '../types';
 import { formatMoney, fetchProductCommunityPhotos } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
+import { calculateLineTotal, currentModifiers, validateCartDraft } from '../utils/cartPersonalization';
 
 interface ProductModalProps {
   product: Product;
@@ -12,6 +13,9 @@ interface ProductModalProps {
   onAddToCart: (product: Product, quantity: number, notes?: string, modifiers?: SelectedModifier[]) => void;
   publicKey?: string | null;
   restaurantName?: string;
+  initialItem?: CartItem;
+  onSave?: (quantity: number, notes: string, modifiers: SelectedModifier[]) => void;
+  blockedReason?: string;
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({
@@ -22,13 +26,76 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   onAddToCart,
   publicKey,
   restaurantName,
+  initialItem,
+  onSave,
+  blockedReason,
 }) => {
-  const [quantity, setQuantity] = useState(1);
-  const [notes, setNotes] = useState('');
-  const [selectedModifiers, setSelectedModifiers] = useState<Record<string, SelectedModifier>>({});
+  const isEditing = Boolean(initialItem && onSave);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  const [quantity, setQuantity] = useState(initialItem?.quantity ?? 1);
+  const [notes, setNotes] = useState(initialItem?.notes ?? '');
+  const [selectedModifiers, setSelectedModifiers] = useState<Record<string, SelectedModifier>>(() => {
+    const current = currentModifiers(product, initialItem?.modifiers ?? []);
+    return Object.fromEntries(current.map((modifier) => [modifier.option_id, modifier]));
+  });
   const [modifierError, setModifierError] = useState('');
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [communityPhotos, setCommunityPhotos] = useState<CommunityPhoto[]>(product.community_photos || []);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const returnToCartId = initialItem?.cart_id;
+    const dialog = dialogRef.current;
+    const focusableSelector = 'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex="-1"])';
+    const focusFirst = () => dialog?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    focusFirst();
+
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', trapFocus);
+    return () => {
+      document.removeEventListener('keydown', trapFocus);
+      window.requestAnimationFrame(() => {
+        const cartEditTrigger = returnToCartId
+          ? Array.from(document.querySelectorAll<HTMLElement>('[data-cart-edit-trigger]'))
+            .find((element) => element.dataset.cartEditTrigger === returnToCartId)
+          : null;
+        const target = cartEditTrigger ?? previousFocus;
+        if (target?.isConnected) target.focus();
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    const current = currentModifiers(product, initialItem?.modifiers ?? []);
+    setQuantity(initialItem?.quantity ?? 1);
+    setNotes(initialItem?.notes ?? '');
+    setSelectedModifiers(Object.fromEntries(current.map((modifier) => [modifier.option_id, modifier])));
+    setModifierError('');
+  }, [product.id, initialItem?.cart_id]);
 
   useEffect(() => {
     if (publicKey && (!product.community_photos || product.community_photos.length === 0)) {
@@ -77,14 +144,19 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     window.open(waUrl, '_blank');
   };
 
-  const modifierDeltaCents = Object.values(selectedModifiers).reduce(
-    (sum, modifier) => sum + modifier.price_delta_cents,
-    0,
-  );
-  const effectiveBasePriceCents = (product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents)
-    ? product.promo_price_cents
-    : product.price_cents;
-  const totalCents = (effectiveBasePriceCents + modifierDeltaCents) * quantity;
+  const selectedModifierList = useMemo(() => Object.values(selectedModifiers), [selectedModifiers]);
+  const staleModifiers = useMemo(() => {
+    const availableIds = new Set((product.modifier_groups ?? []).flatMap((group) => group.options.map((option) => option.id)));
+    return selectedModifierList.filter((modifier) => !availableIds.has(modifier.option_id));
+  }, [product.modifier_groups, selectedModifierList]);
+  const validationMessage = blockedReason || (staleModifiers.length > 0
+    ? 'Algunas opciones ya no están disponibles. Quítalas o cancela la edición.'
+    : validateCartDraft(product, quantity, selectedModifierList));
+  const totalCents = calculateLineTotal(product, quantity, selectedModifierList);
+  const currentOriginalLineTotal = initialItem
+    ? calculateLineTotal(product, initialItem.quantity, currentModifiers(product, initialItem.modifiers ?? []))
+    : null;
+  const linePriceChanged = initialItem && currentOriginalLineTotal !== null && currentOriginalLineTotal !== initialItem.line_total_cents;
   const iconMeta = getProductIconMeta(product);
   const productImg = product.image_url || getProductImage(product);
 
@@ -113,27 +185,29 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       : current);
   };
 
-  const handleAdd = () => {
-    const incompleteGroup = (product.modifier_groups ?? []).find((group) => {
-      const count = group.options.filter((option) => selectedModifiers[option.id]).length;
-      return count < group.minimum_selections;
-    });
-    if (incompleteGroup) {
-      setModifierError(`${incompleteGroup.name} requiere una selección.`);
+  const handleSave = () => {
+    if (validationMessage) {
+      setModifierError(validationMessage);
       return;
     }
-    onAddToCart(product, quantity, notes.trim() || undefined, Object.values(selectedModifiers));
+    if (isEditing) {
+      onSave?.(quantity, notes.trim(), selectedModifierList);
+      return;
+    }
+    onAddToCart(product, quantity, notes.trim() || undefined, selectedModifierList);
     onClose();
   };
 
   return (
-    <div className="product-modal-backdrop" onClick={onClose}>
+    <div className={`product-modal-backdrop ${isEditing ? 'product-modal-editing-backdrop' : ''}`} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div
+        ref={dialogRef}
         className="product-modal-bottom-sheet"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={product.name}
+        aria-labelledby="product-modal-title"
+        tabIndex={-1}
       >
         <div
           className={`product-modal-hero-visual ${productImg ? 'has-img' : 'product-modal-icon-hero'}`}
@@ -206,7 +280,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               <span className="product-modal-category-chip">
                 {product.category_name || 'Especialidad'}
               </span>
-              <h2 className="product-modal-name">{product.name}</h2>
+              <h2 className="product-modal-name" id="product-modal-title">{isEditing ? 'Editar producto' : product.name}</h2>
+              {isEditing && <p className="product-modal-edit-product-name">{product.name}</p>}
             </div>
             <div className="product-modal-price-tag">
               {product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents ? (
@@ -311,7 +386,34 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               </div>
             </div>
           ))}
-          {modifierError && <p role="alert" className="cart-item-notes-text">{modifierError}</p>}
+          {staleModifiers.length > 0 && (
+            <div className="product-modal-option-conflict" role="alert">
+              <p>Estas opciones seleccionadas ya no aparecen en el catálogo actual. Revísalas antes de guardar:</p>
+              {staleModifiers.map((modifier) => (
+                <div className="product-modal-obsolete-option" key={modifier.option_id}>
+                  <span>{modifier.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedModifiers((current) => {
+                      const { [modifier.option_id]: _removed, ...remaining } = current;
+                      return remaining;
+                    })}
+                    aria-label={`Quitar opción obsoleta ${modifier.name}`}
+                  >
+                    Quitar opción
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {(validationMessage || modifierError) && staleModifiers.length === 0 && (
+            <p role="alert" className="product-modal-validation-message">{validationMessage || modifierError}</p>
+          )}
+          {linePriceChanged && initialItem && (
+            <p className="product-modal-price-change-notice" role="status">
+              El total de esta línea cambió con el catálogo actual: {formatMoney(initialItem.line_total_cents)} → {formatMoney(currentOriginalLineTotal)}. Revisa el nuevo total y guarda los cambios.
+            </p>
+          )}
 
           <div className="product-modal-section">
             <label className="product-modal-section-heading" htmlFor="modal-notes-input">
@@ -351,14 +453,22 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             </button>
           </div>
 
-          <button
-            type="button"
-            className="product-modal-add-cart-btn"
-            onClick={handleAdd}
-          >
-            <ShoppingBag size={19} />
-            <span>Agregar • {formatMoney(totalCents)}</span>
-          </button>
+          <div className="product-modal-footer-actions">
+            {isEditing && (
+              <button type="button" className="product-modal-cancel-edit-btn" onClick={onClose}>
+                Cancelar
+              </button>
+            )}
+            <button
+              type="button"
+              className="product-modal-add-cart-btn"
+              onClick={handleSave}
+              disabled={Boolean(validationMessage)}
+            >
+              <ShoppingBag size={19} />
+              <span>{isEditing ? 'Guardar cambios' : 'Agregar'} • {formatMoney(totalCents)}</span>
+            </button>
+          </div>
         </div>
 
         {shareToast && (

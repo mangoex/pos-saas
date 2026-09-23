@@ -15,6 +15,8 @@ import { FloatingCartBar } from './components/FloatingCartBar';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
 import { VoiceOrderModal } from './components/VoiceOrderModal';
 import { detectProductSize } from './imageMap';
+import { replaceCartLine, validateCartDraft } from './utils/cartPersonalization';
+import { hasPendingMobileOrder, readPendingMobileOrder, mobileOrderTimestamp, hasMobileOrderCompletedSince } from './pendingMobileOrder';
 
 const EXCLUDED_CATEGORY_KEYWORDS = [
   'servicio a domicilio',
@@ -55,6 +57,8 @@ export const App: React.FC = () => {
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [catalogHasActiveShift, setCatalogHasActiveShift] = useState<boolean | undefined>(undefined);
   const [storageReadyKey, setStorageReadyKey] = useState<string | null>(null);
+  const [, refreshPendingOrder] = useState(0);
+  const cartStartedAt = useRef(mobileOrderTimestamp());
 
   // Visual Theme (Light vs Warm Dark)
   useEffect(() => {
@@ -68,9 +72,12 @@ export const App: React.FC = () => {
   // Modals & Navigation state
   const [currentTab, setCurrentTab] = useState<NavTab>('explore');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [editingLine, setEditingLine] = useState<{ cartId: string; namespace: string } | null>(null);
+  const consumedDeepLink = useRef<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const submittingOrderRef = useRef(false);
   const [createdOrderResult, setCreatedOrderResult] = useState<CreatedOrderResult | null>(null);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
 
@@ -226,13 +233,15 @@ export const App: React.FC = () => {
 
   // Deep Link handler: ?dish=<productId> or ?p=<productId> or ?product=<productId>
   useEffect(() => {
-    if (products.length === 0) return;
+    if (products.length === 0 || editingLine || isCartOpen) return;
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const dishId = urlParams.get('dish') || urlParams.get('p') || urlParams.get('product');
-      if (dishId) {
+      const linkContext = `${organization?.id}:${selectedBranch?.id}:${dishId}`;
+      if (dishId && consumedDeepLink.current !== linkContext) {
         const target = products.find((p) => p.id === dishId);
         if (target) {
+          consumedDeepLink.current = linkContext;
           setSelectedProduct(target);
         }
       }
@@ -242,6 +251,7 @@ export const App: React.FC = () => {
   }, [products]);
 
   const handleSelectBranch = (branch: BranchInfo) => {
+    if (submittingOrderRef.current) return;
     if (!branches.some((candidate) => candidate.id === branch.id)) return;
     setSelectedBranch(branch);
     if (organization) {
@@ -255,13 +265,52 @@ export const App: React.FC = () => {
 
   const storageNamespace = organization && selectedBranch
     ? `restaurantos_storefront:${organization.id}:${selectedBranch.id}` : null;
+  const pendingOrder = hasPendingMobileOrder(selectedBranch?.public_key || selectedBranch?.id);
+  const pendingState = readPendingMobileOrder(selectedBranch?.public_key || selectedBranch?.id);
+  const hasStaleCart = () => Boolean(cart.length && selectedBranch
+    && hasMobileOrderCompletedSince(selectedBranch.public_key || selectedBranch.id, cartStartedAt.current));
+  const staleCart = hasStaleCart();
+  const cartMutationsBlocked = () => submittingOrderRef.current
+    || hasPendingMobileOrder(selectedBranch?.public_key || selectedBranch?.id) || hasStaleCart();
+  const editingBlockedReason = isSubmittingOrder ? 'Estamos confirmando tu pedido.'
+    : pendingState.kind === 'legacy' ? 'Hay un envío anterior sin información suficiente para reintentarlo. Contacta a la sucursal para confirmar si lo recibió antes de hacer otro pedido.'
+    : pendingState.kind === 'unavailable' ? 'No podemos acceder al almacenamiento de este navegador para confirmar pedidos de forma segura.'
+    : pendingOrder ? 'Hay un envío pendiente de confirmar. Reintenta el envío original antes de cambiar tu pedido.'
+    : staleCart ? 'Se confirmó un pedido en otra pestaña. Conservamos este carrito para que lo revises; no lo enviaremos otra vez.' : undefined;
+  const catalogReady = !loading && !catalogError && Boolean(selectedBranch?.public_key) && storageReadyKey === storageNamespace;
+  const liveCartContext = useRef({ namespace: storageNamespace, cart, products, blocked: Boolean(editingBlockedReason), catalogReady, editingLine });
+  liveCartContext.current = { namespace: storageNamespace, cart, products, blocked: Boolean(editingBlockedReason), catalogReady, editingLine };
+  const editingItem = editingLine?.namespace === storageNamespace
+    ? cart.find(item => item.cart_id === editingLine.cartId) : undefined;
+  const editingProduct = editingItem ? products.find(product => product.id === editingItem.product.id) : undefined;
+
+  useEffect(() => {
+    const refresh = () => {
+      refreshPendingOrder(version => version + 1);
+    };
+    window.addEventListener('storage', refresh);
+    return () => window.removeEventListener('storage', refresh);
+  }, [storageNamespace, selectedBranch?.public_key, selectedBranch?.id]);
+
+  useEffect(() => {
+    setEditingLine(null);
+    setSelectedProduct(null);
+    setOrderSubmitError(null);
+  }, [storageNamespace]);
+
+  useEffect(() => {
+    if (editingLine && !editingItem) setEditingLine(null);
+  }, [editingLine, editingItem]);
 
   useEffect(() => {
     setStorageReadyKey(null);
+    cartStartedAt.current = mobileOrderTimestamp();
     if (!storageNamespace) { setLikedProductIds(new Set()); setCart([]); return; }
     try {
       const favorites = localStorage.getItem(`${storageNamespace}:favorites`);
       const savedCart = localStorage.getItem(`${storageNamespace}:cart`);
+      const savedEpoch = localStorage.getItem(`${storageNamespace}:cart_started_at`);
+      cartStartedAt.current = savedEpoch && Number.isFinite(Number(savedEpoch)) ? Number(savedEpoch) : savedCart ? 0 : mobileOrderTimestamp();
       setLikedProductIds(favorites ? new Set(JSON.parse(favorites)) : new Set());
       setCart(savedCart ? JSON.parse(savedCart) : []);
     } catch { setLikedProductIds(new Set()); setCart([]); }
@@ -289,7 +338,10 @@ export const App: React.FC = () => {
   }, [likedProductIds, storageNamespace, storageReadyKey]);
 
   useEffect(() => {
-    if (storageNamespace && storageReadyKey === storageNamespace) localStorage.setItem(`${storageNamespace}:cart`, JSON.stringify(cart));
+    if (storageNamespace && storageReadyKey === storageNamespace) {
+      localStorage.setItem(`${storageNamespace}:cart_started_at`, String(cartStartedAt.current));
+      localStorage.setItem(`${storageNamespace}:cart`, JSON.stringify(cart));
+    }
   }, [cart, storageNamespace, storageReadyKey]);
 
   // Reset size filter when category changes
@@ -312,10 +364,12 @@ export const App: React.FC = () => {
 
   // Add to Cart
   const handleAddToCart = (product: Product, quantity: number, notes?: string, modifiers: SelectedModifier[] = []) => {
+    if (liveCartContext.current.blocked || cartMutationsBlocked()) return;
     const basePriceCents = (product.is_promo && product.promo_price_cents && product.promo_price_cents < product.price_cents)
       ? product.promo_price_cents
       : product.price_cents;
     setCart((prev) => {
+      if (prev.length === 0) cartStartedAt.current = mobileOrderTimestamp();
       const existingIndex = prev.findIndex(
         (item) => item.product.id === product.id
           && item.notes === (notes || '')
@@ -347,6 +401,7 @@ export const App: React.FC = () => {
 
   // Required catalog choices cannot be silently bypassed from the quick-add affordance.
   const handleQuickAddToCart = (product: Product) => {
+    if (liveCartContext.current.blocked || cartMutationsBlocked()) return;
     if ((product.modifier_groups ?? []).some((group) => group.minimum_selections > 0)) {
       setSelectedProduct(product);
       return;
@@ -355,6 +410,7 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateCartQuantity = (cartId: string, delta: number) => {
+    if (liveCartContext.current.blocked || cartMutationsBlocked()) return;
     setCart((prev) => {
       return prev
         .map((item) => {
@@ -377,11 +433,36 @@ export const App: React.FC = () => {
   };
 
   const handleRemoveCartItem = (cartId: string) => {
+    if (liveCartContext.current.blocked || cartMutationsBlocked()) return;
     setCart((prev) => prev.filter((item) => item.cart_id !== cartId));
+  };
+
+  const handleEditCartItem = (cartId: string) => {
+    if (!catalogReady || !storageNamespace || liveCartContext.current.blocked || cartMutationsBlocked()) return;
+    if (!cart.some(item => item.cart_id === cartId)) return;
+    setSelectedProduct(null);
+    setEditingLine({ cartId, namespace: storageNamespace });
+  };
+
+  const handleSaveCartItem = (quantity: number, notes: string, modifiers: SelectedModifier[]) => {
+    const current = liveCartContext.current;
+    if (!editingLine || editingLine !== current.editingLine || editingLine.namespace !== current.namespace || current.blocked || !current.catalogReady || cartMutationsBlocked()) return;
+    const item = current.cart.find(line => line.cart_id === editingLine.cartId);
+    const product = current.products.find(candidate => candidate.id === item?.product.id);
+    if (!item || !product || validateCartDraft(product, quantity, modifiers)) return;
+    setCart(previous => {
+      if (liveCartContext.current.namespace !== editingLine.namespace || liveCartContext.current.blocked) return previous;
+      return replaceCartLine(previous, editingLine.cartId, product, quantity, notes, modifiers);
+    });
+    setEditingLine(null);
   };
 
   // Submit Order (Hybrid: System + WhatsApp with Branch & GPS)
   const handleSubmitOrder = async (info: CustomerOrderInfo) => {
+    if (submittingOrderRef.current || editingLine) return;
+    submittingOrderRef.current = true;
+    liveCartContext.current.blocked = true;
+    const submittedNamespace = storageNamespace;
     setIsSubmittingOrder(true);
     setOrderSubmitError(null);
     try {
@@ -394,21 +475,26 @@ export const App: React.FC = () => {
         selectedBranch?.public_key || selectedBranch?.id,
         selectedBranch?.phone,
         Boolean(selectedBranch?.whatsapp_ordering_enabled) === true,
+        cartStartedAt.current,
       );
+      if (liveCartContext.current.namespace !== submittedNamespace) return;
       saveCustomerProfile({
-        name: info.name,
-        phone: info.phone,
-        street: info.address_street,
-        number: info.address_number,
-        neighborhood: info.address_neighborhood,
-        address_notes: info.address_notes,
+        name: result.customer_info.name,
+        phone: result.customer_info.phone,
+        street: result.customer_info.address_street,
+        number: result.customer_info.address_number,
+        neighborhood: result.customer_info.address_neighborhood,
+        address_notes: result.customer_info.address_notes,
       });
       setCreatedOrderResult(result);
-      setCart([]);
+      // A replay may belong to another tab's snapshot. Never discard divergent local work.
+      setCart(previous => JSON.stringify(previous) === JSON.stringify(result.items) ? [] : previous);
       setIsCartOpen(false);
     } catch (err: any) {
+      if (liveCartContext.current.namespace !== submittedNamespace) return;
       setOrderSubmitError(err?.message || 'No fue posible confirmar el pedido. Conservamos tu carrito para que puedas reintentar.');
     } finally {
+      submittingOrderRef.current = false;
       setIsSubmittingOrder(false);
     }
   };
@@ -538,13 +624,6 @@ export const App: React.FC = () => {
   const isBranchClosed = selectedBranch?.has_active_shift === false || catalogHasActiveShift === false;
   const hasActiveShift = !isBranchClosed;
 
-  if (catalogError && !storefrontError) {
-    return <main className="mobile-app-shell feed-empty-state" role="alert">
-      <p className="empty-title">{catalogError}</p>
-      <button type="button" className="btn-reset-filters" onClick={() => setCatalogRetry((attempt) => attempt + 1)}>Reintentar</button>
-    </main>;
-  }
-
   if (isResolvingStorefront || storefrontError) {
     return (
       <main className="mobile-app-shell feed-empty-state" role={storefrontError ? 'alert' : 'status'}>
@@ -556,6 +635,10 @@ export const App: React.FC = () => {
 
   return (
     <div className="mobile-app-shell">
+      {catalogError && <div className="feed-empty-state" role="alert">
+        <p>{catalogError}</p>
+        <button type="button" onClick={() => setCatalogRetry(attempt => attempt + 1)}>Reintentar catálogo</button>
+      </div>}
       {currentTab === 'explore' && (
         <HeroHeader
           categories={visibleCategories}
@@ -680,10 +763,28 @@ export const App: React.FC = () => {
       {/* Product Detail Modal */}
       {selectedProduct && (
         <ProductModal
+          key={`add:${selectedProduct.id}`}
           product={selectedProduct}
           isLiked={likedProductIds.has(selectedProduct.id)}
           onToggleLike={handleToggleLike}
           onClose={() => setSelectedProduct(null)}
+          onAddToCart={handleAddToCart}
+          blockedReason={editingBlockedReason}
+          publicKey={selectedBranch?.public_key}
+          restaurantName={organization?.name || selectedBranch?.name}
+        />
+      )}
+
+      {editingItem && (
+        <ProductModal
+          key={`edit:${editingLine?.namespace}:${editingItem.cart_id}`}
+          product={editingProduct || { ...editingItem.product, is_available: false }}
+          initialItem={editingItem}
+          onSave={handleSaveCartItem}
+          blockedReason={editingBlockedReason || (!catalogReady ? 'Espera a que cargue el catálogo para guardar.' : !editingProduct ? 'Este producto ya no está disponible.' : undefined)}
+          isLiked={likedProductIds.has(editingItem.product.id)}
+          onToggleLike={handleToggleLike}
+          onClose={() => setEditingLine(null)}
           onAddToCart={handleAddToCart}
           publicKey={selectedBranch?.public_key}
           restaurantName={organization?.name || selectedBranch?.name}
@@ -693,7 +794,20 @@ export const App: React.FC = () => {
       {/* Cart & Checkout Sheet */}
       {isCartOpen && (
         <CartDrawer
-          items={cart}
+          onEditItem={handleEditCartItem}
+          catalogReady={catalogReady}
+          onRetryCatalog={() => setCatalogRetry(attempt => attempt + 1)}
+          editingItem={Boolean(editingItem || selectedProduct)}
+          editingBlockedReason={editingBlockedReason}
+          onRetryPendingOrder={pendingState.kind === 'record' ? () => void handleSubmitOrder(pendingState.attempt.customerInfo) : undefined}
+          onStartNewOrder={staleCart && pendingState.kind === 'none' ? () => {
+            if (submittingOrderRef.current || hasPendingMobileOrder(selectedBranch?.public_key || selectedBranch?.id)) return;
+            cartStartedAt.current = mobileOrderTimestamp();
+            setEditingLine(null);
+            setCart([]);
+            setOrderSubmitError(null);
+          } : undefined}
+          items={pendingState.kind === 'record' ? pendingState.attempt.items : cart}
           allProducts={products}
           orderType={orderType}
           selectedBranch={selectedBranch}
@@ -756,6 +870,8 @@ export const App: React.FC = () => {
         publicKey={selectedBranch?.public_key || null}
         products={products}
         onAddCartItems={(items) => {
+          if (liveCartContext.current.blocked || cartMutationsBlocked()) return;
+          if (cart.length === 0) cartStartedAt.current = mobileOrderTimestamp();
           setCart((prev) => [...prev, ...items]);
           setIsCartOpen(true);
         }}

@@ -1,5 +1,17 @@
 import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile, TrendingDish, CommunityPhoto } from './types';
 import { getProductImage } from './imageMap';
+import {
+  clearPendingMobileOrder,
+  hasMobileOrderCompletedSince,
+  markMobileOrderCompleted,
+  mobileOrderTimestamp,
+  readPendingMobileOrder,
+  savePendingMobileOrder,
+  withMobileOrderSubmissionLock,
+} from './pendingMobileOrder';
+import type { PendingMobileOrder } from './pendingMobileOrder';
+
+export { hasPendingMobileOrder, mobileOrderTimestamp } from './pendingMobileOrder';
 
 const API_BASE_URL = '/api/v1';
 
@@ -358,7 +370,7 @@ export function buildWhatsAppLink(
   return `https://wa.me/${rawPhone}?text=${encodeURIComponent(text)}`;
 }
 
-export async function submitMobileOrder(
+async function submitMobileOrderAttempt(
   info: CustomerOrderInfo,
   items: CartItem[],
   branchId?: string,
@@ -367,6 +379,7 @@ export async function submitMobileOrder(
   publicKey?: string | null,
   branchPhone?: string,
   whatsappOrderingEnabled?: boolean,
+  invocationStartedAt = mobileOrderTimestamp(),
 ): Promise<CreatedOrderResult> {
   const deliveryAddressText = info.order_type === 'delivery'
     ? `${info.address_street} #${info.address_number}, Col. ${info.address_neighborhood}${info.address_notes ? ` (Ref: ${info.address_notes})` : ''}`
@@ -385,12 +398,6 @@ export async function submitMobileOrder(
   const effectiveKey = publicKey || branchId;
   const useIntent = typeof effectiveKey === 'string' && effectiveKey.length > 0;
 
-  const storageKey = effectiveKey ? `restaurantos_public_order_key:${effectiveKey}` : '';
-  const legacyStorageKey = effectiveKey ? `kiwi_public_order_key:${effectiveKey}` : '';
-  const idempotencyKey = useIntent
-    ? (localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey) || crypto.randomUUID())
-    : undefined;
-  if (useIntent && idempotencyKey) localStorage.setItem(storageKey, idempotencyKey);
   const targetUrl = useIntent
     ? `${API_BASE_URL}/public/branches/${effectiveKey}/order-intents`
     : `${API_BASE_URL}/public/orders`;
@@ -400,10 +407,7 @@ export async function submitMobileOrder(
     info.payment_method === 'cash' && info.cash_amount?.trim() ? `Paga con: $${info.cash_amount.trim()}` : null,
   ].filter(Boolean).join(' | ') || undefined;
 
-  const response = await fetch(targetUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
-    body: JSON.stringify(useIntent ? {
+  const intentPayload = {
       customer_name: info.name.trim(),
       customer_phone: cleanPhone,
       order_type: apiOrderType,
@@ -422,7 +426,8 @@ export async function submitMobileOrder(
           ...(text?.trim() ? { text: text.trim() } : {}),
         })),
       })),
-    } : {
+    };
+  const operationalPayload = {
       owner_name: info.name.trim(),
       customer_phone: cleanPhone,
       order_type: apiOrderType,
@@ -440,7 +445,86 @@ export async function submitMobileOrder(
         quantity: item.quantity,
         notes: item.notes?.trim() || '',
       })),
-    }),
+    };
+
+  let idempotencyKey: string | undefined;
+  let requestBody: string;
+  let receiptInfo = info;
+  let receiptItems = items;
+  let receiptBranchName = branchName;
+  let receiptBranchPhone = branchPhone;
+  let receiptWhatsAppEnabled = whatsappOrderingEnabled;
+
+  if (useIntent && effectiveKey) {
+    const pending = readPendingMobileOrder(effectiveKey);
+    const completedBeforeLockRelease = hasMobileOrderCompletedSince(effectiveKey, invocationStartedAt);
+    if (completedBeforeLockRelease === null) {
+      const err = new Error('No se pudo verificar el estado local del pedido. No se envió otra solicitud.');
+      (err as any).code = 'pending_mobile_order_storage_unavailable';
+      throw err;
+    }
+    if (completedBeforeLockRelease && pending.kind !== 'record') {
+      const err = new Error('El pedido se confirmó en otra pestaña mientras esperabas. Revisa esa confirmación antes de enviar otro.');
+      (err as any).code = 'mobile_order_already_completed';
+      throw err;
+    }
+    if (pending.kind === 'legacy') {
+      const err = new Error(
+        'Hay un envío anterior con una clave guardada pero sin sus datos originales. El carrito permanece protegido. Confirma con la sucursal si recibieron el pedido antes de iniciar otro.',
+      );
+      (err as any).code = 'pending_mobile_order_legacy';
+      throw err;
+    }
+    if (pending.kind === 'unavailable') {
+      const err = new Error('No se pudo guardar o leer la recuperación del pedido. No se envió una solicitud nueva.');
+      (err as any).code = 'pending_mobile_order_storage_unavailable';
+      throw err;
+    }
+
+    if (pending.kind === 'record') {
+      ({
+        idempotencyKey,
+        requestBody,
+        customerInfo: receiptInfo,
+        items: receiptItems,
+        branchName: receiptBranchName,
+        branchPhone: receiptBranchPhone,
+        whatsappOrderingEnabled: receiptWhatsAppEnabled,
+      } = pending.attempt);
+    } else {
+      idempotencyKey = crypto.randomUUID();
+      requestBody = JSON.stringify(intentPayload);
+      let attempt: PendingMobileOrder;
+      try {
+        attempt = {
+          version: 1 as const,
+          idempotencyKey,
+          requestBody,
+          customerInfo: JSON.parse(JSON.stringify(info)) as CustomerOrderInfo,
+          items: JSON.parse(JSON.stringify(items)) as CartItem[],
+          ...(branchName ? { branchName } : {}),
+          ...(branchPhone ? { branchPhone } : {}),
+          whatsappOrderingEnabled: whatsappOrderingEnabled === true,
+        };
+      } catch {
+        const err = new Error('No se pudo guardar la información necesaria para recuperar el pedido. No se envió.');
+        (err as any).code = 'pending_mobile_order_storage_unavailable';
+        throw err;
+      }
+      if (!savePendingMobileOrder(effectiveKey, attempt)) {
+        const err = new Error('No se pudo guardar la recuperación del pedido. No se envió una solicitud nueva.');
+        (err as any).code = 'pending_mobile_order_storage_unavailable';
+        throw err;
+      }
+    }
+  } else {
+    requestBody = JSON.stringify(operationalPayload);
+  }
+
+  const response = await fetch(targetUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
+    body: requestBody,
   });
   if (!response.ok) {
     let errorDetail: any = null;
@@ -453,9 +537,15 @@ export async function submitMobileOrder(
     const detailCode = errorDetail?.detail?.code || errorDetail?.code;
     const detailMsg = errorDetail?.detail?.message || errorDetail?.message;
 
-    if (useIntent && (response.status === 409 || detailCode === 'idempotency_conflict')) {
-      localStorage.removeItem(storageKey);
-      if (legacyStorageKey) localStorage.removeItem(legacyStorageKey);
+    const definitiveNoPersistCodes = new Set([
+      'public_order_schema_invalid',
+      'product_unavailable',
+      'coupon_invalid',
+      'dine_in_disabled',
+    ]);
+    const definitelyRejectedBeforePersist = typeof detailCode === 'string' && definitiveNoPersistCodes.has(detailCode);
+    if (useIntent && effectiveKey && definitelyRejectedBeforePersist) {
+      clearPendingMobileOrder(effectiveKey);
     }
 
     let userMessage = 'No fue posible confirmar el pedido en este momento.';
@@ -464,7 +554,7 @@ export async function submitMobileOrder(
     } else if (response.status === 429 || detailCode === 'public_order_rate_limited') {
       userMessage = 'Demasiadas solicitudes. Por favor espera un momento antes de volver a intentar.';
     } else if (response.status === 409 || detailCode === 'idempotency_conflict') {
-      userMessage = 'El pedido ya fue enviado o hubo un cambio en el carrito. Intenta confirmar nuevamente.';
+      userMessage = 'No se pudo confirmar el resultado del envío anterior. El carrito sigue protegido; vuelve a intentar el envío guardado o confirma con la sucursal antes de iniciar otro.';
     } else if (detailCode === 'public_order_unavailable') {
       userMessage = 'El servicio de pedidos en línea no está disponible temporalmente para esta sucursal.';
     } else if (detailCode === 'product_unavailable') {
@@ -475,7 +565,7 @@ export async function submitMobileOrder(
       userMessage = detailMsg;
     }
 
-    console.error('Order submission error:', response.status, errorDetail);
+    console.error('Order submission error:', response.status, typeof detailCode === 'string' ? detailCode : 'unknown');
     const err = new Error(userMessage);
     (err as any).code = detailCode;
     (err as any).status = response.status;
@@ -497,41 +587,50 @@ export async function submitMobileOrder(
       || !Number.isInteger(intent.total_cents)
     ) throw new Error('public_order_invalid_response');
     const totalCents = intent.total_cents as number;
-    localStorage.removeItem(storageKey);
-    if (legacyStorageKey) localStorage.removeItem(legacyStorageKey);
 
     const effectivePhone = typeof intent.whatsapp_phone === 'string' && intent.whatsapp_phone.trim()
       ? intent.whatsapp_phone
-      : (typeof branchPhone === 'string' && branchPhone.trim() ? branchPhone : undefined);
+      : (typeof receiptBranchPhone === 'string' && receiptBranchPhone.trim() ? receiptBranchPhone : undefined);
 
-    const whatsappUrl = (whatsappOrderingEnabled === true && effectivePhone)
+    const whatsappUrl = (receiptWhatsAppEnabled === true && effectivePhone)
       ? (typeof intent.whatsapp_url === 'string' && intent.whatsapp_url
           ? intent.whatsapp_url
-          : buildWhatsAppLink(intent.public_reference, info, items, totalCents, effectivePhone, branchName))
+          : buildWhatsAppLink(intent.public_reference, receiptInfo, receiptItems, totalCents, effectivePhone, receiptBranchName))
       : undefined;
 
-    return {
+    const result: CreatedOrderResult = {
       kind: 'public_order_intent',
       public_reference: intent.public_reference,
       status: 'PENDING_REVIEW',
       version: intent.version as number,
-      customer_info: info,
-      items,
+      customer_info: receiptInfo,
+      items: receiptItems,
       total_cents: totalCents,
-      coupon_code: info.coupon_code,
-      discount_cents: info.discount_cents,
+      coupon_code: receiptInfo.coupon_code,
+      discount_cents: receiptInfo.discount_cents,
       ...(whatsappUrl ? { whatsapp_url: whatsappUrl } : {}),
     };
+    if (effectiveKey && !markMobileOrderCompleted(effectiveKey, mobileOrderTimestamp())) {
+      const err = new Error('El pedido se recibió, pero no se pudo guardar el cierre local. Vuelve a intentar el envío guardado.');
+      (err as any).code = 'pending_mobile_order_cleanup_failed';
+      throw err;
+    }
+    if (effectiveKey && !clearPendingMobileOrder(effectiveKey)) {
+      const err = new Error('El pedido se recibió, pero no se pudo cerrar su recuperación local. Vuelve a intentar el envío guardado.');
+      (err as any).code = 'pending_mobile_order_cleanup_failed';
+      throw err;
+    }
+    return result;
   }
   if (!data || typeof data !== 'object' || typeof (data as { id?: unknown }).id !== 'string' || typeof (data as { folio?: unknown }).folio !== 'string' || typeof (data as { created_at?: unknown }).created_at !== 'string' || !Number.isInteger((data as { total_cents?: unknown }).total_cents)) throw new Error('public_order_invalid_response');
   const persisted = data as { id: string; folio: string; created_at: string; total_cents: number; whatsapp_phone?: unknown; };
 
   const effectivePhone = typeof persisted.whatsapp_phone === 'string' && persisted.whatsapp_phone.trim()
     ? persisted.whatsapp_phone
-    : (typeof branchPhone === 'string' && branchPhone.trim() ? branchPhone : undefined);
+    : (typeof receiptBranchPhone === 'string' && receiptBranchPhone.trim() ? receiptBranchPhone : undefined);
 
-  const whatsappUrl = (whatsappOrderingEnabled === true && effectivePhone)
-    ? buildWhatsAppLink(persisted.folio, info, items, persisted.total_cents, effectivePhone, branchName)
+  const whatsappUrl = (receiptWhatsAppEnabled === true && effectivePhone)
+    ? buildWhatsAppLink(persisted.folio, receiptInfo, receiptItems, persisted.total_cents, effectivePhone, receiptBranchName)
     : undefined;
 
   return {
@@ -539,13 +638,46 @@ export async function submitMobileOrder(
     folio: persisted.folio,
     id: persisted.id,
     created_at: persisted.created_at,
-    customer_info: info,
-    items,
+    customer_info: receiptInfo,
+    items: receiptItems,
     total_cents: persisted.total_cents,
-    coupon_code: info.coupon_code,
-    discount_cents: info.discount_cents,
+    coupon_code: receiptInfo.coupon_code,
+    discount_cents: receiptInfo.discount_cents,
     ...(whatsappUrl ? { whatsapp_url: whatsappUrl } : {}),
   };
+}
+
+export function submitMobileOrder(
+  info: CustomerOrderInfo,
+  items: CartItem[],
+  branchId?: string,
+  branchName?: string,
+  customerCoords?: { lat: number; lng: number },
+  publicKey?: string | null,
+  branchPhone?: string,
+  whatsappOrderingEnabled?: boolean,
+  cartStartedAt?: number,
+): Promise<CreatedOrderResult> {
+  const effectiveKey = publicKey || branchId;
+  const submit = (invocationStartedAt: number) => submitMobileOrderAttempt(
+    info,
+    items,
+    branchId,
+    branchName,
+    customerCoords,
+    publicKey,
+    branchPhone,
+    whatsappOrderingEnabled,
+    Math.min(
+      invocationStartedAt,
+      typeof cartStartedAt === 'number' && Number.isFinite(cartStartedAt) ? cartStartedAt : Number.POSITIVE_INFINITY,
+    ),
+  );
+  if (typeof effectiveKey === 'string' && effectiveKey.length > 0) {
+    const invocationStartedAt = mobileOrderTimestamp();
+    return withMobileOrderSubmissionLock(effectiveKey, () => submit(invocationStartedAt));
+  }
+  return submit(mobileOrderTimestamp());
 }
 
 export async function submitCustomerFeedback(payload: {

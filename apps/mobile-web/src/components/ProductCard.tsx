@@ -3,6 +3,7 @@ import { Heart, Plus, Flame } from 'lucide-react';
 import { Product } from '../types';
 import { formatMoney } from '../api';
 import { getProductIconMeta, detectProductSize, cleanBaseProductName, getProductImage } from '../imageMap';
+import { hasCustomizationOptions } from '../utils/cartPersonalization';
 
 interface ProductCardProps {
   product: Product;
@@ -23,14 +24,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const displayName = cleanBaseProductName(product.name);
   const iconMeta = getProductIconMeta(product);
   const productImg = product.image_url || getProductImage(product);
+  const hasCustomizations = hasCustomizationOptions(product);
 
   return (
     <article
       className={`product-card-modern ${product.is_promo ? 'is-promo-active' : ''}`}
       onClick={() => onOpenDetail(product)}
-      tabIndex={0}
-      role="button"
-      aria-label={`Ver detalles de ${product.name}`}
     >
       <div className="product-card-visual-wrapper">
         {product.is_promo && (
@@ -100,6 +99,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
 
         <h3 className="product-card-name">{displayName}</h3>
+
+        <button
+          type="button"
+          className="product-card-detail-cue"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenDetail(product);
+          }}
+          aria-label={hasCustomizations ? `Personaliza ${product.name}` : `Ver detalles de ${product.name}`}
+        >
+          {hasCustomizations ? 'Personaliza tu producto' : 'Ver detalles'}
+        </button>
 
         {product.description && (
           <p className="product-card-description-snippet">{product.description}</p>
