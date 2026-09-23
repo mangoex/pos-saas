@@ -98,6 +98,7 @@ def list_branches(session: Session, organization_id: str | None = None) -> list[
             models.branches.c.whatsapp_ordering_enabled,
             models.branches.c.delivery_fee_enabled,
             models.branches.c.dine_in_enabled,
+            models.branches.c.pickup_grace_minutes,
             models.branches.c.delivery_tiers,
             models.branches.c.free_delivery_min_cents,
             models.branches.c.coupons,

@@ -5,6 +5,7 @@ import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, 
 import { getProductIconMeta, getProductImage } from '../imageMap';
 import { requestBrowserCoordinates, reverseGeocode, formatGpsAddressNotes } from '../utils/geolocation';
 import { currentModifiers, hasCustomizationOptions, hasSelectedCustomization } from '../utils/cartPersonalization';
+import { pickupGraceMessage } from '../../../../packages/ui/src/utils/pickupGrace';
 
 const weekDayLetters = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const weekDayFullNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -1142,6 +1143,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </div>
                     )}
 
+                    {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes) && (
+                      <p role="status" style={{ padding: 12, borderRadius: 12, background: 'var(--accent-orange-light)', color: 'var(--text-main)', fontSize: '0.875rem', lineHeight: 1.5 }}>
+                        {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes)}
+                      </p>
+                    )}
                     {/* Selected Summary Badge */}
                     <div className="pickup-summary-badge">
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>

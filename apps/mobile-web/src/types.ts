@@ -119,6 +119,7 @@ export interface BranchInfo {
   mobile_theme?: 'light' | 'dark' | string;
   whatsapp_ordering_enabled?: boolean;
   dine_in_enabled?: boolean;
+  pickup_grace_minutes?: number | null;
   delivery_fee_enabled?: boolean;
   color_palette?: string;
   delivery_tiers?: DeliveryTier[];

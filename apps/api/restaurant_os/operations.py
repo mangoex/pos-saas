@@ -12025,6 +12025,15 @@ def update_branch(
     if extra_payload and "color_palette" in extra_payload:
         update_data["color_palette"] = str(extra_payload["color_palette"]).strip()
 
+    if extra_payload and "pickup_grace_minutes" in extra_payload:
+        grace = extra_payload["pickup_grace_minutes"]
+        if grace is not None and (type(grace) is not int or not 1 <= grace <= 2147483647):
+            raise BusinessError(
+                "pickup_grace_minutes_invalid",
+                "Los minutos para recoger deben ser un entero positivo o quedar vacíos.",
+            )
+        update_data["pickup_grace_minutes"] = grace
+
     if accepts_card_payments is not None:
         update_data["accepts_card_payments"] = bool(accepts_card_payments)
     elif extra_payload and "accepts_card_payments" in extra_payload:
@@ -12192,6 +12201,7 @@ def list_public_branches(
             models.branches.c.whatsapp_ordering_enabled,
             models.branches.c.delivery_fee_enabled,
             models.branches.c.dine_in_enabled,
+            models.branches.c.pickup_grace_minutes,
             models.branches.c.delivery_tiers,
             models.branches.c.free_delivery_min_cents,
             models.branches.c.coupons,

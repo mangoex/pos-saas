@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
+import { parsePickupGraceMinutes } from '../../../../../packages/ui/src/utils/pickupGrace';
 import {
   Store,
   Share2,
@@ -82,6 +83,7 @@ interface Branch {
   google_review_url?: string;
   whatsapp_ordering_enabled?: boolean;
   dine_in_enabled?: boolean;
+  pickup_grace_minutes?: number | null;
   delivery_fee_enabled?: boolean;
   delivery_tiers?: DeliveryTier[];
   free_delivery_min_cents?: number | null;
@@ -169,6 +171,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [googleReviewUrl, setGoogleReviewUrl] = useState('');
   const [dineInEnabled, setDineInEnabled] = useState(true);
+  const [pickupGraceMinutes, setPickupGraceMinutes] = useState('');
   const [deliveryFeeEnabled, setDeliveryFeeEnabled] = useState(true);
   const [freeDeliveryMinPesos, setFreeDeliveryMinPesos] = useState('');
   const [deliveryTiers, setDeliveryTiers] = useState<DeliveryTier[]>([]);
@@ -209,6 +212,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       setWhatsappEnabled(Boolean(currentBranch.whatsapp_ordering_enabled));
       setGoogleReviewUrl(currentBranch.google_review_url || '');
       setDineInEnabled(currentBranch.dine_in_enabled !== false);
+      setPickupGraceMinutes(currentBranch.pickup_grace_minutes == null ? '' : String(currentBranch.pickup_grace_minutes));
       setDeliveryFeeEnabled(currentBranch.delivery_fee_enabled !== false);
       setFreeDeliveryMinPesos(
         currentBranch.free_delivery_min_cents != null && currentBranch.free_delivery_min_cents > 0
@@ -309,7 +313,15 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    let pickupGrace: number | null;
+    try {
+      pickupGrace = parsePickupGraceMinutes(pickupGraceMinutes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Tiempo para recoger inválido');
+      return;
+    }
     updateBranchMutation.mutate({
+      pickup_grace_minutes: pickupGrace,
       name: branchName.trim() || currentBranch?.name,
       street: street.trim(),
       exterior_number: exteriorNumber.trim(),
@@ -1140,6 +1152,18 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   }}
                 />
               </div>
+
+              <section aria-labelledby="pickup-settings-title" style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, border: '1px solid #e2e8f0', marginBottom: 18 }}>
+                <h3 id="pickup-settings-title" style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#0f172a' }}>Recoger</h3>
+                <label htmlFor="pickup-grace-minutes" style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Tiempo disponible después de la hora programada (minutos)</label>
+                <input id="pickup-grace-minutes" type="text" inputMode="numeric"
+                  value={pickupGraceMinutes} onChange={(e) => setPickupGraceMinutes(e.target.value)}
+                  aria-describedby="pickup-grace-help" placeholder="Sin tiempo configurado"
+                  style={{ width: '100%', minHeight: 44, padding: '10px 12px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 10, fontSize: 16 }} />
+                <p id="pickup-grace-help" style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#475569' }}>
+                  Indica cuántos minutos respetarás el pedido después de la hora programada. Déjalo vacío para no mostrar el aviso al cliente. Guarda la configuración para aplicar el cambio.
+                </p>
+              </section>
 
               {/* Card: Modalidad de Consumo: Comer aquí */}
               <div

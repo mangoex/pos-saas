@@ -116,6 +116,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         "whatsapp_ordering_enabled",
         "delivery_fee_enabled",
         "dine_in_enabled",
+        "pickup_grace_minutes",
         "color_palette",
         "delivery_tiers",
         "free_delivery_min_cents",

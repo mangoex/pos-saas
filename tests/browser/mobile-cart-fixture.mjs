@@ -14,7 +14,7 @@ const products = [
   { id: 'plain', sku: 'plain', name: 'Café sin extras', price_cents: 4500, category_name: 'Cafetería', modifier_groups: [] },
   { id: 'required', sku: 'required', name: 'Café obligatorio', price_cents: 5500, category_name: 'Cafetería', modifier_groups: [{ ...group, minimum_selections: 1, is_required: true }] },
 ];
-const branch = { id: 'qa-branch', public_key: 'qa-key', code: 'QA', name: 'Sucursal QA', status: 'active', has_active_shift: true, dine_in_enabled: true, accepts_cash_payments: true, accepts_card_payments: true };
+export const branch = { id: 'qa-branch', public_key: 'qa-key', code: 'QA', name: 'Sucursal QA', status: 'active', has_active_shift: true, dine_in_enabled: true, accepts_cash_payments: true, accepts_card_payments: true };
 const server = await createServer({
   root: resolve('apps/mobile-web'), server: { host: '127.0.0.1', port: 4174, strictPort: true },
   plugins: [{ name: 'synthetic-mobile-api', configureServer(vite) {

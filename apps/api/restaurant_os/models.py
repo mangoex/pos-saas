@@ -124,6 +124,12 @@ branches = sa.Table(
         nullable=False,
         server_default=sa.true(),
     ),
+    sa.Column("pickup_grace_minutes", sa.Integer(), nullable=True),
+    sa.CheckConstraint(
+        "pickup_grace_minutes IS NULL OR "
+        "(pickup_grace_minutes >= 1 AND pickup_grace_minutes <= 2147483647)",
+        name="ck_branches_pickup_grace_minutes",
+    ),
     sa.Column("delivery_tiers", sa.JSON(), nullable=False, server_default="[]"),
     sa.Column("free_delivery_min_cents", sa.Integer(), nullable=True),
     sa.Column(

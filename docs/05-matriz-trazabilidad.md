@@ -21,7 +21,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-013 | SDD SaaS y suplemento de cierre | BDD-SC-708 | TDD-TS-208 | Disenado |
 | PRD-FR-020 | SDD SaaS y suplemento de cierre | BDD-SC-709 | TDD-TS-209 | Disenado |
 | PRD-FR-021 | SDD SaaS y suplemento de cierre | BDD-SC-710 | TDD-TS-210 | Disenado |
-| PRD-FR-022 | SDD SaaS y suplemento de cierre | BDD-SC-711 | TDD-TS-211 | Disenado |
+| PRD-FR-022 | SDD SaaS, suplemento de cierre y 02-SDD-pickup-grace (PICKUP-001 implementado; evidencia local en reports/pickup-grace-2026-09-23.md) | BDD-SC-711, BDD-SC-944, BDD-SC-945, BDD-SC-946, BDD-SC-947 | TDD-TS-211, TDD-TS-293 | Disenado |
 | PRD-FR-023 | SDD SaaS y suplemento de cierre | BDD-SC-712 | TDD-TS-212 | Disenado |
 | PRD-FR-024 | SDD SaaS y suplemento de cierre | BDD-SC-713 | TDD-TS-213 | Disenado |
 | PRD-FR-025 | SDD SaaS y suplemento de cierre | BDD-SC-714 | TDD-TS-214 | Disenado |

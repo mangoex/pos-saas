@@ -115,6 +115,7 @@ Escanea el código QR de mesa o ticket, consulta el menú web móvil, envía ped
   - Apertura de modal táctil solo si el producto requiere modificadores obligatorios; si no, adición directa al ticket en 1 clic.
   - Notas de comanda por platillo (ej. "Sin cebolla", "Salsa aparte").
 - `PRD-FR-022`: **Modalidades de Venta**: Soporte para Venta en Mostrador (Rápida / Para Llevar), Mesas / Comedor (con nombre de mesa o identificador) y Pedido para Recoger.
+  En Config del admin móvil, Recoger permite configurar por sucursal minutos enteros positivos de tolerancia posteriores a la hora programada. Vacío elimina la configuración. El checkout para recoger informa que se respetará el pedido durante esos minutos; sin configuración no muestra aviso. No cancela pedidos ni modifica sus estados al vencer el plazo.
 - `PRD-FR-023`: **División de Cuentas (Split Bill)**:
   - División en partes iguales (N cuentas con el total prorrateado exacto en centavos).
   - División por artículos (asignación de productos específicos a cada comensal).
