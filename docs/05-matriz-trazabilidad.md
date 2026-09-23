@@ -15,7 +15,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-003 | SDD SaaS y suplemento de cierre | BDD-SC-702, BDD-SC-801 | TDD-TS-202, TDD-TS-301 | Disenado |
 | PRD-FR-004 | SDD SaaS y suplemento de cierre | BDD-SC-703 | TDD-TS-203 | Disenado |
 | PRD-FR-005 | SDD SaaS y suplemento de cierre | BDD-SC-704, BDD-SC-804 | TDD-TS-204, TDD-TS-304 | Disenado |
-| PRD-FR-010 | SDD SaaS y suplemento de cierre | BDD-SC-705 | TDD-TS-205 | Disenado |
+| PRD-FR-010 | SDD SaaS y 02-SDD-mobile-product-modifiers | BDD-SC-705, BDD-SC-890, BDD-SC-891, BDD-SC-892, BDD-SC-893 | TDD-TS-205, TDD-TS-290 | Disenado |
 | PRD-FR-011 | SDD SaaS y suplemento de cierre | BDD-SC-706 | TDD-TS-206 | Disenado |
 | PRD-FR-012 | SDD SaaS y suplemento de cierre | BDD-SC-707 | TDD-TS-207 | Disenado |
 | PRD-FR-013 | SDD SaaS y suplemento de cierre | BDD-SC-708 | TDD-TS-208 | Disenado |
@@ -43,7 +43,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-053 | SDD SaaS y suplemento de cierre | BDD-SC-730 | TDD-TS-230 | Disenado |
 | PRD-FR-054 | SDD SaaS y suplemento de cierre | BDD-SC-731 | TDD-TS-231 | Disenado |
 | PRD-FR-060 | SDD SaaS y suplemento de cierre | BDD-SC-732 | TDD-TS-232 | Disenado |
-| PRD-FR-061 | SDD SaaS y suplemento de cierre | BDD-SC-733 | TDD-TS-233 | Disenado |
+| PRD-FR-061 | SDD SaaS y 02-SDD-mobile-product-modifiers | BDD-SC-733, BDD-SC-890 | TDD-TS-233, TDD-TS-290 | Disenado |
 | PRD-FR-062 | SDD SaaS y suplemento de cierre | BDD-SC-734 | TDD-TS-234 | Disenado |
 | PRD-FR-063 | SDD SaaS y suplemento de cierre | BDD-SC-735, BDD-SC-807 | TDD-TS-235, TDD-TS-307 | Disenado |
 | PRD-FR-070 | SDD SaaS y suplemento de cierre | BDD-SC-736, BDD-SC-813 | TDD-TS-236 | Disenado |

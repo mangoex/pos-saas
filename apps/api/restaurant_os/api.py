@@ -1504,7 +1504,7 @@ def post_catalog_product(
     sku = str(payload.get("sku", ""))
     category_name = str(payload.get("category_name", ""))
     station = str(payload.get("station", "kitchen"))
-    price_cents = int(payload.get("price_cents", 0))
+    price_cents = payload.get("price_cents", 0)
     delivery_price_cents = (
         int(payload["delivery_price_cents"])
         if payload.get("delivery_price_cents") is not None
@@ -1537,6 +1537,7 @@ def post_catalog_product(
             is_promo=is_promo,
             promo_price_cents=promo_price_cents,
             promo_badge_text=promo_badge_text,
+            simple_modifiers=payload.get("simple_modifiers", _UNSET),
         )
     )
 
@@ -4423,6 +4424,7 @@ def put_catalog_product(
             is_promo=is_promo,
             promo_price_cents=promo_price_cents,
             promo_badge_text=promo_badge_text,
+            simple_modifiers=payload.get("simple_modifiers", _UNSET),
         )
     )
 
@@ -8253,3 +8255,16 @@ def public_restaurant_catalog_endpoint(slug: str, session: SessionDep) -> dict[s
     else:
         raise HTTPException(422, detail={"code": "branch_context_required"})
     return public_catalog_by_key_endpoint(branch["public_key"], session)
+
+
+@router.get("/products/{product_id}/simple-modifiers")
+def get_simple_product_modifiers(
+    product_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    from restaurant_os.simple_modifiers import read_simple_modifiers
+
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return _business_response(lambda: read_simple_modifiers(session, product_id, actor_id))

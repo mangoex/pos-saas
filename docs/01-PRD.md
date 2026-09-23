@@ -95,6 +95,10 @@ Escanea el código QR de mesa o ticket, consulta el menú web móvil, envía ped
 ### 4.2 Catálogo Ágil y Precios Diferenciados por Canal
 
 - `PRD-FR-010`: **Catálogo Simplificado de Productos**: Administración de categorías, productos, descripción corta, fotos optimizadas, código rápido y visibilidad en menú digital.
+  En el editor móvil, el administrador archiva productos conservando su historia y captura
+  modificadores comerciales opcionales por línea (`nombre, precio MXN`; sin precio = gratis).
+  Son opciones seleccionables, no comentarios. Producto y opciones se guardan juntos; los errores
+  no dejan cambios parciales. No se infieren insumos ni consumos a partir del nombre del modificador.
 - `PRD-FR-011`: **Precios Diferenciados por Canal (Salón vs Delivery)**: Cada producto debe soportar:
   - `price_dine_in`: Precio base para mostrador y consumo en salón.
   - `price_delivery`: Precio para canales de entrega (Uber Eats, DiDi Food, Rappi), permitiendo absorber comisiones de las plataformas sin mermar margen.

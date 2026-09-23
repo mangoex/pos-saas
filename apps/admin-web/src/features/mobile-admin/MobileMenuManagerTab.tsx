@@ -1,6 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
+import {
+  buildProductFieldsForSave,
+  buildSimpleModifiersPayload,
+  newDraftProductSku,
+  positiveMxnToCentsExact,
+  productSnapshotToForm,
+  runLatestSimpleModifiersRequest,
+  simpleModifierOptionsToText,
+  type SimpleModifiersProductSnapshot,
+} from './simpleModifiers';
 import {
   Utensils,
   Plus,
@@ -118,7 +128,12 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   });
   const [productModalError, setProductModalError] = useState<string | null>(null);
   const [modifiersText, setModifiersText] = useState('');
-  const [existingModifierGroupIds, setExistingModifierGroupIds] = useState<string[]>([]);
+  const [modifierLoadStatus, setModifierLoadStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const [modifierLoadError, setModifierLoadError] = useState<string | null>(null);
+  const [simpleModifiersEditable, setSimpleModifiersEditable] = useState(true);
+  const [simpleModifiersRevision, setSimpleModifiersRevision] = useState<string | null>(null);
+  const [simpleModifiersProductBaseline, setSimpleModifiersProductBaseline] = useState<SimpleModifiersProductSnapshot | null>(null);
+  const modifierRequestId = useRef(0);
 
   // Category Modal State
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -216,45 +231,42 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   });
 
   const saveProductMutation = useMutation({
-    mutationFn: async (form: typeof productForm) => {
-      const cents = Math.round((parseFloat(form.price) || 0) * 100);
+    mutationFn: async (variables: { form: typeof productForm; modifiersText: string; baseline: SimpleModifiersProductSnapshot | null }) => {
+      const { form } = variables;
+      const cents = positiveMxnToCentsExact(form.price, 'El precio del producto');
       const promoCents = form.is_promo && form.promo_price.trim() !== ''
-        ? Math.round((parseFloat(form.promo_price) || 0) * 100)
+        ? positiveMxnToCentsExact(form.promo_price, 'El precio de promoción')
         : null;
-      const skuVal = form.sku.trim() || `PROD-${Date.now().toString().slice(-6)}`;
-      const payload = {
-        name: form.name.trim(),
-        sku: skuVal,
-        category_name: form.category_name.trim(),
-        station: form.station,
-        price_cents: cents,
-        is_promo: form.is_promo,
-        promo_price_cents: promoCents,
-        promo_badge_text: form.is_promo ? (form.promo_badge_text.trim() || 'PROMO') : null,
-        status: form.status,
-        image_url: form.image_url.trim() || undefined,
-      };
+      const skuVal = form.sku.trim();
+      const productFields = buildProductFieldsForSave(
+        { ...form, sku: skuVal },
+        cents,
+        promoCents,
+        variables.baseline,
+      );
 
       if (editingProduct) {
+        const simpleModifiers = modifierLoadStatus === 'loaded' && simpleModifiersEditable
+          ? { simple_modifiers: buildSimpleModifiersPayload(variables.modifiersText, simpleModifiersRevision) }
+          : {};
         const res = await fetchApi(`/catalog/products/${editingProduct.id}`, {
           method: 'PUT',
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...productFields, ...simpleModifiers }),
         });
-        await saveModifiers(editingProduct.id);
         return res;
       }
-      const res: any = await fetchApi('/catalog/products', {
+      return fetchApi('/catalog/products', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...productFields,
+          image_url: productFields.image_url || undefined,
+          simple_modifiers: buildSimpleModifiersPayload(variables.modifiersText, null),
+        }),
       });
-      const newId = res?.id || res?.data?.id;
-      if (newId && modifiersText.trim()) {
-        await saveModifiers(newId);
-      }
-      return res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      modifierRequestId.current += 1;
       setIsProductModalOpen(false);
       showToast(editingProduct ? 'Producto actualizado' : 'Producto creado con éxito');
     },
@@ -269,54 +281,39 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      modifierRequestId.current += 1;
       setIsProductModalOpen(false);
-      showToast('Producto eliminado');
+      showToast('Producto archivado');
     },
     onError: (err: any) => {
       setProductModalError(err?.message || err?.detail?.message || 'Error al eliminar producto');
     },
   });
 
-  const saveModifiers = async (productId: string) => {
-    // Delete existing modifier groups first
-    for (const groupId of existingModifierGroupIds) {
-      try {
-        await fetchApi(`/modifier-groups/${groupId}`, { method: 'DELETE' });
-      } catch {
-        // ignore if already deleted
-      }
-    }
-    // Parse lines from textarea
-    const lines = modifiersText.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (lines.length === 0) return;
-    // Create a new modifier group
-    const groupRes: any = await fetchApi(`/products/${productId}/modifier-groups`, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'Extras',
-        is_required: false,
-        minimum_selections: 0,
-        maximum_selections: lines.length,
-      }),
-    });
-    const groupId = groupRes?.id || groupRes?.data?.id;
-    if (!groupId) return;
-    // Create each option
-    for (const line of lines) {
-      const parts = line.split(',');
-      const name = parts[0]?.trim();
-      if (!name) continue;
-      const priceStr = parts[1]?.trim();
-      const priceCents = priceStr ? Math.round((parseFloat(priceStr) || 0) * 100) : 0;
-      await fetchApi(`/modifier-groups/${groupId}/options`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name,
-          price_delta_cents: priceCents,
-          effect_type: 'surcharge',
-        }),
-      });
-    }
+  const loadSimpleModifiers = async (productId: string) => {
+    setModifierLoadStatus('loading');
+    setModifierLoadError(null);
+    await runLatestSimpleModifiersRequest(
+      modifierRequestId,
+      () => fetchApi(`/products/${productId}/simple-modifiers`),
+      (response) => {
+        setModifiersText(simpleModifierOptionsToText(response.options));
+        setSimpleModifiersRevision(response.revision);
+        setSimpleModifiersEditable(response.editable);
+        setSimpleModifiersProductBaseline(response.product);
+        setProductForm(productSnapshotToForm(response.product));
+        setEditingProduct((current) => current ? {
+          ...current,
+          ...response.product,
+          image_url: response.product.image_url ?? undefined,
+        } : current);
+        setModifierLoadStatus('loaded');
+      },
+      (error) => {
+        setModifierLoadError(error instanceof Error ? error.message : 'No se pudieron cargar los modificadores.');
+        setModifierLoadStatus('error');
+      },
+    );
   };
 
   const saveCategoryMutation = useMutation({
@@ -380,7 +377,9 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
 
   // Open Product Modal
   const openProductModal = (product?: Product) => {
+    modifierRequestId.current += 1;
     setProductModalError(null);
+    setModifierLoadError(null);
     if (product) {
       setEditingProduct(product);
       setProductForm({
@@ -395,32 +394,17 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         image_url: product.image_url || '',
         status: product.status || 'active',
       });
-      // Load existing modifiers
-      fetchApi(`/products/${product.id}/modifier-groups`)
-        .then((groups: any) => {
-          const list = Array.isArray(groups) ? groups : (groups?.data || []);
-          const groupIds: string[] = [];
-          const lines: string[] = [];
-          for (const g of list) {
-            if (g.id) groupIds.push(g.id);
-            for (const opt of (g.options || [])) {
-              if (opt.status && opt.status !== 'active') continue;
-              const pricePesos = (opt.price_delta_cents || 0) / 100;
-              lines.push(pricePesos > 0 ? `${opt.name}, ${pricePesos}` : opt.name);
-            }
-          }
-          setExistingModifierGroupIds(groupIds);
-          setModifiersText(lines.join('\n'));
-        })
-        .catch(() => {
-          setExistingModifierGroupIds([]);
-          setModifiersText('');
-        });
+      setModifiersText('');
+      setSimpleModifiersRevision(null);
+      setSimpleModifiersProductBaseline(null);
+      setSimpleModifiersEditable(false);
+      setModifierLoadStatus('loading');
+      void loadSimpleModifiers(product.id);
     } else {
       setEditingProduct(null);
       setProductForm({
         name: '',
-        sku: '',
+        sku: newDraftProductSku(),
         category_name: (selectedCategory !== 'ALL' && selectedCategory !== 'PROMOS') ? selectedCategory : (sortedCategories[0]?.name || ''),
         station: 'kitchen',
         price: '',
@@ -431,10 +415,20 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         status: 'active',
       });
       setModifiersText('');
-      setExistingModifierGroupIds([]);
+      setSimpleModifiersRevision(null);
+      setSimpleModifiersProductBaseline(null);
+      setSimpleModifiersEditable(true);
+      setModifierLoadStatus('loaded');
     }
     setIsProductModalOpen(true);
   };
+
+  const closeProductModal = () => {
+    modifierRequestId.current += 1;
+    setIsProductModalOpen(false);
+  };
+
+  const productFormLocked = modifierLoadStatus === 'loading' || saveProductMutation.isPending || deleteProductMutation.isPending;
 
   // Open Category Modal
   const openCategoryModal = (cat?: Category) => {
@@ -1387,12 +1381,23 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 {editingProduct ? 'Editar Platillo' : 'Nuevo Platillo'}
               </h3>
               <button
-                onClick={() => setIsProductModalOpen(false)}
+                type="button"
+                disabled={saveProductMutation.isPending || deleteProductMutation.isPending}
+                onClick={closeProductModal}
                 style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}
               >
                 <X size={20} />
               </button>
             </div>
+
+            {modifierLoadError && (
+              <div role="alert" style={{ backgroundColor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 12px', color: '#9a3412', fontSize: '0.85rem', marginBottom: 12 }}>
+                <div style={{ marginBottom: 8 }}>No se pudieron cargar los modificadores. {modifierLoadError}</div>
+                <button type="button" onClick={() => editingProduct && void loadSimpleModifiers(editingProduct.id)} style={{ border: '1px solid #c2410c', borderRadius: 8, background: '#fff', color: '#9a3412', padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}>
+                  Reintentar
+                </button>
+              </div>
+            )}
 
             {productModalError && (
               <div
@@ -1418,9 +1423,15 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                saveProductMutation.mutate(productForm);
+                if (saveProductMutation.isPending || deleteProductMutation.isPending || modifierLoadStatus === 'loading') return;
+                if (editingProduct && (modifierLoadStatus !== 'loaded' || !simpleModifiersProductBaseline)) {
+                  setProductModalError('Carga los modificadores antes de guardar el producto.');
+                  return;
+                }
+                saveProductMutation.mutate({ form: productForm, modifiersText, baseline: simpleModifiersProductBaseline });
               }}
             >
+              <fieldset disabled={productFormLocked} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
               {/* Product Name */}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>
@@ -1445,6 +1456,20 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 />
               </div>
 
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                  SKU
+                </label>
+                <input
+                  type="text"
+                  maxLength={64}
+                  value={productForm.sku}
+                  onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
+                  placeholder="Identificador del producto"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: '0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', outline: 'none' }}
+                />
+              </div>
+
               {/* Price & Category in row */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                 <div>
@@ -1453,8 +1478,8 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                   </label>
                   <input
                     type="number"
-                    step="0.50"
-                    min="0"
+                    step="0.01"
+                    min="0.01"
                     required
                     placeholder="0.00"
                     value={productForm.price}
@@ -1570,8 +1595,8 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                       </label>
                       <input
                         type="number"
-                        step="0.50"
-                        min="0"
+                        step="0.01"
+                        min="0.01"
                         value={productForm.promo_price}
                         onChange={(e) => setProductForm({ ...productForm, promo_price: e.target.value })}
                         placeholder="Opcional"
@@ -1752,38 +1777,48 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               {/* Modifiers */}
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                  Modificadores (extras con cargo)
+                  Modificadores simples
                 </label>
-                <p style={{ margin: '0 0 6px', fontSize: '0.75rem', color: '#64748b' }}>
-                  Un modificador por línea: <strong>nombre, precio</strong>. Sin precio = gratis.
-                </p>
-                <textarea
-                  placeholder={`Leche de avena, 10\nExtra matcha, 10\nMiel de agave, 20\nSin azúcar`}
-                  value={modifiersText}
-                  onChange={(e) => setModifiersText(e.target.value)}
-                  rows={4}
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    padding: '10px 12px',
-                    fontSize: '0.9rem',
-                    borderRadius: 10,
-                    border: '1px solid #e2e8f0',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                    outline: 'none',
-                  }}
-                />
-                {modifiersText.trim() && (
-                  <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#64748b' }}>
-                    {modifiersText.split('\n').filter(l => l.trim()).length} modificador(es) configurado(s)
-                  </div>
+                {editingProduct && modifierLoadStatus === 'loaded' && !simpleModifiersEditable ? (
+                  <p style={{ margin: '0 0 6px', fontSize: '0.8rem', color: '#92400e' }}>
+                    Este producto usa grupos avanzados. Se conservarán sin cambios; edítalos desde el administrador de modificadores.
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ margin: '0 0 6px', fontSize: '0.75rem', color: '#64748b' }}>
+                      Un modificador por línea: <strong>nombre, precio</strong>. Sin precio = gratis. Deja el campo vacío para quitar los modificadores simples.
+                    </p>
+                    <textarea
+                      aria-label="Modificadores simples"
+                      placeholder={`Leche de avena, 10\nExtra matcha, 10\nMiel de agave, 20\nSin azúcar`}
+                      value={modifiersText}
+                      disabled={modifierLoadStatus !== 'loaded' || !simpleModifiersEditable}
+                      onChange={(e) => setModifiersText(e.target.value)}
+                      rows={4}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        padding: '10px 12px',
+                        fontSize: '0.9rem',
+                        borderRadius: 10,
+                        border: '1px solid #e2e8f0',
+                        fontFamily: 'inherit',
+                        resize: 'vertical',
+                        outline: 'none',
+                      }}
+                    />
+                    {modifiersText.trim() && (
+                      <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#64748b' }}>
+                        {modifiersText.split('\n').filter(l => l.trim()).length} modificador(es) configurado(s)
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
               <button
                 type="submit"
-                disabled={saveProductMutation.isPending}
+                disabled={saveProductMutation.isPending || deleteProductMutation.isPending || modifierLoadStatus === 'loading' || (editingProduct !== null && (modifierLoadStatus !== 'loaded' || !simpleModifiersProductBaseline))}
                 style={{
                   width: '100%',
                   padding: '14px',
@@ -1803,16 +1838,22 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               {editingProduct && (
                 <button
                   type="button"
-                  disabled={deleteProductMutation.isPending}
+                  aria-label={`Archivar ${editingProduct.name}`}
+                  disabled={deleteProductMutation.isPending || saveProductMutation.isPending}
                   onClick={() => {
-                    if (window.confirm(`¿Eliminar "${editingProduct.name}"? Esta acción no se puede deshacer.`)) {
+                    if (window.confirm(`¿Eliminar "${editingProduct.name}"? El producto se archivará como agotado, conservará sus datos y podrá reactivarse.`)) {
                       deleteProductMutation.mutate(editingProduct.id);
                     }
                   }}
                   style={{
-                    width: '100%',
-                    padding: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    width: 'fit-content',
+                    padding: '10px 14px',
                     marginTop: 10,
+                    marginLeft: 'auto',
                     backgroundColor: '#fef2f2',
                     color: '#dc2626',
                     border: '1px solid #fecaca',
@@ -1820,16 +1861,13 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                     fontSize: '0.9rem',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
                   }}
                 >
                   <Trash2 size={16} />
-                  {deleteProductMutation.isPending ? 'Eliminando...' : 'Eliminar Platillo'}
+                  {deleteProductMutation.isPending ? 'Archivando...' : 'Eliminar Platillo'}
                 </button>
               )}
+              </fieldset>
             </form>
           </div>
         </div>

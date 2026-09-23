@@ -1234,6 +1234,7 @@ def create_product(
     is_promo: bool = False,
     promo_price_cents: int | None = None,
     promo_badge_text: str | None = None,
+    simple_modifiers: Any = _UNSET,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -1266,7 +1267,7 @@ def create_product(
     else:
         station_val = "packing"
 
-    if price_cents <= 0:
+    if type(price_cents) is not int or not 0 < price_cents <= 2147483647:
         raise BusinessError("invalid_price", "Price must be positive")
     if delivery_price_cents is not None and delivery_price_cents <= 0:
         raise BusinessError("invalid_delivery_price", "Delivery price must be positive")
@@ -1359,6 +1360,10 @@ def create_product(
         organization_id=org_id,
         actor_user_id=actor_id,
     )
+    if simple_modifiers is not _UNSET:
+        from restaurant_os.simple_modifiers import save_simple_modifiers
+
+        save_simple_modifiers(session, product["id"], simple_modifiers, actor_id, creating=True)
     session.commit()
     return {
         **product,
@@ -12875,6 +12880,7 @@ def update_product(
     is_promo: bool | None = None,
     promo_price_cents: Any = _UNSET,
     promo_badge_text: Any = _UNSET,
+    simple_modifiers: Any = _UNSET,
 ) -> dict[str, Any]:
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
@@ -12883,10 +12889,20 @@ def update_product(
         sa.select(models.products.c.id).where(
             models.products.c.id == product_id,
             models.products.c.organization_id == org_id,
-        )
+        ).with_for_update()
     )
     if not product_exists:
         raise BusinessError("product_not_found", "Product was not found")
+
+    if simple_modifiers is not _UNSET:
+        from restaurant_os.simple_modifiers import save_simple_modifiers
+
+        save_simple_modifiers(session, product_id, simple_modifiers, actor_id)
+
+    if price_cents is not None and (
+        type(price_cents) is not int or not 0 < price_cents <= 2147483647
+    ):
+        raise BusinessError("invalid_price", "Price must be positive integer cents")
 
     update_data: dict[str, Any] = {}
     if name is not None:
@@ -12952,6 +12968,10 @@ def update_product(
             update_data["promo_badge_text"] = "PROMOCIÓN" if update_data.get("is_promo") else None
 
     now = _now()
+    # Price-only edits must invalidate editor revisions and share the product
+    # lock with modifier edits before closing or inserting price versions.
+    if price_cents is not None:
+        update_data["updated_at"] = now
     if category_name is not None:
         normalized_category = category_name.strip()
         if normalized_category:
@@ -13002,6 +13022,7 @@ def update_product(
             payload=update_data,
             actor_user_id=actor_id,
         )
+    if update_data or price_cents is not None or simple_modifiers is not _UNSET:
         session.commit()
     return {"id": product_id, **update_data}
 
@@ -18089,6 +18110,19 @@ def set_branch_modifier_option(
         )
     ).scalar_one_or_none():
         raise BusinessError("modifier_option_not_found", "Modifier option was not found")
+    # Share the product write lock/revision with the simplified editor, including
+    # on SQLite where SELECT FOR UPDATE is ignored.
+    product_id = session.scalar(
+        sa.select(models.modifier_groups.c.product_id)
+        .join(models.modifier_options,
+              models.modifier_options.c.group_id == models.modifier_groups.c.id)
+        .where(models.modifier_options.c.id == option_id,
+               models.modifier_groups.c.organization_id == organization_id)
+    )
+    session.execute(models.products.update().where(
+        models.products.c.id == product_id,
+        models.products.c.organization_id == organization_id,
+    ).values(updated_at=_now()))
     values = {
         "branch_id": branch_id,
         "option_id": option_id,
