@@ -142,7 +142,8 @@ def test_constitucion_import_is_idempotent_scoped_and_non_operational(tmp_path: 
                 "normalized_payload": {
                     "sku": "'01001",
                     "name": "PRODUCTO DE PRUEBA",
-                    "category_name": "BEBIDAS",
+                    # Seeded BEBIDAS is archived; import into a fresh drink category.
+                    "category_name": "EXTRA JUGOS",
                     "price_cents": 7500,
                 },
             },

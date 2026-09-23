@@ -4864,6 +4864,20 @@ def put_category(
     )
 
 
+@router.delete("/categories/{category_id}")
+def delete_catalog_category(
+    category_id: str,
+    session: SessionDep,
+    delete_products: bool = False,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    from restaurant_os.category_deletion import delete_category
+
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return _business_response(lambda: delete_category(session, category_id, actor_id, delete_products))
+
+
 @router.get("/catalog/menu-home")
 def get_menu_home(session: SessionDep, actor_user_id: ActorUserDep = None,
                   authorization: AuthorizationDep = None) -> dict[str, Any]:

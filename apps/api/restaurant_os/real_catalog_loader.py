@@ -21,7 +21,8 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from . import models
-from .operations import BRANCH_ID, ORGANIZATION_ID, _now
+from .category_deletion import lock_catalog_organization
+from .operations import BRANCH_ID, ORGANIZATION_ID, BusinessError, _now
 
 
 def _uid() -> str:
@@ -37,6 +38,7 @@ def load_real_catalog_from_excels(
     max_customers: int | None = None,
 ) -> dict[str, int]:
     """Imports all clean records from the 5 real excel files into the active database."""
+    lock_catalog_organization(session, organization_id)
     now = _now()
     summary = {
         "units": 0,
@@ -328,13 +330,15 @@ def load_real_catalog_from_excels(
             )
             if grupo not in category_map:
                 existing_cat = session.execute(
-                    sa.select(models.product_categories.c.id).where(
+                    sa.select(models.product_categories.c.id, models.product_categories.c.status).where(
                         models.product_categories.c.organization_id == organization_id,
-                        models.product_categories.c.name == grupo,
+                        sa.func.lower(models.product_categories.c.name) == grupo.lower(),
                     )
-                ).scalar_one_or_none()
+                ).mappings().first()
                 if existing_cat:
-                    category_map[grupo] = str(existing_cat)
+                    if existing_cat["status"] == "archived":
+                        raise BusinessError("category_archived", "La importación incluye una categoría eliminada.")
+                    category_map[grupo] = str(existing_cat["id"])
                 else:
                     cat_id = f"cat-{grupo.lower().replace(' ', '-').replace('/', '-')[:30]}"
                     session.execute(
@@ -383,14 +387,16 @@ def load_real_catalog_from_excels(
             )
 
             existing_p = session.execute(
-                sa.select(models.products.c.id).where(
+                sa.select(models.products.c.id, models.products.c.status).where(
                     models.products.c.organization_id == organization_id,
                     models.products.c.sku == sku,
                 )
-            ).scalar_one_or_none()
+            ).mappings().first()
 
             if existing_p:
-                prod_id = str(existing_p)
+                if existing_p["status"] == "archived":
+                    raise BusinessError("product_archived", "La importación incluye un producto eliminado.")
+                prod_id = str(existing_p["id"])
                 session.execute(
                     sa.update(models.products)
                     .where(models.products.c.id == prod_id)

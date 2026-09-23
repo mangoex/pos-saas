@@ -1240,6 +1240,9 @@ def create_product(
     require_permission(session, actor_id, "catalog.manage")
     org_id = _modifier_actor_organization(session, actor_id)
 
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, org_id)
     normalized_name = name.strip()
     normalized_sku = normalize_product_sku(sku)
     normalized_category = category_name.strip()
@@ -9611,18 +9614,26 @@ def _get_or_create_category(
     organization_id: str | None = None,
 ) -> dict[str, Any]:
     org_id = organization_id or ORGANIZATION_ID
+    archived = session.scalar(sa.select(models.product_categories.c.id).where(
+        models.product_categories.c.organization_id == org_id,
+        sa.func.lower(models.product_categories.c.name) == category_name.lower(),
+        models.product_categories.c.status == "archived",
+    ))
+    if archived:
+        raise BusinessError("category_archived", "La categoría fue eliminada; elige otra categoría.")
     row = (
         session.execute(
             sa.select(models.product_categories).where(
                 models.product_categories.c.organization_id == org_id,
                 models.product_categories.c.name == category_name,
-                models.product_categories.c.status != "archived",
             )
         )
         .mappings()
         .first()
     )
     if row:
+        if row["status"] == "archived":
+            raise BusinessError("category_archived", "La categoría fue eliminada; elige otra categoría.")
         return dict(row)
 
     category = {
@@ -12895,9 +12906,13 @@ def update_product(
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
     org_id = _modifier_actor_organization(session, actor_id)
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, org_id)
     product_exists = session.scalar(
         sa.select(models.products.c.id).where(
             models.products.c.id == product_id,
+            models.products.c.status != "archived",
             models.products.c.organization_id == org_id,
         ).with_for_update()
     )
@@ -13045,9 +13060,13 @@ def delete_product(
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "catalog.manage")
     organization_id = _modifier_actor_organization(session, actor_id)
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, organization_id)
     product_exists = session.scalar(
         sa.select(models.products.c.id).where(
             models.products.c.id == product_id,
+            models.products.c.status != "archived",
             models.products.c.organization_id == organization_id,
         )
     )
@@ -13709,6 +13728,9 @@ def create_category(
         raise AuthorizationError("actor_not_authorized", "Actor is not authorized")
     org_id = actor_organization_id
 
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, org_id)
     normalized_name = name.strip()
     if not normalized_name:
         raise BusinessError("invalid_category", "Category name cannot be blank")
@@ -13717,7 +13739,6 @@ def create_category(
         sa.select(models.product_categories).where(
             models.product_categories.c.organization_id == org_id,
             sa.func.lower(models.product_categories.c.name) == normalized_name.lower(),
-            models.product_categories.c.status != "archived",
         )
     ).first()
     if existing:
@@ -13774,12 +13795,18 @@ def update_category(
     if not actor:
         raise AuthorizationError("actor_required", "Actor authentication is required")
     organization_id = str(actor["organization_id"])
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, organization_id)
     category = session.execute(sa.select(models.product_categories).where(
         models.product_categories.c.id == category_id,
         models.product_categories.c.organization_id == organization_id,
     ).with_for_update()).mappings().first()
     if not category:
         raise BusinessError("category_not_found", "Category was not found")
+
+    if category["status"] == "archived":
+        raise BusinessError("category_archived", "La categoría fue eliminada; vuelve a cargar el catálogo.")
 
     update_data: dict[str, Any] = {"updated_at": _now()}
     if image_url is not None:
@@ -13788,6 +13815,13 @@ def update_category(
         normalized_name = name.strip()
         if not normalized_name:
             raise BusinessError("invalid_category_name", "Category name cannot be blank")
+        duplicate = session.scalar(sa.select(models.product_categories.c.id).where(
+            models.product_categories.c.organization_id == organization_id,
+            models.product_categories.c.id != category_id,
+            sa.func.lower(models.product_categories.c.name) == normalized_name.lower(),
+        ))
+        if duplicate:
+            raise BusinessError("category_exists", "Category with this name already exists")
         update_data["name"] = normalized_name
     if display_order is not None:
         update_data["display_order"] = display_order

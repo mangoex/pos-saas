@@ -95,6 +95,7 @@ Escanea el código QR de mesa o ticket, consulta el menú web móvil, envía ped
 ### 4.2 Catálogo Ágil y Precios Diferenciados por Canal
 
 - `PRD-FR-010`: **Catálogo Simplificado de Productos**: Administración de categorías, productos, descripción corta, fotos optimizadas, código rápido y visibilidad en menú digital.
+  En el editor móvil de categoría, Eliminar categoría aparece al pie y requiere confirmar que también se eliminarán sus productos del catálogo compartido del restaurante. Sólo afecta esa categoría por ID y sus productos, conserva historial mediante archivado y no aplica a la portada Todos. Cancelar no modifica datos.
   En el editor móvil, el administrador archiva productos conservando su historia y captura
   modificadores comerciales opcionales por línea (`nombre, precio MXN`; sin precio = gratis).
   Son opciones seleccionables, no comentarios. Producto y opciones se guardan juntos; los errores

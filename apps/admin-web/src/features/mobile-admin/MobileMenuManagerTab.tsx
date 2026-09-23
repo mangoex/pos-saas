@@ -145,6 +145,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     image_url: '',
   });
   const [categoryModalError, setCategoryModalError] = useState<string | null>(null);
+  const [confirmCategoryDelete, setConfirmCategoryDelete] = useState(false);
 
   // Menu Home ("Todos") Portada Modal State
   const [isMenuHomeModalOpen, setIsMenuHomeModalOpen] = useState(false);
@@ -346,6 +347,19 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     },
   });
 
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (categoryId: string) => fetchApi(`/categories/${categoryId}?delete_products=true`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setSelectedCategory('ALL');
+      setConfirmCategoryDelete(false);
+      setIsCategoryModalOpen(false);
+      showToast('Categoría y sus productos eliminados del catálogo');
+    },
+    onError: (err: Error) => setCategoryModalError(err.message || 'No se pudo eliminar la categoría. Intenta de nuevo.'),
+  });
+
   const saveMenuHomeMutation = useMutation({
     mutationFn: async (form: typeof menuHomeForm) => {
       return fetchApi('/catalog/menu-home', {
@@ -433,6 +447,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   // Open Category Modal
   const openCategoryModal = (cat?: Category) => {
     setCategoryModalError(null);
+    setConfirmCategoryDelete(false);
     if (cat) {
       setEditingCategory(cat);
       setCategoryForm({
@@ -1886,11 +1901,13 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
             justifyContent: 'center',
           }}
         >
-          <div
+          <div role="dialog" aria-modal="true" aria-label={editingCategory ? "Editar Categoría" : "Nueva Categoría"}
             style={{
               backgroundColor: '#ffffff',
               width: '100%',
               maxWidth: 500,
+              maxHeight: '90dvh',
+              overflowY: 'auto',
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               padding: '20px 18px 28px',
@@ -1902,6 +1919,8 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 {editingCategory ? 'Editar Categoría' : 'Nueva Categoría'}
               </h3>
               <button
+                aria-label="Cerrar editor de categoría"
+                disabled={saveCategoryMutation.isPending || deleteCategoryMutation.isPending}
                 onClick={() => setIsCategoryModalOpen(false)}
                 style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}
               >
@@ -1929,6 +1948,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (saveCategoryMutation.isPending || deleteCategoryMutation.isPending || confirmCategoryDelete) return;
                 saveCategoryMutation.mutate(categoryForm);
               }}
             >
@@ -2081,7 +2101,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
 
               <button
                 type="submit"
-                disabled={saveCategoryMutation.isPending}
+                disabled={saveCategoryMutation.isPending || deleteCategoryMutation.isPending || confirmCategoryDelete}
                 style={{
                   width: '100%',
                   padding: '14px',
@@ -2096,6 +2116,29 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               >
                 {saveCategoryMutation.isPending ? 'Guardando...' : editingCategory ? 'Guardar Cambios' : 'Crear Categoría'}
               </button>
+              {editingCategory && (
+                <div style={{ marginTop: 16 }}>
+                  {confirmCategoryDelete ? (
+                    <div role="alertdialog" aria-label="Confirmar eliminación de categoría" aria-describedby="category-delete-description" style={{ padding: 14, background: '#fff1f2', borderRadius: 12 }}>
+                      <p id="category-delete-description" style={{ marginTop: 0, color: '#881337', lineHeight: 1.5 }}>
+                        ¿Eliminar «{editingCategory.name}» y todos sus productos del catálogo de todas las sucursales de este restaurante? Las otras categorías no cambiarán. Se conservará el historial de pedidos.
+                      </p>
+                      <button type="button" autoFocus disabled={deleteCategoryMutation.isPending} onClick={() => setConfirmCategoryDelete(false)} style={{ minHeight: 44, width: '100%', marginBottom: 8 }}>Cancelar</button>
+                      <button type="button" disabled={deleteCategoryMutation.isPending} onClick={() => {
+                        if (deleteCategoryMutation.isPending) return;
+                        setCategoryModalError(null);
+                        deleteCategoryMutation.mutate(editingCategory.id);
+                      }} style={{ minHeight: 48, width: '100%', background: '#b91c1c', color: '#fff', border: 0, borderRadius: 10, fontWeight: 700 }}>
+                        {deleteCategoryMutation.isPending ? 'Eliminando...' : 'Eliminar categoría y productos'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" disabled={saveCategoryMutation.isPending} onClick={() => setConfirmCategoryDelete(true)} style={{ width: '100%', minHeight: 48, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, color: '#b91c1c', background: '#fff', border: '1px solid #fecaca', borderRadius: 12, fontWeight: 700 }}>
+                      <Trash2 size={18} /> Eliminar categoría
+                    </button>
+                  )}
+                </div>
+              )}
             </form>
           </div>
         </div>

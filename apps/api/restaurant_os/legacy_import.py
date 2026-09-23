@@ -240,30 +240,14 @@ def _materialize_inventory_item(
 
 
 def _ensure_category(session: Session, organization_id: str, name: str) -> str:
-    normalized = canonical_category_name(name)
-    existing = session.execute(
-        sa.select(models.product_categories.c.id).where(
-            models.product_categories.c.organization_id == organization_id,
-            models.product_categories.c.name == normalized,
-            models.product_categories.c.status != "archived",
-        )
-    ).scalar_one_or_none()
-    if existing:
-        return str(existing)
-    category_id = _id()
-    now = _now()
-    session.execute(
-        models.product_categories.insert().values(
-            id=category_id,
-            organization_id=organization_id,
-            name=normalized[:120],
-            display_order=999,
-            status="active",
-            created_at=now,
-            updated_at=now,
-        )
+    from restaurant_os.category_deletion import lock_catalog_organization
+    from restaurant_os.operations import _get_or_create_category
+
+    lock_catalog_organization(session, organization_id)
+    category = _get_or_create_category(
+        session, canonical_category_name(name), _now(), organization_id
     )
-    return category_id
+    return str(category["id"])
 
 
 def _materialize_product(
