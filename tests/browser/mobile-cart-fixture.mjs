@@ -21,8 +21,11 @@ const server = await createServer({
     vite.middlewares.use((req, res, next) => {
       if (!req.url?.startsWith('/api/')) return next();
       let body = {};
-      if (req.url.includes('storefront')) body = { organization: { id: `qa-org-${req.url.split('/').at(-1)}`, name: 'Menú QA', public_slug: 'qa' }, branches: [branch], selected_branch_id: branch.id };
-      else if (req.url.includes('catalog')) body = { items: products, categories: [{ id: 'coffee-category', name: 'Cafetería' }], has_active_shift: true };
+      if (req.url.includes('storefront')) {
+        const palette = ['orange', 'green', 'blue', 'tinto'].find(color => req.url.includes(color)) || 'orange';
+        body = { organization: { id: `qa-org-${req.url.split('/').at(-1)}`, name: 'Menú QA', public_slug: 'qa', mobile_theme: 'dark' }, branches: [{ ...branch, color_palette: palette }], selected_branch_id: branch.id };
+      }
+      else if (req.url.includes('catalog')) body = { items: products.map((product, index) => ({ ...product, ...(index === 0 ? { image_url: 'http://127.0.0.1:4174/menu/src/assets/products/bebidas_bar.jpg' } : {}) })), categories: [{ id: 'coffee-category', name: 'Cafetería', image_url: 'http://127.0.0.1:4174/menu/src/assets/products/bebidas_bar.jpg' }], has_active_shift: true };
       else if (req.url.includes('trending')) body = { trending_dishes: [] };
       else if (req.url.includes('community-photos')) body = { photos: [] };
       else if (req.url.includes('recommendations')) body = { recommendations: [] };

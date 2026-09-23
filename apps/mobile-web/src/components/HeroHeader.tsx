@@ -2,9 +2,12 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Category, BranchInfo } from '../types';
 import { getCategoryIcon } from '../imageMap';
 import { CategoryArtwork } from './CategoryArtwork';
-import { Search, X, MapPin, ChevronDown, ChevronLeft, ChevronRight, Navigation } from 'lucide-react';
+import { Search, X, MapPin, ChevronDown, ChevronLeft, ChevronRight, Navigation, ShoppingBag, ArrowRight } from 'lucide-react';
 
 interface HeroHeaderProps {
+  restaurantName?: string;
+  cartCount: number;
+  onOpenCart: () => void;
   categories: Category[];
   activeCategoryId: string;
   onSelectCategory: (categoryId: string) => void;
@@ -19,6 +22,9 @@ interface HeroHeaderProps {
 }
 
 export const HeroHeader: React.FC<HeroHeaderProps> = ({
+  restaurantName,
+  cartCount,
+  onOpenCart,
   categories,
   activeCategoryId,
   onSelectCategory,
@@ -101,8 +107,8 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
       <div className="hero-top-nav-bar">
         {/* Brand Identity / Logo badge */}
         <div className="hero-brand-badge" title={selectedBranch ? selectedBranch.name : 'RestaurantOS'}>
-          <span className="hero-brand-emoji" role="img" aria-label="Restaurante">🍽️</span>
-          <span className="hero-brand-name">{selectedBranch ? selectedBranch.name : 'RestaurantOS'}</span>
+          <span className="menu-welcome">A tu gusto, a tu antojo</span>
+          <span className="hero-brand-name">{restaurantName || selectedBranch?.name || 'Tu menú'}</span>
         </div>
 
         {/* Branch / Location Selector Capsule */}
@@ -142,6 +148,34 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
             <Navigation size={16} className={isLoadingLocation ? 'spin-icon' : ''} />
           </button>
         )}
+        <button type="button" className="menu-header-cart" onClick={onOpenCart} aria-label="Ver tu pedido">
+          <ShoppingBag size={22} />
+          {cartCount > 0 && <span>{cartCount}</span>}
+        </button>
+      </div>
+
+      {/* Menu search */}
+      <div className="hero-integrated-search-container">
+        <div className="hero-search-bar-pill">
+          <Search size={18} className="hero-search-icon" />
+          <input
+            type="search"
+            className="hero-search-input"
+            placeholder="Buscar en el menú..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+          {searchQuery.trim().length > 0 && (
+            <button
+              type="button"
+              className="hero-search-clear-btn"
+              onClick={() => onSearchChange('')}
+              aria-label="Limpiar búsqueda"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Horizontal Category Panoramic Hero Carousel */}
@@ -191,6 +225,9 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
                         {typeof count === 'number' ? `${count} platillos frescos disponibles` : count}
                       </p>
                     )}
+                    <button type="button" className="menu-hero-cta" onClick={() => { onSelectCategory(cat.id); onCategoryCardClick?.(cat.id); }}>
+                      Ver menú <ArrowRight size={17} aria-hidden="true" />
+                    </button>
                   </div>
 
                   <div className="hero-carousel-nav-arrows">
@@ -224,29 +261,6 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
         })}
       </div>
 
-      {/* Integrated Search Bar at Bottom of Hero */}
-      <div className="hero-integrated-search-container">
-        <div className="hero-search-bar-pill">
-          <Search size={18} className="hero-search-icon" />
-          <input
-            type="search"
-            className="hero-search-input"
-            placeholder="Buscar en el menú..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-          {searchQuery.trim().length > 0 && (
-            <button
-              type="button"
-              className="hero-search-clear-btn"
-              onClick={() => onSearchChange('')}
-              aria-label="Limpiar búsqueda"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </div>
     </header>
   );
 };

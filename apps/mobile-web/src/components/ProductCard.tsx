@@ -1,5 +1,5 @@
-import React from 'react';
-import { Heart, Plus, Flame } from 'lucide-react';
+import React, { useState } from 'react';
+import { Heart, Plus, Flame, UtensilsCrossed } from 'lucide-react';
 import { Product } from '../types';
 import { formatMoney } from '../api';
 import { getProductIconMeta, detectProductSize, cleanBaseProductName, getProductImage } from '../imageMap';
@@ -24,6 +24,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const displayName = cleanBaseProductName(product.name);
   const iconMeta = getProductIconMeta(product);
   const productImg = product.image_url || getProductImage(product);
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const hasCustomizations = hasCustomizationOptions(product);
 
   return (
@@ -34,28 +35,28 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="product-card-visual-wrapper">
         {product.is_promo && (
           <div className="product-card-promo-ribbon">
-            <span>🔥</span>
+            <Flame size={12} aria-hidden="true" />
             <span>{product.promo_badge_text || 'PROMOCIÓN'}</span>
           </div>
         )}
-        {productImg ? (
+        {productImg && failedImage !== productImg ? (
           <img
             src={productImg}
             alt={displayName}
             className="product-card-real-food-img"
             loading="lazy"
-            onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+            onError={() => setFailedImage(productImg)}
           />
         ) : (
           <div
             className="product-card-icon-avatar"
             style={{
-              background: iconMeta.bgGradient,
-              borderColor: iconMeta.borderColor,
+              background: 'var(--accent-orange-light)',
+              borderColor: 'var(--border-light)',
             }}
           >
             <span className="product-card-icon-emoji" role="img" aria-label={iconMeta.badgeLabel}>
-              {iconMeta.emoji}
+              <UtensilsCrossed size={40} strokeWidth={1.3} />
             </span>
           </div>
         )}
@@ -78,7 +79,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <Heart
             size={16}
             fill={isLiked ? '#ef4444' : 'none'}
-            color={isLiked ? '#ef4444' : '#ffffff'}
+            color={isLiked ? '#ef4444' : 'currentColor'}
           />
         </button>
 

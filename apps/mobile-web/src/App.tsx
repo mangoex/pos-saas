@@ -15,6 +15,7 @@ import { FloatingCartBar } from './components/FloatingCartBar';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
 import { VoiceOrderModal } from './components/VoiceOrderModal';
 import { detectProductSize } from './imageMap';
+import { resolveMenuTheme } from './utils/menuTheme';
 import { replaceCartLine, validateCartDraft } from './utils/cartPersonalization';
 import { hasPendingMobileOrder, readPendingMobileOrder, mobileOrderTimestamp, hasMobileOrderCompletedSince } from './pendingMobileOrder';
 
@@ -319,8 +320,9 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (!organization) return;
-    const palette = selectedBranch?.color_palette || 'orange';
-    document.documentElement.setAttribute('data-theme', organization.mobile_theme === 'dark' ? 'dark' : palette);
+    const theme = resolveMenuTheme(selectedBranch?.color_palette, organization.mobile_theme);
+    document.documentElement.setAttribute('data-theme', theme.palette);
+    document.documentElement.setAttribute('data-appearance', theme.appearance);
     document.title = `${organization.name} | Menú Digital`;
     let manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!manifest) {
@@ -641,6 +643,9 @@ export const App: React.FC = () => {
       </div>}
       {currentTab === 'explore' && (
         <HeroHeader
+          restaurantName={organization?.name}
+          cartCount={totalCartCount}
+          onOpenCart={() => setIsCartOpen(true)}
           categories={visibleCategories}
           activeCategoryId={activeCategoryId}
           onSelectCategory={setActiveCategoryId}
