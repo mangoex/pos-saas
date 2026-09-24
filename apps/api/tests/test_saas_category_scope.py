@@ -59,10 +59,23 @@ def test_category_update_and_catalog_reads_enforce_tenant_and_expiration():
             .values(trial_ends_at=datetime.now(timezone.utc) - timedelta(days=1))
         )
         session.commit()
+    # Past trial date: operations remain active because suspension is manual
     for path in ("/api/v1/catalog/products", "/api/v1/catalog/categories"):
-        expired = client.get(path, headers=headers_a)
-        assert expired.status_code == 403, expired.text
-        assert "tenant_trial_expired" in expired.text
+        active_resp = client.get(path, headers=headers_a)
+        assert active_resp.status_code == 200, active_resp.text
+
+    # Manual suspension blocks the tenant
+    with client.app.state.test_session_factory() as session:
+        session.execute(
+            models.organizations.update()
+            .where(models.organizations.c.id == first["organization"]["id"])
+            .values(subscription_status="suspended")
+        )
+        session.commit()
+    for path in ("/api/v1/catalog/products", "/api/v1/catalog/categories"):
+        suspended = client.get(path, headers=headers_a)
+        assert suspended.status_code == 403, suspended.text
+        assert "tenant_suspended" in suspended.text
         assert client.get(path, headers=headers_b).status_code == 200
 
 

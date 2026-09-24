@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="RESTAURANTOS_", env_file=".env", populate_by_name=True
+        env_prefix="RESTAURANTOS_", env_file=".env", populate_by_name=True, extra="ignore"
     )
 
     environment: str = Field(default="local")

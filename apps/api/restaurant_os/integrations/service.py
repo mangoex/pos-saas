@@ -381,15 +381,7 @@ class ChannelIntegrationService:
     def _outbound_permitted(organization: dict[str, Any] | None, now: datetime) -> bool:
         if not organization or organization.get("status") != "active":
             return False
-        if organization.get("subscription_status") == "active":
-            return True
-        trial_end = organization.get("trial_ends_at")
-        return bool(
-            organization.get("subscription_status") == "trialing"
-            and isinstance(trial_end, datetime)
-            and now
-            < (trial_end.replace(tzinfo=timezone.utc) if trial_end.tzinfo is None else trial_end)
-        )
+        return organization.get("subscription_status") != "suspended"
 
     def finish_uber_availability_sync(
         self, session: Session, job: dict[str, Any], error: Exception | None

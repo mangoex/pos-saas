@@ -647,18 +647,11 @@ def get_subscription_status_endpoint(
     if not org:
         raise HTTPException(status_code=403, detail={"code": "actor_not_authorized"})
     trial_end = org.get("trial_ends_at")
-    end = (
-        trial_end.replace(tzinfo=timezone.utc)
-        if trial_end and trial_end.tzinfo is None
-        else trial_end
-    )
-    expired = org["subscription_status"] == "trialing" and (
-        not end or end <= datetime.now(timezone.utc)
-    )
+    # La suspensión es exclusivamente manual por superadministrador
     blocked = (
         "tenant_suspended"
         if org["subscription_status"] == "suspended" or org["status"] == "suspended"
-        else ("tenant_trial_expired" if expired else None)
+        else None
     )
     return {
         "organization_id": str(org["id"]),
@@ -3323,17 +3316,9 @@ def _resolve_active_public_order_key(session: Session, public_key: str) -> dict[
     if (
         not org
         or org["status"] != "active"
-        or org["subscription_status"] not in {"active", "trialing"}
+        or org["subscription_status"] == "suspended"
     ):
         return None
-    if org["subscription_status"] == "trialing":
-        trial_end = org["trial_ends_at"]
-        if trial_end is None:
-            return None
-        if trial_end.tzinfo is None:
-            trial_end = trial_end.replace(tzinfo=timezone.utc)
-        if trial_end <= datetime.now(timezone.utc):
-            return None
     return dict(row)
 
 

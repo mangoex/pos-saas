@@ -11693,16 +11693,9 @@ def _now() -> datetime:
 
 
 def _trial_access_expired(subscription_status: object, trial_ends_at: object) -> bool:
-    if subscription_status != "trialing":
-        return False
-    if not isinstance(trial_ends_at, datetime):
-        return True
-    effective_end = (
-        trial_ends_at.replace(tzinfo=UTC)
-        if trial_ends_at.tzinfo is None
-        else trial_ends_at.astimezone(UTC)
-    )
-    return effective_end <= _now()
+    """La suspensión del servicio es exclusivamente manual por superadministrador.
+    El vencimiento del período de prueba no suspende automáticamente el servicio."""
+    return False
 
 
 def _require_active_actor_organization(session: Session, actor_user_id: str) -> None:
@@ -28232,8 +28225,6 @@ def get_organization_profile(session: Session, organization_id: str) -> dict[str
     access_block_reason = None
     if org["subscription_status"] == "suspended" or org["status"] == "suspended":
         access_block_reason = "tenant_suspended"
-    elif org["subscription_status"] == "trialing" and trial_days == 0:
-        access_block_reason = "tenant_trial_expired"
 
     return {
         "id": org["id"],

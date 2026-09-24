@@ -89,8 +89,7 @@ Escanea el código QR de mesa o ticket, consulta el menú web móvil, envía ped
 - `PRD-FR-004`: **Wizard de Onboarding en 3 Pasos (5 Minutos)**:
   - *Paso 1:* Confirmación de datos del negocio (nombre, logo opcional, tipo de comida).
   - *Paso 2:* Carga de catálogo express: Opción de precargar plantilla temática (Taquería, Cafetería, Pizzería, Hamburguesería) o capturar productos iniciales de forma rápida.
-  - *Paso 3:* Configuración básica de caja e impresión, habilitando de inmediato la terminal de cobro.
-- `PRD-FR-005`: **Gestión de Planes y Suscripción**: Manejo de suscripción autoservicio ($349 MXN Básico / $599 MXN Pro) con soporte para período de prueba (Trial 14 días), estado activo, aviso de pago vencido y suspensión automática.
+- `PRD-FR-005`: **Gestión de Planes y Suscripción**: Manejo de suscripción autoservicio ($349 MXN Básico / $599 MXN Pro) con soporte para período de prueba (Trial 14 días iniciales) y estado activo. El transcurso de la fecha de prueba no suspende automáticamente el servicio ni bloquea el storefront ni las operaciones; la suspensión de servicio es exclusivamente manual y deliberada por un superadministrador (`subscription_status="suspended"` o `status="suspended"`), manteniendo intacta toda la información histórica, catálogo, pedidos y accesos del negocio.
 
 ### 4.2 Catálogo Ágil y Precios Diferenciados por Canal
 

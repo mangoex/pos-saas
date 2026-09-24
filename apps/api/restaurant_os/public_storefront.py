@@ -78,8 +78,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         trial_end = trial_end.replace(tzinfo=timezone.utc)
     if (
         org["status"] != "active"
-        or org["subscription_status"] not in {"active", "trialing"}
-        or (org["subscription_status"] == "trialing" and (trial_end is None or trial_end <= now))
+        or org["subscription_status"] == "suspended"
     ):
         raise HTTPException(403, detail={"code": "storefront_unavailable"})
     if not org["slug"]:

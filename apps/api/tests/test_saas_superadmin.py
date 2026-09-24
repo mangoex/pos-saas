@@ -300,7 +300,7 @@ def test_suspended_tenant_token_is_denied_at_permission_check() -> None:
     assert session_response.json()["detail"]["code"] == "tenant_suspended"
 
 
-def test_expired_or_missing_trial_end_denies_existing_token() -> None:
+def test_expired_or_missing_trial_end_keeps_access_until_manual_suspension() -> None:
     client = _client_with_db()
     signup = client.post(
         "/api/v1/auth/signup",
@@ -325,19 +325,34 @@ def test_expired_or_missing_trial_end_denies_existing_token() -> None:
         )
         session.commit()
 
+    # Past trial end: access remains active because suspension is strictly manual
     response = client.get(
         "/api/v1/users",
         headers={"Authorization": f"Bearer {signup.json()['token']}"},
     )
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "tenant_trial_expired"
+    assert response.status_code == 200
     subscription = client.get(
         "/api/v1/subscription/status",
         headers={"Authorization": f"Bearer {signup.json()['token']}"},
     )
     assert subscription.status_code == 200
-    assert subscription.json()["access_block_reason"] == "tenant_trial_expired"
+    assert subscription.json()["access_block_reason"] is None
     assert subscription.json()["renewal_managed_by"] == "platform_superadmin"
+
+    # Only manual suspension blocks the tenant
+    with client.app.state._test_session_factory() as session:
+        session.execute(
+            models.organizations.update()
+            .where(models.organizations.c.id == organization_id)
+            .values(subscription_status="suspended")
+        )
+        session.commit()
+    suspended_resp = client.get(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {signup.json()['token']}"},
+    )
+    assert suspended_resp.status_code == 403
+    assert suspended_resp.json()["detail"]["code"] == "tenant_suspended"
 
 
 def test_trial_with_future_end_allows_existing_token() -> None:
@@ -371,9 +386,7 @@ def test_trial_with_future_end_allows_existing_token() -> None:
     assert response.status_code == 200
 
 
-def test_trial_missing_end_and_exact_boundary_deny_existing_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_trial_missing_end_keeps_access_until_manual_suspension() -> None:
     client = _client_with_db()
     signup = client.post(
         "/api/v1/auth/signup",
@@ -395,22 +408,9 @@ def test_trial_missing_end_and_exact_boundary_deny_existing_token(
             .values(subscription_status="trialing", trial_ends_at=None)
         )
         session.commit()
-    missing = client.get("/api/v1/users", headers=headers)
-    assert missing.status_code == 403
-    assert missing.json()["detail"]["code"] == "tenant_trial_expired"
-
-    frozen_now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    monkeypatch.setattr(operations, "_now", lambda: frozen_now)
-    with client.app.state._test_session_factory() as session:
-        session.execute(
-            models.organizations.update()
-            .where(models.organizations.c.id == organization_id)
-            .values(trial_ends_at=frozen_now)
-        )
-        session.commit()
-    boundary = client.get("/api/v1/users", headers=headers)
-    assert boundary.status_code == 403
-    assert boundary.json()["detail"]["code"] == "tenant_trial_expired"
+    # Missing end: access remains active because suspension is strictly manual
+    response = client.get("/api/v1/users", headers=headers)
+    assert response.status_code == 200
 
 
 def test_superadmin_auth_and_metrics() -> None:
