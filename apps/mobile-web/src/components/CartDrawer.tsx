@@ -5,6 +5,7 @@ import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, 
 import { getProductIconMeta, getProductImage } from '../imageMap';
 import { requestBrowserCoordinates, reverseGeocode, formatGpsAddressNotes } from '../utils/geolocation';
 import { currentModifiers, hasCustomizationOptions, hasSelectedCustomization } from '../utils/cartPersonalization';
+import { generatePickupTimeSlots, getInitialPickupTime } from '../utils/pickupSchedule';
 import { pickupGraceMessage } from '../../../../packages/ui/src/utils/pickupGrace';
 
 const weekDayLetters = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -245,15 +246,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return scheduleByDay.get(selectedDayIndex) || null;
   }, [scheduleByDay, selectedDayIndex]);
 
+  const availablePickupSlots = useMemo(() => {
+    return generatePickupTimeSlots(currentDaySchedule, {
+      isToday: selectedDay.isToday,
+      intervalMinutes: 15,
+      leadTimeMinutes: 15,
+    });
+  }, [currentDaySchedule, selectedDay.isToday]);
+
   const [pickupTime, setPickupTime] = useState<string>(() => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + 30);
-    const roundedMinutes = Math.ceil(d.getMinutes() / 5) * 5;
-    d.setMinutes(roundedMinutes);
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
+    return availablePickupSlots[0]?.value || '';
   });
+
+  useEffect(() => {
+    setPickupTime((prev) => getInitialPickupTime(prev, availablePickupSlots));
+  }, [availablePickupSlots]);
   const [tableNumber, setTableNumber] = useState('');
   const [name, setName] = useState(initialProfile?.name || '');
   const [phone, setPhone] = useState(initialProfile?.phone || '');
@@ -263,6 +270,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [addressNotes, setAddressNotes] = useState(initialProfile?.address_notes || '');
   const [isLocatingGps, setIsLocatingGps] = useState(false);
   const [gpsFeedback, setGpsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [failedRecommendationImages, setFailedRecommendationImages] = useState<Set<string>>(() => new Set());
 
   const handleDetectGpsLocation = async () => {
     setGpsFeedback(null);
@@ -820,18 +828,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <div className="cart-upsell-scroll-track">
                     {recommendedProducts.map((prod) => {
                       const iconMeta = getProductIconMeta(prod);
+                      const prodImg = (prod.image_url || getProductImage(prod))?.trim();
+                      const hasValidImage = Boolean(prodImg && !failedRecommendationImages.has(prod.id));
                       return (
                         <div key={prod.id} className="cart-upsell-card">
                           <div
                             className="cart-upsell-card-thumb"
-                            style={{
+                            style={!hasValidImage ? {
                               background: iconMeta.bgGradient,
                               borderColor: iconMeta.borderColor,
-                            }}
+                            } : undefined}
                           >
-                            <span className="cart-upsell-card-icon" aria-hidden="true">
-                              {getRecommendationIcon(prod)}
-                            </span>
+                            {hasValidImage ? (
+                              <img
+                                src={prodImg}
+                                alt={prod.name}
+                                className="cart-upsell-card-img"
+                                loading="lazy"
+                                onError={() => setFailedRecommendationImages((prev) => new Set(prev).add(prod.id))}
+                              />
+                            ) : (
+                              <span className="cart-upsell-card-icon" aria-hidden="true">
+                                {getRecommendationIcon(prod)}
+                              </span>
+                            )}
                           </div>
                           <div className="cart-upsell-card-info">
                             <strong className="cart-upsell-card-name" title={prod.name}>{prod.name}</strong>
@@ -1094,11 +1114,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </div>
 
                     <div className="pickup-time-input-wrap">
-                      <input
+                      <select
                         id="pickup-time-input"
-                        type="time"
-                        min={currentDaySchedule?.is_open ? currentDaySchedule.open_time : undefined}
-                        max={currentDaySchedule?.is_open ? currentDaySchedule.close_time : undefined}
                         value={pickupTime}
                         onChange={(e) => setPickupTime(e.target.value)}
                         onClick={(e) => {
@@ -1108,11 +1125,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         }}
                         className="pickup-time-field"
                         required={orderType === 'takeaway'}
-                      />
+                        disabled={availablePickupSlots.length === 0}
+                      >
+                        {availablePickupSlots.length === 0 ? (
+                          <option value="">Sin horarios disponibles para este día</option>
+                        ) : (
+                          availablePickupSlots.map((slot) => (
+                            <option key={slot.value} value={slot.value}>
+                              {slot.label}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </div>
 
                     {/* Quick presets for today */}
-                    {selectedDay.isToday && (
+                    {selectedDay.isToday && availablePickupSlots.length > 0 && (
                       <div className="pickup-quick-chips">
                         <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Rápido:</span>
                         {[15, 30, 45, 60]
@@ -1122,20 +1150,27 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             d.setMinutes(d.getMinutes() + mins);
                             const hh = String(d.getHours()).padStart(2, '0');
                             const mm = String(d.getMinutes()).padStart(2, '0');
+                            const openT = currentDaySchedule.open_time || '00:00';
+                            const t = `${hh}:${mm}`;
+                            if (t < openT) return false;
                             return `${hh}:${mm}` <= currentDaySchedule.close_time;
                           })
-                          .map((mins) => (
+                          .map((mins) => {
+                            const d = new Date();
+                            d.setMinutes(d.getMinutes() + mins);
+                            const hh = String(d.getHours()).padStart(2, '0');
+                            const mm = String(d.getMinutes()).padStart(2, '0');
+                            const targetTime = `${hh}:${mm}`;
+                            const matchedSlot = availablePickupSlots.find((s) => s.value >= targetTime) || availablePickupSlots[availablePickupSlots.length - 1];
+                            return { mins, slotValue: matchedSlot.value };
+                          })
+                          .filter((item, index, self) => self.findIndex((s) => s.slotValue === item.slotValue) === index)
+                          .map(({ mins, slotValue }) => (
                             <button
                               key={mins}
                               type="button"
                               className="pickup-quick-chip-btn"
-                              onClick={() => {
-                                const d = new Date();
-                                d.setMinutes(d.getMinutes() + mins);
-                                const hh = String(d.getHours()).padStart(2, '0');
-                                const mm = String(d.getMinutes()).padStart(2, '0');
-                                setPickupTime(`${hh}:${mm}`);
-                              }}
+                              onClick={() => setPickupTime(slotValue)}
                             >
                               +{mins < 60 ? `${mins} min` : '1 hora'}
                             </button>

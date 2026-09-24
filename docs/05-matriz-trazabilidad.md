@@ -21,7 +21,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-013 | SDD SaaS y suplemento de cierre | BDD-SC-708 | TDD-TS-208 | Disenado |
 | PRD-FR-020 | SDD SaaS y suplemento de cierre | BDD-SC-709 | TDD-TS-209 | Disenado |
 | PRD-FR-021 | SDD SaaS y suplemento de cierre | BDD-SC-710 | TDD-TS-210 | Disenado |
-| PRD-FR-022 | SDD SaaS, suplemento de cierre y 02-SDD-pickup-grace (PICKUP-001 implementado; evidencia local en reports/pickup-grace-2026-09-23.md) | BDD-SC-711, BDD-SC-944, BDD-SC-945, BDD-SC-946, BDD-SC-947 | TDD-TS-211, TDD-TS-293 | Disenado |
+| PRD-FR-022 | SDD SaaS, suplemento de cierre, 02-SDD-pickup-grace y 02-SDD-pickup-hours-and-cart-upsell (PICKUP-001 implementado; evidencia local en reports/pickup-grace-2026-09-23.md) | BDD-SC-711, BDD-SC-944, BDD-SC-945, BDD-SC-946, BDD-SC-947, BDD-SC-960, BDD-SC-961, BDD-SC-962 | TDD-TS-211, TDD-TS-293, TDD-TS-296 | Disenado |
 | PRD-FR-023 | SDD SaaS y suplemento de cierre | BDD-SC-712 | TDD-TS-212 | Disenado |
 | PRD-FR-024 | SDD SaaS y suplemento de cierre | BDD-SC-713 | TDD-TS-213 | Disenado |
 | PRD-FR-025 | SDD SaaS y suplemento de cierre | BDD-SC-714 | TDD-TS-214 | Disenado |
@@ -43,7 +43,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-053 | SDD SaaS y suplemento de cierre | BDD-SC-730 | TDD-TS-230 | Disenado |
 | PRD-FR-054 | SDD SaaS y suplemento de cierre | BDD-SC-731 | TDD-TS-231 | Disenado |
 | PRD-FR-060 | SDD SaaS y suplemento de cierre | BDD-SC-732 | TDD-TS-232 | Disenado |
-| PRD-FR-061 | SDD SaaS, 02-SDD-mobile-product-modifiers y 02-SDD-mobile-menu-visual y 02-SDD-mobile-cart-personalization (MOB-CART-001; evidencia local en reporte 2026-09-23) | BDD-SC-733, BDD-SC-890, BDD-SC-930, BDD-SC-931, BDD-SC-932, BDD-SC-933, BDD-SC-934, BDD-SC-935, BDD-SC-936, BDD-SC-937, BDD-SC-938, BDD-SC-939, BDD-SC-940, BDD-SC-941, BDD-SC-942, BDD-SC-943 | TDD-TS-233, TDD-TS-290, TDD-TS-291, TDD-TS-292 | Implementado |
+| PRD-FR-061 | SDD SaaS, 02-SDD-mobile-product-modifiers, 02-SDD-mobile-menu-visual, 02-SDD-mobile-cart-personalization y 02-SDD-pickup-hours-and-cart-upsell (MOB-CART-001; evidencia local en reporte 2026-09-23) | BDD-SC-733, BDD-SC-890, BDD-SC-930, BDD-SC-931, BDD-SC-932, BDD-SC-933, BDD-SC-934, BDD-SC-935, BDD-SC-936, BDD-SC-937, BDD-SC-938, BDD-SC-939, BDD-SC-940, BDD-SC-941, BDD-SC-942, BDD-SC-943, BDD-SC-963, BDD-SC-964 | TDD-TS-233, TDD-TS-290, TDD-TS-291, TDD-TS-292, TDD-TS-296 | Implementado |
 | PRD-FR-062 | SDD SaaS y suplemento de cierre | BDD-SC-734 | TDD-TS-234 | Disenado |
 | PRD-FR-063 | SDD SaaS y suplemento de cierre | BDD-SC-735, BDD-SC-807 | TDD-TS-235, TDD-TS-307 | Disenado |
 | PRD-FR-070 | SDD SaaS y suplemento de cierre | BDD-SC-736, BDD-SC-813 | TDD-TS-236 | Disenado |

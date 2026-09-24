@@ -569,15 +569,15 @@ test('Cart recommendations rely on backend authority and clear stale state', () 
   assert.match(source, /fetchOrderUpsellRecommendations\(ids, selectedBranch\?\.id\)/);
 });
 
-test('Cart AI recommendations use category icons instead of product photos', () => {
+test('Cart AI recommendations show product photograph if configured, falling back to category icon', () => {
   const source = readFileSync(join(root, 'apps/mobile-web/src/components/CartDrawer.tsx'), 'utf8');
   const styles = readFileSync(join(root, 'apps/mobile-web/src/index.css'), 'utf8');
 
   assert.match(source, /const getRecommendationIcon = \(product: Product/);
   assert.match(source, /className="cart-upsell-card-icon"/);
   assert.match(source, /aria-hidden="true"/);
-  assert.doesNotMatch(source, /className="cart-upsell-card-img"/);
-  assert.doesNotMatch(styles, /\.cart-upsell-card-img\s*\{/);
+  assert.match(source, /className="cart-upsell-card-img"/);
+  assert.match(styles, /\.cart-upsell-card-img\s*\{/);
 });
 
 

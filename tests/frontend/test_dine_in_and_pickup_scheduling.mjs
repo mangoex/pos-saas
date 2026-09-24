@@ -40,7 +40,7 @@ test('CartDrawer conditionally renders Comer aquí and falls back to takeaway', 
 
   // Takeaway option is always present
   assert.match(source, /setOrderType\('takeaway'\)/);
-  assert.match(source, /Llevar/);
+  assert.match(source, /(?:Llevar|Recoger)/);
 });
 
 test('CartDrawer provides pickup scheduler with L, M, M, J, V, S, D, time picker, and order observation', () => {

@@ -117,6 +117,7 @@ Escanea el código QR de mesa o ticket, consulta el menú web móvil, envía ped
   - Notas de comanda por platillo (ej. "Sin cebolla", "Salsa aparte").
 - `PRD-FR-022`: **Modalidades de Venta**: Soporte para Venta en Mostrador (Rápida / Para Llevar), Mesas / Comedor (con nombre de mesa o identificador) y Pedido para Recoger.
   En Config del admin móvil, Recoger permite configurar por sucursal minutos enteros positivos de tolerancia posteriores a la hora programada. Vacío elimina la configuración. El checkout para recoger informa que se respetará el pedido durante esos minutos; sin configuración no muestra aviso. No cancela pedidos ni modifica sus estados al vencer el plazo.
+  En el menú digital, al seleccionar recolección (takeaway), el selector de hora restringe las opciones estrictamente a los intervalos disponibles dentro de la ventana de horario de servicio (`open_time` a `close_time`) configurada para el día seleccionado; para el día en curso, excluye horarios pasados y ajusta automáticamente la selección inicial a la ventana de servicio.
 - `PRD-FR-023`: **División de Cuentas (Split Bill)**:
   - División en partes iguales (N cuentas con el total prorrateado exacto en centavos).
   - División por artículos (asignación de productos específicos a cada comensal).
@@ -175,6 +176,7 @@ La implementación y certificación real de ambos proveedores se difiere de esta
   las tarjetas del menú y las líneas de Tu Pedido, y permitir editar una línea del carrito antes
   de enviar la intención. El agregado rápido conserva su comportamiento para opciones opcionales;
   las selecciones obligatorias siguen requiriendo confirmación. Cancelar no modifica el carrito.
+  Las sugerencias complementarias en la caja/carrito muestran la fotografía del producto si está configurada en el catálogo, con fallback al icono temático de categoría ante ausencia o fallo de carga.
   El diseño detallado y sus decisiones están en `02-SDD-mobile-cart-personalization.md`.
 - `PRD-FR-062`: **Carrito y Checkout para WhatsApp**: Carrito interactivo con selección de tipo de entrega (Para recoger en sucursal o A domicilio con dirección) y notas especiales.
 - `PRD-FR-063`: **Generación de Pedido Formateado a WhatsApp**: Al finalizar el pedido, el sistema genera la orden en estado pendiente en el POS y abre automáticamente WhatsApp con un mensaje estructurado y listo para enviar al número del restaurante:

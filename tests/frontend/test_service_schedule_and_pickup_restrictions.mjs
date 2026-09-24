@@ -52,9 +52,9 @@ test('CartDrawer restricts closed days and enforces operating hours on pickup ti
   // Auto fallback to first non-disabled day
   assert.match(source, /const firstAvailable = weekDayOptions\.find\(\(d\) => !d\.disabled\)/);
 
-  // Min/max on pickup time input
-  assert.match(source, /min=\{currentDaySchedule\?\.is_open \? currentDaySchedule\.open_time : undefined\}/);
-  assert.match(source, /max=\{currentDaySchedule\?\.is_open \? currentDaySchedule\.close_time : undefined\}/);
+  // Restrict pickup time options strictly to operating hours window
+  assert.match(source, /generatePickupTimeSlots\(currentDaySchedule/);
+  assert.match(source, /availablePickupSlots/);
 
   // Filter quick chips to not exceed closing time
   assert.match(source, /return `\$\{hh\}:\$\{mm\}` <= currentDaySchedule\.close_time/);
