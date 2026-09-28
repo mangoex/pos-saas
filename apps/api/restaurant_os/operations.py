@@ -9,7 +9,7 @@ import secrets
 import unicodedata
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as BinasciiError
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 # ruff: noqa: E501, E402
 from datetime import date, datetime, timedelta, timezone
@@ -41,6 +41,7 @@ from restaurant_os.catalog_policy import (
 from restaurant_os.config import get_settings
 from restaurant_os.domain.errors import StateTransitionError
 from restaurant_os.domain.order_state_machine import OrderState, OrderStateMachine
+from restaurant_os.pickup_schedule import PickupScheduleError, pickup_options, validate_pickup
 
 UTC = timezone.utc
 
@@ -1019,7 +1020,7 @@ def create_branch(
     delivery_fee_enabled: bool | None = None,
     dine_in_enabled: bool | None = None,
     delivery_tiers: list[dict[str, Any]] | None = None,
-    free_delivery_min_cents: int | None = None,
+    free_delivery_min_cents: int | str | None = None,
     coupons: list[dict[str, Any]] | None = None,
     accepts_cash_payments: bool | None = None,
     accepts_card_payments: bool | None = None,
@@ -2134,7 +2135,7 @@ def reverse_profile_transition_mapping(
         )
     snapshot = list(mapping["role_snapshot"] or [])
     snapshot_role_ids = {item["role_id"] for item in snapshot}
-    current_role_ids = set(
+    current_role_ids: set[str] = set(
         session.execute(
             sa.select(models.user_roles.c.role_id).where(
                 models.user_roles.c.user_id == mapping["user_id"]
@@ -2269,7 +2270,7 @@ def _reject_profile_transition(
 
 
 def _organization_authority_role_id(session: Session, organization_id: str) -> str | None:
-    role_ids = (
+    role_ids: Sequence[str] = (
         session.execute(
             sa.select(models.roles.c.id)
             .select_from(
@@ -3943,7 +3944,7 @@ def create_local_order(
             )
             .values(status="CONSUMED", consumed_order_id=order_id, consumed_at=now)
         )
-        if consumed.rowcount != 1:
+        if cast(sa.CursorResult[Any], consumed).rowcount != 1:
             session.rollback()
             raise BusinessError(
                 "order_adjustment_authorization_conflict",
@@ -4337,7 +4338,7 @@ def fulfill_order(
         .where(models.orders.c.id == order_id, models.orders.c.status == order["status"])
         .values(status=next_state.value)
     )
-    if changed.rowcount != 1:
+    if cast(sa.CursorResult[Any], changed).rowcount != 1:
         session.rollback()
         raise BusinessError("order_transition_conflict", "Order state changed concurrently")
     now = _now()
@@ -5077,7 +5078,9 @@ def list_order_accounts(
         return parsed
 
     start, end = parse("from_utc"), parse("to_utc")
-    if (start is None) != (end is None) or (start and start >= end):
+    if (start is None) != (end is None) or (
+        start is not None and end is not None and start >= end
+    ):
         raise BusinessError(
             "order_accounts_interval_invalid", "Interval must be valid and complete"
         )
@@ -5484,7 +5487,7 @@ def decide_order_reopen_request(
         return replay
     if request["status"] != "REQUESTED":
         raise BusinessError("order_reopen_transition_invalid", "Request is no longer pending")
-    version = session.execute(
+    version: int = session.execute(
         sa.select(models.orders.c.version)
         .where(
             models.orders.c.id == request["order_id"],
@@ -5760,14 +5763,14 @@ def apply_order_reopen_request(
                 raise BusinessError("order_reopen_plan_invalid", "Historic line cannot be repeated")
             seen_source_ids.add(source_id)
             source = historic_lines.get(str(source_id))
-            snapshot = snapshot_lines.get(source_id)
+            historic_snapshot = snapshot_lines.get(source_id)
             if (
                 not source
-                or not snapshot
-                or int(snapshot.get("revision", source["revision"])) != int(source["revision"])
+                or not historic_snapshot
+                or int(historic_snapshot.get("revision", source["revision"])) != int(source["revision"])
                 or int(
-                    snapshot.get(
-                        "total_cents", snapshot.get("line_total_cents", source["line_total_cents"])
+                    historic_snapshot.get(
+                        "total_cents", historic_snapshot.get("line_total_cents", source["line_total_cents"])
                     )
                 )
                 != int(source["line_total_cents"])
@@ -5789,6 +5792,7 @@ def apply_order_reopen_request(
                 raise BusinessError(
                     "historical_snapshot_missing", "Historic line pricing is not reproducible"
                 )
+            line_total = (price + modifier_total // source_quantity) * int(quantity)
             row = {
                 "source_line_id": source_id,
                 "product_id": source["product_id"],
@@ -5806,6 +5810,7 @@ def apply_order_reopen_request(
             if not product or product["currency"] != order["currency"]:
                 raise BusinessError("order_reopen_plan_invalid", "Added product is invalid")
             price = int(product["price_cents"])
+            line_total = price * int(quantity)
             row = {
                 "source_line_id": None,
                 "product_id": product_id,
@@ -5815,11 +5820,6 @@ def apply_order_reopen_request(
                 "modifiers_snapshot": [],
                 "classification": "ADDITION",
             }
-        line_total = (
-            (price + int(source["modifier_total_cents"]) // int(source["quantity"])) * int(quantity)
-            if source_id
-            else price * int(quantity)
-        )
         corrected_total += line_total
         correction_lines.append(
             {**row, "id": _id(), "quantity": quantity, "line_total_cents": line_total}
@@ -5976,7 +5976,7 @@ def apply_order_reopen_request(
             _pco005b_after_sensitive_write("production_task")
             operational_id = None
             operational_task_id = None
-            if desired > 0:
+            if desired > 0 and correction_line is not None:
                 operational_id = _id()
                 operational_task_id = _id()
                 operational = {
@@ -5991,7 +5991,7 @@ def apply_order_reopen_request(
                     "created_at": now,
                 }
                 session.execute(models.order_lines.insert().values(**operational))
-                snapshot = (
+                consumption_snapshot = (
                     session.execute(
                         sa.select(models.order_line_consumption_snapshots).where(
                             models.order_line_consumption_snapshots.c.order_line_id == source["id"]
@@ -6000,7 +6000,7 @@ def apply_order_reopen_request(
                     .mappings()
                     .first()
                 )
-                if not snapshot:
+                if not consumption_snapshot:
                     raise BusinessError(
                         "historical_snapshot_missing",
                         "Order line consumption snapshot was not found",
@@ -6015,19 +6015,19 @@ def apply_order_reopen_request(
                         ),
                         "total_cost": _cost(Decimal(str(component.get("total_cost", 0))) * factor),
                     }
-                    for component in snapshot["components"]
+                    for component in consumption_snapshot["components"]
                 ]
                 session.execute(
                     models.order_line_consumption_snapshots.insert().values(
                         order_line_id=operational_id,
                         order_id=order["id"],
-                        recipe_id=snapshot["recipe_id"],
-                        recipe_version=snapshot["recipe_version"],
+                        recipe_id=consumption_snapshot["recipe_id"],
+                        recipe_version=consumption_snapshot["recipe_version"],
                         branch_id=order["branch_id"],
                         components=_sanitize_for_json(components),
-                        modifiers=snapshot["modifiers"],
+                        modifiers=consumption_snapshot["modifiers"],
                         total_theoretical_cost=_cost(
-                            Decimal(str(snapshot["total_theoretical_cost"])) * factor
+                            Decimal(str(consumption_snapshot["total_theoretical_cost"])) * factor
                         ),
                         created_at=now,
                     )
@@ -6082,7 +6082,7 @@ def apply_order_reopen_request(
             row for row in correction_lines if row["classification"] == "ADDITION"
         ):
             operational_id, task_id = _id(), _id()
-            product = (
+            added_product = (
                 session.execute(
                     sa.select(models.products).where(
                         models.products.c.id == correction_line["product_id"]
@@ -6091,7 +6091,7 @@ def apply_order_reopen_request(
                 .mappings()
                 .one()
             )
-            snapshot = _build_order_consumption_snapshot(
+            addition_snapshot = _build_order_consumption_snapshot(
                 session,
                 order["id"],
                 operational_id,
@@ -6105,31 +6105,31 @@ def apply_order_reopen_request(
                     id=operational_id,
                     order_id=order["id"],
                     product_id=correction_line["product_id"],
-                    product_name=product["name"],
+                    product_name=added_product["name"],
                     quantity=int(correction_line["quantity"]),
                     unit_price_cents=correction_line["unit_price_cents"],
                     line_total_cents=correction_line["line_total_cents"],
-                    station=product["station"],
-                    selected_modifiers=snapshot["modifiers"],
-                    modifier_total_cents=int(snapshot["modifier_total_cents"]),
+                    station=added_product["station"],
+                    selected_modifiers=addition_snapshot["modifiers"],
+                    modifier_total_cents=int(addition_snapshot["modifier_total_cents"]),
                     line_notes=None,
                     status="correction",
                     revision=1,
                     supersedes_line_id=None,
                     updated_at=now,
                     removed_at=None,
-                    family_id_snapshot=product["category_id"],
+                    family_id_snapshot=added_product["category_id"],
                     family_name_snapshot=correction_line["family_name_snapshot"],
                     family_snapshot_source="captured",
                     created_at=now,
                 )
             )
-            snapshot.pop("modifier_total_cents")
-            session.execute(models.order_line_consumption_snapshots.insert().values(**snapshot))
+            addition_snapshot.pop("modifier_total_cents")
+            session.execute(models.order_line_consumption_snapshots.insert().values(**addition_snapshot))
             movements = _record_calculated_consumption_movements(
                 session,
-                snapshot["components"],
-                product["name"],
+                addition_snapshot["components"],
+                added_product["name"],
                 "SALE_RESERVATION",
                 -1,
                 "Reserva por adición de corrección",
@@ -6146,9 +6146,9 @@ def apply_order_reopen_request(
                     branch_id=order["branch_id"],
                     order_id=order["id"],
                     order_line_id=operational_id,
-                    station=product["station"],
+                    station=added_product["station"],
                     status="PENDING",
-                    product_name=product["name"],
+                    product_name=added_product["name"],
                     quantity=int(correction_line["quantity"]),
                     created_at=now,
                     started_at=None,
@@ -6176,7 +6176,7 @@ def apply_order_reopen_request(
             session.execute(models.order_production_adjustments.insert().values(**adjustment))
             _pco005b_after_sensitive_write("production_adjustment")
             production_adjustments.append(adjustment)
-        adjustment = None
+        payment_adjustment: dict[str, Any] | None = None
         if delta:
             adjustment_id, shift_id, movement_id = _id(), None, None
             if method == "cash":
@@ -6213,7 +6213,7 @@ def apply_order_reopen_request(
                     )
                 )
                 _pco005b_after_sensitive_write("cash_movement")
-            adjustment = {
+            payment_adjustment = {
                 "id": adjustment_id,
                 "correction_id": correction_id,
                 "original_payment_id": payments[0]["id"],
@@ -6227,7 +6227,7 @@ def apply_order_reopen_request(
                 "cash_movement_id": movement_id,
                 "created_at": now,
             }
-            session.execute(models.order_payment_adjustments.insert().values(**adjustment))
+            session.execute(models.order_payment_adjustments.insert().values(**payment_adjustment))
             _pco005b_after_sensitive_write("payment_adjustment")
         session.execute(
             models.order_events.insert().values(
@@ -6245,7 +6245,7 @@ def apply_order_reopen_request(
             .values(status="APPLIED", applied_by_user_id=actor_id, applied_at=now, updated_at=now)
         )
         _pco005b_after_sensitive_write("reopen_request")
-        response = _sanitize_for_json(
+        response: dict[str, Any] = _sanitize_for_json(
             {
                 "status": "APPLIED",
                 "correction": {
@@ -6262,9 +6262,9 @@ def apply_order_reopen_request(
                 },
                 "settlement_delta_cents": delta,
                 "payment_adjustment": None
-                if adjustment is None
+                if payment_adjustment is None
                 else {
-                    key: adjustment[key]
+                    key: payment_adjustment[key]
                     for key in (
                         "id",
                         "adjustment_type",
@@ -7253,7 +7253,7 @@ def retry_print_job(
             )
             .values(status="QUEUED", attempts=attempts, printed_at=None, last_error=None)
         )
-        if transitioned.rowcount != 1:
+        if cast(sa.CursorResult[Any], transitioned).rowcount != 1:
             raise BusinessError(
                 "print_job_transition_invalid", "Print job already has an active attempt"
             )
@@ -7335,7 +7335,7 @@ def claim_print_attempt(
             )
             .values(status="CLAIMED", claimed_by_device_id=device_id, claimed_at=_now())
         )
-        if claimed.rowcount != 1:
+        if cast(sa.CursorResult[Any], claimed).rowcount != 1:
             raise BusinessError("print_job_transition_invalid", "Print attempt cannot be claimed")
         if fail_after_update:
             raise RuntimeError("injected_print_claim_failure")
@@ -7415,7 +7415,7 @@ def acknowledge_print_attempt(
             )
             .values(status="PRINTED", ack_hash=ack_hash, acked_at=now)
         )
-        if acknowledged.rowcount != 1:
+        if cast(sa.CursorResult[Any], acknowledged).rowcount != 1:
             raise BusinessError(
                 "print_ack_required", "A valid claimed print acknowledgement is required"
             )
@@ -7496,7 +7496,7 @@ def fail_print_attempt(
             )
             .values(status="FAILED", failed_at=now, error_code=error_code)
         )
-        if failed.rowcount != 1:
+        if cast(sa.CursorResult[Any], failed).rowcount != 1:
             raise BusinessError("print_job_transition_invalid", "Print attempt cannot be failed")
         if fail_after_update:
             raise RuntimeError("injected_print_failure_failure")
@@ -7587,7 +7587,7 @@ def recover_expired_print_claim(
                 error_code="CLAIM_LEASE_EXPIRED",
             )
         )
-        if recovered.rowcount != 1:
+        if cast(sa.CursorResult[Any], recovered).rowcount != 1:
             raise BusinessError(
                 "print_job_transition_invalid", "Print claim lease is not eligible for recovery"
             )
@@ -7861,7 +7861,7 @@ def get_sync_status(
             )
         ).scalar_one()
     )
-    last_confirmed_at = session.execute(
+    last_confirmed_at: datetime | None = session.execute(
         sa.select(sa.func.max(models.sync_commands.c.confirmed_at)).where(
             models.sync_commands.c.organization_id == organization_id,
             models.sync_commands.c.branch_id == branch_id,
@@ -7956,7 +7956,7 @@ def advance_kds_task(
         )
         .values(**values)
     )
-    if changed.rowcount != 1:
+    if cast(sa.CursorResult[Any], changed).rowcount != 1:
         session.rollback()
         raise BusinessError("task_transition_conflict", "Production task changed concurrently")
 
@@ -8191,8 +8191,8 @@ class ReportingProjectionService:
         if branch_id:
             query = query.where(models.sales_operation_snapshots.c.branch_id == branch_id)
         operations: dict[str, list[dict[str, Any]]] = {}
-        for row in self.session.execute(query).mappings():
-            operations.setdefault(str(row["operation_id"]), []).append(dict(row))
+        for persisted_row in self.session.execute(query).mappings():
+            operations.setdefault(str(persisted_row["operation_id"]), []).append(dict(persisted_row))
         groups: dict[tuple[str, str], dict[str, Any]] = {}
         incomplete_operations: set[str] = set()
 
@@ -9568,6 +9568,7 @@ def _get_available_product(
 ) -> dict[str, Any] | None:
     price = (
         sa.select(
+            models.price_versions.c.organization_id,
             models.price_versions.c.product_id,
             models.price_versions.c.price_cents,
             models.price_versions.c.currency,
@@ -9589,9 +9590,20 @@ def _get_available_product(
             .select_from(
                 models.products.join(
                     models.product_categories,
-                    models.products.c.category_id == models.product_categories.c.id,
+                    sa.and_(
+                        models.products.c.category_id == models.product_categories.c.id,
+                        models.products.c.organization_id == models.product_categories.c.organization_id,
+                    ),
                 )
-                .join(price, models.products.c.id == price.c.product_id)
+                .join(models.branches, sa.and_(
+                    models.branches.c.id == branch_id,
+                    models.branches.c.organization_id == models.products.c.organization_id,
+                    models.branches.c.status == "active",
+                ))
+                .join(price, sa.and_(
+                    models.products.c.id == price.c.product_id,
+                    models.products.c.organization_id == price.c.organization_id,
+                ))
                 .outerjoin(
                     models.branch_product_availability,
                     sa.and_(
@@ -9607,6 +9619,10 @@ def _get_available_product(
                     sa.func.lower(models.products.c.name) == product_id.strip().lower(),
                 ),
                 models.products.c.status == "active",
+                sa.or_(
+                    models.products.c.catalog_scope == "organization",
+                    models.products.c.source_branch_id == branch_id,
+                ),
                 sa.func.coalesce(models.branch_product_availability.c.is_available, True).is_(True),
             )
         )
@@ -10590,6 +10606,8 @@ def require_permission(
     actor_user_id: str,
     permission_code: str,
     branch_id: str | None = None,
+    *,
+    organization_scope: bool = False,
 ) -> None:
     if not actor_user_id:
         _record_authorization_denied(
@@ -10694,7 +10712,7 @@ def require_permission(
         )
     ).mappings()
     roles = [dict(row) for row in role_rows]
-    organization_scope_required = permission_code == "admin.manage" or (
+    organization_scope_required = organization_scope or permission_code == "admin.manage" or (
         permission_code == "catalog.manage" and branch_id is None
     )
     scoped_role_ids = [
@@ -10870,8 +10888,8 @@ def authorize_cash_movement_scope(
 
     A POS cashier that may create a movement must be able to verify the open
     shift even when its role intentionally does not grant the ledger read view.
-    Failed alternatives are rolled back so they do not leave denial audits for
-    an ultimately authorized request; the final failure remains audited.
+    Select a candidate from persisted scoped grants without speculative denials.
+    The canonical guard makes the final decision and audits a real rejection once.
     """
     permissions = (
         "cash.shift.read",
@@ -10879,12 +10897,63 @@ def authorize_cash_movement_scope(
         "cash.movement.withdraw",
         "cash.movement.deposit",
     )
-    for permission_code in permissions[:-1]:
-        try:
-            return authorize_branch_scope(session, actor_user_id, permission_code, branch_id)
-        except AuthorizationError:
-            session.rollback()
-    return authorize_branch_scope(session, actor_user_id, permissions[-1], branch_id)
+    actor_id = _actor_user_id(actor_user_id)
+    actor = _actor_user_info(session, actor_id) if actor_id else None
+    granted: set[str] = set()
+    if actor:
+        candidate_branch = branch_id
+        if not candidate_branch and not _actor_has_organization_scope(session, actor_id):
+            candidate_branch = _actor_default_branch_id(session, actor_id)
+            if not candidate_branch:
+                candidate_branch = session.scalar(
+                    sa.select(models.branches.c.id).where(
+                        models.branches.c.organization_id == actor["organization_id"],
+                        models.branches.c.status == "active",
+                    ).order_by(models.branches.c.code).limit(1)
+                )
+        scoped_grants: sa.ScalarResult[str] = session.scalars(
+            sa.select(models.permissions.c.code)
+            .select_from(
+                models.user_roles.join(models.roles, models.roles.c.id == models.user_roles.c.role_id)
+                .join(models.role_permissions, models.role_permissions.c.role_id == models.roles.c.id)
+                .join(models.permissions, models.permissions.c.id == models.role_permissions.c.permission_id)
+            )
+            .where(
+                models.user_roles.c.user_id == actor_id,
+                models.roles.c.organization_id == actor["organization_id"],
+                sa.or_(
+                    models.roles.c.scope == "organization",
+                    sa.and_(
+                        models.roles.c.scope == "branch",
+                        models.user_roles.c.branch_id == candidate_branch,
+                    ),
+                ),
+                models.permissions.c.code.in_((*permissions, "cash.withdraw")),
+            )
+        )
+        granted = set(scoped_grants)
+    # This lookup does not authorize access: owner/authority grants, actor/tenant status,
+    # branch ownership and revocations are all checked by the canonical guard below.
+    selected = next(
+        (code for code in permissions if _compatible_permission_codes(code) & granted),
+        permissions[0],
+    )
+    return authorize_branch_scope(session, actor_id, selected, branch_id)
+
+
+def get_cash_movement_shift(
+    session: Session,
+    actor_user_id: str,
+    branch_id: str | None,
+    register_code: str,
+) -> dict[str, Any] | None:
+    """Read the operational shift with any authorized legacy movement capability."""
+    scoped_branch = authorize_cash_movement_scope(session, actor_user_id, branch_id)
+    if not scoped_branch:
+        raise BusinessError("cash_shift_current_payload_invalid", "branch_id is required")
+    # The scope above is authoritative here; the generic reader's optional actor guard
+    # requires cash.shift.read specifically and does not represent movement capabilities.
+    return get_open_cash_shift(session, register_code, scoped_branch)
 
 
 def _actor_has_organization_scope(session: Session, actor_user_id: str) -> bool:
@@ -10971,7 +11040,7 @@ def get_recipes_workspace(
         .all()
     )
     if not corporate_allowed:
-        assigned = set(
+        assigned: set[str] = set(
             session.execute(
                 sa.select(models.user_roles.c.branch_id)
                 .select_from(
@@ -11573,7 +11642,7 @@ def _next_folio(session: Session, branch_id: str = BRANCH_ID) -> str:
         sa.select(models.branches.c.code).where(models.branches.c.id == branch_id)
     ).scalar_one_or_none()
     prefix = str(branch_code or "PILOTO").strip().upper()
-    folios = session.execute(
+    folios: sa.ScalarResult[str] = session.execute(
         sa.select(models.orders.c.folio).where(
             models.orders.c.branch_id == branch_id,
             models.orders.c.folio.like(f"{prefix}-%"),
@@ -11930,11 +11999,11 @@ def update_branch(
     delivery_fee_enabled: bool | None = None,
     dine_in_enabled: bool | None = None,
     delivery_tiers: list[dict[str, Any]] | None = None,
-    free_delivery_min_cents: int | None = None,
+    free_delivery_min_cents: int | str | None = None,
     coupons: list[dict[str, Any]] | None = None,
     service_schedule: list[dict[str, Any]] | None = None,
     auto_cash_shift_enabled: bool | None = None,
-    auto_cash_opening_cents: int | None = None,
+    auto_cash_opening_cents: int | str | None = None,
     accepts_cash_payments: bool | None = None,
     accepts_card_payments: bool | None = None,
     bank_transfer_info: dict[str, Any] | None = None,
@@ -12273,7 +12342,8 @@ def list_public_branches(
         elif not include_public_key:
             b.pop("public_key", None)
         lat = float(b["latitude"]) if b.get("latitude") is not None else None
-        lng = float(b.get("longitude")) if b.get("longitude") is not None else None
+        longitude = b.get("longitude")
+        lng = float(longitude) if longitude is not None else None
         b["latitude"] = lat
         b["longitude"] = lng
 
@@ -12717,7 +12787,7 @@ def record_attendance_check(
             "attendance_timezone_invalid", "Branch timezone is not configured correctly"
         ) from exc
 
-    previous_sequences = list(
+    previous_sequences: list[int] = list(
         session.execute(
             sa.select(models.attendance_checks.c.daily_sequence).where(
                 models.attendance_checks.c.organization_id == organization_id,
@@ -14710,8 +14780,9 @@ def update_product_recipe_versioned(
         )
         + 1
     )
+    recipe_id = _id()
     recipe = {
-        "id": _id(),
+        "id": recipe_id,
         "organization_id": ORGANIZATION_ID,
         "product_id": product_id,
         "output_item_id": None,
@@ -14757,7 +14828,7 @@ def update_product_recipe_versioned(
             session,
             "recipe.versioned",
             "recipe",
-            recipe["id"],
+            recipe_id,
             {"product_id": product_id, "version": version, "branch_id": branch_id},
             branch_id=branch_id,
             actor_user_id=actor_id,
@@ -15019,7 +15090,7 @@ def create_modifier_option(
         )
     item_ids = [str(item_id) for item_id in (affected, replacement) if item_id]
     if item_ids:
-        found = set(
+        found: set[str] = set(
             session.execute(
                 sa.select(models.inventory_items.c.id).where(
                     models.inventory_items.c.id.in_(item_ids),
@@ -15270,7 +15341,7 @@ def update_modifier_option(
 
     item_ids = [str(item_id) for item_id in (affected, replacement) if item_id]
     if item_ids:
-        found = set(
+        found: set[str] = set(
             session.execute(
                 sa.select(models.inventory_items.c.id).where(
                     models.inventory_items.c.id.in_(item_ids),
@@ -15659,7 +15730,7 @@ def reorder_modifier_groups(
     if not ordered_group_ids:
         return {"status": "ok"}
 
-    found_groups = set(
+    found_groups: set[str] = set(
         session.execute(
             sa.select(models.modifier_groups.c.id).where(
                 models.modifier_groups.c.id.in_(ordered_group_ids),
@@ -15901,7 +15972,7 @@ def create_ingredient_variation(
     custom_label = str(
         payload.get("name") or payload.get("add_label") or payload.get("label") or ""
     ).strip()
-    item = None
+    item: RowMapping | dict[str, str] | None = None
     if item_id:
         item = (
             session.execute(
@@ -16273,7 +16344,7 @@ def update_ingredient_variation(
                         .values(status="active", updated_at=values["updated_at"])
                     )
     if values.get("status") in {"active", "archived"}:
-        group_ids = session.execute(
+        group_ids: sa.ScalarResult[str] = session.execute(
             sa.select(models.modifier_options.c.group_id).where(
                 models.modifier_options.c.id.in_(
                     [
@@ -16397,7 +16468,7 @@ def _candidate_assignment_products(session: Session, payload: dict[str, Any]) ->
             "variation_assignment_targets_required", "At least one product or category is required"
         )
     if category_ids:
-        valid_categories = set(
+        valid_categories: set[str] = set(
             session.execute(
                 sa.select(models.product_categories.c.id).where(
                     models.product_categories.c.id.in_(category_ids),
@@ -16524,7 +16595,7 @@ def _ingredient_variation_branch(session: Session, actor_id: str) -> str:
 
 def _ingredient_group_is_owned(session: Session, group: dict[str, Any]) -> bool:
     """A named group is reusable only when every historical option is catalog-owned."""
-    options = list(
+    options: list[str] = list(
         session.execute(
             sa.select(models.modifier_options.c.id).where(
                 models.modifier_options.c.group_id == group["id"]
@@ -16533,7 +16604,7 @@ def _ingredient_group_is_owned(session: Session, group: dict[str, Any]) -> bool:
     )
     if not options:
         return False
-    linked = set(
+    linked: set[str] = set(
         session.execute(
             sa.select(models.ingredient_variation_products.c.add_option_id)
             .where(models.ingredient_variation_products.c.add_option_id.in_(options))
@@ -16978,7 +17049,7 @@ def _legacy_archive_ingredient_variation_assignment(
         .where(models.ingredient_variation_products.c.id == row["id"])
         .values(status="archived", updated_at=now)
     )
-    group_ids = set(
+    group_ids: set[str] = set(
         session.execute(
             sa.select(models.modifier_options.c.group_id).where(
                 models.modifier_options.c.id.in_(
@@ -17262,7 +17333,7 @@ def _validate_order_comment_products(
 ) -> list[str]:
     if not product_ids:
         raise BusinessError("order_comment_products_required", "Select at least one product")
-    found = set(
+    found: set[str] = set(
         session.execute(
             sa.select(models.products.c.id).where(
                 models.products.c.id.in_(product_ids),
@@ -17684,7 +17755,7 @@ def _is_safe_preset_variation_group(session: Session, group: dict[str, Any]) -> 
         return False
     if group["maximum_selections"] < 1:
         return False
-    effects = set(
+    effects: set[str] = set(
         session.execute(
             sa.select(models.modifier_options.c.effect_type).where(
                 models.modifier_options.c.group_id == group["id"]
@@ -19033,7 +19104,7 @@ def get_production_batch(session: Session, batch_id: str) -> dict[str, Any]:
 
 
 def list_production_batches(session: Session, branch_id: str | None) -> list[dict[str, Any]]:
-    ids = session.execute(
+    ids: sa.ScalarResult[str] = session.execute(
         sa.select(models.production_batches.c.id)
         .where(models.production_batches.c.branch_id == branch_id)
         .order_by(models.production_batches.c.created_at.desc())
@@ -20092,7 +20163,9 @@ def list_customers_page(
         cid: {"average_rating": None, "rating_count": 0, "recent_feedbacks": []}
         for cid in customer_ids
     }
-    feedback_criteria = [models.customer_feedbacks.c.customer_id.in_(customer_ids)]
+    feedback_criteria: list[sa.ColumnElement[bool]] = [
+        models.customer_feedbacks.c.customer_id.in_(customer_ids)
+    ]
     if organization_id:
         feedback_criteria.append(models.customer_feedbacks.c.organization_id == organization_id)
     feedback_rows = list(
@@ -20820,15 +20893,13 @@ def create_purchase_presentation(
     base_unit_id = str(payload.get("base_unit_id") or item["base_unit_id"])
     commercial_unit_id = str(payload.get("commercial_unit_id") or base_unit_id)
     unit_ids = {base_unit_id, commercial_unit_id}
-    owned_units = {
-        str(unit_id)
-        for unit_id in session.execute(
-            sa.select(models.inventory_units.c.id).where(
-                models.inventory_units.c.id.in_(unit_ids),
-                models.inventory_units.c.organization_id == organization_id,
-            )
-        ).scalars()
-    }
+    owned_unit_ids: sa.ScalarResult[str] = session.execute(
+        sa.select(models.inventory_units.c.id).where(
+            models.inventory_units.c.id.in_(unit_ids),
+            models.inventory_units.c.organization_id == organization_id,
+        )
+    ).scalars()
+    owned_units = {str(unit_id) for unit_id in owned_unit_ids}
     if owned_units != unit_ids:
         raise BusinessError("presentation_reference_not_found", "Units must belong to the organization")
 
@@ -21702,7 +21773,7 @@ def cancel_purchase_document(
             .mappings()
             .one()
         )
-        register_code = session.execute(
+        register_code: str = session.execute(
             sa.select(models.cash_shifts.c.register_code).where(
                 models.cash_shifts.c.id == original_cash["cash_shift_id"]
             )
@@ -21935,7 +22006,7 @@ def list_purchase_documents(
     actor_id = _actor_user_id(actor_user_id)
     organization_id = _procurement_actor_organization(session, actor_id)
     authorized_branch_id = authorize_branch_scope(session, actor_id, "purchases.read", branch_id)
-    ids = session.execute(
+    ids: sa.ScalarResult[str] = session.execute(
         sa.select(models.purchase_documents.c.id)
         .where(
             models.purchase_documents.c.organization_id == organization_id,
@@ -22393,7 +22464,7 @@ def list_cash_concepts(session: Session, actor_user_id: str | None = None) -> li
     actor_id = _actor_user_id(actor_user_id)
     require_permission(session, actor_id, "cash.concept.manage")
     organization_id = _cash_concept_actor_organization(session, actor_id)
-    concept_ids = session.execute(
+    concept_ids: sa.ScalarResult[str] = session.execute(
         sa.select(models.cash_movement_concepts.c.id)
         .where(models.cash_movement_concepts.c.organization_id == organization_id)
         .order_by(models.cash_movement_concepts.c.code)
@@ -22857,7 +22928,7 @@ def compensate_cash_movement(
     if not reason or len(reason) > 600:
         raise BusinessError("cash_compensation_invalid", "Compensation reason is required")
     evidence_refs = _validate_cash_evidence(payload["evidence_refs"])
-    register_code = session.execute(
+    register_code: str = session.execute(
         sa.select(models.cash_shifts.c.register_code).where(
             models.cash_shifts.c.id == original["cash_shift_id"]
         )
@@ -24596,7 +24667,7 @@ def get_waste_record(
 def list_waste_records(
     session: Session, branch_id: str | None, organization_id: str
 ) -> list[dict[str, Any]]:
-    ids = session.execute(
+    ids: sa.ScalarResult[str] = session.execute(
         sa.select(models.waste_records.c.id)
         .where(
             models.waste_records.c.organization_id == organization_id,
@@ -25166,7 +25237,7 @@ def get_inventory_transfer(session: Session, transfer_id: str) -> dict[str, Any]
     )
     if not transfer:
         raise BusinessError("transfer_not_found", "Inventory transfer was not found")
-    destination_name = session.execute(
+    destination_name: str = session.execute(
         sa.select(models.branches.c.name).where(
             models.branches.c.id == transfer["destination_branch_id"]
         )
@@ -25216,7 +25287,7 @@ def get_inventory_transfer(session: Session, transfer_id: str) -> dict[str, Any]
 
 
 def list_inventory_transfers(session: Session, branch_id: str | None) -> list[dict[str, Any]]:
-    ids = session.execute(
+    ids: sa.ScalarResult[str] = session.execute(
         sa.select(models.inventory_transfers.c.id)
         .where(
             sa.or_(
@@ -25775,7 +25846,7 @@ def get_physical_count_session(session: Session, count_id: str) -> dict[str, Any
 
 
 def list_physical_count_sessions(session: Session, branch_id: str | None) -> list[dict[str, Any]]:
-    ids = session.execute(
+    ids: sa.ScalarResult[str] = session.execute(
         sa.select(models.physical_count_sessions.c.id)
         .where(models.physical_count_sessions.c.branch_id == branch_id)
         .order_by(models.physical_count_sessions.c.created_at.desc())
@@ -25786,7 +25857,7 @@ def list_physical_count_sessions(session: Session, branch_id: str | None) -> lis
 def _physical_inventory_quantity(
     session: Session, branch_id: str, warehouse_id: str, item_id: str
 ) -> Decimal:
-    value = session.execute(
+    value: Decimal = session.execute(
         sa.select(
             sa.func.coalesce(sa.func.sum(models.inventory_movements.c.quantity_delta), 0)
         ).where(
@@ -26279,17 +26350,15 @@ def _active_organization_branch_ids(
     session: Session, organization_id: str | None = None
 ) -> list[str]:
     org_id = organization_id or ORGANIZATION_ID
-    return [
-        str(branch_id)
-        for branch_id in session.execute(
-            sa.select(models.branches.c.id)
-            .where(
-                models.branches.c.organization_id == org_id,
-                models.branches.c.status == "active",
-            )
-            .order_by(models.branches.c.code)
-        ).scalars()
-    ]
+    branch_ids: sa.ScalarResult[str] = session.execute(
+        sa.select(models.branches.c.id)
+        .where(
+            models.branches.c.organization_id == org_id,
+            models.branches.c.status == "active",
+        )
+        .order_by(models.branches.c.code)
+    ).scalars()
+    return [str(branch_id) for branch_id in branch_ids]
 
 
 def _branch_detail(
@@ -26677,7 +26746,7 @@ def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
     )
 
     categories, products = _project_pos_catalog(session, active_branch_id)
-    organization_id = session.execute(sa.select(models.branches.c.organization_id).where(
+    organization_id: str = session.execute(sa.select(models.branches.c.organization_id).where(
         models.branches.c.id == active_branch_id)).scalar_one()
 
     items = []
@@ -27078,7 +27147,7 @@ def moderate_community_photo(
 def validate_branch_coupon(
     session: Session,
     branch_key: str,
-    coupon_code: str,
+    coupon_code: str | None,
     subtotal_cents: int,
 ) -> dict[str, Any]:
     configured = (
@@ -27182,6 +27251,29 @@ def _recover_public_order_command(
     return dict(prior["result"]), False
 
 
+def get_public_pickup_options(session: Session, public_key: str) -> dict[str, Any]:
+    if not 1 <= len(public_key) <= 160:
+        raise BusinessError("public_order_unavailable", "Public ordering is unavailable")
+    configured = session.execute(
+        sa.select(models.branches.c.timezone, models.branches.c.service_schedule)
+        .join(models.public_order_keys, models.public_order_keys.c.branch_id == models.branches.c.id)
+        .where(
+            models.public_order_keys.c.public_key == public_key,
+            models.public_order_keys.c.status == "active",
+            models.branches.c.status == "active",
+            models.public_order_keys.c.organization_id == models.branches.c.organization_id,
+        )
+    ).mappings().first()
+    if not configured:
+        raise BusinessError("public_order_unavailable", "Public ordering is unavailable")
+    try:
+        return pickup_options(
+            configured["service_schedule"], configured["timezone"] or "America/Chihuahua", _now(),
+        )
+    except PickupScheduleError as error:
+        raise BusinessError(error.code, "El horario de recogida no está disponible") from error
+
+
 def create_public_order_intent(
     session: Session,
     public_key: str,
@@ -27202,6 +27294,8 @@ def create_public_order_intent(
                 models.branches.c.delivery_tiers,
                 models.branches.c.free_delivery_min_cents,
                 models.branches.c.coupons,
+                models.branches.c.timezone,
+                models.branches.c.service_schedule,
             )
             .join(models.branches, models.branches.c.id == models.public_order_keys.c.branch_id)
             .where(
@@ -27239,6 +27333,9 @@ def create_public_order_intent(
         normalized["payment_method"] = str(payload["payment_method"]).strip()
     if payload.get("cash_amount"):
         normalized["cash_amount"] = str(payload["cash_amount"]).strip()
+    if payload.get("pickup_date") is not None or payload.get("pickup_time") is not None:
+        normalized["pickup_date"] = payload.get("pickup_date")
+        normalized["pickup_time"] = payload.get("pickup_time")
     digest = hashlib.sha256(
         json.dumps(
             {"contract": 1, "branch": branch_id, "payload": normalized},
@@ -27273,6 +27370,15 @@ def create_public_order_intent(
     if not isinstance(normalized["lines"], list) or not 1 <= len(normalized["lines"]) <= 50:
         raise BusinessError("public_order_schema_invalid", "Order lines are invalid")
     now, intent_id = _now(), _id()
+    try:
+        scheduled_pickup = validate_pickup(
+            configured["service_schedule"], configured["timezone"] or "America/Chihuahua", now,
+            normalized.get("pickup_date"), normalized.get("pickup_time"), normalized["order_type"],
+        )
+    except PickupScheduleError as error:
+        raise BusinessError(
+            error.code, "El horario de recogida ya no está disponible. Elige otro horario.",
+        ) from error
     total_cents = 0
     snapshots: list[dict[str, Any]] = []
     for item in normalized["lines"]:
@@ -27373,6 +27479,7 @@ def create_public_order_intent(
                 "table_number": normalized.get("table_number"),
                 "payment_method": normalized.get("payment_method"),
                 "cash_amount": normalized.get("cash_amount"),
+                **({"pickup": scheduled_pickup} if scheduled_pickup is not None else {}),
             },
             delivery_address_snapshot=normalized["delivery_address"],
             order_type=normalized["order_type"],

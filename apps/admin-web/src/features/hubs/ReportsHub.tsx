@@ -1,9 +1,19 @@
 import React from 'react';
-import { BarChart3, LineChart } from 'lucide-react';
+import { BarChart3, LineChart, Wallet } from 'lucide-react';
 import { CategoryHubView, HubCardItem } from './CategoryHubView';
+import { canManageCashConcepts } from '../cash/cashConceptState';
 
 export const ReportsHub: React.FC = () => {
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const cards: HubCardItem[] = [
+    ...(canManageCashConcepts(currentUser) ? [{
+      title: 'Conceptos de Caja',
+      description: 'Motivos autorizados de ingresos y egresos de efectivo.',
+      icon: <Wallet size={26} />,
+      iconBg: '#fff7ed',
+      iconColor: '#c2410c',
+      path: '/cash-concepts',
+    }] : []),
     {
       title: 'Cierre y Reconciliación',
       description: 'Dashboard corporativo de reconciliación de turnos, ingresos y reembolsos.',

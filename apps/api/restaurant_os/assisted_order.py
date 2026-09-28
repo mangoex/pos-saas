@@ -172,16 +172,35 @@ def request_openrouter_draft(
                 "role": "system",
                 "content": (
                     "Eres un capturista experto de pedidos para restaurantes en México.\n"
-                    "Tu tarea es interpretar la solicitud del cliente y mapearla al catálogo provisto.\n\n"
-                    "Debes devolver estrictamente un JSON con las siguientes 3 claves obligatorias:\n"
-                    "- 'order_type': 'delivery', 'takeout', o null si no se especifica explícitamente.\n"
-                    "- 'lines': lista de objetos {'product_id': <id_del_catalogo>, 'quantity': <numero>} ÚNICAMENTE para los productos pedidos que SÍ existen en el catálogo provisto. Usa el 'id' exacto del producto.\n"
-                    "- 'unmatched_items': lista de strings con CADA artículo, comida o bebida que el cliente pidió pero que NO existe en el catálogo provisto (ejemplo: si piden tacos o sushi en una hamburguesería, pon ['2 tacos de carne asada', 'una gringa']). Si TODO lo solicitado está en el catálogo, debe ser obligatoriamente una lista vacía [].\n\n"
+                    "Tu tarea es interpretar la solicitud del cliente y mapearla al "
+                    "catálogo provisto.\n\n"
+                    "Debes devolver estrictamente un JSON con las siguientes 3 claves "
+                    "obligatorias:\n"
+                    "- 'order_type': 'delivery', 'takeout', o null si no se especifica "
+                    "explícitamente.\n"
+                    "- 'lines': lista de objetos {'product_id': <id_del_catalogo>, "
+                    "'quantity': <numero>} ÚNICAMENTE para los productos pedidos que SÍ "
+                    "existen en el catálogo provisto. Usa el 'id' exacto del producto.\n"
+                    "- 'unmatched_items': lista de strings con CADA artículo, comida o "
+                    "bebida que el cliente pidió pero que NO existe en el catálogo "
+                    "provisto (ejemplo: si piden tacos o sushi en una hamburguesería, pon"
+                    " ['2 tacos de carne asada', 'una gringa']). Si TODO lo solicitado "
+                    "está en el catálogo, debe ser obligatoriamente una lista vacía [].\n\n"
                     "Reglas obligatorias y estrictas:\n"
-                    "1. LA CLAVE 'unmatched_items' ES OBLIGATORIA: Siempre debes incluirla en el JSON. Identifica cuidadosamente cualquier producto pedido que no esté en el menú y ponlo en 'unmatched_items'.\n"
-                    "2. PROHIBIDO FORZAR COINCIDENCIAS: Si el cliente pide algo que NO existe en el catálogo, NUNCA lo asignes a otro producto del menú (como 'platillo especial', 'combo' o 'hamburguesa'). Agrégalo a 'unmatched_items' y NO lo agregues a 'lines'.\n"
-                    "3. Si NINGUNO de los productos pedidos existe en el catálogo, 'lines' debe ser una lista vacía [] y 'unmatched_items' debe listar todo lo solicitado.\n"
-                    "4. Asocia sinónimos directos o variaciones de presentación del mismo producto (por ejemplo: 'cafe americano' -> 'Café Americano12Oz', 'una bebida' -> 'Bebida del día', 'combo' -> 'Combo del día', 'coca' -> 'Refresco Coca-Cola').\n"
+                    "1. LA CLAVE 'unmatched_items' ES OBLIGATORIA: Siempre debes "
+                    "incluirla en el JSON. Identifica cuidadosamente cualquier producto "
+                    "pedido que no esté en el menú y ponlo en 'unmatched_items'.\n"
+                    "2. PROHIBIDO FORZAR COINCIDENCIAS: Si el cliente pide algo que NO "
+                    "existe en el catálogo, NUNCA lo asignes a otro producto del menú "
+                    "(como 'platillo especial', 'combo' o 'hamburguesa'). Agrégalo a "
+                    "'unmatched_items' y NO lo agregues a 'lines'.\n"
+                    "3. Si NINGUNO de los productos pedidos existe en el catálogo, "
+                    "'lines' debe ser una lista vacía [] y 'unmatched_items' debe listar "
+                    "todo lo solicitado.\n"
+                    "4. Asocia sinónimos directos o variaciones de presentación del mismo"
+                    " producto (por ejemplo: 'cafe americano' -> 'Café Americano12Oz', "
+                    "'una bebida' -> 'Bebida del día', 'combo' -> 'Combo del día', 'coca'"
+                    " -> 'Refresco Coca-Cola').\n"
                     "5. 'quantity' debe ser un número entero (ej: 1, 2, 3).\n"
                     "6. Responde estrictamente con el JSON requerido, sin texto adicional."
                 ),
@@ -307,7 +326,8 @@ def build_assisted_draft(
             item_label = candidate.get("product_id") or "desconocido"
             raise AssistedOrderError(
                 "assisted_order_catalog_mismatch",
-                f"El producto «{item_label}» no se encuentra en el catálogo disponible de este restaurante.",
+                f"El producto «{item_label}» no se encuentra en el catálogo "
+                "disponible de este restaurante.",
             )
         groups = modifier_loader(product_id)
         selected_options: list[dict[str, Any]] = []

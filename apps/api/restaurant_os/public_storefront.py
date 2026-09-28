@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from html import escape
 from typing import Annotated, Any
 
@@ -47,14 +46,12 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         .all()
     )
     org_ids = {str(org["id"]) for org in orgs}
-    org_ids.update(
-        str(value)
-        for value in session.scalars(
-            sa.select(models.storefront_aliases.c.organization_id).where(
-                models.storefront_aliases.c.alias == identifier
-            )
+    alias_org_ids: sa.ScalarResult[str] = session.scalars(
+        sa.select(models.storefront_aliases.c.organization_id).where(
+            models.storefront_aliases.c.alias == identifier
         )
     )
+    org_ids.update(str(value) for value in alias_org_ids)
     org_ids.update(str(branch["organization_id"]) for branch in aliases)
     if not org_ids:
         raise HTTPException(404, detail={"code": "storefront_not_found"})
@@ -72,10 +69,6 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
         .mappings()
         .one()
     )
-    now = datetime.now(timezone.utc)
-    trial_end = org["trial_ends_at"]
-    if trial_end and trial_end.tzinfo is None:
-        trial_end = trial_end.replace(tzinfo=timezone.utc)
     if (
         org["status"] != "active"
         or org["subscription_status"] == "suspended"
@@ -127,7 +120,7 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
     )
     branches = []
     for branch in branch_rows:
-        keys = (
+        keys: list[str] = list(
             session.execute(
                 sa.select(models.public_order_keys.c.public_key).where(
                     models.public_order_keys.c.organization_id == org["id"],
@@ -136,7 +129,6 @@ def resolve_storefront(session: Session, identifier: str) -> dict[str, Any]:
                 )
             )
             .scalars()
-            .all()
         )
         if len(keys) != 1:
             raise HTTPException(409, detail={"code": "storefront_setup_required"})

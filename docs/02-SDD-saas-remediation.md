@@ -147,8 +147,8 @@ El comando guarda una versión deseada y un lease. El worker reclama y confirma 
 cortas separadas por la llamada HTTP; sólo el mismo token y versión puede confirmar, por lo que una
 respuesta vieja no puede sobrescribir un cambio más reciente. Si una respuesta vieja llega después
 de una confirmación nueva, vuelve a encolar el último deseo para reconciliar el proveedor. El lease
-vencido permite recuperación tras reinicio. Configuración deshabilitada, tenant inactivo o trial
-vencido no producen tráfico saliente. Los
+vencido permite recuperación tras reinicio. Configuración deshabilitada o tenant suspendido no producen tráfico saliente. El trial
+vencido por tiempo no bloquea tráfico conforme al suplemento de suspensión manual. Los
 errores transitorios usan backoff acotado; no se reintentan credenciales o respuestas 4xx finales.
 El proceso se provisiona separadamente, no desde el contenedor API: desde `apps/api`, `python -m
 restaurant_os.uber_availability_worker --once` sirve para una ejecución acotada y `python -m

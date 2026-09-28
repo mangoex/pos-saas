@@ -69,9 +69,18 @@ def _alembic(url: str, *arguments: str) -> subprocess.CompletedProcess[str]:
 
 def _truncate_isolated_database(engine: sa.Engine) -> None:
     """Clear only the already validated PCO-005B fixture database."""
-    table_names = ", ".join(table.name for table in reversed(models.metadata.sorted_tables))
     with engine.begin() as connection:
-        connection.execute(sa.text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))  # noqa: S608
+        tables = sa.inspect(connection).get_table_names(schema="public")
+        required = {
+            "orders", "order_reopen_requests", "order_corrections", "order_correction_lines",
+            "order_payment_adjustments", "order_production_adjustments", "audit_events",
+        }
+        assert required.issubset(tables), "PCO-005B migrated tables are missing"
+        preparer = connection.dialect.identifier_preparer
+        table_names = ", ".join(
+            f'public.{preparer.quote(table)}' for table in tables if table != "alembic_version"
+        )
+        connection.execute(sa.text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
 
 
 def _reset_isolated_schema(url: str) -> None:

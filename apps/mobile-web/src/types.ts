@@ -157,10 +157,26 @@ export interface CartItem {
 export type OrderType = 'takeaway' | 'delivery' | 'dine-in';
 export type PaymentMethod = 'cash' | 'card' | 'transfer';
 
+export interface PickupOptions {
+  generated_at: string;
+  timezone: string;
+  configured: boolean;
+  days: {
+    date: string;
+    day_index: number;
+    is_today: boolean;
+    is_past: boolean;
+    is_closed: boolean;
+    slots: { value: string; scheduled_at: string }[];
+  }[];
+}
+
 export interface CustomerOrderInfo {
   name: string;
   phone: string;
   order_type: OrderType;
+  pickup_date?: string;
+  pickup_time?: string;
   table_number?: string;
   address_street: string;
   address_number: string;

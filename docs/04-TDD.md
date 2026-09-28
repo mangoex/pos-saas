@@ -370,9 +370,15 @@ Un pull request no puede integrarse si falla:
 - cobertura mínima.
 
 La suite autoritativa completa se ejecuta una sola vez en `pull_request`. El workflow verifica además
-el whitespace del diff real contra `origin/${{ github.base_ref }}`; no sustituye esa comprobación por
+el whitespace del diff real contra el SHA base del PR. En ejecución manual usa el ancestro común
+con `origin/main`, o `HEAD^1` cuando ambos coinciden; no sustituye esa comprobación por
 un árbol de trabajo limpio. `main` permanece protegido por checks requeridos y no ejecuta un segundo
 ciclo completo post-merge. Despliegue y verificación productiva son gates separados.
+
+Las fixtures que crean esquemas PostgreSQL desde metadata compartido deben clonarlo antes
+de emitir DDL. La regresión de `test_mobile_product_modifiers_postgres.py` comprueba que las
+FK cíclicas agregadas con ALTER no desaparecen del DDL SQLite posterior; la secuencia del
+módulo PostgreSQL seguida por `test_public_order_intents.py` verifica también el rechazo real.
 
 La seguridad de dependencias usa un único `dependency-review` sobre el delta del pull request y
 rechaza vulnerabilidades nuevas de severidad alta o crítica. La acción se fija a un SHA revisado para

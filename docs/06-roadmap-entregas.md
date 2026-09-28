@@ -1,5 +1,11 @@
 # Roadmap de entregas
 
+## Remediación SaaS 2026-09-28
+
+Alcance acotado y evidencia: `docs/reports/saas-completed-fixes-2026-09-28.md`.
+WhatsApp y sus flujos Meta quedan aplazados por decisión del usuario; no forman parte del release.
+El historial de fases siguientes se conserva y no acredita implementación productiva actual.
+
 ## Principio
 
 Construir vertical slices utilizables. No desarrollar todos los módulos horizontalmente antes de probar operación real.

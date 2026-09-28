@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier
 from urllib.parse import urlparse
@@ -32,7 +33,7 @@ from test_platform_api import ADMIN_USER_ID, BRANCH_ID
 
 TEST_URL_ENV = "AIA001_TEST_POSTGRES_URL"
 API_DIR = Path(__file__).resolve().parents[1]
-PRODUCT_ID = "018f6f73-2d0a-74f0-8f1c-000000000111"
+PRODUCT_ID = "018f6f73-2d0a-74f0-8f1c-000000009111"
 OPTIONS = AdminAiProviderOptions(
     api_key="synthetic-admin-ai-postgres-key",
     model="synthetic/model",
@@ -114,7 +115,7 @@ def _provider_result() -> dict[str, object]:
                 "target_id": PRODUCT_ID,
                 "payload_json": json.dumps({"name": "HAMBURGUESA CONCURRENTE"}),
                 "evidence": [
-                    {"field": "target_id", "quote": "Hamburguesa Kiwi"},
+                    {"field": "target_id", "quote": "HAMBURGUESA AIA"},
                     {"field": "name", "quote": "HAMBURGUESA CONCURRENTE"},
                 ],
             }
@@ -124,10 +125,31 @@ def _provider_result() -> dict[str, object]:
 
 def _seed_proposal(engine: sa.Engine) -> str:
     with Session(engine) as session:
+        # The migration seed is archived by 0027; use a new active tenant-owned fixture.
+        now = datetime(2026, 9, 1, tzinfo=UTC)
+        organization_id = session.scalar(
+            sa.select(models.users.c.organization_id).where(models.users.c.id == ADMIN_USER_ID)
+        )
+        category_id = "018f6f73-2d0a-74f0-8f1c-000000009110"
+        session.execute(models.product_categories.insert().values(
+            id=category_id, organization_id=organization_id, name="AIA CONCURRENCY",
+            status="active", created_at=now, updated_at=now,
+        ))
+        session.execute(models.products.insert().values(
+            id=PRODUCT_ID, organization_id=organization_id, category_id=category_id,
+            name="HAMBURGUESA AIA", sku="99111", station="kitchen", status="active",
+            catalog_scope="organization", created_at=now, updated_at=now,
+        ))
+        session.execute(models.price_versions.insert().values(
+            id="018f6f73-2d0a-74f0-8f1c-000000009112", organization_id=organization_id,
+            product_id=PRODUCT_ID, price_cents=9500, currency="MXN",
+            valid_from=now, created_at=now,
+        ))
+        session.commit()
         proposal = create_admin_ai_response(
             session,
             ADMIN_USER_ID,
-            "Actualiza Hamburguesa Kiwi a HAMBURGUESA CONCURRENTE",
+            "Actualiza HAMBURGUESA AIA a HAMBURGUESA CONCURRENTE",
             BRANCH_ID,
             OPTIONS,
             lambda *_args: _provider_result(),

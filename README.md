@@ -1,6 +1,6 @@
 # RestaurantOS Harness
 
-Repositorio base de especificación para construir en Codex una plataforma web, offline-first, para una cadena mexicana de restaurantes de comida rápida con siete sucursales y quince cajas.
+Plataforma web SaaS multitenant para restaurantes, gobernada por PRD, SDD, BDD y TDD. Conserva módulos históricos de RestaurantOS y capacidades offline cuyo alcance se acredita por pruebas.
 
 ## Objetivo
 
@@ -56,31 +56,18 @@ merge y push. Despliegue, migración, configuración y datos productivos mantien
 separada. Handoff, plan y reporte se crean sólo cuando aportan información nueva y no deben duplicar
 PRD/SDD/BDD/TDD.
 
-## Alcance de la versión 1
+## Alcance vigente
 
-Incluye:
+El alcance comercial y sus límites se definen en `docs/01-PRD.md`; los módulos ERP históricos
+no son promesas comerciales implícitas. Incluye registro y onboarding por tenant, catálogo,
+menú digital, POS/caja, cocina/entrega, facturación y gestión de suscripción según sus contratos.
+La fecha del trial no suspende el servicio: sólo una decisión manual de superadmin lo hace.
 
-- Operación POS y caja.
-- Pedidos de mostrador, para recoger y a domicilio.
-- WhatsApp, chatbot y marketplaces.
-- Cocina, bebidas, empaque y entrega.
-- Inventarios, recetas, subrecetas y producción por lotes.
-- Costeo promedio y costo estándar.
-- Compras, XML de CFDI y cuentas por pagar.
-- Repartidores propios y optimización simultánea de rutas.
-- Operación offline mediante gateway local por sucursal.
-- Impresión automática en Windows.
-- Exportación configurable hacia CONTPAQi.
-- Facturación individual y global mediante exportación.
+WhatsApp queda aplazado en la remediación del 2026-09-28. El plan no habilita sus integraciones.
+La cobertura offline y los proveedores externos requieren evidencia por capacidad; código o
+configuración presentes no acreditan una integración productiva.
 
-No incluye inicialmente:
-
-- Mesas, meseros o reservaciones.
-- Facturación CFDI directa.
-- Pago en línea.
-- Aplicación móvil del repartidor.
-- Operación multiempresa comercial abierta al mercado.
-- Producción centralizada.
+Correcciones publicables: `docs/reports/saas-completed-fixes-2026-09-28.md`.
 
 ## Arquitectura resumida
 

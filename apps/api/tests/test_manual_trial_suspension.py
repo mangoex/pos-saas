@@ -1,3 +1,4 @@
+# SEC001-SYNTHETIC-FIXTURE provenance=restaurantos-manual-trial-suspension-tests-v1
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -66,7 +67,9 @@ def test_tenant_past_trial_remains_active_and_only_manual_suspension_blocks(monk
     assert profile_resp.status_code == 200
     profile = profile_resp.json()
     assert profile["subscription_status"] == "trialing"
-    assert profile["access_block_reason"] is None, "Access must not be blocked automatically past trial date"
+    assert profile["access_block_reason"] is None, (
+        "Access must not be blocked automatically past trial date"
+    )
 
     # Branch list
     assert client.get("/api/v1/branches", headers=headers).status_code == 200
@@ -78,7 +81,9 @@ def test_tenant_past_trial_remains_active_and_only_manual_suspension_blocks(monk
         "/api/v1/public/storefront-context",
         headers={"Host": "marimba.mimenu.onl"},
     )
-    assert storefront_resp.status_code == 200, f"Storefront must remain accessible past 14 days: {storefront_resp.text}"
+    assert storefront_resp.status_code == 200, (
+        f"Storefront must remain accessible past 14 days: {storefront_resp.text}"
+    )
     assert storefront_resp.json()["organization"]["slug"] == "marimba"
 
     # Public catalog by key

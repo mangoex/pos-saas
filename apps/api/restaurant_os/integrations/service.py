@@ -32,6 +32,25 @@ class ChannelIntegrationService:
         self.didi_adapter = DiDiFoodAdapter()
         self.rappi_adapter = RappiAdapter()
 
+    @staticmethod
+    def _require_mapping_branch(session: Session, organization_id: str, branch_id: str) -> None:
+        branch = session.scalar(
+            sa.select(models.branches.c.id)
+            .join(
+                models.organizations,
+                models.organizations.c.id == models.branches.c.organization_id,
+            )
+            .where(
+                models.branches.c.id == branch_id,
+                models.branches.c.organization_id == organization_id,
+                models.branches.c.status == "active",
+                models.organizations.c.status == "active",
+                models.organizations.c.subscription_status != "suspended",
+            )
+        )
+        if branch is None:
+            raise ValueError("integration_branch_scope_invalid")
+
     def get_adapter(self, provider: str) -> UberEatsAdapter | DiDiFoodAdapter | RappiAdapter:
         if provider == "UBER_EATS":
             return self.uber_adapter
@@ -82,6 +101,9 @@ class ChannelIntegrationService:
         if len(rows) != 1:
             raise ValueError("webhook_store_not_configured")
         row = rows[0]
+        self._require_mapping_branch(
+            session, str(row["organization_id"]), str(row["branch_id"])
+        )
         secret = str(row["webhook_secret"] or "").strip()
         if not secret:
             raise ValueError("webhook_secret_required")
@@ -185,6 +207,7 @@ class ChannelIntegrationService:
         external_store_id: str,
         is_active: bool = True,
     ) -> dict[str, Any]:
+        self._require_mapping_branch(session, organization_id, branch_id)
         now = datetime.now(timezone.utc)
         existing = (
             session.execute(
@@ -242,6 +265,49 @@ class ChannelIntegrationService:
         session.commit()
         return True
 
+    @staticmethod
+    def _availability_target_active(
+        session: Session,
+        organization_id: str,
+        branch_id: str,
+        product_id: str,
+        store_id: str,
+        item_id: str,
+    ) -> bool:
+        """Reauthorize the exact queued destination, including mappings changed since enqueue."""
+        stores, items = models.channel_store_mappings, models.channel_product_mappings
+        return session.scalar(
+            sa.select(stores.c.id)
+            .join(models.branches, sa.and_(
+                models.branches.c.id == stores.c.branch_id,
+                models.branches.c.organization_id == stores.c.organization_id,
+            ))
+            .join(models.organizations, models.organizations.c.id == stores.c.organization_id)
+            .join(items, sa.and_(
+                items.c.organization_id == stores.c.organization_id,
+                items.c.provider == stores.c.provider,
+            ))
+            .join(models.products, sa.and_(
+                models.products.c.id == items.c.product_id,
+                models.products.c.organization_id == items.c.organization_id,
+            ))
+            .where(
+                stores.c.organization_id == organization_id,
+                stores.c.branch_id == branch_id,
+                stores.c.external_store_id == store_id,
+                stores.c.provider == "UBER_EATS",
+                stores.c.is_active.is_(True),
+                items.c.product_id == product_id,
+                items.c.external_item_id == item_id,
+                items.c.is_active.is_(True),
+                models.branches.c.status == "active",
+                models.organizations.c.status == "active",
+                models.organizations.c.subscription_status != "suspended",
+                models.products.c.status == "active",
+            )
+            .limit(1)
+        ) is not None
+
     def enqueue_uber_availability_sync(
         self,
         session: Session,
@@ -275,6 +341,12 @@ class ChannelIntegrationService:
                 *([models.channel_store_mappings.c.branch_id == branch_id] if branch_id else []),
             )
         ).all()
+        rows = [
+            row for row in rows
+            if self._availability_target_active(
+                session, organization_id, str(row[0]), product_id, str(row[1]), str(row[2])
+            )
+        ]
         jobs = models.channel_availability_sync_jobs
         for mapped_branch_id, store_id, item_id in rows:
             target = sa.and_(
@@ -368,13 +440,18 @@ class ChannelIntegrationService:
             .mappings()
             .first()
         )
-        session.commit()
         job = dict(candidate)
         job.update(
             lease_token=token,
             config=config,
             organization=dict(organization) if organization else None,
+            target_is_active=self._availability_target_active(
+                session, str(candidate["organization_id"]), str(candidate["branch_id"]),
+                str(candidate["product_id"]), str(candidate["external_store_id"]),
+                str(candidate["external_item_id"]),
+            ),
         )
+        session.commit()
         return job
 
     @staticmethod
@@ -389,7 +466,9 @@ class ChannelIntegrationService:
         """Only the current lease/version can report provider confirmation."""
         now = datetime.now(timezone.utc)
         attempts = int(job["attempts"]) + 1
-        if not bool((job.get("config") or {}).get("is_enabled")) or not self._outbound_permitted(
+        if not job.get("target_is_active", False):
+            status, message, due = "FAILED", "uber_outbound_target_unavailable", now
+        elif not bool((job.get("config") or {}).get("is_enabled")) or not self._outbound_permitted(
             job.get("organization"), now
         ):
             status, message, due = "FAILED", "uber_outbound_disabled", now
@@ -466,8 +545,10 @@ class ChannelIntegrationService:
             config = job.get("config") or {}
             organization = job.get("organization")
             error: Exception | None = None
-            if bool(config.get("is_enabled")) and self._outbound_permitted(
-                organization, datetime.now(timezone.utc)
+            if (
+                job.get("target_is_active", False)
+                and bool(config.get("is_enabled"))
+                and self._outbound_permitted(organization, datetime.now(timezone.utc))
             ):
                 try:
                     self.uber_adapter.update_item_availability(
