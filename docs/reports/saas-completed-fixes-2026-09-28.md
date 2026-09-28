@@ -92,6 +92,17 @@ skips (IA, modificadores móviles y migraciones de presentación/dominios con Po
 y SQLite). Ruff, mypy del modelo, política de repositorio y diff-check verdes.
 La nueva ejecución completa de CI del PR es el gate pendiente para integrar este cierre.
 
+La segunda ejecución (`36497323587`) aprobó 1265 pruebas y omitió las mismas 15;
+falló una prueba SQLite por contaminación entre fixtures. SQLAlchemy `AddConstraint`
+modifica las FK cíclicas del metadata al crear tablas PostgreSQL; reutilizar después ese
+metadata para SQLite omitía la FK del intento aceptado. Se reprodujo en el mismo proceso
+con el módulo PostgreSQL seguido del caso SQLite: **1 failed, 3 passed**. El fixture ahora
+clona su metadata y una regresión comprueba que emitir DDL PostgreSQL conserva intacto el
+DDL SQLite compartido. No cambia el runtime ni se debilita la prueba de rechazo real.
+Revalidación secuencial del módulo PostgreSQL y todo `test_public_order_intents.py`:
+**30 passed**, sin skips, 72.46 s. Ruff, política, diff-check y revisión independiente
+del fixture verdes; la corrida completa posterior de CI debe aprobar antes del merge.
+
 Se mantienen visibles la deprecación Starlette/httpx, advertencias de chunks grandes,
 el aviso del pyproject raíz sin tabla project y el aviso Windows de ruta temporal
 corta/larga del auditor. No son resultados de pruebas omitidos ni fallos silenciados.
