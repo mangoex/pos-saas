@@ -381,7 +381,7 @@ Para habilitar el autoservicio sin barreras técnicas, se implementa el endpoint
 
 #### Arquitectura de Webhooks (Idempotencia):
 - **Idempotencia**: Todo webhook de pago de Mercado Pago valida su `id` contra la tabla de eventos (`integration_events`). Eventos procesados se descartan atómicamente.
-- **Fail-Closed**: Desajustes temporales o falta de confirmación tras expirar `next_billing_date` transicionan la suscripción a `PAST_DUE`, suspendiendo accesos operativos (excepto configuraciones).
+- **Confirmación y acceso separados**: falta de confirmación mantiene la facturación pendiente o vencida; nunca acredita pago ni suspende automáticamente operaciones. Sólo el superadmin puede suspender el servicio, conforme a PRD-FR-005 y al suplemento de suspensión manual.
 
 #### Modelo Físico:
 Tabla exclusiva para facturación de inquilinos: `id` (UUID), `restaurant_id` (FK `organizations.id`), `customer_id` (ID Mercado Pago), `preapproval_id` (ID Suscripción Mercado Pago), `status` (Enum/String), `next_billing_date` (DateTime UTC).

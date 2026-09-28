@@ -74,7 +74,7 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     Then la interfaz no declara Alarma lista hasta confirmar estado running
     And conserva una alerta visual y una acción explícita de reactivación
 
-  @BDD-SC-819
+  @BDD-SC-980
   Scenario: Configuración de horarios de servicio semanal y apertura/cierre automático de caja
     Given un usuario administrador en la pestaña de "Caja" del shell móvil
     When despliega la sección "Horarios y Caja Automática"
@@ -86,7 +86,7 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     And al finalizar el horario de servicio o en días cerrados, el turno se cierra operativamente de forma automática
     And el administrador conserva la facultad de abrir y cerrar turnos manualmente en cualquier momento
 
-  @BDD-SC-820
+  @BDD-SC-981
   Scenario: Restricción de pedidos para recoger y llevar según horario de servicio configurado
     Given un cliente navegando el menú digital público con intención de pedir para recoger o llevar
     When despliega el selector de fecha y hora en el carrito
@@ -95,7 +95,7 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     And las sugerencias rápidas de tiempo se filtran para no rebasar la hora límite de cierre
     And el sistema valida antes de enviar el pedido que el horario seleccionado corresponda a un día abierto y dentro del rango de servicio
 
-  @BDD-SC-821
+  @BDD-SC-982
   Scenario: Configuración de métodos de pago aceptados y datos bancarios en caja móvil
     Given un usuario administrador en la pestaña de "Caja" del shell móvil
     When despliega la sección de configuración de métodos de cobro abajo de horarios
@@ -103,7 +103,7 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     Then el sistema persiste los métodos de cobro y datos bancarios mediante "PUT /branches/{id}"
     And expone estos valores en el catálogo público de la sucursal para sincronizar el menú digital
 
-  @BDD-SC-822
+  @BDD-SC-983
   Scenario: Presentación condicional de métodos de pago, cupones y datos de transferencia en carrito digital
     Given un cliente en el carrito de compras del menú digital público
     When la sucursal no tiene códigos de cupón activos configurados

@@ -37,7 +37,7 @@ def test_create_lite_subscription_mercadopago():
         # Validate strictly that amount is sent as Decimal(349)
         # Note: In HTTP requests, Decimal might be serialized as a string or float in JSON,
         # but internal service calls before HTTP layer should use Decimal.
-        # Here we check the mock call arguments to ensure it was formatted correctly (e.g., '349.00').
+        # Check the mock arguments for the expected formatting (e.g., '349.00').
         # Since we are mocking httpx, we can check the kwargs sent to post.
         found_amount = False
         for call in mock_post.call_args_list:

@@ -1,0 +1,38 @@
+name: Dependency audit
+
+on:
+  schedule:
+    - cron: '17 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolved-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Create clean Python environment
+        run: |
+          python -m venv .venv-ci
+          echo "$GITHUB_WORKSPACE/.venv-ci/bin" >> "$GITHUB_PATH"
+      - name: Install hashed Python dependency graph
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements/python-bootstrap.lock
+          python -m pip install --require-hashes --only-binary=:all: -r requirements/python-dev.lock
+          python -m pip check
+      - name: Audit existing Python dependencies
+        run: python -m pip_audit --strict
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen frontend dependency graph
+        run: pnpm install --frozen-lockfile
+      - name: Audit existing frontend dependencies
+        run: pnpm audit --audit-level moderate

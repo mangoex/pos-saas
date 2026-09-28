@@ -160,6 +160,7 @@ de apertura fallan antes de escribir. La migración sólo backfillea una fuente 
 
 ## TDD-TC-114 Matriz de permisos y alcance
 
+
 API real cubre positivos Líder, Supervisor, Administrador y Dueño, y negativos Cajero, Cajero jefe,
 branch NULL, sucursal ajena, actor inactivo/cross-org y rol visible adulterado. La denegación deja
 huella financiera idéntica y auditoría redactada.
@@ -387,6 +388,15 @@ When se calcula esperado y después se compensa la compra con DEPOSIT 3000
 Then los resultados son 11000 y 14000 centavos y cada movimiento participa exactamente una vez.
 
 ## TDD-TC-085 Movimiento manual exige autoridad, turno, concepto y evidencia
+
+Regresión 2026-09-28: `test_cash_ledger.py` comprueba consulta legacy del turno con
+retiro, depósito, lectura de movimientos y lectura de turno como permisos alternativos;
+la ruta canónica mantiene `cash.shift.read`. `test_saas_cash_scope.py` cubre rechazo del
+alias entre tenants sin efectos de caja. RED observado: retiro autorizado devuelve 403
+por una segunda guarda incompatible. Las pruebas no conceden permisos extra para pasar.
+La matriz cuenta auditorías antes/después: cero denegaciones nuevas para 200 y una para
+403, incluyendo sucursal ajena y permiso revocado. Evita falsos rechazos persistentes al
+explorar capacidades alternativas; no elimina ni modifica eventos históricos.
 
 Matriz por permiso prueba Cajero retiro/no depósito, Cajero jefe depósito/retiro y Dueño compensación;
 actor ausente, branch ajena/NULL, caja sin turno `OPEN`, importe cero/negativo, concepto

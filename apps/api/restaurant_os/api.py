@@ -96,7 +96,6 @@ from restaurant_os.operations import (
     assign_user_role,
     authenticate_user,
     authorize_branch_scope,
-    authorize_cash_movement_scope,
     authorize_order_adjustment,
     authorize_supervisor_step_up,
     build_session_profile,
@@ -158,6 +157,7 @@ from restaurant_os.operations import (
     get_cash_shift_summary,
     get_customer_feedbacks,
     get_ingredient_variation,
+    get_cash_movement_shift,
     get_open_cash_shift,
     reconcile_branch_auto_cash_shift,
     get_order_detail,
@@ -168,6 +168,7 @@ from restaurant_os.operations import (
     list_community_photos_for_moderation,
     moderate_community_photo,
     get_public_order_intent,
+    get_public_pickup_options,
     reject_public_order_intent,
     get_sync_status,
     issue_offline_cash_grant,
@@ -477,7 +478,7 @@ def get_dashboard_overview_endpoint(
         authorized_branch_id = authorize_branch_scope(
             session, actor_id, "dashboard.read", branch_id
         )
-        organization_id = session.execute(
+        organization_id: str = session.execute(
             sa.select(models.users.c.organization_id).where(models.users.c.id == actor_id)
         ).scalar_one()
         return get_dashboard_overview(
@@ -1399,11 +1400,11 @@ def get_customer_crm_segments(
     def operation() -> dict[str, Any]:
         require_permission(session, actor_id, "customers.read")
         organization_id = _actor_org_from_request(session, actor_id)
-        branch_id_str = (
-            authorize_branch_scope(session, actor_id, "customers.read", str(branch_id))
-            if branch_id
-            else None
+        branch_id_str = authorize_branch_scope(
+            session, actor_id, "customers.read", str(branch_id) if branch_id else None
         )
+        if branch_id_str is None:
+            require_permission(session, actor_id, "customers.read", organization_scope=True)
         segments = get_crm_segments_and_churn_risk(
             session, organization_id=organization_id, branch_id=branch_id_str
         )
@@ -1683,12 +1684,9 @@ def get_current_cash_shift_legacy(
         actor_id = _required_actor_from_request(actor_user_id, authorization)
         if not register_id or not register_id.strip():
             raise BusinessError("cash_shift_current_payload_invalid", "register_id is required")
-        scoped_branch = authorize_cash_movement_scope(session, actor_id, branch_id)
-        if not scoped_branch:
-            raise BusinessError("cash_shift_current_payload_invalid", "branch_id is required")
         return _serialize_pco_response(
             {
-                "cash_shift": get_open_cash_shift(session, register_id, scoped_branch, actor_user_id=actor_id),
+                "cash_shift": get_cash_movement_shift(session, actor_id, branch_id, register_id),
                 "closure": None,
             }
         )
@@ -2850,7 +2848,7 @@ def get_mobile_theme_endpoint(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_permission(session, actor_id, "admin.manage")
-    theme = session.execute(
+    theme: str | None = session.execute(
         sa.select(models.organizations.c.mobile_theme).where(
             models.organizations.c.id == _actor_org_from_request(session, actor_id)
         )
@@ -3238,11 +3236,17 @@ class PublicOrderIntentPayload(BaseModel):
     payment_method: str | None = Field(default=None, max_length=32)
     cash_amount: str | None = Field(default=None, max_length=32)
     coupon_code: str | None = Field(default=None, max_length=64)
+    pickup_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    pickup_time: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
     @model_validator(mode="after")
     def delivery_requires_address(self) -> PublicOrderIntentPayload:
         if self.order_type == "delivery" and self.delivery_address is None:
             raise ValueError("delivery orders require delivery_address")
+        if (self.pickup_date is None) != (self.pickup_time is None):
+            raise ValueError("pickup requires both date and time")
+        if self.pickup_date is not None and self.order_type != "takeout":
+            raise ValueError("pickup scheduling requires takeout")
         return self
 
 
@@ -3540,6 +3544,14 @@ def validate_coupon_endpoint(
             subtotal_cents=payload.subtotal_cents,
         )
     )
+
+
+@router.get("/public/branches/{public_key}/pickup-options")
+def get_public_pickup_options_endpoint(
+    public_key: str, response: Response, session: SessionDep,
+) -> dict[str, Any]:
+    response.headers["Cache-Control"] = "no-store"
+    return _business_response(lambda: get_public_pickup_options(session, public_key))
 
 
 @router.post("/public/branches/{public_key}/order-intents")
@@ -6979,6 +6991,7 @@ def post_uber_eats_store_mapping(
             status_code=400, detail="branch_id y external_store_id son obligatorios."
         )
     org_id = _actor_org_from_request(session, actor_id)
+    authorize_branch_scope(session, actor_id, "admin.manage", branch_id)
     return channel_service.save_store_mapping(
         session, org_id, "UBER_EATS", branch_id, external_store_id, is_active
     )
@@ -7029,8 +7042,9 @@ def post_uber_eats_test_order(
     items_count = int(payload.get("items_count") or 1)
     store_id = payload.get("store_id") or "d0e94168-bf1b-49cb-a49b-02df1ff9b68e"
 
+    simulated_order_id = f"uber-test-{uuid.uuid4().hex[:8]}"
     simulated_order = {
-        "id": f"uber-test-{uuid.uuid4().hex[:8]}",
+        "id": simulated_order_id,
         "display_id": f"U{uuid.uuid4().hex[:4].upper()}",
         "event_type": "orders.notification",
         "store": {"id": store_id, "name": "Restaurante Demo"},
@@ -7071,7 +7085,7 @@ def post_uber_eats_test_order(
         organization_id,
         "UBER_EATS",
         "orders.notification",
-        simulated_order["id"],
+        simulated_order_id,
         "simulated-hmac-sha256",
         simulated_order,
         "processed",
@@ -7266,6 +7280,7 @@ def post_didi_food_store_mapping(
             status_code=400, detail="branch_id y external_store_id son obligatorios."
         )
     org_id = _actor_org_from_request(session, actor_id)
+    authorize_branch_scope(session, actor_id, "admin.manage", branch_id)
     return channel_service.save_store_mapping(
         session, org_id, "DIDI_FOOD", branch_id, external_store_id, is_active
     )
@@ -7617,6 +7632,7 @@ def post_rappi_store_mapping(
             status_code=400, detail="branch_id y external_store_id son obligatorios."
         )
     org_id = _actor_org_from_request(session, actor_id)
+    authorize_branch_scope(session, actor_id, "admin.manage", branch_id)
     return channel_service.save_store_mapping(
         session, org_id, "RAPPI", branch_id, external_store_id, is_active
     )

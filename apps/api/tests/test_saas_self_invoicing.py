@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from restaurant_os import models
@@ -363,7 +364,9 @@ def test_self_invoice_respects_disabled_and_expired_window(monkeypatch):
         )
         if not disabled:
             session.execute(
-                models.orders.update().values(created_at=datetime.now(timezone.utc) - timedelta(days=60))
+                models.orders.update().values(
+                    created_at=datetime.now(timezone.utc) - timedelta(days=60)
+                )
             )
         session.commit()
         session.close()
@@ -400,7 +403,8 @@ def test_self_invoice_provider_errors_are_redacted(monkeypatch):
     assert response.json()["detail"]["correlation_id"]
 
 
-def test_self_invoice_blocks_suspended_and_expired_tenants(monkeypatch):
+@pytest.mark.parametrize("status,expected", [("suspended", 403), ("trialing", 200)])
+def test_self_invoice_respects_manual_suspension_after_trial(monkeypatch, status, expected):
     from datetime import timedelta
 
     from restaurant_os.invoicing.self_invoicing import invoicing_service
@@ -408,32 +412,42 @@ def test_self_invoice_blocks_suspended_and_expired_tenants(monkeypatch):
     client = _client_with_db()
     _, tenant, folio = _setup_tenant_and_order(client)
     key = _public_key_for_branch(client, tenant["branch"]["id"])
+    calls = []
 
-    def forbidden_call(**kwargs):
-        raise AssertionError("Provider must not be called for suspended tenants")
+    def simulated_issue(**kwargs):
+        assert status != "suspended", "Provider must not be called for suspended tenants"
+        calls.append(kwargs)
+        return {"status": "simulated", "provider_confirmed": False}
 
-    monkeypatch.setattr(invoicing_service, "issue_invoice", forbidden_call)
-    for status in ("suspended", "trialing"):
+    monkeypatch.setattr(invoicing_service, "issue_invoice", simulated_issue)
+    try:
         gen = client.app.dependency_overrides[get_session]()
         session = next(gen)
         session.execute(
-            models.organizations.update().values(
-                subscription_status=status, trial_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1)
+            models.organizations.update()
+            .where(models.organizations.c.id == tenant["organization"]["id"])
+            .values(
+                subscription_status=status,
+                trial_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1),
             )
         )
         session.commit()
         session.close()
         params = {"folio": folio, "public_key": key}
-        assert client.get("/api/v1/self-invoice/lookup", params=params).status_code == 403
-        assert (
-            client.post(
-                "/api/v1/self-invoice/emit",
-                json={
-                    **params,
-                    "rfc": "GOMR880101ABC",
-                    "legal_name": "Synthetic Customer",
-                    "zip": "06700",
-                },
-            ).status_code
-            == 403
+        assert client.get("/api/v1/self-invoice/lookup", params=params).status_code == expected
+        response = client.post(
+            "/api/v1/self-invoice/emit",
+            json={
+                **params,
+                "rfc": "GOMR880101ABC",
+                "legal_name": "Synthetic Customer",
+                "zip": "06700",
+            },
         )
+        assert response.status_code == expected
+        assert len(calls) == (1 if status == "trialing" else 0)
+        if calls:
+            assert calls[0]["org_id"] == tenant["organization"]["id"]
+            assert response.json()["provider_confirmed"] is False
+    finally:
+        client.app.dependency_overrides.clear()

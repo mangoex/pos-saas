@@ -42,6 +42,9 @@ Feature: Autorizar capacidades acumulativas por permisos persistidos
   @BDD-SC-272
   Scenario: Cajero vende y registra retiro sin manejar caja
     Given un Cajero con turno abierto en su sucursal asignada
+    When consulta el turno por el alias operativo con permiso de retiro y sin cash.shift.read
+    Then obtiene el turno de su sucursal y no puede consultar una sucursal ajena
+    And la consulta permitida no registra denegaciones y cada rechazo real queda auditado una vez
     When crea y cobra un pedido y registra un retiro manual válido
     Then las operaciones quedan auditadas y el retiro se incorpora una vez al efectivo esperado
     When intenta abrir/cerrar turno, depositar, comprar, registrar merma o crear corte por usuario

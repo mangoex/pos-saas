@@ -441,16 +441,25 @@ def get_multi_branch_consolidated_report(
         for day in days:
             rep = get_branch_daily_reconciliation(session, b_id, day, actor_id=None)
             bal = rep["balance"]
-            s_sales = bal.get("total_sales_with_tax", float(bal.get("total_sales_with_tax_cents", 0)) / 100.0)
-            s_sup = bal.get("supplier_expenses", float(bal.get("supplier_expenses_cents", 0)) / 100.0)
+            s_sales = bal.get(
+                "total_sales_with_tax", float(bal.get("total_sales_with_tax_cents", 0)) / 100.0
+            )
+            s_sup = bal.get(
+                "supplier_expenses", float(bal.get("supplier_expenses_cents", 0)) / 100.0
+            )
             s_fixed = bal.get("fixed_expenses", float(bal.get("fixed_expenses_cents", 0)) / 100.0)
             s_cards = bal.get("card_payments", float(bal.get("card_payments_cents", 0)) / 100.0)
-            s_transf = bal.get("transfer_payments", float(bal.get("transfer_payments_cents", 0)) / 100.0)
+            s_transf = bal.get(
+                "transfer_payments", float(bal.get("transfer_payments_cents", 0)) / 100.0
+            )
             s_cred = bal.get("credit_sales", float(bal.get("credit_sales_cents", 0)) / 100.0)
             s_cash = bal.get("cash_sales", float(bal.get("cash_sales_cents", 0)) / 100.0)
             s_dep = bal.get("cash_deposits", float(bal.get("cash_deposits_cents", 0)) / 100.0)
             s_w = bal.get("cash_withdrawals", float(bal.get("cash_withdrawals_cents", 0)) / 100.0)
-            s_exp = bal.get("expected_cash_in_register", float(bal.get("expected_cash_in_register_cents", 0)) / 100.0)
+            s_exp = bal.get(
+                "expected_cash_in_register",
+                float(bal.get("expected_cash_in_register_cents", 0)) / 100.0,
+            )
 
             b_sales += s_sales
             b_expenses += s_sup + s_fixed
@@ -475,13 +484,17 @@ def get_multi_branch_consolidated_report(
                 sname = sup["provider_name"]
                 s_amt = sup.get("amount", float(sup.get("amount_cents", 0)) / 100.0)
                 supplier_totals[sname] = supplier_totals.get(sname, 0.0) + s_amt
-                supplier_totals_cents[sname] = supplier_totals_cents.get(sname, 0) + sup.get("amount_cents", int(s_amt * 100))
+                supplier_totals_cents[sname] = supplier_totals_cents.get(sname, 0) + sup.get(
+                    "amount_cents", int(s_amt * 100)
+                )
 
             for fexp in rep["fixed_expenses_breakdown"]:
                 ename = fexp["expense_type"]
                 f_amt = fexp.get("amount", float(fexp.get("amount_cents", 0)) / 100.0)
                 fixed_expense_totals[ename] = fixed_expense_totals.get(ename, 0.0) + f_amt
-                fixed_expense_totals_cents[ename] = fixed_expense_totals_cents.get(ename, 0) + fexp.get("amount_cents", int(f_amt * 100))
+                fixed_expense_totals_cents[ename] = fixed_expense_totals_cents.get(
+                    ename, 0
+                ) + fexp.get("amount_cents", int(f_amt * 100))
 
         branch_summaries.append(
             {

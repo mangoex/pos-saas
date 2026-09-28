@@ -3539,3 +3539,32 @@ body {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+.pickup-options-feedback {
+  margin: 12px 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.pickup-options-feedback.is-error {
+  padding: 12px;
+  border: 1px solid #fca5a5;
+  border-radius: 12px;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.pickup-options-feedback p {
+  margin: 0 0 8px;
+}
+
+.pickup-options-feedback button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

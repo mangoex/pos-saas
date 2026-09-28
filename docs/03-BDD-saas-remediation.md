@@ -854,7 +854,9 @@ Feature: Límite exacto de prueba y suspensión
   @BDD-SC-804
   Scenario: Límite exacto de prueba y suspensión
     Given trial iniciado en t0 y token emitido antes del vencimiento
-    When se opera en t0+14 días o después de suspensión
+    When se opera en t0+14 días sin una suspensión manual
+    Then el tiempo transcurrido no bloquea la operación comercial
+    When un superadministrador suspende explícitamente el servicio
     Then la operación comercial se rechaza aunque el token no haya expirado
 ```
 

@@ -616,10 +616,37 @@ def get_crm_segments_and_churn_risk(
 ) -> dict[str, Any]:
     """Segment customers into VIPs, churn risk, and new customers with metrics."""
     criteria = [models.customers.c.organization_id == organization_id]
+    order_criteria = [
+        models.orders.c.organization_id == organization_id,
+        models.orders.c.status != "cancelled",
+    ]
     if branch_id:
         criteria.append(models.customers.c.origin_branch_id == branch_id)
+        order_criteria.append(models.orders.c.branch_id == branch_id)
 
-    customers_list = list(session.execute(sa.select(models.customers).where(*criteria)).mappings())
+    order_totals = (
+        sa.select(
+            models.orders.c.customer_id,
+            sa.func.count(models.orders.c.id).label("total_orders"),
+            sa.func.sum(models.orders.c.total_cents).label("total_spend_cents"),
+            sa.func.max(models.orders.c.created_at).label("last_order_date"),
+        )
+        .where(*order_criteria)
+        .group_by(models.orders.c.customer_id)
+        .subquery()
+    )
+    customers_list = list(session.execute(
+        sa.select(
+            models.customers,
+            order_totals.c.total_orders,
+            order_totals.c.total_spend_cents,
+            order_totals.c.last_order_date,
+        )
+        .select_from(models.customers.outerjoin(
+            order_totals, models.customers.c.id == order_totals.c.customer_id,
+        ))
+        .where(*criteria)
+    ).mappings())
 
     now = datetime.now(UTC)
     vips: list[dict[str, Any]] = []
@@ -629,34 +656,14 @@ def get_crm_segments_and_churn_risk(
     for cust in customers_list:
         cid = str(cust["id"])
 
-        # Aggregate total orders and total spend in exact cents
-        order_criteria = [
-            models.orders.c.customer_id == cid,
-            models.orders.c.organization_id == organization_id,
-            models.orders.c.status != "cancelled",
-        ]
-        if branch_id:
-            order_criteria.append(models.orders.c.branch_id == branch_id)
-        orders = list(
-            session.execute(
-                sa.select(
-                    models.orders.c.id,
-                    models.orders.c.total_cents,
-                    models.orders.c.created_at,
-                ).where(*order_criteria)
-            ).mappings()
-        )
-
-        total_orders = len(orders)
-        total_spend_cents = sum(int(o["total_cents"] or 0) for o in orders)
-
-        last_order_dt: datetime | None = None
-        if orders:
-            order_dates = [o["created_at"] for o in orders if o["created_at"]]
-            if order_dates:
-                last_order_dt = max(order_dates)
-                if last_order_dt.tzinfo is None:
-                    last_order_dt = last_order_dt.replace(tzinfo=UTC)
+        total_orders = int(cust["total_orders"] or 0)
+        total_spend_cents = int(cust["total_spend_cents"] or 0)
+        last_order_dt: datetime | None = cust["last_order_date"]
+        if last_order_dt is not None:
+            last_order_dt = (
+                last_order_dt.replace(tzinfo=UTC)
+                if last_order_dt.tzinfo is None else last_order_dt.astimezone(UTC)
+            )
 
         days_inactive = (now - last_order_dt).days if last_order_dt else 999
 

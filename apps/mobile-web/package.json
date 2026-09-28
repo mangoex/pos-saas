@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@restaurantos/api-client": "workspace:^",
-    "lucide-react": "^0.370.0",
+    "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.8.0",

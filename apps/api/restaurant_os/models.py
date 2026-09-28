@@ -136,7 +136,9 @@ branches = sa.Table(
         "coupons",
         sa.JSON(),
         nullable=False,
-        server_default='[{"code": "MIMENU-GRACIAS10", "discount_percentage": 10, "is_active": true}]',
+        server_default=(
+            '[{"code": "MIMENU-GRACIAS10", "discount_percentage": 10, "is_active": true}]'
+        ),
     ),
     sa.Column("service_schedule", sa.JSON(), nullable=False, server_default="[]"),
     sa.Column(
@@ -2893,6 +2895,11 @@ channel_store_mappings = sa.Table(
         name="uq_channel_store_mappings_org_provider_store",
     ),
     sa.UniqueConstraint("branch_id", "provider", name="uq_channel_store_mappings_branch_provider"),
+    sa.ForeignKeyConstraint(
+        ["organization_id", "branch_id"],
+        ["branches.organization_id", "branches.id"],
+        name="fk_channel_store_mapping_tenant_branch",
+    ),
 )
 
 channel_product_mappings = sa.Table(
@@ -3185,7 +3192,10 @@ subscriptions = sa.Table(
     "subscriptions",
     metadata,
     sa.Column("id", sa.String(36), primary_key=True),
-    sa.Column("restaurant_id", sa.String(36), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
+    sa.Column(
+        "restaurant_id", sa.String(36),
+        sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False,
+    ),
     sa.Column("customer_id", sa.String(255), nullable=False),
     sa.Column("preapproval_id", sa.String(255), nullable=False),
     sa.Column("status", sa.String(32), nullable=False),

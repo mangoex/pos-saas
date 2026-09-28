@@ -81,18 +81,30 @@ def test_create_branch_has_default_coupon(session: Any) -> None:
         code="NORTE11",
         actor_user_id=ADMIN_USER_ID,
     )
-    branch_row = session.execute(
-        sa.select(models.branches).where(models.branches.c.id == branch["id"])
-    ).mappings().first()
+    branch_row = (
+        session.execute(sa.select(models.branches).where(models.branches.c.id == branch["id"]))
+        .mappings()
+        .first()
+    )
     assert branch_row is not None
     assert branch_row["coupons"] == [
-        {"code": "MIMENU-GRACIAS10", "discount_percentage": 10, "is_active": True, "show_in_checkout": True}
+        {
+            "code": "MIMENU-GRACIAS10",
+            "discount_percentage": 10,
+            "is_active": True,
+            "show_in_checkout": True,
+        }
     ]
 
 
 def test_update_branch_coupons(session: Any) -> None:
     new_coupons = [
-        {"code": "SUMMER20", "discount_percentage": 20, "is_active": True, "show_in_checkout": True},
+        {
+            "code": "SUMMER20",
+            "discount_percentage": 20,
+            "is_active": True,
+            "show_in_checkout": True,
+        },
         {"code": "VIP50", "discount_percentage": 50, "is_active": False, "show_in_checkout": False},
     ]
     update_branch(
@@ -101,12 +113,19 @@ def test_update_branch_coupons(session: Any) -> None:
         coupons=new_coupons,
         actor_user_id=ADMIN_USER_ID,
     )
-    branch_row = session.execute(
-        sa.select(models.branches).where(models.branches.c.id == BRANCH_ID)
-    ).mappings().first()
+    branch_row = (
+        session.execute(sa.select(models.branches).where(models.branches.c.id == BRANCH_ID))
+        .mappings()
+        .first()
+    )
     assert branch_row is not None
     assert branch_row["coupons"] == [
-        {"code": "SUMMER20", "discount_percentage": 20, "is_active": True, "show_in_checkout": True},
+        {
+            "code": "SUMMER20",
+            "discount_percentage": 20,
+            "is_active": True,
+            "show_in_checkout": True,
+        },
         {"code": "VIP50", "discount_percentage": 50, "is_active": False, "show_in_checkout": False},
     ]
 
@@ -124,9 +143,11 @@ def test_update_branch_coupons_can_be_cleared_to_empty(session: Any) -> None:
         coupons=[],
         actor_user_id=ADMIN_USER_ID,
     )
-    branch_row = session.execute(
-        sa.select(models.branches).where(models.branches.c.id == branch["id"])
-    ).mappings().first()
+    branch_row = (
+        session.execute(sa.select(models.branches).where(models.branches.c.id == branch["id"]))
+        .mappings()
+        .first()
+    )
     assert branch_row is not None
     assert branch_row["coupons"] == []
 
@@ -233,11 +254,15 @@ def test_public_order_intent_with_coupon_applies_deterministic_discount(session:
     assert result["discount_cents"] == 1900
     assert result["total_cents"] == 17100
 
-    intent_row = session.execute(
-        sa.select(models.public_order_intents).where(
-            models.public_order_intents.c.public_reference == result["public_reference"]
+    intent_row = (
+        session.execute(
+            sa.select(models.public_order_intents).where(
+                models.public_order_intents.c.public_reference == result["public_reference"]
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     assert intent_row is not None
     assert intent_row["coupon_code"] == "MIMENU-GRACIAS10"
     assert intent_row["discount_cents"] == 1900
@@ -250,11 +275,15 @@ def test_public_order_intent_with_coupon_applies_deterministic_discount(session:
         idempotency_key="idemp-accept-coupon-001",
         actor_user_id=ADMIN_USER_ID,
     )
-    order_row = session.execute(
-        sa.select(models.orders).where(
-            models.orders.c.public_order_intent_id == intent_row["id"]
+    order_row = (
+        session.execute(
+            sa.select(models.orders).where(
+                models.orders.c.public_order_intent_id == intent_row["id"]
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     assert order_row is not None
     assert order_row["coupon_code"] == "MIMENU-GRACIAS10"
     assert order_row["discount_cents"] == 1900

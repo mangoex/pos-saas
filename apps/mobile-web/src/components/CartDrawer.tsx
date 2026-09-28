@@ -5,13 +5,15 @@ import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, 
 import { getProductIconMeta, getProductImage } from '../imageMap';
 import { requestBrowserCoordinates, reverseGeocode, formatGpsAddressNotes } from '../utils/geolocation';
 import { currentModifiers, hasCustomizationOptions, hasSelectedCustomization } from '../utils/cartPersonalization';
-import { generatePickupTimeSlots, getInitialPickupTime } from '../utils/pickupSchedule';
+import { formatTimeSlotLabel, validatePickupSelection } from '../utils/pickupSchedule';
+import { usePickupOptions } from '../hooks/usePickupOptions';
 import { pickupGraceMessage } from '../../../../packages/ui/src/utils/pickupGrace';
 
 const weekDayLetters = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const weekDayFullNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 interface PickupDayOption {
+  date: string;
   index: number;
   letter: string;
   name: string;
@@ -179,88 +181,47 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return initialOrderType;
   });
 
-  // Pickup scheduling state (L, M, M, J, V, S, D and time)
-  const currentDayIndex = useMemo(() => {
-    return (new Date().getDay() + 6) % 7;
-  }, []);
+  const branchKey = selectedBranch?.public_key || '';
+  const { options: pickupOptions, loading: pickupLoading, error: pickupError, refresh: refreshPickup } =
+    usePickupOptions(branchKey, orderType === 'takeaway');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [pickupTime, setPickupTime] = useState('');
+  const [validatingPickup, setValidatingPickup] = useState(false);
+  const submittingRef = useRef(false);
+  const checkoutContextRef = useRef(`${branchKey}:${orderType}`);
+  checkoutContextRef.current = `${branchKey}:${orderType}:${isBranchClosed}:${Boolean(editingBlockedReason)}`;
+  useEffect(() => () => { checkoutContextRef.current = ''; }, []);
 
-  const scheduleByDay = useMemo(() => {
-    const map = new Map<number, any>();
-    if (selectedBranch?.service_schedule && Array.isArray(selectedBranch.service_schedule)) {
-      for (const s of selectedBranch.service_schedule) {
-        map.set(s.day_index, s);
-      }
-    }
-    return map;
-  }, [selectedBranch?.service_schedule]);
-
-  const weekDayOptions = useMemo<PickupDayOption[]>(() => {
-    const now = new Date();
-    const todayIndex = (now.getDay() + 6) % 7;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - todayIndex);
-
-    return weekDayLetters.map((letter, idx) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + idx);
-      const isPast = idx < todayIndex;
-      const isToday = idx === todayIndex;
-      const monthName = d.toLocaleDateString('es-MX', { month: 'short' });
-      const daySchedule = scheduleByDay.get(idx);
-      const isClosed = daySchedule ? daySchedule.is_open === false : false;
-      const disabled = isPast || isClosed;
-      return {
-        index: idx,
-        letter,
-        name: weekDayFullNames[idx],
-        dateNumber: d.getDate(),
-        monthName,
-        isPast,
-        isToday,
-        isClosed,
-        disabled,
-      };
-    });
-  }, [scheduleByDay]);
-
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
-    return (new Date().getDay() + 6) % 7;
-  });
-
-  // Automatically fall back to first non-disabled day if today or selected day is closed
+  const weekDayOptions = useMemo<PickupDayOption[]>(() => (pickupOptions?.days ?? []).map(day => ({
+    date: day.date,
+    index: day.day_index,
+    letter: weekDayLetters[day.day_index],
+    name: weekDayFullNames[day.day_index],
+    dateNumber: Number(day.date.slice(8)),
+    // Format the server's calendar date in UTC to avoid shifting it in the device's timezone.
+    monthName: new Date(`${day.date}T12:00:00Z`).toLocaleDateString('es-MX', { month: 'short', timeZone: 'UTC' }),
+    isPast: day.is_past,
+    isToday: day.is_today,
+    isClosed: day.is_closed,
+    disabled: day.is_past || day.is_closed || day.slots.length === 0,
+  })), [pickupOptions]);
+  const selectedDay = weekDayOptions.find(day => day.date === selectedDate);
+  const availablePickupSlots = useMemo(() => (pickupOptions?.days.find(day => day.date === selectedDate)?.slots ?? [])
+    .map(slot => ({ ...slot, label: formatTimeSlotLabel(slot.value) })), [pickupOptions, selectedDate]);
   useEffect(() => {
-    const currentOpt = weekDayOptions.find((d) => d.index === selectedDayIndex);
-    if (currentOpt?.disabled) {
-      const firstAvailable = weekDayOptions.find((d) => !d.disabled);
-      if (firstAvailable) {
-        setSelectedDayIndex(firstAvailable.index);
-      }
-    }
-  }, [weekDayOptions, selectedDayIndex]);
-
-  const selectedDay = useMemo(() => {
-    return weekDayOptions.find((d) => d.index === selectedDayIndex) || weekDayOptions[currentDayIndex] || weekDayOptions[0];
-  }, [weekDayOptions, selectedDayIndex, currentDayIndex]);
-
-  const currentDaySchedule = useMemo(() => {
-    return scheduleByDay.get(selectedDayIndex) || null;
-  }, [scheduleByDay, selectedDayIndex]);
-
-  const availablePickupSlots = useMemo(() => {
-    return generatePickupTimeSlots(currentDaySchedule, {
-      isToday: selectedDay.isToday,
-      intervalMinutes: 15,
-      leadTimeMinutes: 15,
-    });
-  }, [currentDaySchedule, selectedDay.isToday]);
-
-  const [pickupTime, setPickupTime] = useState<string>(() => {
-    return availablePickupSlots[0]?.value || '';
-  });
-
+    setSelectedDate('');
+    setPickupTime('');
+  }, [branchKey]);
   useEffect(() => {
-    setPickupTime((prev) => getInitialPickupTime(prev, availablePickupSlots));
-  }, [availablePickupSlots]);
+    if (!selectedDate && pickupOptions?.configured) {
+      const firstDate = weekDayOptions.find(day => !day.disabled)?.date || '';
+      setSelectedDate(firstDate);
+      setPickupTime(pickupOptions.days.find(day => day.date === firstDate)?.slots[0]?.value || '');
+      return;
+    }
+    // A stale selection becomes empty; refresh must not silently book a different time.
+    if (!availablePickupSlots.some(slot => slot.value === pickupTime)) setPickupTime('');
+  }, [pickupOptions, weekDayOptions, selectedDate, availablePickupSlots, pickupTime]);
   const [tableNumber, setTableNumber] = useState('');
   const [name, setName] = useState(initialProfile?.name || '');
   const [phone, setPhone] = useState(initialProfile?.phone || '');
@@ -544,8 +505,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return results.slice(0, 4);
   }, [items, allProducts, aiRecs]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || isSubmitting || editingBlockedReason || editingItem || items.length === 0) return;
     setFormError('');
 
     if (isBranchClosed) {
@@ -570,30 +532,43 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
 
     let finalOrderNotes = orderNotes.trim();
+    let pickupDateToSend: string | undefined;
+    let pickupTimeToSend: string | undefined;
     if (orderType === 'takeaway') {
-      if (selectedDay.disabled) {
-        setFormError(`El día seleccionado (${selectedDay.name}) se encuentra cerrado para pedidos.`);
-        return;
-      }
-      if (currentDaySchedule && currentDaySchedule.is_open) {
-        const openT = currentDaySchedule.open_time || '09:00';
-        const closeT = currentDaySchedule.close_time || '22:00';
-        if (pickupTime && (pickupTime < openT || pickupTime > closeT)) {
-          setFormError(`El horario de atención para ${selectedDay.name} es de ${openT} a ${closeT} hrs. Por favor elige una hora dentro de este rango.`);
-          return;
+      const checkoutContext = checkoutContextRef.current;
+      const requestedDate = pickupOptions?.configured ? selectedDay?.date || '' : '';
+      const requestedTime = pickupOptions?.configured ? pickupTime : '';
+      submittingRef.current = true;
+      setValidatingPickup(true);
+      try {
+        const freshOptions = await refreshPickup();
+        if (checkoutContextRef.current !== checkoutContext) return;
+        validatePickupSelection(freshOptions, requestedDate, requestedTime);
+        if (freshOptions.configured) {
+          pickupDateToSend = requestedDate;
+          pickupTimeToSend = requestedTime;
+          finalOrderNotes = [`📅 Recoger: ${requestedDate} a las ${requestedTime}`, finalOrderNotes].filter(Boolean).join(' | ');
+        } else {
+          finalOrderNotes = ['Recoger: lo antes posible', finalOrderNotes].filter(Boolean).join(' | ');
         }
+      } catch (error) {
+        if (checkoutContextRef.current !== checkoutContext) return;
+        setFormError(error instanceof Error && error.message === 'pickup_slot_unavailable'
+          ? 'El horario seleccionado ya no está disponible. Elige otro horario y vuelve a enviar.'
+          : 'No pudimos verificar los horarios. Vuelve a intentarlo antes de enviar.');
+        return;
+      } finally {
+        submittingRef.current = false;
+        setValidatingPickup(false);
       }
-      const dayLabel = selectedDay.isToday
-        ? `Hoy (${selectedDay.name} ${selectedDay.dateNumber} ${selectedDay.monthName})`
-        : `${selectedDay.name} ${selectedDay.dateNumber} ${selectedDay.monthName}`;
-      const pickupScheduleNote = `📅 Recoger: ${dayLabel} a las ${pickupTime || 'lo antes posible'}`;
-      finalOrderNotes = [pickupScheduleNote, finalOrderNotes].filter(Boolean).join(' | ');
     }
 
     const orderInfo: CustomerOrderInfo = {
       name: name.trim(),
       phone: phone.trim(),
       order_type: orderType,
+      pickup_date: pickupDateToSend,
+      pickup_time: pickupTimeToSend,
       table_number: orderType === 'dine-in' ? tableNumber.trim() || undefined : undefined,
       address_street: street.trim(),
       address_number: number.trim(),
@@ -659,6 +634,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           onSubmit={handleSubmit}
           className="cart-drawer-form-body"
         >
+          <fieldset disabled={validatingPickup} style={{ display: 'contents' }}>
           {items.length === 0 ? (
             <div className="cart-empty-view">
               <div className="cart-empty-icon-circle">
@@ -1073,22 +1049,34 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </label>
                   </div>
                   <p style={{ margin: '0 0 10px', fontSize: '0.775rem', color: '#64748b' }}>
-                    Selecciona el día y la hora estimada en que pasarás por tu pedido.
+                    Selecciona el día y la hora estimada en que pasarás por tu pedido. Los horarios corresponden a la sucursal.
                   </p>
+                  {pickupLoading && <p role="status" className="pickup-options-feedback">Actualizando horarios…</p>}
+                  {pickupError && <div role="alert" className="pickup-options-feedback is-error"><p>{pickupError}</p>
+                    <button type="button" onClick={() => void refreshPickup().catch(() => {})}>Reintentar horarios</button>
+                  </div>}
+                  {pickupOptions && !pickupOptions.configured && <p role="status">Recogerás tu pedido lo antes posible.</p>}
 
+                  {pickupOptions?.configured && <>
                   {/* Day of Week Selector: L, M, M, J, V, S, D */}
                   <div className="pickup-days-container" role="radiogroup" aria-label="Día de recolección">
                     {weekDayOptions.map((opt) => {
-                      const isSelected = selectedDayIndex === opt.index;
+                      const isSelected = selectedDate === opt.date;
                       return (
                         <button
-                          key={opt.index}
+                          key={opt.date}
                           type="button"
-                          disabled={opt.disabled}
-                          onClick={() => !opt.disabled && setSelectedDayIndex(opt.index)}
+                          disabled={opt.disabled || pickupLoading || Boolean(pickupError)}
+                          onClick={() => {
+                            const slots = pickupOptions.days.find(day => day.date === opt.date)?.slots ?? [];
+                            setSelectedDate(opt.date);
+                            setPickupTime(slots.some(slot => slot.value === pickupTime) ? pickupTime : slots[0]?.value || '');
+                          }}
                           className={`pickup-day-btn ${isSelected ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''} ${opt.isToday ? 'is-today' : ''}`}
                           title={opt.disabled ? `${opt.name} (${opt.isPast ? 'Día pasado no disponible' : 'Cerrado por horario'})` : opt.name}
                           aria-label={opt.name}
+                          role="radio"
+                          aria-checked={isSelected}
                         >
                           <span className="pickup-day-letter">{opt.letter}</span>
                           <span className="pickup-day-number">{opt.dateNumber}</span>
@@ -1109,7 +1097,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         Hora estimada de recolección
                       </label>
                       <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 600 }}>
-                        {selectedDay.isToday ? 'Hoy' : selectedDay.name}
+                        {selectedDay?.isToday ? 'Hoy' : selectedDay?.name}
                       </span>
                     </div>
 
@@ -1124,9 +1112,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           } catch {}
                         }}
                         className="pickup-time-field"
-                        required={orderType === 'takeaway'}
-                        disabled={availablePickupSlots.length === 0}
+                        required
+                        disabled={availablePickupSlots.length === 0 || pickupLoading || Boolean(pickupError)}
                       >
+                        {availablePickupSlots.length > 0 && <option value="">Selecciona una hora</option>}
                         {availablePickupSlots.length === 0 ? (
                           <option value="">Sin horarios disponibles para este día</option>
                         ) : (
@@ -1140,63 +1129,40 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </div>
 
                     {/* Quick presets for today */}
-                    {selectedDay.isToday && availablePickupSlots.length > 0 && (
+                    {selectedDay?.isToday && availablePickupSlots.length > 0 && (
                       <div className="pickup-quick-chips">
-                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Rápido:</span>
-                        {[15, 30, 45, 60]
-                          .filter((mins) => {
-                            if (!currentDaySchedule?.close_time) return true;
-                            const d = new Date();
-                            d.setMinutes(d.getMinutes() + mins);
-                            const hh = String(d.getHours()).padStart(2, '0');
-                            const mm = String(d.getMinutes()).padStart(2, '0');
-                            const openT = currentDaySchedule.open_time || '00:00';
-                            const t = `${hh}:${mm}`;
-                            if (t < openT) return false;
-                            return `${hh}:${mm}` <= currentDaySchedule.close_time;
-                          })
-                          .map((mins) => {
-                            const d = new Date();
-                            d.setMinutes(d.getMinutes() + mins);
-                            const hh = String(d.getHours()).padStart(2, '0');
-                            const mm = String(d.getMinutes()).padStart(2, '0');
-                            const targetTime = `${hh}:${mm}`;
-                            const matchedSlot = availablePickupSlots.find((s) => s.value >= targetTime) || availablePickupSlots[availablePickupSlots.length - 1];
-                            return { mins, slotValue: matchedSlot.value };
-                          })
-                          .filter((item, index, self) => self.findIndex((s) => s.slotValue === item.slotValue) === index)
-                          .map(({ mins, slotValue }) => (
+                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Próximas horas:</span>
+                        {availablePickupSlots.slice(0, 4).map(slot => (
                             <button
-                              key={mins}
+                              key={slot.value}
                               type="button"
                               className="pickup-quick-chip-btn"
-                              onClick={() => setPickupTime(slotValue)}
+                              disabled={pickupLoading || Boolean(pickupError)}
+                              onClick={() => setPickupTime(slot.value)}
                             >
-                              +{mins < 60 ? `${mins} min` : '1 hora'}
+                              {slot.value}
                             </button>
                           ))}
                       </div>
                     )}
 
-                    {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes) && (
-                      <p role="status" className="pickup-grace-notice">
-                        {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes)}
-                      </p>
-                    )}
                     {/* Selected Summary Badge */}
                     <div className="pickup-summary-badge">
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', minWidth: 0 }}>
                         <span>
-                          📅 Pasarás a recoger: <strong>{selectedDay.isToday ? 'Hoy' : selectedDay.name} ({selectedDay.dateNumber} {selectedDay.monthName}) a las {pickupTime || '--:--'} hrs</strong>
+                          {pickupLoading || pickupError ? 'Tu horario está pendiente de verificación.' : selectedDay && pickupTime
+                            ? <>📅 Pasarás a recoger: <strong>{selectedDay.isToday ? 'Hoy' : selectedDay.name} ({selectedDay.dateNumber} {selectedDay.monthName}) a las {pickupTime} hrs</strong></>
+                            : 'Selecciona un día y una hora disponibles para recoger.'}
                         </span>
-                        {currentDaySchedule?.is_open && (
-                          <span style={{ fontSize: '0.72rem', color: 'var(--accent-primary)', fontWeight: 500 }}>
-                            ⏰ Horario de servicio {selectedDay.isToday ? 'hoy' : selectedDay.name}: {currentDaySchedule.open_time} a {currentDaySchedule.close_time} hrs
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
+                  </>}
+                  {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes) && (
+                    <p role="status" className="pickup-grace-notice">
+                      {pickupGraceMessage(orderType, selectedBranch?.pickup_grace_minutes)}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1802,13 +1768,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <button
                   type="submit"
                   className={`btn-cart-submit-order ${isBranchClosed ? 'disabled-closed' : ''}`}
-                  disabled={isSubmitting || items.length === 0 || isBranchClosed || Boolean(editingBlockedReason)}
+                  disabled={isSubmitting || validatingPickup || items.length === 0 || isBranchClosed || Boolean(editingBlockedReason)
+                    || (orderType === 'takeaway' && (pickupLoading || Boolean(pickupError) || !pickupOptions
+                      || (pickupOptions.configured && (!selectedDay || !pickupTime))))}
                   title={isBranchClosed ? 'Sucursal cerrada por el momento' : editingBlockedReason || undefined}
                 >
                   <Send size={18} />
                   <span>
                     {isBranchClosed
                       ? 'Abriremos pronto'
+                      : validatingPickup ? 'Verificando horario…'
                       : isSubmitting
                       ? 'Enviando pedido…'
                       : `Enviar Pedido • ${formatMoney(grandTotalCents)}`}
@@ -1817,6 +1786,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
             </>
           )}
+          </fieldset>
         </form>
       </div>
     </div>

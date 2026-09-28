@@ -12,20 +12,20 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-087 | SDD Dominio wildcard compartido | BDD-DOM-004, BDD-DOM-005 | test_restaurant_domains.py, test_restaurant_links.mjs, test_mobile_storefront_host.mjs | Disenado |
 | PRD-FR-001 | SDD SaaS y suplemento de cierre | BDD-SC-700; BDD SaaS: contraste de selectores del registro | TDD-TS-200; register_select_contrast.browser.js | Disenado |
 | PRD-FR-002 | SDD SaaS y suplemento de cierre | BDD-SC-701, BDD-SC-803 | TDD-TS-201, TDD-TS-303 | Disenado |
-| PRD-FR-003 | SDD SaaS y suplemento de cierre | BDD-SC-702, BDD-SC-801 | TDD-TS-202, TDD-TS-301 | Disenado |
+| PRD-FR-003 | SDD SaaS y suplemento de cierre ; SDD tenant-boundary-remediation | BDD-SC-702, BDD-SC-801 , BDD-SC-984, BDD-SC-985, BDD-SC-986 | TDD-TS-202, TDD-TS-301 , TDD-TS-298 | Disenado |
 | PRD-FR-004 | SDD SaaS y suplemento de cierre | BDD-SC-703 | TDD-TS-203 | Disenado |
 | PRD-FR-005 | SDD SaaS, suplemento de cierre y 02-SDD-manual-trial-suspension | BDD-SC-704, BDD-SC-804, BDD-SC-970, BDD-SC-971, BDD-SC-972 | TDD-TS-204, TDD-TS-304, TDD-TS-297 | Implementado |
 | PRD-FR-010 | SDD SaaS, 02-SDD-mobile-product-modifiers y 02-SDD-category-delete, 02-SDD-product-description | BDD-SC-705, BDD-SC-890, BDD-SC-891, BDD-SC-892, BDD-SC-893, BDD-SC-948, BDD-SC-949, BDD-SC-950, BDD-SC-951, BDD-SC-952, BDD-SC-953, BDD-SC-954 | TDD-TS-205, TDD-TS-290, TDD-TS-294, TDD-TS-295 | Disenado |
 | PRD-FR-011 | SDD SaaS y suplemento de cierre | BDD-SC-706 | TDD-TS-206 | Disenado |
 | PRD-FR-012 | SDD SaaS y suplemento de cierre | BDD-SC-707 | TDD-TS-207 | Disenado |
-| PRD-FR-013 | SDD SaaS y suplemento de cierre | BDD-SC-708 | TDD-TS-208 | Disenado |
+| PRD-FR-013 | SDD SaaS y suplemento de cierre, 02-SDD-tenant-boundary-remediation | BDD-SC-708, BDD-SC-990 | TDD-TS-208, TDD-TS-298 | Disenado |
 | PRD-FR-020 | SDD SaaS y suplemento de cierre | BDD-SC-709 | TDD-TS-209 | Disenado |
 | PRD-FR-021 | SDD SaaS y suplemento de cierre | BDD-SC-710 | TDD-TS-210 | Disenado |
 | PRD-FR-022 | SDD SaaS, suplemento de cierre, 02-SDD-pickup-grace y 02-SDD-pickup-hours-and-cart-upsell (PICKUP-001 implementado; evidencia local en reports/pickup-grace-2026-09-23.md) | BDD-SC-711, BDD-SC-944, BDD-SC-945, BDD-SC-946, BDD-SC-947, BDD-SC-960, BDD-SC-961, BDD-SC-962 | TDD-TS-211, TDD-TS-293, TDD-TS-296 | Disenado |
 | PRD-FR-023 | SDD SaaS y suplemento de cierre | BDD-SC-712 | TDD-TS-212 | Disenado |
 | PRD-FR-024 | SDD SaaS y suplemento de cierre | BDD-SC-713 | TDD-TS-213 | Disenado |
-| PRD-FR-025 | SDD SaaS y suplemento de cierre | BDD-SC-714 | TDD-TS-214 | Disenado |
-| PRD-FR-026 | SDD SaaS y suplemento de cierre | BDD-SC-715 | TDD-TS-215 | Disenado |
+| PRD-FR-025 | SDD SaaS y suplemento de cierre, 02-SDD-mobile-payment-recovery | BDD-SC-714, BDD-SC-991, BDD-SC-992, BDD-SC-993, BDD-SC-994 | TDD-TS-214, TDD-TS-399 | Disenado |
+| PRD-FR-026 | SDD SaaS y suplemento de cierre, 02-SDD-mobile-payment-recovery | BDD-SC-715, BDD-SC-991, BDD-SC-992, BDD-SC-993, BDD-SC-994 | TDD-TS-215, TDD-TS-399 | Disenado |
 | PRD-FR-027 | SDD SaaS y suplemento de cierre | BDD-SC-716 | TDD-TS-216 | Disenado |
 | PRD-FR-028 | SDD SaaS y suplemento de cierre | BDD-SC-717 | TDD-TS-217 | Disenado |
 | PRD-FR-030 | SDD SaaS y suplemento de cierre | BDD-SC-718 | TDD-TS-218 | Disenado |
@@ -36,7 +36,7 @@ Disenado significa contrato y verificación definidos, no pruebas ejecutadas ni 
 | PRD-FR-040 | SDD SaaS y suplemento de cierre | BDD-SC-723 | TDD-TS-223 | Disenado |
 | PRD-FR-041 | SDD SaaS y suplemento de cierre | BDD-SC-724 | TDD-TS-224 | Disenado |
 | PRD-FR-042 | SDD SaaS y suplemento de cierre | BDD-SC-725, BDD-SC-805 | TDD-TS-225, TDD-TS-305 | Disenado |
-| PRD-FR-043 | SDD SaaS y suplemento de cierre | BDD-SC-726, BDD-SC-806 | TDD-TS-226, TDD-TS-306 | Disenado |
+| PRD-FR-043 | SDD SaaS y suplemento de cierre, 02-SDD-tenant-boundary-remediation | BDD-SC-726, BDD-SC-806, BDD-SC-990 | TDD-TS-226, TDD-TS-306, TDD-TS-298 | Disenado |
 | PRD-FR-050 | SDD SaaS y suplemento de cierre | BDD-SC-727 | TDD-TS-227 | Disenado |
 | PRD-FR-051 | SDD SaaS y suplemento de cierre | BDD-SC-728 | TDD-TS-228 | Disenado |
 | PRD-FR-052 | SDD SaaS y suplemento de cierre | BDD-SC-729 | TDD-TS-229 | Disenado |
@@ -270,9 +270,9 @@ Estado permitido: `Propuesto`, `Disenado`, `Scaffold`, `Probado`, `Implementado`
 | PRD-FR-735 | Smart Rating de satisfacción en confirmación de pedido y retención de feedback privado | BDD-SC-475 | TDD-TS-105, TDD-TC-232 | Implementado |
 | PRD-FR-736 | SDD §45: venta cruzada determinista, complementaria y acotada al catálogo efectivo de la sucursal, sin autoridad sobre checkout | BDD-SC-484, BDD-SC-485, BDD-SC-486, BDD-SC-487, BDD-SC-488 | TDD-TS-107, TDD-TC-238, TDD-TC-239, TDD-TC-240, TDD-TC-241 | Implementado |
 | PRD-FR-737 | Auto-registro y vinculación de clientes por pedido (POS y App Móvil) y trazabilidad de calificaciones promedio y comentarios en directorio de clientes del Administrador | BDD-SC-489, BDD-SC-490, BDD-SC-491, BDD-SC-492, BDD-SC-493, BDD-SC-494 | TDD-TS-108, TDD-TC-242, TDD-TC-243, TDD-TC-244, TDD-TC-245, TDD-TC-246, TDD-TC-247 | Implementado |
-| PRD-FR-738 | Alerta móvil persistente en primer plano probada con feed mínimo autorizado, cursor estable por sucursal y fallback visual; audio en dispositivo real queda como QA posterior a publicación | BDD-SC-497, BDD-SC-498, BDD-SC-499, BDD-SC-500, BDD-SC-502, BDD-SC-815, BDD-SC-816, BDD-SC-817, BDD-SC-818 | TDD-TS-109, TDD-TC-250, TDD-TC-251, TDD-TC-252, TDD-TC-253, TDD-TC-254, TDD-TC-255, TDD-TC-256, TDD-TC-257, TDD-TC-258 | Probado |
+| PRD-FR-738 | Alerta móvil persistente en primer plano probada con feed mínimo autorizado, cursor estable por sucursal y fallback visual; audio en dispositivo real queda como QA posterior a publicación | BDD-SC-497, BDD-SC-498, BDD-SC-499, BDD-SC-500, BDD-SC-502, BDD-SC-815, BDD-SC-816, BDD-SC-817, BDD-SC-818 , BDD-SC-980, BDD-SC-981 | TDD-TS-109, TDD-TC-250, TDD-TC-251, TDD-TC-252, TDD-TC-253, TDD-TC-254, TDD-TC-255, TDD-TC-256, TDD-TC-257, TDD-TC-258 , TDD-TC-980, TDD-TC-981 | Probado |
 | PRD-FR-739 | SDD §5.4: borrador asistido público validado por Python y probado sin red real; proveedor, micrófono y TDD-TC-266 E2E quedan pendientes | BDD-SC-819, BDD-SC-820, BDD-SC-821, BDD-SC-822, BDD-SC-823, BDD-SC-824, BDD-SC-825 | TDD-TS-310, TDD-TC-259, TDD-TC-260, TDD-TC-261, TDD-TC-262, TDD-TC-263, TDD-TC-264, TDD-TC-265, TDD-TC-266 | Probado |
-| PRD-FR-740 | Configuración de métodos de pago en caja móvil (efectivo por defecto, tarjeta terminal, datos de transferencia bancaria) y reflejo condicional en carrito digital con supresión de cupón inactivo y ampliación de tarjetas de platillos | BDD-SC-821, BDD-SC-822 | TDD-TC-261, TDD-TC-262, test_branch_payment_methods_and_storefront.py, test_cart_payment_methods_and_coupons.mjs | Implementado |
+| PRD-FR-740 | Configuración de métodos de pago en caja móvil (efectivo por defecto, tarjeta terminal, datos de transferencia bancaria) y reflejo condicional en carrito digital con supresión de cupón inactivo y ampliación de tarjetas de platillos | BDD-SC-982, BDD-SC-983 | TDD-TC-982, TDD-TC-983, test_branch_payment_methods_and_storefront.py, test_cart_payment_methods_and_coupons.mjs | Implementado |
 
 Evidencia operativa de `PRD-FR-708` y `PRD-FR-718`: PCO-004 fue publicado mediante PR #24 y la
 compatibilidad histórica gobernada mediante PR #25. El despliegue productivo quedó en

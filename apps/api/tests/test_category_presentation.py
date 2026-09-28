@@ -234,7 +234,10 @@ def test_category_and_product_base64_image_url(tenants):
     cat_id = created.json()["id"]
 
     # Update category image with another base64
-    base64_png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    base64_png = (
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+        "AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    )
     updated = client.put(
         f"/api/v1/categories/{cat_id}",
         headers=headers,

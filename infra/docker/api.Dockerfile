@@ -9,7 +9,7 @@ ENV VITE_MERCADOPAGO_PUBLIC_KEY=$VITE_MERCADOPAGO_PUBLIC_KEY
 
 WORKDIR /app
 COPY . .
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 RUN pnpm --filter "@restaurantos/pos-web" build
 RUN pnpm --filter "@restaurantos/admin-web" build
 RUN pnpm --filter "@restaurantos/kds-web" build
@@ -20,6 +20,10 @@ RUN pnpm --filter "@restaurantos/landing-web" build
 FROM python:3.12-slim
 
 WORKDIR /app
+
+COPY requirements/python-bootstrap.lock requirements/python-api.lock /app/requirements/
+RUN python -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r /app/requirements/python-bootstrap.lock \
+    && python -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r /app/requirements/python-api.lock
 
 # Copy built frontends to static directory
 COPY --from=frontend-builder /app/apps/pos-web/dist /app/static/pos-web
@@ -37,7 +41,8 @@ COPY apps/api /app/apps/api
 COPY infra/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 WORKDIR /app/apps/api
-RUN pip install --no-cache-dir -e .
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation -e . \
+    && python -m pip check
 
 ENV RESTAURANTOS_PUBLIC_ORDER_INTENTS_ENABLED="true"
 ENV RESTAURANTOS_PUBLIC_VOICE_ORDER_ENABLED="true"

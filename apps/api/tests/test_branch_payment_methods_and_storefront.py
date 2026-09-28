@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from typing import Any
+
 import pytest
 import sqlalchemy as sa
+from restaurant_os import models, operations, public_storefront
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from restaurant_os import models, operations, public_storefront
 from test_platform_api import _seed
 
 BRANCH_ID = "018f6f73-2d0a-74f0-8f1c-000000000003"
