@@ -2,7 +2,7 @@
   "synthetic_allowlist": [
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "defd1cd3bd91c5c374fef73b809dd009231db28e176325041267a5a7849a8fcb",
+      "sha256": "f9f44bf1c8b1e656a24b2c65ba05d731afa4e18b21a3329ddc4b9710831dc64f",
       "provenance": "restaurantos-ci-test-services-v1"
     },
     {
@@ -12,7 +12,7 @@
     },
     {
       "path": "apps/api/tests/test_admin_ai_postgres.py",
-      "sha256": "c93ff595f85734156eeac628de54493e748183db6b0e81b980a9d84c8a149f7b",
+      "sha256": "c92ac33d8ac4839116620ca043f08f9eefa231f8e5c962feaec97087b7570a1d",
       "provenance": "restaurantos-admin-ai-postgres-tests-v1"
     },
     {

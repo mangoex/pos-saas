@@ -62,6 +62,36 @@ no cambia ni se excluyen directorios/patrones. Incluye deuda preexistente en HEA
 registrar el hash de una prueba histórica WhatsApp no modifica ni habilita esa integración.
 Las pruebas del scanner conservan rechazo de otro contenido o procedencia incorrecta.
 
+### Ajustes encontrados por la suite completa de CI
+
+La primera ejecución del PR #5 (`36495250983`) terminó con 1252 pruebas aprobadas,
+14 fallidas y 15 omitidas. No se integró ese SHA. Los fallos identificaron contratos
+de prueba desactualizados y una divergencia del modelo respecto a la migración 0026:
+
+- El head esperado se actualiza a 0098; los rollbacks PostgreSQL deben conservar la
+  revisión previa al intento fallido, junto con sus datos históricos.
+- El fixture de IA crea un producto activo del tenant. La semilla histórica usada
+  antes fue archivada por 0027; se conserva archivada y no se debilita la guarda.
+- La paginación de caja prepara turnos cerrados secuencialmente, respetando un único
+  turno abierto por actor. Mantiene verificación de duplicados, omisiones y cursor.
+- Las expresiones booleanas del metadata se alinean literalmente con la migración
+  0026 ya existente. No se cambia esquema productivo ni regla de variaciones.
+- CI conserva PR/manual, sin segunda suite automática post-merge. Las regresiones
+  verifican el SHA base, el fallback manual y el mismo rango para whitespace/ratchet.
+- La comprobación estructural del POS sigue el helper de sesión vigente y mantiene
+  la validación de sucursal antes de aplicar la sesión.
+
+No se omiten pruebas ni se relajan permisos para resolver estos fallos. Sólo se
+actualizan los hashes exactos de los dos fixtures sintéticos modificados (CI/AIA).
+La revisión independiente del delta confirmó paridad del DDL y conservación de las
+aserciones de concurrencia, idempotencia y rollback.
+
+Revalidación local del ajuste: **38 passed** (contratos CI/POS, cadena Alembic y
+paginación), **20 passed** (variaciones existentes/trazabilidad), **15 passed** sin
+skips (IA, modificadores móviles y migraciones de presentación/dominios con PostgreSQL
+y SQLite). Ruff, mypy del modelo, política de repositorio y diff-check verdes.
+La nueva ejecución completa de CI del PR es el gate pendiente para integrar este cierre.
+
 Se mantienen visibles la deprecación Starlette/httpx, advertencias de chunks grandes,
 el aviso del pyproject raíz sin tabla project y el aviso Windows de ruta temporal
 corta/larga del auditor. No son resultados de pruebas omitidos ni fallos silenciados.

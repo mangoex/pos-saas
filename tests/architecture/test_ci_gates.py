@@ -85,24 +85,25 @@ _PUSH_TRIGGER_PATTERN = r"^ *push:[ ]*$"
 
 # The direct `whitespace` job must inspect the actual PR diff. A clean working
 # tree is not an equivalent check: it cannot find whitespace introduced by the
-# proposed change. The base ref is fetched explicitly and the diff is anchored
-# to the pull request base, with `main` as the workflow-dispatch fallback.
+# proposed change. Resolve the event base SHA, with main/parent as the manual
+# fallback, so dispatch on main also checks a nonempty committed range.
 _WHITESPACE_STEP_PATTERNS = {
     "uses: actions/checkout@v4": r"^ *(?:- )?uses:[ ]*actions/checkout@v4[ ]*$",
     "fetch-depth: 0": r"^ *fetch-depth:[ ]*0[ ]*$",
-    "resolve pull request base or main": (
-        r"^ *BASE_REF:[ ]*\$\{\{ github\.base_ref \|\| 'main' \}\}[ ]*$"
+    "resolve event base SHA": (
+        r"^ *EVENT_BASE_SHA:[ ]*\$\{\{ github\.event\.before \|\| "
+        r"github\.event\.pull_request\.base\.sha \}\}[ ]*$"
     ),
-    "fetch resolved base ref": (
-        r'^ *git fetch --no-tags origin "\$BASE_REF"[ ]*$'
+    "fetch event base SHA": (
+        r'^ *git fetch --no-tags origin "\$EVENT_BASE_SHA"[ ]*$'
     ),
-    "git diff --check origin/resolved-base...HEAD": (
-        r'^ *git diff --check "origin/\$BASE_REF\.\.\.HEAD"[ ]*$'
+    "check committed comparison diff": (
+        r'^ *run: git diff --check "\$COMPARISON_BASE\.\.\.HEAD"[ ]*$'
     ),
     "run repository policy": r"^ *run:[ ]*python scripts/repository_policy\.py \.[ ]*$",
     "run quality ratchet": (
         r'^ *run:[ ]*python scripts/quality_ratchet\.py --base '
-        r'"origin/\$BASE_REF" --head HEAD[ ]*$'
+        r'"\$COMPARISON_BASE" --head HEAD[ ]*$'
     ),
 }
 
@@ -238,9 +239,12 @@ def test_python_job_provisions_isolated_aia001_postgres_without_generic_url() ->
 
 def test_whitespace_gate_uses_main_when_workflow_dispatch_has_no_base_ref() -> None:
     whitespace_section = _job_section(_ci_content(), "whitespace")
-    assert "BASE_REF: ${{ github.base_ref || 'main' }}" in whitespace_section
-    assert 'git fetch --no-tags origin "$BASE_REF"' in whitespace_section
-    assert 'git diff --check "origin/$BASE_REF...HEAD"' in whitespace_section
+    assert 'git fetch --no-tags origin main' in whitespace_section
+    assert 'comparison_base="$(git merge-base origin/main HEAD)"' in whitespace_section
+    assert 'if [ "$comparison_base" = "$(git rev-parse HEAD)" ]; then' in whitespace_section
+    assert 'comparison_base="$(git rev-parse --verify HEAD^1)"' in whitespace_section
+    assert 'echo "COMPARISON_BASE=$comparison_base" >> "$GITHUB_ENV"' in whitespace_section
+    assert 'git diff --check "$COMPARISON_BASE...HEAD"' in whitespace_section
 
 
 def test_frontend_semantic_gate_includes_handoff_idempotency_and_offline_cash() -> None:
@@ -348,9 +352,9 @@ def test_negative_synthetic_yaml_is_rejected() -> None:
     ]
     assert missing_whitespace_steps == [
         "fetch-depth: 0",
-        "resolve pull request base or main",
-        "fetch resolved base ref",
-        "git diff --check origin/resolved-base...HEAD",
+        "resolve event base SHA",
+        "fetch event base SHA",
+        "check committed comparison diff",
         "run repository policy",
         "run quality ratchet",
     ]

@@ -67,7 +67,8 @@ def test_organization_branch_selection_is_validated_before_application() -> None
     """An organization selection must round-trip through the canonical endpoint."""
     session_source = _read("session.ts")
     settings_source = _read("features/settings/Settings.tsx")
-    assert "/auth/session?branch_id=${encodeURIComponent(branchId)}" in session_source
+    assert "/auth/session?branch_id=${encodeURIComponent(targetBranchId)}" in session_source
+    assert "nextSession = await fetchCanonicalSession(branchId)" in session_source
     assert "allowed_branch_ids.includes(branchId)" in session_source
     assert "nextSession.active_branch?.id !== branchId" in session_source
     assert "applySession(nextSession)" in session_source

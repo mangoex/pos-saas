@@ -87,6 +87,9 @@ def test_presentation_upgrade_and_protected_rollback(tmp_path, dialect):
         if dialect == "postgresql":
             verify_concurrent_category_audit(engine)
         with engine.begin() as conn:
+            revision_before_rollback = conn.scalar(
+                sa.text("SELECT version_num FROM alembic_version")
+            )
             conn.execute(
                 sa.text("UPDATE organizations SET menu_home_name='Nuestra carta' WHERE id=:id"),
                 {"id": org},
@@ -96,7 +99,7 @@ def test_presentation_upgrade_and_protected_rollback(tmp_path, dialect):
         assert "preserve menu presentation" in blocked.stderr
         with engine.connect() as conn:
             expected_revision = (
-                "0086_secure_customer_feedback_reference"
+                revision_before_rollback
                 if dialect == "postgresql"
                 else "0082_category_presentation"
             )

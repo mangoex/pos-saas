@@ -710,17 +710,17 @@ ingredient_variation_products = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     sa.UniqueConstraint("variation_id", "product_id", name="uq_ingredient_variation_product"),
-    sa.CheckConstraint("allow_add = 1 OR allow_remove = 1", name="ck_ingredient_variation_actions"),
+    sa.CheckConstraint("allow_add OR allow_remove", name="ck_ingredient_variation_actions"),
     sa.CheckConstraint(
-        "allow_add = 0 OR add_quantity > 0", name="ck_ingredient_variation_add_quantity"
+        "NOT allow_add OR add_quantity > 0", name="ck_ingredient_variation_add_quantity"
     ),
     sa.CheckConstraint("remove_quantity >= 0", name="ck_ingredient_variation_remove_quantity"),
     sa.CheckConstraint(
-        "charge_additional = 0 OR (allow_add = 1 AND add_price_delta_cents > 0)",
+        "NOT charge_additional OR (allow_add AND add_price_delta_cents > 0)",
         name="ck_ingredient_variation_charge",
     ),
     sa.CheckConstraint(
-        "charge_additional = 1 OR add_price_delta_cents = 0",
+        "charge_additional OR add_price_delta_cents = 0",
         name="ck_ingredient_variation_free_price",
     ),
 )
