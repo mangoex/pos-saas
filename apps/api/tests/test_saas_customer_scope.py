@@ -205,7 +205,9 @@ def test_superadmin_can_view_customers_across_all_organizations_and_filter_by_te
     assert pizza_item["organization_id"] == pizza["organization"]["id"]
 
     # 2. Superadmin can paginate across all tenants
-    page_res = client.get("/api/v1/customers?all_organizations=true&limit=50&offset=0", headers=headers_sa)
+    page_res = client.get(
+        "/api/v1/customers?all_organizations=true&limit=50&offset=0", headers=headers_sa
+    )
     assert page_res.status_code == 200, page_res.text
     page_data = page_res.json()
     assert "items" in page_data
@@ -215,13 +217,17 @@ def test_superadmin_can_view_customers_across_all_organizations_and_filter_by_te
     assert pizza_cust_id in page_ids
 
     # 3. Superadmin can filter specifically by organization_id
-    filter_tacos = client.get(f"/api/v1/customers?organization_id={tacos['organization']['id']}", headers=headers_sa)
+    filter_tacos = client.get(
+        f"/api/v1/customers?organization_id={tacos['organization']['id']}", headers=headers_sa
+    )
     assert filter_tacos.status_code == 200, filter_tacos.text
     filter_tacos_ids = {c["id"] for c in filter_tacos.json()}
     assert tacos_cust_id in filter_tacos_ids
     assert pizza_cust_id not in filter_tacos_ids
 
-    filter_pizza = client.get(f"/api/v1/customers?organization_id={pizza['organization']['id']}", headers=headers_sa)
+    filter_pizza = client.get(
+        f"/api/v1/customers?organization_id={pizza['organization']['id']}", headers=headers_sa
+    )
     assert filter_pizza.status_code == 200, filter_pizza.text
     filter_pizza_ids = {c["id"] for c in filter_pizza.json()}
     assert pizza_cust_id in filter_pizza_ids
@@ -253,5 +259,7 @@ def test_regular_tenant_cannot_access_cross_tenant_customers_via_superadmin_para
     assert denied_all.status_code == 403, denied_all.text
 
     # Attempt to query another organization's customers
-    denied_org = client.get(f"/api/v1/customers?organization_id={tenant_2['organization']['id']}", headers=headers_1)
+    denied_org = client.get(
+        f"/api/v1/customers?organization_id={tenant_2['organization']['id']}", headers=headers_1
+    )
     assert denied_org.status_code == 403, denied_org.text

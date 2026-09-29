@@ -331,9 +331,12 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
     }
     const cents = Math.round(amountNum * 100);
     const cleanConcept = movementConcept.trim();
-    const cleanEvidence = movementEvidence.trim() || 'Registro móvil';
     if (!cleanConcept) {
       setError('Captura el motivo o concepto del movimiento.');
+      return;
+    }
+    if (!movementEvidence.trim()) {
+      setError('Captura una referencia de evidencia o comprobante del movimiento.');
       return;
     }
     const operation = [
@@ -359,7 +362,7 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
           concept: cleanConcept,
           amount_cents: cents,
           reference: cleanConcept,
-          evidence_refs: [cleanEvidence],
+          evidence_refs: [movementEvidence.trim()],
         }),
       });
       commandKeys.current.clear(operation);
@@ -2059,12 +2062,14 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                  Referencia / Comprobante (Opcional)
+                <label htmlFor="mobile-cash-evidence" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Referencia / Comprobante
                 </label>
                 <input
                   type="text"
                   value={movementEvidence}
+                  id="mobile-cash-evidence"
+                  required
                   onChange={(e) => setMovementEvidence(e.target.value)}
                   maxLength={600}
                   placeholder="Ej. Ticket #12, Vale de caja, etc."

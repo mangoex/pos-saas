@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -50,10 +51,12 @@ def _postgres_url() -> str:
 
 
 def _alembic(url: str, command: str, revision: str) -> None:
+    environment = {**os.environ, "RESTAURANTOS_DATABASE_URL": url}
+    environment.pop("DATABASE_URL", None)
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", "alembic.ini", command, revision],
         cwd=API_DIR,
-        env={"PATH": os.environ.get("PATH", ""), "RESTAURANTOS_DATABASE_URL": url},
+        env=environment,
         capture_output=True,
         text=True,
     )
@@ -70,18 +73,62 @@ def _truncate(engine: sa.Engine) -> None:
 def postgres_engine() -> sa.Engine:
     url = _postgres_url()
     engine = sa.create_engine(url, pool_pre_ping=True)
+    ready = False
     try:
         _alembic(url, "upgrade", "head")
-        _truncate(engine)
-        _alembic(url, "downgrade", "0038_cash_shift_closures_sales_monitor")
-        _alembic(url, "upgrade", "0039_order_reopen_requests")
+        ready = True
         _truncate(engine)
         yield engine
     finally:
         try:
-            _truncate(engine)
+            if ready:
+                _truncate(engine)
         finally:
             engine.dispose()
+
+
+def test_postgres_reopen_historical_empty_roundtrip() -> None:
+    url = _postgres_url()
+    schema = f"pco005_roundtrip_{uuid4().hex}"
+    admin = sa.create_engine(url)
+    try:
+        with admin.begin() as connection:
+            connection.execute(sa.schema.CreateSchema(schema))
+        scoped_url = sa.engine.make_url(url).set(query={"options": f"-csearch_path={schema}"})
+        scoped = scoped_url.render_as_string(hide_password=False)
+        _alembic(scoped, "upgrade", "0038_cash_shift_closures_sales_monitor")
+        _alembic(scoped, "upgrade", "0039_order_reopen_requests")
+        inspection = sa.create_engine(scoped_url)
+        try:
+            assert sa.inspect(inspection).has_table("order_reopen_requests", schema=schema)
+            _alembic(scoped, "downgrade", "0038_cash_shift_closures_sales_monitor")
+            assert not sa.inspect(inspection).has_table("order_reopen_requests", schema=schema)
+            _alembic(scoped, "upgrade", "0039_order_reopen_requests")
+            assert sa.inspect(inspection).has_table("order_reopen_requests", schema=schema)
+        finally:
+            inspection.dispose()
+    finally:
+        with admin.begin() as connection:
+            connection.execute(sa.schema.DropSchema(schema, cascade=True, if_exists=True))
+        admin.dispose()
+
+
+def test_reopen_alembic_preserves_os_environment_and_isolates_database(monkeypatch) -> None:
+    monkeypatch.setenv("SYSTEMROOT", "synthetic-os-root")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://untrusted.example/not-used")
+    monkeypatch.setenv("RESTAURANTOS_DATABASE_URL", "postgresql://untrusted.example/not-used")
+    captured = {}
+
+    def run(arguments, **kwargs):
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    explicit = "postgresql+psycopg://test:test@127.0.0.1/pco005_test"
+    _alembic(explicit, "upgrade", "head")
+    assert captured["env"]["SYSTEMROOT"] == "synthetic-os-root"
+    assert captured["env"]["RESTAURANTOS_DATABASE_URL"] == explicit
+    assert "DATABASE_URL" not in captured["env"]
 
 
 def _setup_order(engine: sa.Engine) -> str:

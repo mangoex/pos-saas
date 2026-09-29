@@ -158,6 +158,9 @@ def test_public_intent_is_exactly_once_and_total_is_derived_in_python() -> None:
         "status": "PENDING_REVIEW",
         "version": 1,
         "total_cents": 19_000,
+        "delivery_fee_cents": 0,
+        "coupon_code": None,
+        "discount_cents": 0,
     }
 
     replay = _post_intent(client, payload)
@@ -221,6 +224,9 @@ def test_public_reference_read_is_redacted() -> None:
         "status": "PENDING_REVIEW",
         "version": 1,
         "total_cents": 9_500,
+        "delivery_fee_cents": 0,
+        "coupon_code": None,
+        "discount_cents": 0,
     }
 
 

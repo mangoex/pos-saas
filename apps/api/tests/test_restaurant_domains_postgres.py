@@ -106,6 +106,9 @@ def test_domain_claim_race_and_migration_history():
             alias_count = session.scalar(
                 sa.select(sa.func.count()).select_from(models.storefront_aliases)
             )
+            revision_before_rollback = session.scalar(
+                sa.text("select version_num from alembic_version")
+            )
         rollback = migrate("downgrade", "0080_delivery_inbox_idempotency")
         assert rollback.returncode != 0
         assert "preserve domain/alias history" in rollback.stderr
@@ -120,7 +123,7 @@ def test_domain_claim_race_and_migration_history():
             )
             assert (
                 session.scalar(sa.text("select version_num from alembic_version"))
-                == "0086_secure_customer_feedback_reference"
+                == revision_before_rollback
             )
     finally:
         engine.dispose()

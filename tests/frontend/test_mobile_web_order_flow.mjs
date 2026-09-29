@@ -29,6 +29,7 @@ Object.defineProperty(testNavigator, 'locks', { configurable: true, value: mockM
 
 let buildWhatsAppLink;
 let fetchMobileMenu;
+let fetchPickupOptions;
 let fetchOrderUpsellRecommendations;
 let submitMobileOrder;
 let hasPendingMobileOrder;
@@ -60,6 +61,7 @@ try {
   const mobileApi = require(join(temporaryDirectory, 'api.js'));
   buildWhatsAppLink = mobileApi.buildWhatsAppLink;
   fetchMobileMenu = mobileApi.fetchMobileMenu;
+  fetchPickupOptions = mobileApi.fetchPickupOptions;
   fetchOrderUpsellRecommendations = mobileApi.fetchOrderUpsellRecommendations;
   submitMobileOrder = mobileApi.submitMobileOrder;
   hasPendingMobileOrder = mobileApi.hasPendingMobileOrder;
@@ -75,6 +77,29 @@ try {
 
 process.on('exit', () => {
   rmSync(temporaryDirectory, { recursive: true, force: true });
+});
+
+test('Pickup options uses the public branch key, no-store and strict response validation', async () => {
+  const originalFetch = global.fetch;
+  const data = { generated_at: '2026-09-28T22:00:00Z', timezone: 'America/Chihuahua', configured: false,
+    days: Array.from({ length: 7 }, (_, i) => ({ date: `2026-09-${String(21 + i).padStart(2, '0')}`,
+      day_index: i, is_today: i === 0, is_past: false, is_closed: true, slots: [] })) };
+  const abort = new AbortController();
+  try {
+    global.fetch = async (url, options) => {
+      assert.equal(url, '/api/v1/public/branches/key%2Fbranch/pickup-options');
+      assert.equal(options.cache, 'no-store');
+      assert.equal(options.signal, abort.signal);
+      return { ok: true, json: async () => data };
+    };
+    assert.deepEqual(await fetchPickupOptions('key/branch', abort.signal), data);
+    global.fetch = async () => ({ ok: true, json: async () => ({}) });
+    await assert.rejects(() => fetchPickupOptions('branch-a'), /pickup_options_invalid/);
+    global.fetch = async () => ({ ok: false, status: 503 });
+    await assert.rejects(() => fetchPickupOptions('branch-a'), /pickup_options_503/);
+    global.fetch = async () => { throw new Error('Should not fetch without branch'); };
+    await assert.rejects(() => fetchPickupOptions(''), /pickup_branch_missing/);
+  } finally { global.fetch = originalFetch; }
 });
 
 test('Mobile Order WhatsApp link format for takeaway', () => {
@@ -242,6 +267,7 @@ test('Public intent retries retain pending state except persisted success', asyn
 test('Uncertain mobile order retries its original body and receipt after inputs change', async () => {
   const originalInfo = {
     name: 'Cliente original', phone: '5511223344', order_type: 'takeaway',
+    pickup_date: '2026-09-28', pickup_time: '16:15',
     address_street: '', address_number: '', address_neighborhood: '', address_notes: '',
     payment_method: 'cash', cash_amount: '200', order_notes: 'Sin cubiertos',
   };
@@ -253,7 +279,7 @@ test('Uncertain mobile order retries its original body and receipt after inputs 
     modifiers: [{ option_id: 'extra-1', selection_kind: 'modifier', name: 'Avena', price_delta_cents: 500 }],
     line_total_cents: 14000,
   }];
-  const changedInfo = { ...originalInfo, name: 'Cliente editado', phone: '5588776655', order_notes: 'Con cubiertos' };
+  const changedInfo = { ...originalInfo, name: 'Cliente editado', phone: '5588776655', order_notes: 'Con cubiertos', pickup_date: '2026-10-05', pickup_time: '18:00' };
   const changedItems = [{ ...originalItems[0], cart_id: 'line-edited', quantity: 1 }];
   const originalFetch = global.fetch;
   const originalStorage = global.localStorage;
@@ -277,6 +303,8 @@ test('Uncertain mobile order retries its original body and receipt after inputs 
     // A fresh invocation over the same storage models a page reload.
     const recovered = await submitMobileOrder(changedInfo, changedItems, 'branch-1', 'Sucursal editada', undefined, 'public-key', '5215500000002', true);
     assert.equal(requests[1].body, requests[0].body);
+    assert.equal(JSON.parse(requests[1].body).pickup_date, '2026-09-28');
+    assert.equal(JSON.parse(requests[1].body).pickup_time, '16:15');
     assert.equal(requests[1].key, persistedKey);
     assert.equal(recovered.public_reference, 'PI-RECOVERED');
     assert.deepEqual(recovered.customer_info, originalInfo);

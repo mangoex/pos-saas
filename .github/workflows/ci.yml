@@ -25,18 +25,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Check pull request diff whitespace
+      - name: Resolve comparison commit
         env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_BASE_SHA: ${{ github.event.before || github.event.pull_request.base.sha }}
         run: |
-          git fetch --no-tags origin "$BASE_REF"
-          git diff --check "origin/$BASE_REF...HEAD"
+          if [ -n "$EVENT_BASE_SHA" ] && [ "$EVENT_BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags origin "$EVENT_BASE_SHA"
+            comparison_base="$(git rev-parse --verify "$EVENT_BASE_SHA^{commit}")"
+          else
+            git fetch --no-tags origin main
+            comparison_base="$(git merge-base origin/main HEAD)"
+            if [ "$comparison_base" = "$(git rev-parse HEAD)" ]; then
+              comparison_base="$(git rev-parse --verify HEAD^1)"
+            fi
+          fi
+          echo "COMPARISON_BASE=$comparison_base" >> "$GITHUB_ENV"
+      - name: Check change diff whitespace
+        run: git diff --check "$COMPARISON_BASE...HEAD"
       - name: Enforce repository policy
         run: python scripts/repository_policy.py .
       - name: Reject newly added quality suppressions
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-        run: python scripts/quality_ratchet.py --base "origin/$BASE_REF" --head HEAD
+        run: python scripts/quality_ratchet.py --base "$COMPARISON_BASE" --head HEAD
 
   python:
     runs-on: ubuntu-latest
@@ -59,14 +68,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Create clean Python environment
+        run: |
+          python -m venv .venv-ci
+          echo "$GITHUB_WORKSPACE/.venv-ci/bin" >> "$GITHUB_PATH"
       - name: Install API dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r apps/api/requirements-dev.txt
+          python -m pip install --require-hashes --only-binary=:all: -r requirements/python-bootstrap.lock
+          python -m pip install --require-hashes --only-binary=:all: -r apps/api/requirements-dev.txt
+          python -m pip check
+      - name: Audit resolved Python dependencies
+        run: python -m pip_audit --strict
+      - name: Check Python lock consistency
+        run: python scripts/python_locks.py
+      - name: Install local projects without dependency resolution
+        run: python -m pip install --no-deps --no-build-isolation -e ./apps/api -e ./apps/edge-gateway
       - name: Create isolated PCO, SEC, MOB-ORD, RBAC, seed and AIA PostgreSQL databases
         env:
           PGPASSWORD: postgres
         run: |
+          psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --command "CREATE DATABASE pco005_ci"
           psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'pco005b_ci'" | grep -qx 1 || psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --command "CREATE DATABASE pco005b_ci"
           psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'pco006_ci'" | grep -qx 1 || psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --command "CREATE DATABASE pco006_ci"
           psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'pco007_ci'" | grep -qx 1 || psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --command "CREATE DATABASE pco007_ci"
@@ -84,6 +105,7 @@ jobs:
       - name: Run tests
         env:
           SAAS_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco005b_ci
+          PCO005_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco005_ci
           PCO005B_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco005b_ci
           PCO006_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco006_ci
           PCO007_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/pco007_ci
@@ -96,12 +118,29 @@ jobs:
         run: python -m pytest
       - name: Ruff
         run: python -m ruff check apps/api tests
+      - name: Typecheck SaaS API and remediated services
+        run: >-
+          python -m mypy
+          apps/api/restaurant_os/api.py
+          apps/api/restaurant_os/operations.py
+          apps/api/restaurant_os/public_storefront.py
+          apps/api/restaurant_os/pickup_schedule.py
+          apps/api/restaurant_os/customer_ai.py
+          apps/api/restaurant_os/integrations/service.py
+          apps/api/restaurant_os/integrations/kill_switch.py
+          --follow-imports=silent
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Validate compose
         run: docker compose -f infra/docker/docker-compose.yml config
+      - name: Build release image from hashed locks
+        run: docker build -f infra/docker/api.Dockerfile -t "restaurantos-ci:$GITHUB_SHA" .
+      - name: Verify API image without starting migrations
+        run: |
+          docker run --rm --entrypoint python "restaurantos-ci:$GITHUB_SHA" -m pip check
+          docker run --rm --entrypoint python "restaurantos-ci:$GITHUB_SHA" -c "import restaurant_os.main"
 
   frontend:
     runs-on: ubuntu-latest
@@ -114,6 +153,8 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile
+      - name: Audit resolved frontend dependencies
+        run: pnpm audit --audit-level moderate
       - name: Typecheck
         run: pnpm typecheck
       - name: Run semantic frontend regressions

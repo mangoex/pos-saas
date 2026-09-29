@@ -1,0 +1,4 @@
+types-openpyxl
+types-jsonschema
+pip-audit==2.9.0
+uv==0.12.19

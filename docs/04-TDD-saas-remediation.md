@@ -2,6 +2,16 @@
 
 Estado inicial: diseño, sin certificación. Identificar primero prueba focal fallida por razón esperada; no desactivar tests heredados para obtener verde.
 
+## Verificación del paquete 4: dependencias reproducibles
+
+La auditoría inicial de dependencias proporciona el gate rojo; no se fabrica un fallo funcional.
+Instalar bootstrap y locks en entorno Python 3.12 limpio con hashes, comprobar `pip check`, auditar
+el grafo instalado y probar grants Ed25519, gateway y compatibilidad criptográfica. Mantener
+runtime API/gateway y dev consistentes; probar instalación de los proyectos sin nueva resolución.
+CI Linux acredita marcadores de esa plataforma; validación Windows no sustituye build Docker.
+Frontend: instalación frozen, auditoría de todas las dependencias, typecheck, semánticas afectadas
+y builds de los cinco frontends. Avisos de tamaño no se ocultan ni equivalen a vulnerabilidades.
+
 ## TDD-TS-200 PRD-FR-001: Sign Up Público Autoservicio
 
 Verificar BDD-SC-700 con fixture de dos organizaciones. Oráculo: resultado funcional completo del requisito, efectos persistidos en A y ausencia de efectos/lecturas en B; no basta HTTP 200 ni texto de UI. Cubrir rechazo de entradas inválidas y rollback si hay escritura. Evidencia ejecutable y resultado pendientes; no atribuir suites ERP por coincidencia de IDs.
@@ -424,3 +434,21 @@ para ambos selectores, temas oscuro/claro y anchos 390/1440; verifica la paleta 
 opciones y que cada valor pueda seleccionarse. No envía el formulario ni crea cuentas.
 RED confirmado: tema oscuro, hover, contraste 1.03:1 antes de corregir `Select.css`.
 La hoja nativa del sistema en iOS/Android requiere además comprobación en dispositivo real.
+
+Remediación 2026-09-28: el gate SQLite de reversibilidad compara el head aplicado con `ScriptDirectory.get_heads()` y comprueba la unicidad compuesta de confirmación de merma. La expectativa no se ata a una revisión histórica fija.
+
+### Typecheck del alcance SaaS remediado
+
+CI ejecuta mypy estricto para `api.py`, `operations.py`, `public_storefront.py`, `pickup_schedule.py`,
+`customer_ai.py`, `integrations/service.py` e `integrations/kill_switch.py`, con `--follow-imports=silent`. Es un gate explícito de estos módulos;
+no acredita typecheck de todo el monorepo ni de módulos importados fuera de la lista.
+El baseline de 65 errores API/operations se midió con la misma configuración, sin
+nuevos ignores, exclusiones, relajación de strict o cambios en las pruebas para obtener verde.
+
+Las anotaciones SQL se contrastan con los tipos reales de columna. Los casts a
+`CursorResult` sólo documentan resultados de UPDATE Core cuyo `rowcount` ya se verificaba;
+no modifican SQL, locks ni comparación de filas. El refactor de correcciones mantiene las
+fuentes históricas y fórmulas, y distingue snapshots, producto añadido y ajuste de pago.
+Verificación dirigida: reapertura/correcciones y sus carreras PostgreSQL, impresión SEC-001,
+recetas/reportes PCO-007, storefront y normalizadores de sucursal/cupones. La evidencia exacta
+y la revisión R3 se registran en el reporte de ejecución, no como estado global Probado.

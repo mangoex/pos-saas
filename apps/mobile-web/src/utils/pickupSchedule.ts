@@ -1,100 +1,65 @@
-import type { DaySchedule } from '../types';
+import type { PickupOptions } from '../types';
 
-export interface PickupTimeSlot {
-  value: string; // "16:00" (24h)
-  label: string; // "16:00 (04:00 PM)"
+export function formatTimeSlotLabel(value: string): string {
+  const [hours, minutes] = value.split(':').map(Number);
+  return `${value} (${String(hours % 12 || 12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'})`;
 }
 
-export interface PickupScheduleOptions {
-  isToday?: boolean;
-  referenceDate?: Date;
-  intervalMinutes?: number;
-  leadTimeMinutes?: number;
+/** Validate transport shape; Python alone determines the available dates and times. */
+export function parsePickupOptions(value: unknown): PickupOptions {
+  const record = (input: unknown): input is Record<string, unknown> => typeof input === 'object' && input !== null;
+  if (!record(value) || typeof value.generated_at !== 'string' || !Number.isFinite(Date.parse(value.generated_at))
+    || typeof value.timezone !== 'string' || !value.timezone || typeof value.configured !== 'boolean'
+    || !Array.isArray(value.days) || value.days.length !== 7) throw new Error('pickup_options_invalid');
+  const dates = new Set<string>();
+  for (const [index, day] of value.days.entries()) {
+    if (!record(day) || day.day_index !== index || typeof day.date !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}$/.test(day.date) || dates.has(day.date)
+      || typeof day.is_today !== 'boolean' || typeof day.is_past !== 'boolean'
+      || typeof day.is_closed !== 'boolean' || !Array.isArray(day.slots)) throw new Error('pickup_options_invalid');
+    dates.add(day.date);
+    const times = new Set<string>();
+    for (const slot of day.slots) {
+      if (!record(slot) || typeof slot.value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.value)
+        || times.has(slot.value) || typeof slot.scheduled_at !== 'string' || !Number.isFinite(Date.parse(slot.scheduled_at))
+        || day.is_closed || day.is_past || !value.configured) throw new Error('pickup_options_invalid');
+      times.add(slot.value);
+    }
+  }
+  return value as unknown as PickupOptions;
 }
 
-export function formatTimeSlotLabel(timeStr: string): string {
-  const parts = timeStr.split(':');
-  if (parts.length < 2) return timeStr;
-  const hours = parseInt(parts[0], 10);
-  const minutes = parseInt(parts[1], 10);
-  if (isNaN(hours) || isNaN(minutes)) return timeStr;
-
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const displayHours = hours % 12 === 0 ? 12 : hours % 12;
-  const padH = String(displayHours).padStart(2, '0');
-  const padM = String(minutes).padStart(2, '0');
-  return `${timeStr} (${padH}:${padM} ${period})`;
+export function validatePickupSelection(options: PickupOptions, date: string, time: string): void {
+  if (!options.configured && !date && !time) return;
+  if (!options.configured || !options.days.some(day => day.date === date && !day.is_closed && !day.is_past
+    && day.slots.some(slot => slot.value === time))) throw new Error('pickup_slot_unavailable');
 }
 
-/**
- * Generates available pickup time slots strictly bounded by the branch's service schedule.
- * If isToday is true, slots prior to the current time (+ lead time) are excluded.
- */
-export function generatePickupTimeSlots(
-  schedule: DaySchedule | null | undefined,
-  options: PickupScheduleOptions = {}
-): PickupTimeSlot[] {
-  if (!schedule || schedule.is_open === false) {
-    return [];
-  }
-
-  const openTime = schedule.open_time || '09:00';
-  const closeTime = schedule.close_time || '22:00';
-
-  const [openH, openM] = openTime.split(':').map((v) => parseInt(v, 10));
-  const [closeH, closeM] = closeTime.split(':').map((v) => parseInt(v, 10));
-
-  if (isNaN(openH) || isNaN(openM) || isNaN(closeH) || isNaN(closeM)) {
-    return [];
-  }
-
-  const interval = Math.max(5, options.intervalMinutes ?? 15);
-  const openMinutes = openH * 60 + openM;
-  const closeMinutes = closeH * 60 + closeM;
-
-  if (openMinutes >= closeMinutes) {
-    return [];
-  }
-
-  let startMinutes = openMinutes;
-
-  if (options.isToday) {
-    const refDate = options.referenceDate ?? new Date();
-    const leadTime = options.leadTimeMinutes ?? 15;
-    const currentMins = refDate.getHours() * 60 + refDate.getMinutes() + leadTime;
-    const rounded = Math.ceil(currentMins / interval) * interval;
-    startMinutes = Math.max(openMinutes, rounded);
-  }
-
-  if (startMinutes > closeMinutes) {
-    return [];
-  }
-
-  const slots: PickupTimeSlot[] = [];
-  for (let mins = startMinutes; mins <= closeMinutes; mins += interval) {
-    const hh = String(Math.floor(mins / 60)).padStart(2, '0');
-    const mm = String(mins % 60).padStart(2, '0');
-    const timeValue = `${hh}:${mm}`;
-    slots.push({
-      value: timeValue,
-      label: formatTimeSlotLabel(timeValue),
-    });
-  }
-
-  return slots;
-}
-
-/**
- * Validates or falls back to the first available slot when the selected day changes
- * or the currently chosen time is outside the permitted operating window.
- */
-export function getInitialPickupTime(currentTime: string, availableSlots: PickupTimeSlot[]): string {
-  if (!availableSlots || availableSlots.length === 0) {
-    return '';
-  }
-  const match = availableSlots.find((s) => s.value === currentTime);
-  if (match) {
-    return currentTime;
-  }
-  return availableSlots[0].value;
+/** Latest request wins even when an aborted transport eventually resolves. */
+export function createPickupOptionsLoader(
+  fetcher: (key: string, signal: AbortSignal) => Promise<PickupOptions>,
+  publish: (key: string, data: PickupOptions) => void,
+) {
+  let revision = 0;
+  let controller: AbortController | undefined;
+  return {
+    async load(key: string): Promise<PickupOptions> {
+      const request = ++revision;
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const data = await fetcher(key, controller.signal);
+        if (request !== revision) throw new Error('pickup_request_superseded');
+        publish(key, data);
+        return data;
+      } catch (error) {
+        if (request !== revision) throw new Error('pickup_request_superseded');
+        throw error;
+      }
+    },
+    dispose() {
+      revision++;
+      controller?.abort();
+    },
+  };
 }

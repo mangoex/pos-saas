@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { fetchApi, ApiError, formatOrderModifier } from '@restaurantos/api-client';
+import { runMobileOrderCommand, pendingMobileOrderCommand, type MobileCommandAction } from './mobileOrderRecovery';
 import {
   X,
   Phone,
@@ -30,6 +31,8 @@ interface OrderLineItem {
 
 interface OrderDetail {
   id: string;
+  organization_id: string;
+  branch_id: string;
   folio: string;
   status: string;
   service_type?: string;
@@ -91,25 +94,47 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
+  const [hasPendingRecovery, setHasPendingRecovery] = useState(false);
+  const activeOrder = useRef(orderId);
+  const viewEpoch = useRef(0);
+  activeOrder.current = isOpen ? orderId : null;
+  const currentToken = () => {
+    try { return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token'); }
+    catch { return null; }
+  };
+
 
   useEffect(() => {
+    viewEpoch.current += 1;
+    setActionLoading(false);
+    setDetail(null);
     if (!isOpen || !orderId) {
-      setDetail(null);
       setError(null);
       setNotice(null);
       return;
     }
 
     let active = true;
+    const session = currentToken();
+    setHasPendingRecovery(false);
     setLoading(true);
     setError(null);
     setNotice(null);
 
-    fetchApi(`/orders/${encodeURIComponent(orderId)}`)
-      .then((data: any) => {
-        if (!active) return;
+    fetchApi<OrderDetail>(`/orders/${encodeURIComponent(orderId)}`)
+      .then(async (data: OrderDetail) => {
+        if (!active || currentToken() !== session) return;
+        const profile = await fetchApi<{ user: { id: string } }>(
+          `/auth/session?branch_id=${encodeURIComponent(data.branch_id)}`,
+        );
+        if (!active || currentToken() !== session) return;
+        const pending = pendingMobileOrderCommand({ organizationId: data.organization_id,
+          branchId: data.branch_id, actorId: profile.user.id, orderId: data.id }, localStorage);
+        setHasPendingRecovery(Boolean(pending));
         setDetail(data);
-        if (data.payment_method_intent) {
+        if (pending && ['cash', 'card', 'transfer'].includes(pending.method)) {
+          setPaymentMethod(pending.method as 'cash' | 'card' | 'transfer');
+        } else if (data.payment_method_intent) {
           setPaymentMethod(
             data.payment_method_intent === 'card'
               ? 'card'
@@ -129,6 +154,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
 
     return () => {
       active = false;
+      viewEpoch.current += 1;
     };
   }, [isOpen, orderId]);
 
@@ -192,126 +218,68 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     }
   };
 
-  const handleDeliverAndPay = async () => {
-    if (!orderId || !detail) return;
+  const executeFinancialCommand = async (action: MobileCommandAction, recover = false) => {
+    if (!orderId || !detail || actionLoading) return;
+    const requestedOrder = orderId;
+    const requestedEpoch = viewEpoch.current;
+    const currentView = () => activeOrder.current === requestedOrder && viewEpoch.current === requestedEpoch;
     setActionLoading(true);
     setError(null);
+    setNotice(null);
     try {
-      const isAlreadyPaid = detail.payment_status === 'CONFIRMED';
-      if (!isAlreadyPaid && detail.total_cents > 0) {
-        const paymentIdempotencyKey = `pay-mobile-${orderId}-${Date.now()}`;
-        await fetchApi(`/orders/${encodeURIComponent(orderId)}/payments`, {
-          method: 'POST',
-          headers: {
-            'Idempotency-Key': paymentIdempotencyKey,
-          },
-          body: JSON.stringify({
-            amount_cents: detail.total_cents,
-            method: paymentMethod,
-            register_id: 'CAJA-01',
-            idempotency_key: paymentIdempotencyKey,
-          }),
-        });
-      }
-
-      const fulfillIdempotencyKey = `mobile-fulfill-${orderId}-deliver-${Date.now()}`;
-      await fetchApi(`/orders/${encodeURIComponent(orderId)}/fulfillment/deliver`, {
-        method: 'POST',
-        headers: {
-          'Idempotency-Key': fulfillIdempotencyKey,
-        },
-      });
-
-      if (onOrderUpdated) onOrderUpdated();
-      onClose();
-    } catch (err: any) {
-      let msg =
-        typeof err?.message === 'string'
-          ? err.message
-          : typeof err === 'string'
-            ? err
-            : 'Error al procesar la entrega y cobro.';
-      if (msg.includes('cash_shift_not_open') || msg.includes('OPEN cash shift is required')) {
-        msg = '⚠️ La caja está cerrada. Abre el turno en la pestaña "Caja" para poder registrar cobros.';
-      }
-      setError(msg);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleConfirmPaymentOnly = async () => {
-    if (!orderId || !detail) return;
-    setActionLoading(true);
-    setError(null);
-    try {
-      const paymentIdempotencyKey = `pay-mobile-${orderId}-${Date.now()}`;
-      await fetchApi(`/orders/${encodeURIComponent(orderId)}/payments`, {
-        method: 'POST',
-        headers: {
-          'Idempotency-Key': paymentIdempotencyKey,
-        },
-        body: JSON.stringify({
-          amount_cents: detail.total_cents,
-          method: paymentMethod,
-          register_id: 'CAJA-01',
-          idempotency_key: paymentIdempotencyKey,
-        }),
-      });
-
-      setDetail((prev) =>
-        prev
-          ? {
-              ...prev,
-              payment_status: 'CONFIRMED',
-              payment_method: paymentMethod,
-            }
-          : null
+      const session = currentToken();
+      if (!session) throw new Error('La sesión no está disponible. Inicia sesión nuevamente.');
+      const profile = await fetchApi<{ user: { id: string } }>(
+        `/auth/session?branch_id=${encodeURIComponent(detail.branch_id)}`,
       );
-      setNotice('¡Cobro registrado y confirmado exitosamente!');
-      if (onOrderUpdated) onOrderUpdated();
-    } catch (err: any) {
-      let msg =
-        typeof err?.message === 'string'
-          ? err.message
-          : typeof err === 'string'
-            ? err
-            : 'Error al confirmar el cobro.';
-      if (msg.includes('cash_shift_not_open') || msg.includes('OPEN cash shift is required')) {
-        msg = '⚠️ La caja está cerrada. Abre el turno en la pestaña "Caja" para poder registrar cobros.';
+      if (currentToken() !== session || !currentView()) {
+        throw new Error('La sesión o el pedido cambió. Abre nuevamente el pedido.');
       }
-      setError(msg);
+      const scope = { organizationId: detail.organization_id, branchId: detail.branch_id,
+        actorId: profile.user.id, orderId: detail.id };
+      const pending = pendingMobileOrderCommand(scope, localStorage);
+      setHasPendingRecovery(Boolean(pending));
+      if (recover && !pending) {
+        const refreshed = await fetchApi<OrderDetail>(`/orders/${encodeURIComponent(detail.id)}`);
+        if (currentView() && currentToken() === session) {
+          setDetail(refreshed);
+          setNotice('No hay un intento guardado. Se actualizó el estado sin iniciar un cobro.');
+        }
+        return;
+      }
+      const selectedAction = recover && pending ? pending.action : action;
+      const result = await runMobileOrderCommand({ scope, action: selectedAction,
+        method: recover && pending ? pending.method : paymentMethod,
+        registerId: recover && pending ? pending.registerId : localStorage.getItem('pos_register_id') || 'CAJA-01',
+        session,
+      }, {
+        storage: localStorage, api: fetchApi, currentSession: currentToken,
+        newKey: () => crypto.randomUUID(),
+        lock: navigator.locks ? async (name, operation) => await navigator.locks.request(name, operation) : undefined,
+      });
+      if (!currentView() || currentToken() !== session) return;
+      setDetail((previous) => previous ? { ...previous, ...result.order,
+        payment_method: result.payment?.method || previous.payment_method } : null);
+      setHasPendingRecovery(false);
+      setNotice(result.payment ? 'Cobro confirmado; recibo recuperado.' : 'Estado del pedido actualizado.');
+      if (onOrderUpdated) onOrderUpdated();
+      if (selectedAction !== 'pay') onClose();
+    } catch (err: unknown) {
+      if (!currentView()) return;
+      let message = err instanceof Error ? err.message : 'No se pudo completar la operación.';
+      if (message.includes('cash_shift_not_open') || message.includes('OPEN cash shift is required')) {
+        message = 'La caja está cerrada. Abre el turno y recupera el intento pendiente.';
+      }
+      setError(`${message} Si el envío quedó pendiente, usa Recuperar operación pendiente.`);
+      // A failed response may have committed. Recovery reads durable local and server state.
+      setHasPendingRecovery(true);
     } finally {
-      setActionLoading(false);
+      if (currentView()) setActionLoading(false);
     }
   };
 
-  const handleFulfillTransition = async (command: string = 'deliver') => {
-    if (!orderId) return;
-    setActionLoading(true);
-    setError(null);
-    try {
-      const idempotencyKey = `mobile-fulfill-${orderId}-${command}-${Date.now()}`;
-      await fetchApi(`/orders/${encodeURIComponent(orderId)}/fulfillment/${encodeURIComponent(command)}`, {
-        method: 'POST',
-        headers: {
-          'Idempotency-Key': idempotencyKey,
-        },
-      });
-      if (onOrderUpdated) onOrderUpdated();
-      onClose();
-    } catch (err: any) {
-      const msg =
-        typeof err?.message === 'string'
-          ? err.message
-          : typeof err === 'string'
-            ? err
-            : 'Error al actualizar el estado de la comanda.';
-      setError(msg);
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  const handleDeliverAndPay = () => executeFinancialCommand('pay_and_deliver');
+  const handleConfirmPaymentOnly = () => executeFinancialCommand('pay');
 
   const customerName =
     detail?.customer_snapshot?.name ||
@@ -560,6 +528,18 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
             </div>
           )}
 
+          {hasPendingRecovery && (
+            <div role="status" style={{ padding: 12, background: '#fff7ed', borderRadius: 8 }}>
+              <p>Hay una operación por verificar. Recupera el intento antes de iniciar otro cobro.</p>
+              <button type="button" disabled={actionLoading}
+                style={{ width: '100%', minHeight: 44, marginTop: 8, borderRadius: 8,
+                  border: '1px solid #9a3412', background: '#9a3412', color: '#fff',
+                  fontWeight: 700, padding: '10px 12px', cursor: actionLoading ? 'wait' : 'pointer' }}
+                onClick={() => void executeFinancialCommand('pay', true)}>
+                {actionLoading ? 'Recuperando…' : 'Recuperar operación pendiente'}
+              </button>
+            </div>
+          )}
           {notice && (
             <div
               style={{
@@ -956,6 +936,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                       key={m.id}
                       type="button"
                       onClick={() => setPaymentMethod(m.id)}
+                      disabled={actionLoading || hasPendingRecovery}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -984,7 +965,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
           {isReadyOrInPrep && (
             <button
               onClick={handleDeliverAndPay}
-              disabled={actionLoading}
+              disabled={actionLoading || hasPendingRecovery || loading}
               style={{
                 width: '100%',
                 backgroundColor: detail?.payment_status === 'CONFIRMED' ? '#0f172a' : '#059669',
@@ -1089,7 +1070,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                 </div>
                 <button
                   onClick={handleConfirmPaymentOnly}
-                  disabled={actionLoading}
+                  disabled={actionLoading || hasPendingRecovery || loading}
                   style={{
                     width: '100%',
                     backgroundColor: '#059669',

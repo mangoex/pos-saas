@@ -1213,6 +1213,94 @@ def test_current_cash_shift_accepts_withdraw_only_and_legacy_read_only() -> None
     assert legacy_read_only.json()["cash_shift"]["id"] == SHIFT_ID
 
 
+@pytest.mark.parametrize(
+    "permission",
+    [
+        "cash.shift.read", "cash.movement.read", "cash.movement.withdraw",
+        "cash.movement.deposit", "cash.withdraw",
+    ],
+)
+def test_current_shift_movement_capabilities_preserve_branch_scope(permission: str) -> None:
+    client = _cash_concept_client()
+    with client.app.state.test_session_factory() as session:
+        _grant_cash_permissions(session, permission)
+        _insert_shift(session)
+    headers = {"X-Actor-User-Id": CASHIER_ID}
+
+    def denial_count() -> int:
+        with client.app.state.test_session_factory() as session:
+            return session.scalar(
+                sa.select(sa.func.count()).select_from(models.audit_events).where(
+                    models.audit_events.c.action == "authorization.denied"
+                )
+            )
+
+    for route in ("/api/v1/cash-shifts/current", "/api/v1/cash/shifts/current"):
+        before = denial_count()
+        own = client.get(
+            route, headers=headers, params={"branch_id": BRANCH_A, "register_id": "CAJA-01"}
+        )
+        expected = (
+            200 if route.endswith("cash-shifts/current") or permission == "cash.shift.read" else 403
+        )
+        assert own.status_code == expected, own.text
+        if expected == 200:
+            assert own.json()["cash_shift"]["id"] == SHIFT_ID
+            assert denial_count() == before
+        else:
+            assert denial_count() == before + 1
+        before = denial_count()
+        other = client.get(
+            route, headers=headers, params={"branch_id": BRANCH_B, "register_id": "CAJA-01"}
+        )
+        assert other.status_code == 403, other.text
+        assert denial_count() == before + 1
+    default_branch = client.get(
+        "/api/v1/cash-shifts/current", headers=headers, params={"register_id": "CAJA-01"}
+    )
+    assert default_branch.status_code == 200, default_branch.text
+    assert default_branch.json()["cash_shift"]["id"] == SHIFT_ID
+    for table, entity_id, blocked_status in (
+        (models.users, CASHIER_ID, "inactive"),
+        (models.organizations, ORG_ID, "suspended"),
+    ):
+        with client.app.state.test_session_factory() as session:
+            previous_status = session.scalar(
+                sa.select(table.c.status).where(table.c.id == entity_id)
+            )
+            session.execute(
+                table.update().where(table.c.id == entity_id).values(status=blocked_status)
+            )
+            session.commit()
+        before = denial_count()
+        blocked = client.get(
+            "/api/v1/cash-shifts/current", headers=headers,
+            params={"branch_id": BRANCH_A, "register_id": "CAJA-01"},
+        )
+        assert blocked.status_code == 403, blocked.text
+        assert denial_count() == before + 1
+        with client.app.state.test_session_factory() as session:
+            session.execute(
+                table.update().where(table.c.id == entity_id).values(status=previous_status)
+            )
+            session.commit()
+    with client.app.state.test_session_factory() as session:
+        session.execute(
+            models.role_permissions.delete().where(
+                models.role_permissions.c.role_id == CASHIER_ROLE_ID
+            )
+        )
+        session.commit()
+    before = denial_count()
+    revoked = client.get(
+        "/api/v1/cash-shifts/current",
+        headers=headers,
+        params={"branch_id": BRANCH_A, "register_id": "CAJA-01"},
+    )
+    assert revoked.status_code == 403, revoked.text
+    assert denial_count() == before + 1
+
+
 def test_cash_movement_without_catalog_concept() -> None:
     client = _cash_concept_client()
     factory = client.app.state.test_session_factory
@@ -1247,4 +1335,7 @@ def test_cash_movement_without_catalog_concept() -> None:
         params={"branch_id": BRANCH_A},
     )
     assert ledger_res.status_code == 200
-    assert any(item["id"] == body["movement"]["id"] and item["concept_id"] is None for item in items)
+    assert any(
+        item["id"] == body["movement"]["id"] and item["concept_id"] is None
+        for item in ledger_res.json()["items"]
+    )

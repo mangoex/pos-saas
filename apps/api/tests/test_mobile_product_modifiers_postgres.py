@@ -14,12 +14,33 @@ from fastapi.testclient import TestClient
 from restaurant_os import models
 from restaurant_os.database import get_session
 from restaurant_os.main import create_app
+from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlalchemy.orm import Session, sessionmaker
 from test_platform_api import _admin_headers, _seed
 
 PRODUCT_ID = "018f6f73-2d0a-74f0-8f1c-000000000111"
 OPTIONS_A = [{"name": "Avena", "price_delta_cents": 900}]
 OPTIONS_B = [{"name": "Almendra", "price_delta_cents": 1100}]
+
+
+def _schema_metadata() -> sa.MetaData:
+    # PostgreSQL AddConstraint mutates cyclic FK objects while emitting DDL.
+    # Keep that state out of the shared runtime metadata used by later SQLite tests.
+    metadata = sa.MetaData()
+    for table in models.metadata.tables.values():
+        table.to_metadata(metadata)
+    return metadata
+
+
+def test_postgres_schema_creation_preserves_shared_sqlite_foreign_keys() -> None:
+    def sqlite_order_ddl() -> str:
+        return str(sa.schema.CreateTable(models.orders).compile(dialect=sqlite_dialect()))
+
+    before = sqlite_order_ddl()
+    assert "fk_orders_public_order_intent_accepted" in before
+    engine = sa.create_mock_engine("postgresql+psycopg://", lambda *_args, **_kwargs: None)
+    _schema_metadata().create_all(engine, checkfirst=False)
+    assert sqlite_order_ddl() == before
 
 
 def _client(engine: sa.Engine) -> TestClient:
@@ -171,7 +192,7 @@ def test_postgres_same_revision_writes_have_one_atomic_winner() -> None:
     scoped_url = database_url.update_query_dict({"options": f"-csearch_path={schema}"})
     engine = sa.create_engine(scoped_url)
     try:
-        models.metadata.create_all(engine)
+        _schema_metadata().create_all(engine)
         client = _client(engine)
         _assert_one_winner_one_conflict(client)
     finally:
@@ -187,7 +208,7 @@ def test_sqlite_file_same_revision_writes_have_one_atomic_winner(tmp_path: Path)
         connect_args={"check_same_thread": False, "timeout": 20},
     )
     try:
-        models.metadata.create_all(engine)
+        _schema_metadata().create_all(engine)
         client = _client(engine)
         _assert_one_winner_one_conflict(client)
     finally:
@@ -206,7 +227,7 @@ def test_postgres_option_write_failure_rolls_back_product_and_modifier_state() -
     scoped_url = database_url.update_query_dict({"options": f"-csearch_path={schema}"})
     engine = sa.create_engine(scoped_url)
     try:
-        models.metadata.create_all(engine)
+        _schema_metadata().create_all(engine)
         client = _client(engine)
         revision = _revision(client)
         before = _snapshot(client)

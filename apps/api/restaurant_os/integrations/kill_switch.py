@@ -116,23 +116,15 @@ def toggle_kill_switch(
                 )
             )
 
-    # 2. Update channel_product_mappings across external providers
-    session.execute(
-        sa.update(models.channel_product_mappings)
-        .where(
-            models.channel_product_mappings.c.organization_id == org_id,
-            models.channel_product_mappings.c.product_id == req.product_id,
-        )
-        .values(is_active=req.is_available)
-    )
-
+    # Temporary branch availability must not revoke the organization-wide mapping:
+    # that mapping is still needed to send sold-out and restore commands to the provider.
     uber_sync_jobs = channel_service.enqueue_uber_availability_sync(
         session, org_id, req.product_id, req.is_available, req.branch_id
     )
 
     # 3. Retrieve configured integrations.  A configuration by itself is not
     # proof that an external provider accepted the availability update.
-    active_integrations = set(
+    active_integrations: set[str] = set(
         session.execute(
             sa.select(models.channel_integrations.c.provider).where(
                 models.channel_integrations.c.organization_id == org_id,

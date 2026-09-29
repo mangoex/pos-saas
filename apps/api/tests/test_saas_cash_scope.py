@@ -26,6 +26,7 @@ from restaurant_os.operations import (
     create_cash_concept_version,
     create_cash_movement,
     create_local_order,
+    get_cash_movement_shift,
     list_cash_concepts,
     list_cash_movement_ledger,
     list_order_accounts,
@@ -178,6 +179,11 @@ def test_cash_shift_and_order_scope_to_branch_tenant_and_reject_cross_actor(
         assert payment["organization_id"] == org_a
 
         before = session.scalar(sa.select(sa.func.count()).select_from(models.cash_shifts))
+        visible_shift = get_cash_movement_shift(session, owner_a, branch_a, "CAJA-01")
+        assert visible_shift is not None
+        assert (visible_shift["id"], visible_shift["organization_id"]) == (shift["id"], org_a)
+        with pytest.raises(AuthorizationError):
+            get_cash_movement_shift(session, owner_b, branch_a, "CAJA-01")
         with pytest.raises(AuthorizationError):
             open_cash_shift(
                 session, 0, register_code="CAJA-B", branch_id=branch_a, actor_user_id=owner_b
@@ -726,6 +732,13 @@ def test_cash_shift_open_api_rejects_other_tenant_branch_without_side_effect() -
         assert forbidden_history.status_code == 403
         forbidden_detail = client.get(f"/api/v1/cash/shifts/{shift_id}", headers=headers_b)
         assert forbidden_detail.status_code == 403
+        for route in ("/api/v1/cash-shifts/current", "/api/v1/cash/shifts/current"):
+            forbidden_current = client.get(
+                route,
+                headers=headers_b,
+                params={"branch_id": branch_a, "register_id": "CAJA-A"},
+            )
+            assert forbidden_current.status_code == 403, forbidden_current.text
         with factory() as session:
             assert session.scalar(sa.select(sa.func.count()).select_from(models.cash_shifts)) == 1
     finally:

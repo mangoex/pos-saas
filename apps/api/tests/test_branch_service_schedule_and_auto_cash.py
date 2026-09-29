@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
-import pytest
-import sqlalchemy as sa
 from zoneinfo import ZoneInfo
 
+import pytest
+import sqlalchemy as sa
 from restaurant_os import models
 from restaurant_os.operations import (
     ORGANIZATION_ID,
@@ -15,7 +15,6 @@ from restaurant_os.operations import (
     reconcile_branch_auto_cash_shift,
     update_branch,
 )
-from restaurant_os.public_storefront import resolve_storefront
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -71,13 +70,55 @@ def test_branch_schedule_columns_defaults(session: Any) -> None:
 
 def test_update_branch_service_schedule_and_auto_cash(session: Any) -> None:
     schedule = [
-        {"day_index": 0, "day_name": "Lunes", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 1, "day_name": "Martes", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 2, "day_name": "Miércoles", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 3, "day_name": "Jueves", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 4, "day_name": "Viernes", "is_open": True, "open_time": "09:00", "close_time": "23:00"},
-        {"day_index": 5, "day_name": "Sábado", "is_open": True, "open_time": "10:00", "close_time": "23:00"},
-        {"day_index": 6, "day_name": "Domingo", "is_open": False, "open_time": "10:00", "close_time": "20:00"},
+        {
+            "day_index": 0,
+            "day_name": "Lunes",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 1,
+            "day_name": "Martes",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 2,
+            "day_name": "Miércoles",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 3,
+            "day_name": "Jueves",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 4,
+            "day_name": "Viernes",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "23:00",
+        },
+        {
+            "day_index": 5,
+            "day_name": "Sábado",
+            "is_open": True,
+            "open_time": "10:00",
+            "close_time": "23:00",
+        },
+        {
+            "day_index": 6,
+            "day_name": "Domingo",
+            "is_open": False,
+            "open_time": "10:00",
+            "close_time": "20:00",
+        },
     ]
 
     update_branch(
@@ -116,13 +157,55 @@ def test_update_branch_service_schedule_and_auto_cash(session: Any) -> None:
 def test_reconcile_branch_auto_cash_shift_opens_shift(session: Any) -> None:
     # Set Monday (index 0) open from 09:00 to 22:00
     schedule = [
-        {"day_index": 0, "day_name": "Lunes", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 1, "day_name": "Martes", "is_open": False, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 2, "day_name": "Miércoles", "is_open": False, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 3, "day_name": "Jueves", "is_open": False, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 4, "day_name": "Viernes", "is_open": False, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 5, "day_name": "Sábado", "is_open": False, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 6, "day_name": "Domingo", "is_open": False, "open_time": "09:00", "close_time": "22:00"},
+        {
+            "day_index": 0,
+            "day_name": "Lunes",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 1,
+            "day_name": "Martes",
+            "is_open": False,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 2,
+            "day_name": "Miércoles",
+            "is_open": False,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 3,
+            "day_name": "Jueves",
+            "is_open": False,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 4,
+            "day_name": "Viernes",
+            "is_open": False,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 5,
+            "day_name": "Sábado",
+            "is_open": False,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 6,
+            "day_name": "Domingo",
+            "is_open": False,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
     ]
     update_branch(
         session,
@@ -156,7 +239,13 @@ def test_reconcile_branch_auto_cash_shift_opens_shift(session: Any) -> None:
 def test_reconcile_branch_auto_cash_shift_closes_shift_when_past_hours(session: Any) -> None:
     # First open a shift on Monday at 10:30 AM
     schedule = [
-        {"day_index": 0, "day_name": "Lunes", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
+        {
+            "day_index": 0,
+            "day_name": "Lunes",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
     ]
     update_branch(
         session,
@@ -193,8 +282,20 @@ def test_reconcile_branch_auto_cash_shift_closes_shift_when_past_hours(session: 
 def test_reconcile_branch_auto_cash_shift_closes_shift_when_day_is_closed(session: Any) -> None:
     # Shift was open, but Tuesday is closed
     schedule = [
-        {"day_index": 0, "day_name": "Lunes", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
-        {"day_index": 1, "day_name": "Martes", "is_open": False, "open_time": "09:00", "close_time": "22:00"},
+        {
+            "day_index": 0,
+            "day_name": "Lunes",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
+        {
+            "day_index": 1,
+            "day_name": "Martes",
+            "is_open": False,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
     ]
     update_branch(
         session,
@@ -207,7 +308,9 @@ def test_reconcile_branch_auto_cash_shift_closes_shift_when_day_is_closed(sessio
 
     tz = ZoneInfo("America/Chihuahua")
     monday_1030 = datetime(2026, 9, 21, 10, 30, tzinfo=tz)
-    reconcile_branch_auto_cash_shift(session, branch_id=BRANCH_ID, register_code="CAJA-01", now_dt=monday_1030)
+    reconcile_branch_auto_cash_shift(
+        session, branch_id=BRANCH_ID, register_code="CAJA-01", now_dt=monday_1030
+    )
     assert get_open_cash_shift(session, branch_id=BRANCH_ID) is not None
 
     # Next day: Tuesday (2026-09-22) 11:00 AM
@@ -219,9 +322,15 @@ def test_reconcile_branch_auto_cash_shift_closes_shift_when_day_is_closed(sessio
     assert get_open_cash_shift(session, branch_id=BRANCH_ID) is None
 
 
-def test_manual_close_today_prevents_auto_reopen(session: Any) -> None:
+def test_manual_close_today_prevents_auto_reopen(session: Any, monkeypatch: Any) -> None:
     schedule = [
-        {"day_index": 0, "day_name": "Lunes", "is_open": True, "open_time": "09:00", "close_time": "22:00"},
+        {
+            "day_index": 0,
+            "day_name": "Lunes",
+            "is_open": True,
+            "open_time": "09:00",
+            "close_time": "22:00",
+        },
     ]
     update_branch(
         session,
@@ -241,7 +350,11 @@ def test_manual_close_today_prevents_auto_reopen(session: Any) -> None:
 
     # Simulate manual closure by administrator at 14:00
     monday_1400 = datetime(2026, 9, 21, 14, 0, tzinfo=tz)
+    monkeypatch.setattr(
+        "restaurant_os.operations._now", lambda: monday_1400.astimezone(timezone.utc)
+    )
     from restaurant_os.operations import close_cash_shift_operationally
+
     close_cash_shift_operationally(
         session,
         cash_shift_id=opened["id"],

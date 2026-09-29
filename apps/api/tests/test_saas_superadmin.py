@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
-from restaurant_os import models, operations
+from restaurant_os import models
 from restaurant_os.database import get_session
 from restaurant_os.main import app
 from restaurant_os.superadmin.service import provision_platform_superadmin

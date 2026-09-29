@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
+import { canManageCashConcepts } from '../features/cash/cashConceptState';
 
 interface SubNavItem {
   path: string;
@@ -59,6 +60,7 @@ const CATEGORY_CONFIGS: CategoryNavConfig[] = [
     hubPath: '/reports-hub',
     categoryTitle: 'Cajas y Reportes',
     items: [
+      { path: '/cash-concepts', label: 'Conceptos de Caja', requiredPermission: canManageCashConcepts },
       { path: '/reports', label: 'Cortes X/Z y Ventas' },
       { path: '/analytics', label: 'Métricas y Rendimiento' },
     ],

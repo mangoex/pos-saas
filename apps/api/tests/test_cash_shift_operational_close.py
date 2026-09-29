@@ -154,6 +154,13 @@ def test_cash_shift_list_paginates_stably_without_duplicates_or_omissions() -> N
         )
         assert response.status_code == 200
         opened_ids.append(response.json()["id"])
+        # One actor may hold only one open shift; pagination includes closed shifts.
+        closed = client.post(
+            f"/api/v1/cash/shifts/{opened_ids[-1]}/close-operationally",
+            headers={**_admin_headers(), "Idempotency-Key": f"pagination-close-{suffix}"},
+            json={},
+        )
+        assert closed.status_code == 200, closed.text
 
     first_page = client.get(
         "/api/v1/cash/shifts",

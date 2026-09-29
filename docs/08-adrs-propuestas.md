@@ -400,3 +400,24 @@ Decisión:
    - `restaurantos_reengagement_offer` (`CATEGORY: MARKETING`): Diseñada para campañas de marketing con 5 variables posicionales (`[nombre, sucursal, producto_o_texto, cupón, enlace_tienda]`), acompañada de botón Quick Reply de baja (`STOP`).
 3. **Sincronización y Registro Automatizado vía Graph API**: El backend expone endpoints (`POST /integrations/whatsapp/templates/sync` y `GET /integrations/whatsapp/templates`) que consultan la WABA del restaurante en Meta Graph API (`/{WABA_ID}/message_templates`) y registran automáticamente las plantillas estándar faltantes, monitoreando su estado (`APPROVED`, `PENDING`, `REJECTED`).
 4. **Despacho Dual Estructurado (`type: template`)**: `WhatsAppNotificationService` y `WhatsAppCampaignService` generan payloads estructurados según el estándar de Meta Cloud API (`"type": "template"`), asegurando la entrega garantizada tanto dentro como fuera de la ventana de 24 horas.
+
+
+### SDD-ADR-043 — Resolución Python reproducible para CI y release
+
+Estado: adoptada para el paquete 4; no cambia despliegues existentes.
+Los pyproject conservan requisitos directos. `uv pip compile` 0.12.19 genera archivos requirements
+con versiones exactas, hashes y marcadores de plataforma para Python 3.12. uv es herramienta de
+resolución; pip instala los locks con `--require-hashes`. No es dependencia de dominio.
+API y gateway tienen locks de runtime separados; gateway y desarrollo se resuelven sujetos a las
+versiones del lock API para compartir cryptography/httpx. Bootstrap (pip/setuptools/wheel) se fija
+aparte y los proyectos locales se instalan sin resolver dependencias ni aislamiento de build.
+CI y Docker consumen los mismos locks; no resuelven rangos al liberar. Node usa pnpm congelado.
+La auditoría periódica vuelve a evaluar dependencias existentes; un error de red no es aprobación.
+Rollback conserva locks del release anterior sin borrar datos ni bajar esquemas. Una versión
+vulnerable no se considera destino de rollback aprobado por haber sido usada antes.
+
+Cryptography pasa a 50.0.1 (API y gateway), preservando Ed25519/Fernet y verificando grants,
+cifrado histórico y firmas. La plataforma validada es Python 3.12 de 64 bits; no se promete soporte
+para Windows de 32 bits ni macOS Intel retirados por upstream. Pytest se actualiza a >=9.0.3 por
+su aviso de directorios temporales. Fuentes: https://cryptography.io/en/latest/changelog/ y
+https://docs.astral.sh/uv/pip/compile/ (consultadas 2026-09-28).

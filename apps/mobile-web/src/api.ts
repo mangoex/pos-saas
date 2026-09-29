@@ -1,5 +1,6 @@
 import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile, TrendingDish, CommunityPhoto } from './types';
 import { getProductImage } from './imageMap';
+import { parsePickupOptions } from './utils/pickupSchedule';
 import {
   clearPendingMobileOrder,
   hasMobileOrderCompletedSince,
@@ -14,6 +15,15 @@ import type { PendingMobileOrder } from './pendingMobileOrder';
 export { hasPendingMobileOrder, mobileOrderTimestamp } from './pendingMobileOrder';
 
 const API_BASE_URL = '/api/v1';
+
+export async function fetchPickupOptions(publicKey: string, signal?: AbortSignal) {
+  if (!publicKey) throw new Error('pickup_branch_missing');
+  const response = await fetch(`${API_BASE_URL}/public/branches/${encodeURIComponent(publicKey)}/pickup-options`, {
+    cache: 'no-store', signal,
+  });
+  if (!response.ok) throw new Error(`pickup_options_${response.status}`);
+  return parsePickupOptions(await response.json());
+}
 
 /** Resolves a public menu to one tenant before any catalog request is made. */
 export async function fetchStorefront(identifier: string): Promise<Storefront> {
@@ -411,6 +421,8 @@ async function submitMobileOrderAttempt(
       customer_name: info.name.trim(),
       customer_phone: cleanPhone,
       order_type: apiOrderType,
+      pickup_date: info.order_type === 'takeaway' ? info.pickup_date : undefined,
+      pickup_time: info.order_type === 'takeaway' ? info.pickup_time : undefined,
       coupon_code: info.coupon_code || undefined,
       table_number: info.order_type === 'dine-in' ? (info.table_number?.trim() || undefined) : undefined,
       payment_method: info.payment_method || undefined,
