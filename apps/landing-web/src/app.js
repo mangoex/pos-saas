@@ -1,130 +1,229 @@
-(() => {
+(function () {
   "use strict";
 
-  const mobileViewport = window.matchMedia("(max-width: 860px)");
-  let desktopStarted = false;
+  const mobileViewport =
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 860px)")
+      : null;
 
-  function startDesktop() {
-    if (mobileViewport.matches || desktopStarted) return;
-    desktopStarted = true;
-
-    const root = document.documentElement;
-    const world = document.querySelector('[data-sc-mode="worldflight"]');
-    const map = document.querySelector(".plate-map");
-    const routeControls = Array.from(document.querySelectorAll("[data-route-progress]"));
-    const mapButtons = Array.from(document.querySelectorAll("[data-route-index]"));
-    const stories = Array.from(document.querySelectorAll("[data-story]"));
-    const plates = new Map(
-      Array.from(document.querySelectorAll("[data-plate]")).map((plate) => [plate.dataset.plate, plate])
-    );
-    const seeds = Array.from(document.querySelectorAll(".plate-map__seed"));
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const routeBreaks = [0, 0.255, 0.515, 0.775, 1.01];
-    let activeIndex = -1;
-    let raf = 0;
-
-    function pageProgress() {
-      const distance = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
-      return Math.min(1, Math.max(0, window.scrollY / distance));
-    }
-
-    function routeIndex(progress) {
-      for (let index = routeBreaks.length - 2; index >= 0; index -= 1) {
-        if (progress >= routeBreaks[index]) return index;
-      }
-      return 0;
-    }
-
-    function syncVisualState() {
-      raf = 0;
-      if (mobileViewport.matches) return;
-      const progress = pageProgress();
-      const index = routeIndex(progress);
-
-      root.style.setProperty("--omnipos-progress", `${progress}turn`);
-      root.style.setProperty("--omnipos-active", String(index));
-      root.style.setProperty("--kiwi-progress", `${progress}turn`);
-      root.style.setProperty("--kiwi-active", String(index));
-
-      stories.forEach((story) => {
-        const plate = plates.get(story.dataset.story);
-        const opacity = Number.parseFloat(story.style.opacity || "0");
-        const visible = Number.isFinite(opacity) && opacity > 0.5;
-        story.toggleAttribute("inert", !visible);
-        if (visible) story.removeAttribute("aria-hidden");
-        else story.setAttribute("aria-hidden", "true");
-        if (plate) plate.style.opacity = Number.isFinite(opacity) ? String(Math.min(1, opacity * 1.08)) : "0";
-      });
-
-      if (index !== activeIndex) {
-        activeIndex = index;
-        mapButtons.forEach((button, buttonIndex) => {
-          button.setAttribute("aria-current", buttonIndex === index ? "true" : "false");
-        });
-      }
-
-      seeds.forEach((seed, seedIndex) => {
-        seed.classList.toggle("is-complete", seedIndex <= index);
-      });
-
-      const video = world?.querySelector("video");
-      const time = video && Number.isFinite(video.currentTime) ? video.currentTime.toFixed(1) : "0.0";
-      if (map) {
-        map.dataset.scVerifyState = `tramo:${index}|plato:${Math.round(progress * 20)}|video:${time}`;
-      }
-    }
-
-    function requestSync() {
-      if (!raf) raf = window.requestAnimationFrame(syncVisualState);
-    }
-
-    function jumpTo(progress) {
-      const distance = Math.max(document.documentElement.scrollHeight - window.innerHeight, 0);
-      window.scrollTo({
-        top: distance * progress,
-        behavior: reducedMotion.matches ? "auto" : "smooth",
-      });
-    }
-
-    routeControls.forEach((control) => {
-      control.addEventListener("click", (event) => {
-        const progress = Number.parseFloat(control.dataset.routeProgress || "0");
-        if (!Number.isFinite(progress)) return;
-        event.preventDefault();
-        jumpTo(progress);
-      });
-    });
-
-    window.addEventListener("scroll", requestSync, { passive: true });
-    window.addEventListener("resize", requestSync);
-    window.addEventListener("load", () => {
-      window.dispatchEvent(new Event("resize"));
-      requestSync();
-    });
-
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(() => {
-        window.dispatchEvent(new Event("resize"));
-        requestSync();
-      });
-    }
-
-    if (window.ScrollCraft) {
-      window.__sc = window.ScrollCraft.mount(document.body);
-    }
-
-    function followEngine() {
-      if (mobileViewport.matches) return;
-      syncVisualState();
-      window.requestAnimationFrame(followEngine);
-    }
-
-    window.requestAnimationFrame(followEngine);
-    mobileViewport.addEventListener("change", () => {
-      if (!mobileViewport.matches) window.requestAnimationFrame(followEngine);
-    });
+  function isMobile() {
+    return Boolean(mobileViewport && mobileViewport.matches);
   }
 
-  mobileViewport.addEventListener("change", startDesktop);
+  let desktopMounted = false;
+
+  function startDesktop() {
+    if (isMobile()) return;
+
+    if (!desktopMounted && typeof window.ScrollCraft !== "undefined" && typeof window.ScrollCraft.mount === "function") {
+      desktopMounted = true;
+      window.ScrollCraft.mount();
+    }
+
+    initHeroParallaxScroll();
+    initNavbarTracker();
+  }
+
+  /* --------------------------------------------------------------------------
+     Hero Parallax Continuous Video Scroll Engine (5 Aura Slides)
+     -------------------------------------------------------------------------- */
+  let heroParallaxInitialized = false;
+
+  function initHeroParallaxScroll() {
+    if (heroParallaxInitialized) return;
+    if (typeof document === "undefined" || typeof document.querySelector !== "function") return;
+    const track = document.querySelector("#section-1.hero-parallax-track");
+    const viewport = document.querySelector("#heroSlidesViewport");
+    if (!track || !viewport || typeof viewport.querySelectorAll !== "function") return;
+
+    const slides = Array.from(viewport.querySelectorAll(".hero-full-slide"));
+    if (slides.length === 0) return;
+
+    heroParallaxInitialized = true;
+
+    const scrubberSteps = typeof document.querySelectorAll === "function"
+      ? Array.from(document.querySelectorAll(".hero-timeline-scrubber .scrubber-step"))
+      : [];
+    const progressFill = document.querySelector("#scrubberProgressFill");
+    const scrollHint = document.querySelector("#heroScrollHint");
+    const navbar = document.querySelector(".desktop-navbar");
+
+    let rafId = null;
+    let targetProgress = 0;
+    let currentProgress = 0;
+    const totalTransitions = Math.max(1, slides.length - 1);
+
+    function getScrollProgress() {
+      if (typeof window === "undefined" || !track.getBoundingClientRect) return 0;
+      const rect = track.getBoundingClientRect();
+      const scrollHeight = (track.offsetHeight || 0) - (window.innerHeight || 800);
+      if (scrollHeight <= 0) return 0;
+      const scrolled = -rect.top;
+      return Math.max(0, Math.min(1, scrolled / scrollHeight));
+    }
+
+    function renderProgress(p) {
+      const virtualIndex = p * totalTransitions; // 0.0 to 4.0
+
+      if (progressFill && progressFill.style) {
+        progressFill.style.height = `${(p * 100).toFixed(1)}%`;
+      }
+
+      if (scrollHint && scrollHint.style) {
+        scrollHint.style.opacity = p > 0.04 ? "0" : "1";
+        scrollHint.style.pointerEvents = p > 0.04 ? "none" : "auto";
+      }
+
+      // Parallax update on full-screen slides
+      slides.forEach((slide, idx) => {
+        if (!slide.style) return;
+        const diff = virtualIndex - idx;
+        const absDiff = Math.abs(diff);
+
+        if (absDiff < 1.15) {
+          const clampedAbs = Math.min(1, absDiff);
+          const opacity = Math.max(0, 1 - clampedAbs * 1.3);
+          const translateY = -diff * 60;
+          const scale = 1 - clampedAbs * 0.035;
+
+          slide.style.opacity = opacity.toFixed(3);
+          slide.style.transform = `translate3d(0, ${translateY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+          slide.style.pointerEvents = absDiff < 0.4 ? "auto" : "none";
+          slide.style.visibility = "visible";
+          slide.style.zIndex = String(Math.round((1 - clampedAbs) * 10) + 1);
+
+          if (slide.classList && typeof slide.classList.add === "function") {
+            if (absDiff < 0.5) {
+              slide.classList.add("is-active");
+            } else {
+              slide.classList.remove("is-active");
+            }
+          }
+        } else {
+          slide.style.opacity = "0";
+          slide.style.pointerEvents = "none";
+          slide.style.visibility = "hidden";
+          if (slide.classList && typeof slide.classList.remove === "function") {
+            slide.classList.remove("is-active");
+          }
+        }
+      });
+
+      // Update Step Indicators
+      const activeStepIndex = Math.round(virtualIndex);
+      scrubberSteps.forEach((btn, sIdx) => {
+        if (!btn.classList || typeof btn.classList.add !== "function") return;
+        if (sIdx === activeStepIndex) {
+          btn.classList.add("is-active");
+        } else {
+          btn.classList.remove("is-active");
+        }
+      });
+
+      // Update Navbar Theme based on active slide
+      if (navbar && typeof navbar.setAttribute === "function") {
+        const activeSlide = slides[activeStepIndex];
+        const theme = activeSlide && activeSlide.dataset ? activeSlide.dataset.theme : "light";
+        navbar.setAttribute("data-theme", theme || "light");
+      }
+    }
+
+    function onScroll() {
+      targetProgress = getScrollProgress();
+      if (!rafId && typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        rafId = window.requestAnimationFrame(updateLoop);
+      }
+    }
+
+    function updateLoop() {
+      currentProgress += (targetProgress - currentProgress) * 0.22;
+      if (Math.abs(targetProgress - currentProgress) < 0.001) {
+        currentProgress = targetProgress;
+        renderProgress(currentProgress);
+        rafId = null;
+      } else {
+        renderProgress(currentProgress);
+        if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+          rafId = window.requestAnimationFrame(updateLoop);
+        }
+      }
+    }
+
+    // Click handler for timeline scrubber buttons
+    scrubberSteps.forEach((btn) => {
+      if (typeof btn.addEventListener === "function") {
+        btn.addEventListener("click", () => {
+          const step = Number.parseInt((btn.dataset && btn.dataset.step) || "0", 10);
+          if (typeof window === "undefined" || !track.getBoundingClientRect) return;
+          const rect = track.getBoundingClientRect();
+          const trackTop = (window.scrollY || 0) + rect.top;
+          const scrollHeight = (track.offsetHeight || 0) - (window.innerHeight || 800);
+          const targetY = trackTop + (step / totalTransitions) * scrollHeight;
+          if (typeof window.scrollTo === "function") {
+            window.scrollTo({ top: targetY, behavior: "smooth" });
+          }
+        });
+      }
+    });
+
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll, { passive: true });
+    }
+
+    currentProgress = getScrollProgress();
+    targetProgress = currentProgress;
+    renderProgress(currentProgress);
+  }
+
+  /* --------------------------------------------------------------------------
+     Active Navbar Link Tracker
+     -------------------------------------------------------------------------- */
+  function initNavbarTracker() {
+    if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
+    const links = Array.from(document.querySelectorAll(".desktop-navbar__link[href^='#']"));
+    if (links.length === 0) return;
+
+    const sections = links.map((l) => (typeof l.getAttribute === "function" ? document.querySelector(l.getAttribute("href") || "") : null)).filter(Boolean);
+    if (sections.length === 0) return;
+
+    const navbar = document.querySelector(".desktop-navbar");
+
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener(
+        "scroll",
+        () => {
+          const scrollY = window.scrollY || 0;
+          const innerH = window.innerHeight || 800;
+
+          sections.forEach((section, idx) => {
+            const top = section.offsetTop || 0;
+            const height = section.offsetHeight || 0;
+            if (scrollY >= top - innerH / 3 && scrollY < top + height - innerH / 3) {
+              links.forEach((l) => {
+                if (l.classList && typeof l.classList.remove === "function") l.classList.remove("active");
+              });
+              if (links[idx] && links[idx].classList && typeof links[idx].classList.add === "function") {
+                links[idx].classList.add("active");
+              }
+
+              if (navbar && typeof navbar.setAttribute === "function") {
+                if (section.id === "section-pedidos") {
+                  navbar.setAttribute("data-theme", "dark");
+                } else if (section.id === "section-pricing") {
+                  navbar.setAttribute("data-theme", "light");
+                }
+              }
+            }
+          });
+        },
+        { passive: true }
+      );
+    }
+  }
+
+  if (mobileViewport && typeof mobileViewport.addEventListener === "function") {
+    mobileViewport.addEventListener("change", startDesktop);
+  }
   startDesktop();
 })();
