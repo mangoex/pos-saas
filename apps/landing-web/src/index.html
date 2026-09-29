@@ -84,79 +84,221 @@
     <!-- ==========================================
          SECTION 1: HERO (5 AURA CARDS & PARALLAX SCROLL STREAM)
          ========================================== -->
+    <!-- ==========================================
+         SECTION 1: HERO (FULL-SCREEN AURA SLIDES & PARALLAX SCROLL STREAM)
+         ========================================== -->
     <section id="section-1" class="hero-parallax-track">
       <div class="hero-parallax-sticky" id="heroParallaxSticky">
-        <!-- Ambient Aura Glow Layer (shifts dynamically per active card) -->
-        <div class="hero-aura-ambient" id="heroAuraAmbient" aria-hidden="true">
-          <div class="aura-orb aura-orb--0 is-active"></div>
-          <div class="aura-orb aura-orb--1"></div>
-          <div class="aura-orb aura-orb--2"></div>
-          <div class="aura-orb aura-orb--3"></div>
-          <div class="aura-orb aura-orb--4"></div>
-        </div>
+        <!-- Full-Screen Aura Slides Container -->
+        <div class="hero-slides-viewport" id="heroSlidesViewport">
 
-        <!-- Pinned Top Banner: Tag & Value Statement -->
-        <div class="hero-pinned-header">
-          <div class="hero-tag-badge">
-            <span class="hero-pulse-dot"></span>
-            <span>✦ RESTAURANT OS · SISTEMA OPERATIVO INTELIGENTE</span>
-          </div>
-          <p class="hero-header-sub">Menú digital · Pedidos · Control de caja · Cocina KDS · Todo desde tu celular</p>
-        </div>
+          <!-- SLIDE 0: RESTAURANTE (Fondo Crema cálido con Aura Naranja flotante) -->
+          <article class="hero-full-slide hero-full-slide--0 is-active" data-slide-index="0" data-theme="light" aria-label="Tu restaurante. Desde tu celular.">
+            <!-- Aura blob flotante que se mueve suavemente por la pantalla -->
+            <div class="hero-slide__aura-layer" aria-hidden="true">
+              <div class="hero-slide__aura-blob hero-slide__aura-blob--orange"></div>
+              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--amber"></div>
+            </div>
 
-        <!-- Center Deck: The 5 Aura Cards -->
-        <div class="hero-card-stage" id="heroCardStage">
-          <!-- Card 0: Tu restaurante desde tu celular -->
-          <article class="aura-slide is-active" data-slide-index="0" aria-label="Tu restaurante. Desde tu celular.">
-            <div class="aura-card-wrapper">
-              <div class="aura-card-halo aura-card-halo--orange"></div>
-              <div class="aura-card-inner">
-                <img src="/landing-assets/assets/aura-card-1.jpg" alt="Tu restaurante. Desde tu celular. Recibe pedidos, actualiza tu menú y controla tus ventas en un solo lugar." class="aura-card-img">
-                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox" title="Comenzar gratis con 14 días de prueba" aria-label="Comenzar gratis"></a>
+            <div class="hero-slide__content">
+              <div class="hero-slide__tag-stack">
+                <span class="hero-tag-badge hero-tag-badge--dark">✦ RESTAURANT OS</span>
+                <span class="hero-tag-kicker">SISTEMA OPERATIVO PARA RESTAURANTES</span>
+              </div>
+
+              <h1 class="hero-slide__title">
+                Tu restaurante.<br>
+                <span class="hero-title-accent">Desde tu celular.</span>
+              </h1>
+
+              <p class="hero-slide__subtitle">
+                Recibe pedidos, actualiza tu menú y controla tus ventas en un solo lugar.
+              </p>
+
+              <div class="hero-slide__cta-row">
+                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
+                  <span>Comenzar gratis</span>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
+                  Planes desde $349 MXN/mes
+                </a>
+              </div>
+
+              <div class="hero-slide__pills">
+                <span class="pill-item">📱 Todo desde tu celular</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">⚡ Sin equipos costosos</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">⏱️ Listo en minutos</span>
               </div>
             </div>
           </article>
 
-          <!-- Card 1: Pedidos en un solo lugar -->
-          <article class="aura-slide" data-slide-index="1" aria-label="Pedidos en un solo lugar.">
-            <div class="aura-card-wrapper">
-              <div class="aura-card-halo aura-card-halo--magma"></div>
-              <div class="aura-card-inner">
-                <img src="/landing-assets/assets/aura-card-2.jpg" alt="Pedidos en un solo lugar. Recibe, organiza y da seguimiento a todos tus pedidos en tiempo real." class="aura-card-img">
-                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar con pedidos" aria-label="Ver pedidos"></a>
+          <!-- SLIDE 1: PEDIDOS (Fondo Noche Oscura con Aura Magma carmesí flotante) -->
+          <article class="hero-full-slide hero-full-slide--1" data-slide-index="1" data-theme="dark" aria-label="Pedidos en un solo lugar.">
+            <div class="hero-slide__aura-layer" aria-hidden="true">
+              <div class="hero-slide__aura-blob hero-slide__aura-blob--magma"></div>
+              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--crimson"></div>
+            </div>
+
+            <div class="hero-slide__content">
+              <div class="hero-slide__tag-stack">
+                <span class="hero-tag-badge hero-tag-badge--magma">01 / 04</span>
+                <span class="hero-tag-kicker">PEDIDOS · MENÚ · CAJA · SUCURSAL</span>
+              </div>
+
+              <h2 class="hero-slide__title">
+                Pedidos en<br>
+                <span class="hero-title-accent hero-title-accent--magma">un solo lugar.</span>
+              </h2>
+
+              <p class="hero-slide__subtitle">
+                Recibe, organiza y da seguimiento a todos tus pedidos en tiempo real.
+              </p>
+
+              <div class="hero-slide__cta-row">
+                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--magma">
+                  <span>Prueba 14 Días Gratis</span>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--light">
+                  Planes desde $349 MXN/mes
+                </a>
+              </div>
+
+              <div class="hero-slide__pills">
+                <span class="pill-item">🔔 Notificaciones al instante</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">📋 Comandas claras para cocina</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">🚀 Cero pedidos perdidos</span>
               </div>
             </div>
           </article>
 
-          <!-- Card 2: Menú actualiza al momento -->
-          <article class="aura-slide" data-slide-index="2" aria-label="Menú. Actualiza al momento.">
-            <div class="aura-card-wrapper">
-              <div class="aura-card-halo aura-card-halo--gold"></div>
-              <div class="aura-card-inner">
-                <img src="/landing-assets/assets/aura-card-3.jpg" alt="Menú. Actualiza al momento. Cambia precios, disponibilidad, fotos y categorías en segundos." class="aura-card-img">
-                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar con menú" aria-label="Ver menú"></a>
+          <!-- SLIDE 2: MENÚ (Fondo Azul Cielo a Crema con Aura Dorada flotante) -->
+          <article class="hero-full-slide hero-full-slide--2" data-slide-index="2" data-theme="light" aria-label="Menú. Actualiza al momento.">
+            <div class="hero-slide__aura-layer" aria-hidden="true">
+              <div class="hero-slide__aura-blob hero-slide__aura-blob--gold"></div>
+              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--sky"></div>
+            </div>
+
+            <div class="hero-slide__content">
+              <div class="hero-slide__tag-stack">
+                <span class="hero-tag-badge hero-tag-badge--dark">02 / 04</span>
+                <span class="hero-tag-kicker">SIMPLE · VISUAL · DELICIOSO</span>
+              </div>
+
+              <h2 class="hero-slide__title">
+                Menú.<br>
+                <span class="hero-title-accent hero-title-accent--gold">Actualiza al momento.</span>
+              </h2>
+
+              <p class="hero-slide__subtitle">
+                Cambia precios, disponibilidad, fotos y categorías en segundos.
+              </p>
+
+              <div class="hero-slide__cta-row">
+                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
+                  <span>Prueba 14 Días Gratis</span>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
+                  Planes desde $349 MXN/mes
+                </a>
+              </div>
+
+              <div class="hero-slide__pills">
+                <span class="pill-item">⚡ Edición instantánea</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">📸 Fotos HD y combos</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">✨ Modificadores con o sin precio</span>
               </div>
             </div>
           </article>
 
-          <!-- Card 3: Caja bajo control -->
-          <article class="aura-slide" data-slide-index="3" aria-label="Caja bajo control.">
-            <div class="aura-card-wrapper">
-              <div class="aura-card-halo aura-card-halo--flame"></div>
-              <div class="aura-card-inner">
-                <img src="/landing-assets/assets/aura-card-4.jpg" alt="Caja bajo control. Lleva tus ventas, controla tus pagos y ten toda tu operación en un solo lugar." class="aura-card-img">
-                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar con caja" aria-label="Ver caja"></a>
+          <!-- SLIDE 3: CAJA (Fondo Cian Suave a Crema con Aura Flama Naranja flotante) -->
+          <article class="hero-full-slide hero-full-slide--3" data-slide-index="3" data-theme="light" aria-label="Caja bajo control.">
+            <div class="hero-slide__aura-layer" aria-hidden="true">
+              <div class="hero-slide__aura-blob hero-slide__aura-blob--flame"></div>
+              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--cyan"></div>
+            </div>
+
+            <div class="hero-slide__content">
+              <div class="hero-slide__tag-stack">
+                <span class="hero-tag-badge hero-tag-badge--dark">03 / 04</span>
+                <span class="hero-tag-kicker">VENTAS · CONTROL · CRECIMIENTO</span>
+              </div>
+
+              <h2 class="hero-slide__title">
+                Caja<br>
+                <span class="hero-title-accent hero-title-accent--flame">bajo control.</span>
+              </h2>
+
+              <p class="hero-slide__subtitle">
+                Lleva tus ventas, controla tus pagos y ten toda tu operación en un solo lugar.
+              </p>
+
+              <div class="hero-slide__cta-row">
+                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
+                  <span>Prueba 14 Días Gratis</span>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
+                  Planes desde $349 MXN/mes
+                </a>
+              </div>
+
+              <div class="hero-slide__pills">
+                <span class="pill-item">💵 Cobros y corte de turno</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">📊 Reportes automáticos</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">🔒 Seguridad e inmutabilidad</span>
               </div>
             </div>
           </article>
 
-          <!-- Card 4: Haz crecer tu negocio -->
-          <article class="aura-slide" data-slide-index="4" aria-label="Haz crecer tu negocio.">
-            <div class="aura-card-wrapper">
-              <div class="aura-card-halo aura-card-halo--coral"></div>
-              <div class="aura-card-inner">
-                <img src="/landing-assets/assets/aura-card-5.jpg" alt="Haz crecer tu negocio. Comparte tu enlace o QR, llega a más clientes y vende más sin llamadas." class="aura-card-img">
-                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar a crecer" aria-label="Crecer tu negocio"></a>
+          <!-- SLIDE 4: CRECIMIENTO (Fondo Azul Cielo Eléctrico con Aura Coral flotante) -->
+          <article class="hero-full-slide hero-full-slide--4" data-slide-index="4" data-theme="light" aria-label="Haz crecer tu negocio.">
+            <div class="hero-slide__aura-layer" aria-hidden="true">
+              <div class="hero-slide__aura-blob hero-slide__aura-blob--coral"></div>
+              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--sky"></div>
+            </div>
+
+            <div class="hero-slide__content">
+              <div class="hero-slide__tag-stack">
+                <span class="hero-tag-badge hero-tag-badge--dark">04 / 04</span>
+                <span class="hero-tag-kicker">MÁS PEDIDOS · MÁS CLIENTES · MÁS TIEMPO</span>
+              </div>
+
+              <h2 class="hero-slide__title">
+                Haz crecer<br>
+                <span class="hero-title-accent hero-title-accent--coral">tu negocio<span class="hero-dot-coral">.</span></span>
+              </h2>
+
+              <p class="hero-slide__subtitle">
+                Comparte tu enlace o QR, llega a más clientes y vende más sin llamadas ni intermediarios.
+              </p>
+
+              <div class="hero-slide__cta-row">
+                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
+                  <span>Prueba 14 Días Gratis</span>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
+                  Planes desde $349 MXN/mes
+                </a>
+              </div>
+
+              <div class="hero-slide__pills">
+                <span class="pill-item">🔗 Tu propio link web y QR</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">💸 0% comisiones abusivas</span>
+                <span class="pill-sep">|</span>
+                <span class="pill-item">📈 Clientes leales a tu marca</span>
               </div>
             </div>
           </article>
@@ -192,11 +334,15 @@
         <!-- Pinned Bottom Controls & Navigation -->
         <div class="hero-pinned-footer">
           <div class="hero-footer-left">
-            <a href="/admin/register?plan=trial" class="btn-hero-primary">
-              <span>Prueba 14 Días Gratis</span>
-              <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-            <a href="/admin/register?plan=starter" class="hero-footer-pricing-link">Planes desde $349 MXN/mes</a>
+            <nav class="hero-quick-links" aria-label="Accesos directos">
+              <a href="/admin/login">ADMIN</a>
+              <span>·</span>
+              <a href="/pos/">POS</a>
+              <span>·</span>
+              <a href="/kds/">KDS</a>
+              <span>·</span>
+              <a href="/manual/">MANUAL</a>
+            </nav>
           </div>
 
           <div class="hero-scroll-hint" id="heroScrollHint">
@@ -207,15 +353,10 @@
           </div>
 
           <div class="hero-footer-right">
-            <nav class="hero-quick-links" aria-label="Accesos directos">
-              <a href="/admin/login">ADMIN</a>
-              <span>·</span>
-              <a href="/pos/">POS</a>
-              <span>·</span>
-              <a href="/kds/">KDS</a>
-              <span>·</span>
-              <a href="/manual/">MANUAL</a>
-            </nav>
+            <div class="hero-status-pill">
+              <span class="status-pulse"></span>
+              <span>SISTEMA OPERATIVO ACTIVO</span>
+            </div>
           </div>
         </div>
       </div>

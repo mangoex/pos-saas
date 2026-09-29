@@ -132,13 +132,12 @@
   function initHeroParallaxScroll() {
     if (typeof document === "undefined" || typeof document.querySelector !== "function") return;
     const track = document.querySelector("#section-1.hero-parallax-track");
-    const stage = document.querySelector("#heroCardStage");
-    if (!track || !stage) return;
+    const viewport = document.querySelector("#heroSlidesViewport") || document.querySelector("#heroCardStage");
+    if (!track || !viewport) return;
 
-    const slides = Array.from(stage.querySelectorAll ? stage.querySelectorAll(".aura-slide") : []);
+    const slides = Array.from(viewport.querySelectorAll ? viewport.querySelectorAll(".hero-full-slide, .aura-slide") : []);
     if (slides.length === 0) return;
 
-    const ambientOrbs = Array.from(document.querySelectorAll ? document.querySelectorAll(".hero-aura-ambient .aura-orb") : []);
     const scrubberSteps = Array.from(document.querySelectorAll ? document.querySelectorAll(".hero-timeline-scrubber .scrubber-step") : []);
     const progressFill = document.querySelector("#scrubberProgressFill");
     const scrollHint = document.querySelector("#heroScrollHint");
@@ -171,7 +170,7 @@
         scrollHint.style.pointerEvents = p > 0.04 ? "none" : "auto";
       }
 
-      // Update Slides with smooth Parallax + Video Scrubber Crossfade
+      // Update Full-Screen Slides with smooth Parallax + Video Scrubber Crossfade
       slides.forEach((slide, idx) => {
         if (!slide.style) return;
         const diff = virtualIndex - idx; // diff < 0: upcoming slide; diff > 0: past slide
@@ -179,41 +178,28 @@
 
         if (absDiff < 1.15) {
           const clampedAbs = Math.min(1, absDiff);
-          const opacity = Math.max(0, 1 - clampedAbs * 1.25);
+          const opacity = Math.max(0, 1 - clampedAbs * 1.3);
           const translateY = -diff * 60; // Parallax vertical drift
-          const scale = 1 - clampedAbs * 0.06; // Subtle zoom-in / zoom-out
-          const rotate = diff * -1.5; // Organic 3D perspective tilt
+          const scale = 1 - clampedAbs * 0.035; // Subtle cinematic scale
 
           slide.style.opacity = opacity.toFixed(3);
-          slide.style.transform = `translate3d(0, ${translateY.toFixed(1)}px, 0) scale(${scale.toFixed(3)}) rotate(${rotate.toFixed(2)}deg)`;
+          slide.style.transform = `translate3d(0, ${translateY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
           slide.style.pointerEvents = absDiff < 0.4 ? "auto" : "none";
           slide.style.visibility = "visible";
           slide.style.zIndex = String(Math.round((1 - clampedAbs) * 10) + 1);
 
-          // Aura halo behind the card
-          const halo = slide.querySelector ? slide.querySelector(".aura-card-halo") : null;
-          if (halo && halo.style) {
-            const haloScale = 0.95 + (1 - clampedAbs) * 0.25;
-            const haloOpacity = Math.max(0, (1 - clampedAbs) * 0.95);
-            halo.style.transform = `scale(${haloScale.toFixed(3)})`;
-            halo.style.opacity = haloOpacity.toFixed(3);
+          if (slide.classList) {
+            if (absDiff < 0.5) {
+              slide.classList.add("is-active");
+            } else {
+              slide.classList.remove("is-active");
+            }
           }
         } else {
           slide.style.opacity = "0";
           slide.style.pointerEvents = "none";
           slide.style.visibility = "hidden";
-        }
-      });
-
-      // Update Ambient Background Orbs
-      ambientOrbs.forEach((orb, oIdx) => {
-        if (!orb.style) return;
-        const orbDiff = Math.abs(virtualIndex - oIdx);
-        if (orbDiff < 1.0) {
-          const orbOpacity = Math.max(0, 1 - orbDiff);
-          orb.style.opacity = orbOpacity.toFixed(3);
-        } else {
-          orb.style.opacity = "0";
+          if (slide.classList) slide.classList.remove("is-active");
         }
       });
 
