@@ -3,31 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#070e14">
-  <title>mi menú.onl | Sistema Operativo Inteligente para Restaurantes</title>
-  <meta name="description" content="mi menú.onl. Menú digital interactivo, punto de venta táctil POS, pantallas de cocina KDS y pedidos directos sin comisiones para restaurantes.">
-  <link rel="icon" href="/landing-assets/assets/omnipos-logo.svg">
-  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-1.jpg" media="(min-width: 861px)">
-  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-2.jpg" media="(min-width: 861px)">
-  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-3.jpg" media="(min-width: 861px)">
-  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-4.jpg" media="(min-width: 861px)">
-  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-5.jpg" media="(min-width: 861px)">
-  <link href="https://db.onlinewebfonts.com/c/1cd1e7d71e048159076fd90b39846902?family=Open+Sauce+One" rel="stylesheet">
-  <link href="https://db.onlinewebfonts.com/c/42acf9aa4a6dc2f2886a3f682e337ead?family=Open+Sauce+One+Bold" rel="stylesheet">
+  <meta name="theme-color" content="#0b1319">
+  <title>mi menú.onl | Sistema Operativo para Restaurantes</title>
+  <meta name="description" content="mi menú.onl. Sistema operativo inteligente para restaurantes. Pedidos desde tu celular, menú digital, punto de venta y delivery hub unificado.">
+  <link rel="icon" href="/landing-assets/assets/logo-mark.png">
+  <link rel="preload" as="image" href="/landing-assets/assets/omnipos-bg.webp" media="(min-width: 861px)">
+  <link rel="stylesheet" href="/landing-assets/scrollcraft.css">
   <link rel="stylesheet" href="/landing-assets/styles.css">
 </head>
 <body>
-  <!-- MOBILE VIEW (PRESERVED INTACT) -->
+  <!-- VISTA MÓVIL (Se mantiene intacta y optimizada exclusivamente para móviles) -->
   <main class="mobile-landing" aria-labelledby="mobile-title">
     <header class="mobile-landing__brand">
-      <img src="/landing-assets/assets/omnipos-logo.svg" width="36" height="36" alt="">
-      <span>mi menú.onl</span>
+      <img src="/landing-assets/assets/logo-mi-menu.png" height="32" alt="mi menú.onl" style="object-fit: contain;">
     </header>
     <section class="mobile-landing__hero">
       <p class="mobile-landing__eyebrow">Tu restaurante, bajo control</p>
       <h1 id="mobile-title">Menos pendientes.<br><em>Más restaurante.</em></h1>
       <p class="mobile-landing__intro">Organiza tus pedidos, cocina y cobros en un solo lugar.</p>
-      <nav class="mobile-landing__actions" aria-label="Comienza con mi menú.onl">
+      <nav class="mobile-landing__actions" aria-label="Comienza con Omnipos">
         <a class="mobile-landing__primary" href="/admin/register?plan=trial">Probar gratis 14 días <span aria-hidden="true">→</span></a>
         <a class="mobile-landing__secondary" href="/admin/login">Iniciar sesión</a>
       </nav>
@@ -48,513 +42,463 @@
     </section>
     <footer class="mobile-landing__footer"><span>mi menú.onl · Tu operación, conectada.</span><a href="/manual/">Manual de uso</a></footer>
   </main>
+  <span data-sc-progress aria-hidden="true"></span>
+  <div class="sc-grain" aria-hidden="true"></div>
 
-  <!-- DESKTOP: SPLASH SCREEN (Counter 0-100) -->
-  <div id="splash-screen" class="splash-screen" aria-hidden="true">
-    <div class="splash-screen__content">
-      <span class="splash-screen__kicker">INICIANDO MI MENÚ.ONL</span>
-      <span id="splash-counter" class="splash-screen__counter">0</span>
-    </div>
-  </div>
-
-  <!-- DESKTOP: FIXED NAVBAR -->
-  <header class="desktop-navbar">
-    <div class="desktop-navbar__brand">
-      <a href="#inicio" class="desktop-navbar__logo-link">
-        <span class="desktop-navbar__logo-text">mi menú<span class="sparkle">.onl</span></span>
-        <span class="desktop-navbar__logo-sub">SISTEMA OPERATIVO PARA RESTAURANTES</span>
-      </a>
-    </div>
-
-    <nav class="desktop-navbar__center" aria-label="Navegación principal">
-      <a href="#section-1" class="desktop-navbar__link active">Inicio</a>
-      <a href="#section-2" class="desktop-navbar__link">Operación</a>
-      <a href="#section-3" class="desktop-navbar__link">Crecimiento</a>
-      <a href="/manual/" class="desktop-navbar__link">Manual</a>
-    </nav>
-
-    <div class="desktop-navbar__actions">
-      <a href="/admin/login" class="btn-navbar-secondary">Iniciar Sesión</a>
-      <a href="/admin/register?plan=trial" class="btn-navbar-primary">14 Días Gratis</a>
+  <!-- BARRA DE NAVEGACIÓN SUPERIOR ESCRITORIO -->
+  <header class="omnipos-bar kiwi-bar">
+    <a class="omnipos-wordmark kiwi-wordmark" href="#inicio" aria-label="mi menú.onl, volver al inicio">
+      <img class="omnipos-wordmark__logo kiwi-wordmark__logo" src="/landing-assets/assets/logo-mi-menu-white.png" alt="mi menú.onl" style="width: auto; height: 38px; object-fit: contain;">
+    </a>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a class="omnipos-nav-cta" href="/admin/login" style="color: #fff; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); padding: 7px 16px; border-radius: 9999px; text-decoration: none; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; backdrop-filter: blur(8px); transition: all 0.2s ease;">Iniciar Sesión</a>
+      <a class="omnipos-nav-cta" href="/admin/register?plan=trial" style="color: #fff; background: #FF5722; border: 1px solid #FF5722; padding: 7px 18px; border-radius: 9999px; text-decoration: none; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; box-shadow: 0 4px 16px rgba(255, 87, 34, 0.4); transition: all 0.2s ease;">14 Días Gratis</a>
     </div>
   </header>
 
-  <!-- DESKTOP: FULL-SCREEN SECTIONS (MASKED CARDS & STAGGERED REVEAL) -->
-  <main id="inicio" class="desktop-landing">
-    <!-- ==========================================
-         SECTION 1: HERO (5 AURA CARDS & PARALLAX SCROLL STREAM)
-         ========================================== -->
-    <!-- ==========================================
-         SECTION 1: HERO (FULL-SCREEN AURA SLIDES & PARALLAX SCROLL STREAM)
-         ========================================== -->
-    <section id="section-1" class="hero-parallax-track">
-      <div class="hero-parallax-sticky" id="heroParallaxSticky">
-        <!-- Full-Screen Aura Slides Container -->
-        <div class="hero-slides-viewport" id="heroSlidesViewport">
+  <!-- CONTENEDOR PRINCIPAL ESCRITORIO -->
+  <main id="inicio" class="desktop-main">
 
-          <!-- SLIDE 0: RESTAURANTE (Fondo Crema cálido con Aura Naranja flotante) -->
-          <article class="hero-full-slide hero-full-slide--0 is-active" data-slide-index="0" data-theme="light" aria-label="Tu restaurante. Desde tu celular.">
-            <!-- Aura blob flotante que se mueve suavemente por la pantalla -->
-            <div class="hero-slide__aura-layer" aria-hidden="true">
-              <div class="hero-slide__aura-blob hero-slide__aura-blob--orange"></div>
-              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--amber"></div>
-            </div>
+    <!-- SECCIÓN HERO (Conserva el Hero existente con su video de fondo y copy) -->
+    <section class="omnipos-hero-stage">
+      <div class="hero-media-wrap" aria-hidden="true">
+        <picture>
+          <source media="(max-width: 860px)" srcset="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'/%3E">
+          <source srcset="/landing-assets/assets/omnipos-bg.webp" type="image/webp">
+          <img class="sc-world__poster" src="/landing-assets/assets/omnipos-bg.webp" width="800" height="450" alt="mi menú.onl en acción">
+        </picture>
+        <video
+          src="/landing-assets/assets/omnipos-journey.mp4"
+          poster="/landing-assets/assets/omnipos-bg.webp"
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="auto"></video>
+        <div class="omnipos-grade kiwi-grade" aria-hidden="true"></div>
+      </div>
 
-            <div class="hero-slide__content">
-              <div class="hero-slide__tag-stack">
-                <span class="hero-tag-badge hero-tag-badge--dark">✦ RESTAURANT OS</span>
-                <span class="hero-tag-kicker">SISTEMA OPERATIVO PARA RESTAURANTES</span>
-              </div>
+      <div class="hero-content-wrap">
+        <section class="omnipos-story omnipos-story--one kiwi-story kiwi-story--one" aria-labelledby="story-one-title">
+          <p class="omnipos-kicker kiwi-kicker">Plataforma Micro-POS SaaS</p>
+          <h1 id="story-one-title">Control total<br> <em>de tu restaurante.</em></h1>
+          <p class="omnipos-story__body kiwi-story__body">El sistema punto de venta todo en uno para taquerías, cafeterías y restaurantes en crecimiento.</p>
+          <div class="hero-action-buttons">
+            <a class="omnipos-primary-cta kiwi-primary-cta" href="/admin/register?plan=trial">
+              <span>Prueba 14 Días Gratis</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
+            </a>
+            <a class="hero-btn-explore" href="#pedidos">
+              <span>Conocer funciones</span>
+              <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </a>
+          </div>
+        </section>
+      </div>
+    </section>
 
-              <h1 class="hero-slide__title">
-                Tu restaurante.<br>
-                <span class="hero-title-accent">Desde tu celular.</span>
-              </h1>
+    <!-- SECCIÓN 1 NUEVA: FRANJA NARANJA "PEDIDOS" Y APP MOCKUP (IMAGEN 1) -->
+    <section class="section-pedidos" id="pedidos" aria-labelledby="pedidos-heading">
+      <!-- Encabezado superior de la franja -->
+      <div class="pedidos-topbar">
+        <div class="pedidos-brand-group">
+          <div class="pedidos-logo-row">
+            <img src="/landing-assets/assets/logo-mi-menu-white.png" alt="mi menú.onl" height="32" style="object-fit: contain;">
+          </div>
+          <p class="pedidos-brand-sub" id="pedidos-heading">SISTEMA OPERATIVO PARA RESTAURANTES</p>
+        </div>
+        <div class="pedidos-tagline" aria-label="Todo desde tu celular">
+          <span>TODO</span>
+          <span>DESDE</span>
+          <span>TU CELULAR.</span>
+        </div>
+      </div>
 
-              <p class="hero-slide__subtitle">
-                Recibe pedidos, actualiza tu menú y controla tus ventas en un solo lugar.
-              </p>
+      <!-- Marca tipográfica gigante de fondo -->
+      <div class="pedidos-watermark" aria-hidden="true">PEDIDOS</div>
 
-              <div class="hero-slide__cta-row">
-                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
-                  <span>Comenzar gratis</span>
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
-                  Planes desde $349 MXN/mes
-                </a>
-              </div>
+      <!-- Escenario central con iPhone y tarjetas flotantes glassmorphism -->
+      <div class="pedidos-stage">
 
-              <div class="hero-slide__pills">
-                <span class="pill-item">📱 Todo desde tu celular</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">⚡ Sin equipos costosos</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">⏱️ Listo en minutos</span>
-              </div>
-            </div>
-          </article>
+        <!-- Tarjeta Flotante Izquierda: Nuevo pedido -->
+        <aside class="glass-card glass-card--left" aria-label="Notificación de nuevo pedido">
+          <div class="glass-card__icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </div>
+          <div class="glass-card__content">
+            <span class="glass-card__title">Nuevo pedido</span>
+            <span class="glass-card__highlight">#1286</span>
+            <span class="glass-card__amount">$220</span>
+          </div>
+          <div class="glass-card__arrow">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        </aside>
 
-          <!-- SLIDE 1: PEDIDOS (Fondo Noche Oscura con Aura Magma carmesí flotante) -->
-          <article class="hero-full-slide hero-full-slide--1" data-slide-index="1" data-theme="dark" aria-label="Pedidos en un solo lugar.">
-            <div class="hero-slide__aura-layer" aria-hidden="true">
-              <div class="hero-slide__aura-blob hero-slide__aura-blob--magma"></div>
-              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--crimson"></div>
-            </div>
-
-            <div class="hero-slide__content">
-              <div class="hero-slide__tag-stack">
-                <span class="hero-tag-badge hero-tag-badge--magma">01 / 04</span>
-                <span class="hero-tag-kicker">PEDIDOS · MENÚ · CAJA · SUCURSAL</span>
-              </div>
-
-              <h2 class="hero-slide__title">
-                Pedidos en<br>
-                <span class="hero-title-accent hero-title-accent--magma">un solo lugar.</span>
-              </h2>
-
-              <p class="hero-slide__subtitle">
-                Recibe, organiza y da seguimiento a todos tus pedidos en tiempo real.
-              </p>
-
-              <div class="hero-slide__cta-row">
-                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--magma">
-                  <span>Prueba 14 Días Gratis</span>
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--light">
-                  Planes desde $349 MXN/mes
-                </a>
-              </div>
-
-              <div class="hero-slide__pills">
-                <span class="pill-item">🔔 Notificaciones al instante</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">📋 Comandas claras para cocina</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">🚀 Cero pedidos perdidos</span>
-              </div>
-            </div>
-          </article>
-
-          <!-- SLIDE 2: MENÚ (Fondo Azul Cielo a Crema con Aura Dorada flotante) -->
-          <article class="hero-full-slide hero-full-slide--2" data-slide-index="2" data-theme="light" aria-label="Menú. Actualiza al momento.">
-            <div class="hero-slide__aura-layer" aria-hidden="true">
-              <div class="hero-slide__aura-blob hero-slide__aura-blob--gold"></div>
-              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--sky"></div>
-            </div>
-
-            <div class="hero-slide__content">
-              <div class="hero-slide__tag-stack">
-                <span class="hero-tag-badge hero-tag-badge--dark">02 / 04</span>
-                <span class="hero-tag-kicker">SIMPLE · VISUAL · DELICIOSO</span>
-              </div>
-
-              <h2 class="hero-slide__title">
-                Menú.<br>
-                <span class="hero-title-accent hero-title-accent--gold">Actualiza al momento.</span>
-              </h2>
-
-              <p class="hero-slide__subtitle">
-                Cambia precios, disponibilidad, fotos y categorías en segundos.
-              </p>
-
-              <div class="hero-slide__cta-row">
-                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
-                  <span>Prueba 14 Días Gratis</span>
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
-                  Planes desde $349 MXN/mes
-                </a>
-              </div>
-
-              <div class="hero-slide__pills">
-                <span class="pill-item">⚡ Edición instantánea</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">📸 Fotos HD y combos</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">✨ Modificadores con o sin precio</span>
+        <!-- Mockup iPhone Pro con Interfaz de Pedidos -->
+        <div class="phone-device" role="img" aria-label="Vista de la app mi menú.onl en celular recibiendo pedidos">
+          <div class="phone-device__outer">
+            <!-- Barra de estado iOS -->
+            <div class="phone-status">
+              <span class="phone-status__time">9:41</span>
+              <div class="phone-status__island"></div>
+              <div class="phone-status__icons">
+                <svg width="15" height="12" viewBox="0 0 15 12" fill="currentColor"><path d="M1 9h2v3H1V9zm4-3h2v6H5V6zm4-3h2v9H9V3zm4-3h2v12h-2V0z"/></svg>
+                <svg width="15" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M8 2.5C5.2 2.5 2.7 3.7.9 5.6L0 4.6C2.2 2.4 5 1 8 1s5.8 1.4 8 3.6l-.9 1C13.3 3.7 10.8 2.5 8 2.5zm0 3.5c-1.8 0-3.4.8-4.6 2.1l-.9-.9C4 5.6 5.9 4.5 8 4.5s4 1.1 5.5 2.7l-.9.9C11.4 6.8 9.8 6 8 6zm0 3.5c-.8 0-1.5.4-2 1l2 2 2-2c-.5-.6-1.2-1-2-1z"/></svg>
+                <div class="phone-battery"><div class="phone-battery__fill"></div></div>
               </div>
             </div>
-          </article>
 
-          <!-- SLIDE 3: CAJA (Fondo Cian Suave a Crema con Aura Flama Naranja flotante) -->
-          <article class="hero-full-slide hero-full-slide--3" data-slide-index="3" data-theme="light" aria-label="Caja bajo control.">
-            <div class="hero-slide__aura-layer" aria-hidden="true">
-              <div class="hero-slide__aura-blob hero-slide__aura-blob--flame"></div>
-              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--cyan"></div>
+            <!-- Header de la Aplicación -->
+            <div class="phone-app-header">
+              <button type="button" class="phone-app-btn" aria-label="Abrir menú">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              </button>
+              <div class="phone-app-brand">
+                <div class="phone-app-logo">mi menú<span class="phone-dot">.onl</span></div>
+                <div class="phone-app-branch">Restaurante Demo <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg></div>
+              </div>
+              <button type="button" class="phone-app-btn phone-app-btn--bell" aria-label="Notificaciones">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                <span class="phone-app-badge"></span>
+              </button>
             </div>
 
-            <div class="hero-slide__content">
-              <div class="hero-slide__tag-stack">
-                <span class="hero-tag-badge hero-tag-badge--dark">03 / 04</span>
-                <span class="hero-tag-kicker">VENTAS · CONTROL · CRECIMIENTO</span>
-              </div>
-
-              <h2 class="hero-slide__title">
-                Caja<br>
-                <span class="hero-title-accent hero-title-accent--flame">bajo control.</span>
-              </h2>
-
-              <p class="hero-slide__subtitle">
-                Lleva tus ventas, controla tus pagos y ten toda tu operación en un solo lugar.
-              </p>
-
-              <div class="hero-slide__cta-row">
-                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
-                  <span>Prueba 14 Días Gratis</span>
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
-                  Planes desde $349 MXN/mes
-                </a>
-              </div>
-
-              <div class="hero-slide__pills">
-                <span class="pill-item">💵 Cobros y corte de turno</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">📊 Reportes automáticos</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">🔒 Seguridad e inmutabilidad</span>
-              </div>
-            </div>
-          </article>
-
-          <!-- SLIDE 4: CRECIMIENTO (Fondo Azul Cielo Eléctrico con Aura Coral flotante) -->
-          <article class="hero-full-slide hero-full-slide--4" data-slide-index="4" data-theme="light" aria-label="Haz crecer tu negocio.">
-            <div class="hero-slide__aura-layer" aria-hidden="true">
-              <div class="hero-slide__aura-blob hero-slide__aura-blob--coral"></div>
-              <div class="hero-slide__aura-blob-secondary hero-slide__aura-blob--sky"></div>
+            <!-- Navegación por pestañas superiores -->
+            <div class="phone-app-tabs">
+              <button type="button" class="phone-tab phone-tab--active">Pedidos</button>
+              <button type="button" class="phone-tab">Menú</button>
+              <button type="button" class="phone-tab">Caja</button>
             </div>
 
-            <div class="hero-slide__content">
-              <div class="hero-slide__tag-stack">
-                <span class="hero-tag-badge hero-tag-badge--dark">04 / 04</span>
-                <span class="hero-tag-kicker">MÁS PEDIDOS · MÁS CLIENTES · MÁS TIEMPO</span>
-              </div>
-
-              <h2 class="hero-slide__title">
-                Haz crecer<br>
-                <span class="hero-title-accent hero-title-accent--coral">tu negocio<span class="hero-dot-coral">.</span></span>
-              </h2>
-
-              <p class="hero-slide__subtitle">
-                Comparte tu enlace o QR, llega a más clientes y vende más sin llamadas ni intermediarios.
-              </p>
-
-              <div class="hero-slide__cta-row">
-                <a href="/admin/register?plan=trial" class="btn-hero-slide-primary btn-hero-slide-primary--dark">
-                  <span>Prueba 14 Días Gratis</span>
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="/admin/register?plan=starter" class="hero-slide__pricing-link hero-slide__pricing-link--dark">
-                  Planes desde $349 MXN/mes
-                </a>
-              </div>
-
-              <div class="hero-slide__pills">
-                <span class="pill-item">🔗 Tu propio link web y QR</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">💸 0% comisiones abusivas</span>
-                <span class="pill-sep">|</span>
-                <span class="pill-item">📈 Clientes leales a tu marca</span>
-              </div>
+            <!-- Filtros de estado de comandas -->
+            <div class="phone-app-filters">
+              <button type="button" class="filter-chip filter-chip--active">Nuevos <span class="filter-badge">3</span></button>
+              <button type="button" class="filter-chip">En preparación <span class="filter-badge-muted">5</span></button>
+              <button type="button" class="filter-chip">Listos <span class="filter-badge-muted">2</span></button>
             </div>
-          </article>
+
+            <!-- Lista de Pedidos en Tiempo Real -->
+            <div class="phone-orders-list">
+              <!-- Comanda 1 -->
+              <article class="phone-order-card">
+                <div class="order-info">
+                  <div class="order-header-line">
+                    <span class="order-id">#1286</span>
+                    <span class="order-timestamp">Hoy 12:30</span>
+                  </div>
+                  <div class="order-customer-name">María González</div>
+                  <div class="order-dish-items">2x Hamburguesa Clásica<br>1x Papas</div>
+                </div>
+                <div class="order-action-col">
+                  <span class="order-price-value">$220</span>
+                  <button type="button" class="order-accept-btn">Aceptar</button>
+                </div>
+              </article>
+
+              <!-- Comanda 2 -->
+              <article class="phone-order-card">
+                <div class="order-info">
+                  <div class="order-header-line">
+                    <span class="order-id">#1285</span>
+                    <span class="order-timestamp">Hoy 12:28</span>
+                  </div>
+                  <div class="order-customer-name">Carlos Ruiz</div>
+                  <div class="order-dish-items">1x Pizza Pepperoni<br>1x Refresco</div>
+                </div>
+                <div class="order-action-col">
+                  <span class="order-price-value">$180</span>
+                  <button type="button" class="order-accept-btn">Aceptar</button>
+                </div>
+              </article>
+
+              <!-- Comanda 3 -->
+              <article class="phone-order-card">
+                <div class="order-info">
+                  <div class="order-header-line">
+                    <span class="order-id">#1284</span>
+                    <span class="order-timestamp">Hoy 12:21</span>
+                  </div>
+                  <div class="order-customer-name">Ana López</div>
+                  <div class="order-dish-items">3x Tacos al Pastor</div>
+                </div>
+                <div class="order-action-col">
+                  <span class="order-price-value">$150</span>
+                  <button type="button" class="order-accept-btn">Aceptar</button>
+                </div>
+              </article>
+            </div>
+          </div>
         </div>
 
-        <!-- Right Side Timeline Scrubber -->
-        <nav class="hero-timeline-scrubber" id="heroTimelineScrubber" aria-label="Línea de tiempo de funciones">
-          <div class="scrubber-track-line" aria-hidden="true">
-            <div class="scrubber-progress-fill" id="scrubberProgressFill"></div>
+        <!-- Tarjeta Flotante Derecha: Ventas hoy -->
+        <aside class="glass-card glass-card--right" aria-label="Métrica de ventas de hoy">
+          <div class="glass-card__chart-header">
+            <div class="glass-chart-icon">
+              <span class="bar-col bar-col--1"></span>
+              <span class="bar-col bar-col--2"></span>
+              <span class="bar-col bar-col--3"></span>
+            </div>
+            <span class="glass-card__sales-title">Ventas hoy</span>
+            <span class="glass-card__dots" aria-hidden="true">•••</span>
           </div>
-          <button type="button" class="scrubber-step is-active" data-step="0" aria-label="Ir a Restaurante">
-            <span class="scrubber-num">00</span>
-            <span class="scrubber-label">Restaurante</span>
-          </button>
-          <button type="button" class="scrubber-step" data-step="1" aria-label="Ir a Pedidos">
-            <span class="scrubber-num">01</span>
-            <span class="scrubber-label">Pedidos</span>
-          </button>
-          <button type="button" class="scrubber-step" data-step="2" aria-label="Ir a Menú">
-            <span class="scrubber-num">02</span>
-            <span class="scrubber-label">Menú</span>
-          </button>
-          <button type="button" class="scrubber-step" data-step="3" aria-label="Ir a Caja">
-            <span class="scrubber-num">03</span>
-            <span class="scrubber-label">Caja</span>
-          </button>
-          <button type="button" class="scrubber-step" data-step="4" aria-label="Ir a Crecimiento">
-            <span class="scrubber-num">04</span>
-            <span class="scrubber-label">Crecimiento</span>
-          </button>
+          <div class="glass-card__metric-val">$4,850</div>
+          <div class="glass-card__trend-pill">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
+            <span>+12%</span>
+          </div>
+        </aside>
+
+      </div>
+
+      <!-- Bloque de texto inferior izquierdo -->
+      <div class="pedidos-bottom-quote">
+        <p class="quote-lines">
+          <span>MÁS</span>
+          <span>PEDIDOS.</span>
+          <span>MÁS CONTROL.</span>
+          <span>MÁS TIEMPO</span>
+          <span>PARA LO IMPORTANTE.</span>
+        </p>
+        <div class="quote-dash" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2 NUEVA: PLANES Y PRECIOS "RESTAURANTES SIN LÍMITES" (IMAGEN 2) -->
+    <section class="section-pricing" id="precios" aria-labelledby="pricing-heading">
+      <!-- Encabezado superior de la franja -->
+      <div class="pricing-topbar">
+        <div class="pricing-brand-wrap">
+          <img src="/landing-assets/assets/logo-mi-menu.png" alt="mi menú.onl" height="34" style="object-fit: contain;">
+        </div>
+        <div class="pricing-super-tag" id="pricing-heading">
+          <span>RESTAURANTES</span>
+          <span>SIN LÍMITES</span>
+        </div>
+      </div>
+
+      <!-- Cuadrícula de 3 Tarjetas de Precios con Resplandores Luminosos -->
+      <div class="pricing-grid">
+
+        <!-- PLAN 1: ESENCIAL -->
+        <article class="pricing-box pricing-box--esencial">
+          <!-- Bloque Superior Blanco/Translúcido con Glow Naranja -->
+          <div class="pricing-box__upper upper--esencial">
+            <div class="plan-header-row">
+              <span class="plan-tier-label">ESENCIAL</span>
+              <span class="plan-pill-tag">
+                <span class="plan-circle-indicator plan-circle--orange"></span>
+                Empieza hoy
+              </span>
+            </div>
+            <h3 class="plan-headline">Todo lo que necesitas para empezar.</h3>
+            <p class="plan-subheadline">Desde tu celular.</p>
+            <div class="plan-cost-block">
+              <span class="plan-cost-num">$349</span>
+              <span class="plan-cost-unit">MXN / mes</span>
+            </div>
+            <a href="/admin/register?plan=starter" class="plan-cta-button">
+              <span>PROBAR 14 DÍAS GRATIS</span>
+              <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            </a>
+          </div>
+
+          <!-- Bloque Inferior Naranja Vibrante -->
+          <div class="pricing-box__lower lower--esencial">
+            <ul class="features-list">
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Menú digital</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Pedidos en tiempo real</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Caja y ventas</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>QR + enlace propio</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Promociones</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Productos y disponibilidad al momento</span>
+              </li>
+            </ul>
+            <p class="plan-bottom-foot">Sin equipos costosos. Solo necesitas tu celular.</p>
+          </div>
+        </article>
+
+        <!-- PLAN 2: CONECTA -->
+        <article class="pricing-box pricing-box--conecta">
+          <!-- Bloque Superior Blanco/Translúcido con Glow Cyan y Naranja -->
+          <div class="pricing-box__upper upper--conecta">
+            <div class="plan-header-row">
+              <span class="plan-tier-label">CONECTA</span>
+              <span class="plan-pill-tag">
+                <span class="plan-circle-indicator plan-circle--blue"></span>
+                Vende en más canales
+              </span>
+            </div>
+            <h3 class="plan-headline">Todos tus pedidos.</h3>
+            <p class="plan-subheadline">Un solo lugar.</p>
+            <div class="plan-cost-block">
+              <span class="plan-cost-num">$699</span>
+              <span class="plan-cost-unit">MXN / mes</span>
+            </div>
+            <a href="/admin/register?plan=pro" class="plan-cta-button">
+              <span>PROBAR 14 DÍAS GRATIS</span>
+              <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            </a>
+          </div>
+
+          <!-- Bloque Inferior Sunset / Charcoal Cálido -->
+          <div class="pricing-box__lower lower--conecta">
+            <p class="features-prefix-title">Todo lo de Esencial, más:</p>
+            <ul class="features-list">
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span><strong>Uber Eats, DiDi Food y Rappi*</strong></span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Pedidos centralizados</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Catálogo sincronizado</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Disponibilidad por canal</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Más herramientas para sucursales</span>
+              </li>
+            </ul>
+
+            <!-- Callout Box Caja / Pausa -->
+            <div class="callout-glass-box box--conecta">
+              <div class="callout-icon-badge badge--orange">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+              </div>
+              <div class="callout-desc">
+                <strong>¿Se agotó un producto?</strong>
+                <span>Páusalo una vez.</span>
+                <small>Actualízalo en todos tus canales.</small>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- PLAN 3: CONTROL -->
+        <article class="pricing-box pricing-box--control">
+          <!-- Bloque Superior Blanco/Translúcido con Glow Azul y Carmesí -->
+          <div class="pricing-box__upper upper--control">
+            <div class="plan-header-row">
+              <span class="plan-tier-label">CONTROL</span>
+              <span class="plan-pill-tag">
+                <span class="plan-circle-indicator plan-circle--red"></span>
+                Haz crecer tu negocio
+              </span>
+            </div>
+            <h3 class="plan-headline">No solo sepas cuánto vendiste.</h3>
+            <p class="plan-subheadline">Sabe cuánto ganaste.</p>
+            <div class="plan-cost-block">
+              <span class="plan-cost-num">$999</span>
+              <span class="plan-cost-unit">MXN / mes</span>
+            </div>
+            <a href="/admin/register?plan=enterprise" class="plan-cta-button">
+              <span>PROBAR 14 DÍAS GRATIS</span>
+              <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            </a>
+          </div>
+
+          <!-- Bloque Inferior Azul Noche / Pizarra -->
+          <div class="pricing-box__lower lower--control">
+            <p class="features-prefix-title">Todo lo de Conecta, más:</p>
+            <ul class="features-list">
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Inventarios</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Recetas y subrecetas</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Costos por platillo</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Control de mermas</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Consumo automático de insumos</span>
+              </li>
+              <li>
+                <span class="feature-check" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></span>
+                <span>Márgenes y reportes</span>
+              </li>
+            </ul>
+
+            <!-- Callout Box Decisiones y Datos -->
+            <div class="callout-glass-box box--control">
+              <div class="callout-icon-badge badge--blue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+              </div>
+              <div class="callout-desc">
+                <strong>Decisiones basadas en datos.</strong>
+                <small>Un restaurante más rentable.</small>
+              </div>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- PIE DE PÁGINA ESCRITORIO -->
+    <footer class="desktop-footer" role="contentinfo">
+      <div class="desktop-footer__inner">
+        <div class="footer-brand-side">
+          <img src="/landing-assets/assets/logo-mi-menu-white.png" alt="mi menú.onl" height="30" style="object-fit: contain;">
+          <p>© 2026 mi menú.onl · Sistema Operativo Inteligente para Restaurantes.</p>
+        </div>
+        <nav class="footer-links-side" aria-label="Enlaces de pie de página">
+          <a href="/admin/login">Iniciar Sesión</a>
+          <a href="/admin/register?plan=trial">Prueba 14 Días</a>
+          <a href="/manual/">Manual de Uso</a>
         </nav>
-
-        <!-- Pinned Bottom Controls & Navigation -->
-        <div class="hero-pinned-footer">
-          <div class="hero-footer-left">
-            <nav class="hero-quick-links" aria-label="Accesos directos">
-              <a href="/admin/login">ADMIN</a>
-              <span>·</span>
-              <a href="/pos/">POS</a>
-              <span>·</span>
-              <a href="/kds/">KDS</a>
-              <span>·</span>
-              <a href="/manual/">MANUAL</a>
-            </nav>
-          </div>
-
-          <div class="hero-scroll-hint" id="heroScrollHint">
-            <span class="scroll-mouse-icon" aria-hidden="true">
-              <span class="scroll-wheel-dot"></span>
-            </span>
-            <span class="scroll-hint-text">Desliza para explorar como video continuo</span>
-          </div>
-
-          <div class="hero-footer-right">
-            <div class="hero-status-pill">
-              <span class="status-pulse"></span>
-              <span>SISTEMA OPERATIVO ACTIVO</span>
-            </div>
-          </div>
-        </div>
       </div>
-    </section>
-
-    <!-- ==========================================
-         SECTION 2: OPERACIÓN EN VIVO (Grid Mosaic)
-         ========================================== -->
-    <section id="section-2" class="desktop-section section-2" data-bg="/landing-assets/assets/kitchen-live.jpg" data-focal="0.5">
-      <div class="section-2__grid">
-        <!-- Card 0 - Top Left -->
-        <div class="masked-card card-grid card-celular" data-card-index="0">
-          <div class="card-overlay">
-            <span class="card-kicker">PARA RESTAURANTES</span>
-            <h2 class="card-title-lg">Tu restaurante.<br><span class="hero-accent-orange">Desde tu celular.</span></h2>
-            <p class="card-desc">Recibe pedidos, actualiza tu menú y controla tus ventas en un solo lugar.</p>
-            <div class="pills-row">
-              <span class="feature-pill">📱 Todo desde tu celular</span>
-              <span class="feature-pill">⚡ Sin equipos costosos</span>
-              <span class="feature-pill">⏱️ Listo en minutos</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 1 - Top Right (Spans 2 rows) -->
-        <div class="masked-card card-grid card-pedidos" data-card-index="1">
-          <div class="card-overlay card-overlay--column">
-            <div>
-              <span class="card-kicker">PEDIDOS EN VIVO</span>
-              <h2 class="card-title-md">Recibe y organiza.</h2>
-              <p class="card-desc">Todos tus pedidos en un solo lugar. Fácil, rápido y sin perder ventas.</p>
-            </div>
-
-            <!-- Live Order Mockup -->
-            <div class="live-orders-widget">
-              <div class="order-ticket">
-                <div class="order-ticket__header">
-                  <strong>#1286</strong>
-                  <span class="order-status-badge">Nuevo</span>
-                  <span class="order-amount">$220</span>
-                </div>
-                <div class="order-ticket__body">
-                  <span class="customer-name">María González</span>
-                  <span class="order-items">2x Hamburguesa Clásica, 1x Papas</span>
-                </div>
-                <button type="button" class="btn-order-accept">Aceptar</button>
-              </div>
-
-              <div class="order-ticket order-ticket--secondary">
-                <div class="order-ticket__header">
-                  <strong>#1285</strong>
-                  <span class="order-status-badge order-status-badge--prep">En cocina</span>
-                  <span class="order-amount">$180</span>
-                </div>
-                <div class="order-ticket__body">
-                  <span class="customer-name">Carlos Ruiz</span>
-                  <span class="order-items">1x Pizza Pepperoni, 1x Refresco</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="card-action-row">
-              <a href="/admin/register?plan=trial" class="btn-orange-primary">Comenzar gratis →</a>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 2 - Bottom Left -->
-        <div class="masked-card card-grid card-menu" data-card-index="2">
-          <div class="card-overlay">
-            <span class="card-kicker">GESTIÓN DE MENÚ</span>
-            <h2 class="card-title-lg">Actualiza<br>al momento.</h2>
-            <p class="card-desc">Cambia precios, disponibilidad de platillos y fotos en segundos.</p>
-            <div class="menu-mini-toggle">
-              <div class="toggle-row">
-                <span>Hamburguesa Doble ($160)</span>
-                <span class="switch-active">Disponible</span>
-              </div>
-              <div class="toggle-row">
-                <span>Papas a la Francesa ($55)</span>
-                <span class="switch-active">Disponible</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 3 - Bottom Full Width (4 Service Cards) -->
-        <div class="masked-card card-grid card-services-row" data-card-index="3">
-          <div class="services-subcards">
-            <div class="service-pill-card service-pill-card--active">
-              <div class="service-pill-card__top">
-                <h3>Menú Digital<br>con QR</h3>
-                <span class="service-num">01</span>
-              </div>
-              <p class="service-subtext">Catálogo en línea visual y optimizado para móviles.</p>
-            </div>
-
-            <div class="service-pill-card">
-              <div class="service-pill-card__top">
-                <h3>Punto de Venta<br>POS Táctil</h3>
-                <span class="service-num">02</span>
-              </div>
-              <p class="service-subtext">Cobros rápidos, tickets y caja diaria sin demoras.</p>
-            </div>
-
-            <div class="service-pill-card">
-              <div class="service-pill-card__top">
-                <h3>Pantalla KDS<br>de Cocina</h3>
-                <span class="service-num">03</span>
-              </div>
-              <p class="service-subtext">Comandas claras en tiempo real por estación.</p>
-            </div>
-
-            <div class="service-pill-card">
-              <div class="service-pill-card__top">
-                <h3>Delivery &<br>WhatsApp</h3>
-                <span class="service-num">04</span>
-              </div>
-              <p class="service-subtext">Toma pedidos directo de clientes sin comisiones.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ==========================================
-         SECTION 3: CRECIMIENTO Y ESCALA
-         ========================================== -->
-    <section id="section-3" class="desktop-section section-3">
-      <div class="section-3__grid">
-        <!-- LEFT COLUMN: 3 stacked cards -->
-        <div class="section-3__col-left">
-          <!-- Card 1: Heading -->
-          <div class="editorial-card card-grow-heading">
-            <span class="editorial-kicker">CONTROL TOTAL</span>
-            <h2 class="editorial-title">Haz crecer<br>tu negocio.</h2>
-            <p class="editorial-desc">Más pedidos. Más control. Más tiempo para lo importante.</p>
-          </div>
-
-          <!-- Card 2: Two Image Cards -->
-          <div class="editorial-images-row">
-            <div class="editorial-img-box">
-              <img src="/landing-assets/assets/app-ordering.jpg" alt="Menú en smartphone" loading="lazy">
-              <span class="img-badge">Menú Inteligente</span>
-            </div>
-            <div class="editorial-img-box">
-              <img src="/landing-assets/assets/kds-tickets.jpg" alt="Control de pedidos" loading="lazy">
-              <span class="img-badge">Comandas Directas</span>
-            </div>
-          </div>
-
-          <!-- Card 3: Consultation / Starter Plan -->
-          <div class="editorial-card card-pricing-action">
-            <div class="pricing-action__info">
-              <span class="editorial-kicker">SIN ATADURAS</span>
-              <h3>Planes accesibles<br>desde $349 MXN/mes</h3>
-              <p>Sin contratos forzosos. Cancela cuando quieras.</p>
-            </div>
-            <a href="/admin/register?plan=starter" class="btn-pricing-action">Conocer el plan inicial ↗</a>
-          </div>
-        </div>
-
-        <!-- RIGHT COLUMN: Single tall image card with 2 bottom overlay cards -->
-        <div class="section-3__col-right">
-          <div class="tall-feature-card">
-            <img src="/landing-assets/assets/burger-blue.jpg" alt="Crecimiento de restaurante" class="tall-feature-card__bg" loading="lazy">
-
-            <div class="tall-card__overlays">
-              <!-- Overlay Card 1 (White) -->
-              <div class="overlay-card overlay-card--white">
-                <div>
-                  <span class="overlay-kicker">VENTAS DIRECTAS</span>
-                  <h4>Comparte tu enlace o QR</h4>
-                  <p>Ventas sin intermediarios ni comisiones de plataformas.</p>
-                </div>
-                <div class="overlay-arrow-btn">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5L8 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </div>
-              </div>
-
-              <!-- Overlay Card 2 (Glass) -->
-              <div class="overlay-card overlay-card--glass">
-                <div>
-                  <span class="overlay-kicker">OPERACIÓN ÁGIL</span>
-                  <h4>La forma más fácil de vender</h4>
-                  <p>Automatiza comandas y tickets para todo tu equipo.</p>
-                </div>
-                <div class="overlay-arrow-btn overlay-arrow-btn--white">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5L8 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    </footer>
   </main>
 
+  <script src="/landing-assets/scrollcraft.js"></script>
   <script src="/landing-assets/app.js"></script>
 </body>
 </html>
