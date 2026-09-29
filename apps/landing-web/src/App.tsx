@@ -3,7 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 // ============================================================================
 // DATA & ASSET CONSTANTS (mi menú.onl - Sistema Operativo para Restaurantes)
 // ============================================================================
-const HERO_IMAGE = '/landing-assets/assets/hero-clean.jpg';
+const HERO_IMAGES = [
+  { url: '/landing-assets/assets/hero-clean.jpg', label: 'Burgers', icon: '🍔' },
+  { url: '/landing-assets/assets/hero-tacos.jpg', label: 'Tacos', icon: '🌮' },
+  { url: '/landing-assets/assets/hero-hotdog.jpg', label: 'Hot Dogs', icon: '🌭' },
+];
+const HERO_IMAGE = HERO_IMAGES[0].url;
 const SECTION2_IMAGE = '/landing-assets/assets/kitchen-live.jpg';
 const SECTION3_IMG1 = '/landing-assets/assets/app-ordering.jpg';
 const SECTION3_IMG2 = '/landing-assets/assets/kds-tickets.jpg';
@@ -171,7 +176,9 @@ function useStaggeredReveal(count: number, threshold = 0.15) {
 // MASKED CARD COMPONENT
 // ============================================================================
 interface MaskedCardProps {
-  bgImage: string;
+  bgImage?: string;
+  bgImages?: string[];
+  activeImageIndex?: number;
   position?: CardPosition;
   imageWidth: number;
   focalX: number;
@@ -183,6 +190,8 @@ interface MaskedCardProps {
 
 const MaskedCard: React.FC<MaskedCardProps> = ({
   bgImage,
+  bgImages,
+  activeImageIndex = 0,
   position,
   imageWidth,
   focalX,
@@ -199,16 +208,34 @@ const MaskedCard: React.FC<MaskedCardProps> = ({
   const overflow = imageWidth > sw ? imageWidth - sw : 0;
   const focalOffset = overflow * focalX;
 
-  const maskStyle: React.CSSProperties = {
-    backgroundImage: `url(${bgImage})`,
+  const getSlideStyle = (url: string, isActive: boolean): React.CSSProperties => ({
+    backgroundImage: `url(${url})`,
     backgroundSize: sh > 0 ? `auto ${sh}px` : 'cover',
     backgroundPosition: `-${Math.round(x + focalOffset)}px -${Math.round(y)}px`,
     backgroundRepeat: 'no-repeat',
-    ...style,
-  };
+    opacity: isActive ? 1 : 0,
+    transition: 'opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
+  });
 
   return (
-    <div ref={cardRef} className={`relative overflow-hidden ${className}`} style={maskStyle}>
+    <div
+      ref={cardRef}
+      className={`relative overflow-hidden ${className}`}
+      style={!bgImages && bgImage ? {
+        backgroundImage: `url(${bgImage})`,
+        backgroundSize: sh > 0 ? `auto ${sh}px` : 'cover',
+        backgroundPosition: `-${Math.round(x + focalOffset)}px -${Math.round(y)}px`,
+        backgroundRepeat: 'no-repeat',
+        ...style,
+      } : style}
+    >
+      {bgImages?.map((url, idx) => (
+        <div
+          key={url}
+          className="absolute inset-0 pointer-events-none"
+          style={getSlideStyle(url, idx === activeImageIndex)}
+        />
+      ))}
       {children}
     </div>
   );
@@ -389,7 +416,15 @@ const Navbar: React.FC = () => {
 // ============================================================================
 export const App: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
+  const [heroIndex, setHeroIndex] = useState(0);
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setHeroIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, []);
 
   // Section 1
   const section1Ref = useRef<HTMLElement | null>(null);
@@ -407,6 +442,8 @@ export const App: React.FC = () => {
 
   // Section 3
   const s3Reveal = useStaggeredReveal(4);
+
+  const heroImageUrls = HERO_IMAGES.map((img) => img.url);
 
   return (
     <div className="bg-[#070e14] text-white min-h-screen">
@@ -433,7 +470,8 @@ export const App: React.FC = () => {
             <MaskedCard
               key={text}
               cardRef={(el) => { s1CardsRef.current[i] = el; }}
-              bgImage={HERO_IMAGE}
+              bgImages={heroImageUrls}
+              activeImageIndex={heroIndex}
               position={s1Positions[i]}
               imageWidth={s1ImageWidth}
               focalX={isMobile ? 0.5 : 0.5}
@@ -452,7 +490,8 @@ export const App: React.FC = () => {
         {/* Main Hero Card (4th card) */}
         <MaskedCard
           cardRef={(el) => { s1CardsRef.current[3] = el; }}
-          bgImage={HERO_IMAGE}
+          bgImages={heroImageUrls}
+          activeImageIndex={heroIndex}
           position={s1Positions[3]}
           imageWidth={s1ImageWidth}
           focalX={isMobile ? 0.5 : 0.5}
@@ -500,6 +539,25 @@ export const App: React.FC = () => {
 
           {/* Bottom-right block */}
           <div className="absolute bottom-6 right-4 md:bottom-8 md:right-7 z-10 flex flex-col items-end gap-2">
+            {/* Dish Switcher Buttons */}
+            <div className="flex items-center gap-1.5 p-1 rounded-full bg-black/70 backdrop-blur-md border border-white/15">
+              {HERO_IMAGES.map((item, idx) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setHeroIndex(idx)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    idx === heroIndex
+                      ? 'bg-white/20 text-white border border-white/30 shadow-lg'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>{item.icon}</span>
+                  <span className="uppercase tracking-wider">{item.label}</span>
+                </button>
+              ))}
+            </div>
+
             <div className="flex items-center gap-3 text-xs md:text-sm font-bold tracking-wider text-slate-200 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
               <a href="/admin/">ADMIN</a> · <a href="/pos/">POS</a> · <a href="/kds/">KDS</a> · <a href="/manual/">MANUAL</a>
             </div>

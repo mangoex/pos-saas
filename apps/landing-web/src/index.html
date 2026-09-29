@@ -8,6 +8,8 @@
   <meta name="description" content="mi menú.onl. Menú digital interactivo, punto de venta táctil POS, pantallas de cocina KDS y pedidos directos sin comisiones para restaurantes.">
   <link rel="icon" href="/landing-assets/assets/omnipos-logo.svg">
   <link rel="preload" as="image" href="/landing-assets/assets/hero-clean.jpg" media="(min-width: 861px)">
+  <link rel="preload" as="image" href="/landing-assets/assets/hero-tacos.jpg" media="(min-width: 861px)">
+  <link rel="preload" as="image" href="/landing-assets/assets/hero-hotdog.jpg" media="(min-width: 861px)">
   <link href="https://db.onlinewebfonts.com/c/1cd1e7d71e048159076fd90b39846902?family=Open+Sauce+One" rel="stylesheet">
   <link href="https://db.onlinewebfonts.com/c/42acf9aa4a6dc2f2886a3f682e337ead?family=Open+Sauce+One+Bold" rel="stylesheet">
   <link rel="stylesheet" href="/landing-assets/styles.css">
@@ -84,18 +86,27 @@
       <!-- 3 Feature Bars (Masked Cards Row) -->
       <div class="feature-bars">
         <div class="masked-card feature-bar" data-card-index="0">
+          <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
+          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
+          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
           <div class="feature-bar__content">
             <span class="feature-bar__dot"></span>
             <span>Menú Digital QR Interactivo</span>
           </div>
         </div>
         <div class="masked-card feature-bar" data-card-index="1">
+          <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
+          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
+          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
           <div class="feature-bar__content">
             <span class="feature-bar__dot"></span>
             <span>POS Táctil & Control de Caja</span>
           </div>
         </div>
         <div class="masked-card feature-bar" data-card-index="2">
+          <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
+          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
+          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
           <div class="feature-bar__content">
             <span class="feature-bar__dot"></span>
             <span>Cocina KDS & Delivery WhatsApp</span>
@@ -105,6 +116,10 @@
 
       <!-- Main Hero Card (Card 3) -->
       <div class="masked-card hero-card" data-card-index="3">
+        <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
+        <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
+        <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
+
         <div class="hero-card__scrim" aria-hidden="true"></div>
 
         <div class="hero-card__top-left">
@@ -126,6 +141,22 @@
         </div>
 
         <div class="hero-card__bottom-right">
+          <!-- Food Dish Switcher -->
+          <div class="hero-food-switcher" aria-label="Seleccionar platillo">
+            <button type="button" class="hero-indicator-dot is-active" data-slide-target="0" title="Hamburguesas">
+              <span class="dot-icon">🍔</span>
+              <span class="dot-label">Burgers</span>
+            </button>
+            <button type="button" class="hero-indicator-dot" data-slide-target="1" title="Tacos">
+              <span class="dot-icon">🌮</span>
+              <span class="dot-label">Tacos</span>
+            </button>
+            <button type="button" class="hero-indicator-dot" data-slide-target="2" title="Hot Dogs">
+              <span class="dot-icon">🌭</span>
+              <span class="dot-label">Hot Dogs</span>
+            </button>
+          </div>
+
           <nav class="hero-quick-links" aria-label="Accesos directos">
             <a href="/admin/">ADMIN</a>
             <span>·</span>

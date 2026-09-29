@@ -19,10 +19,13 @@
     // 3. Masked Cards Engine (Windowing effect sharing background image across cards)
     initMaskedCards();
 
-    // 4. Staggered Reveal Animations via IntersectionObserver
+    // 4. Hero Food Carousel (Cycles 🍔 Burgers -> 🌮 Tacos -> 🌭 Hot Dogs)
+    initHeroCarousel();
+
+    // 5. Staggered Reveal Animations via IntersectionObserver
     initStaggeredReveal();
 
-    // 5. Active Navbar Link Tracker
+    // 6. Active Navbar Link Tracker
     initNavbarTracker();
   }
 
@@ -90,15 +93,24 @@
         const focalOffset = overflow * focalX;
 
         cards.forEach((card) => {
-          if (!card.getBoundingClientRect || !card.style) return;
+          if (!card.getBoundingClientRect) return;
           const cRect = card.getBoundingClientRect();
           const x = cRect.left - sRect.left;
           const y = cRect.top - sRect.top;
 
-          card.style.backgroundImage = `url("${bgUrl}")`;
-          card.style.backgroundSize = `auto ${Math.round(sh)}px`;
-          card.style.backgroundPosition = `-${Math.round(x + focalOffset)}px -${Math.round(y)}px`;
-          card.style.backgroundRepeat = "no-repeat";
+          const slides = card.querySelectorAll ? Array.from(card.querySelectorAll(".masked-card__slide")) : [];
+          if (slides.length > 0) {
+            slides.forEach((slide) => {
+              if (!slide.style) return;
+              slide.style.backgroundSize = `auto ${Math.round(sh)}px`;
+              slide.style.backgroundPosition = `-${Math.round(x + focalOffset)}px -${Math.round(y)}px`;
+            });
+          } else if (card.style) {
+            card.style.backgroundImage = `url("${bgUrl}")`;
+            card.style.backgroundSize = `auto ${Math.round(sh)}px`;
+            card.style.backgroundPosition = `-${Math.round(x + focalOffset)}px -${Math.round(y)}px`;
+            card.style.backgroundRepeat = "no-repeat";
+          }
         });
       }
 
@@ -110,6 +122,59 @@
 
       if (window.addEventListener) {
         window.addEventListener("resize", updatePositions, { passive: true });
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     Hero Food Carousel (Cycles 🍔 Burgers -> 🌮 Tacos -> 🌭 Hot Dogs)
+     -------------------------------------------------------------------------- */
+  function initHeroCarousel() {
+    if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
+    const section1 = document.querySelector ? document.querySelector("#section-1") : null;
+    if (!section1) return;
+
+    const cards = section1.querySelectorAll ? Array.from(section1.querySelectorAll(".masked-card")) : [];
+    if (cards.length === 0) return;
+
+    let currentSlide = 0;
+    const totalSlides = 3;
+
+    function goToSlide(idx) {
+      currentSlide = ((idx % totalSlides) + totalSlides) % totalSlides;
+      cards.forEach((card) => {
+        const slides = card.querySelectorAll ? Array.from(card.querySelectorAll(".masked-card__slide")) : [];
+        slides.forEach((slide, sIdx) => {
+          if (!slide.classList) return;
+          if (sIdx === currentSlide) {
+            slide.classList.add("is-active");
+          } else {
+            slide.classList.remove("is-active");
+          }
+        });
+      });
+
+      const buttons = section1.querySelectorAll ? Array.from(section1.querySelectorAll(".hero-indicator-dot")) : [];
+      buttons.forEach((btn, bIdx) => {
+        if (!btn.classList) return;
+        if (bIdx === currentSlide) {
+          btn.classList.add("is-active");
+        } else {
+          btn.classList.remove("is-active");
+        }
+      });
+    }
+
+    setInterval(() => {
+      goToSlide(currentSlide + 1);
+    }, 4500);
+
+    const buttons = section1.querySelectorAll ? Array.from(section1.querySelectorAll(".hero-indicator-dot")) : [];
+    buttons.forEach((btn, idx) => {
+      if (btn.addEventListener) {
+        btn.addEventListener("click", () => {
+          goToSlide(idx);
+        });
       }
     });
   }
