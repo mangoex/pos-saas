@@ -58,3 +58,44 @@ test('current catalog owns prices and selection membership', () => {
   assert.ok(helpers.validateCartDraft({ ...product, modifier_groups: [{ ...product.modifier_groups[0], maximum_selections: 1 }] }, 1, [selected(option), selected(free)]));
   assert.equal(helpers.validateCartDraft(product, 1, [selected(free)]), null);
 });
+
+test('multi-modifier price summation and natural Spanish phrase formatting', () => {
+  const multiProduct = {
+    id: 'latte',
+    sku: 'latte',
+    name: 'Latte',
+    price_cents: 14500,
+    modifier_groups: [{
+      id: 'extras',
+      name: 'Extras',
+      minimum_selections: 0,
+      maximum_selections: 4,
+      is_required: false,
+      options: [
+        { id: 'oat', name: 'Leche de avena', price_delta_cents: 1500, selection_kind: 'modifier' },
+        { id: 'almond', name: 'Leche de almendras', price_delta_cents: 1000, selection_kind: 'modifier' },
+        { id: 'sugar', name: 'Azúcar', price_delta_cents: 0, selection_kind: 'modifier' },
+        { id: 'lemon', name: 'Limón', price_delta_cents: 0, selection_kind: 'modifier' },
+      ],
+    }],
+  };
+  const oatSel = { option_id: 'oat', name: 'Leche de avena', price_delta_cents: 1500, selection_kind: 'modifier' };
+  const almondSel = { option_id: 'almond', name: 'Leche de almendras', price_delta_cents: 1000, selection_kind: 'modifier' };
+  const sugarSel = { option_id: 'sugar', name: 'Azúcar', price_delta_cents: 0, selection_kind: 'modifier' };
+  const lemonSel = { option_id: 'lemon', name: 'Limón', price_delta_cents: 0, selection_kind: 'modifier' };
+
+  const allSelections = [oatSel, almondSel, sugarSel, lemonSel];
+
+  // Base 14500 + 1500 + 1000 + 0 + 0 = 17000 ($170.00)
+  assert.equal(helpers.calculateLineTotal(multiProduct, 1, allSelections), 17000);
+
+  // Natural phrase formatting
+  assert.equal(
+    helpers.formatModifiersSummary(allSelections),
+    'Con Leche de avena, Leche de almendras, Azúcar y Limón'
+  );
+  assert.equal(helpers.formatModifiersSummary([oatSel]), 'Con Leche de avena');
+  assert.equal(helpers.formatModifiersSummary([oatSel, almondSel]), 'Con Leche de avena y Leche de almendras');
+  assert.equal(helpers.formatModifiersSummary([]), '');
+  assert.equal(helpers.formatModifiersSummary(undefined), '');
+});

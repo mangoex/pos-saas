@@ -167,11 +167,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         const { [option.option_id]: _removed, ...rest } = current;
         return rest;
       }
+      if (maximum === 1) {
+        const rest = Object.fromEntries(
+          Object.entries(current).filter(([_, selection]) => {
+            const sourceGroup = product.modifier_groups?.find((group) => group.options.some((candidate) => candidate.id === selection.option_id));
+            return sourceGroup?.id !== groupId;
+          })
+        );
+        return { ...rest, [option.option_id]: option };
+      }
       const inGroup = Object.values(current).filter((selection) => {
         const sourceGroup = product.modifier_groups?.find((group) => group.options.some((candidate) => candidate.id === selection.option_id));
         return sourceGroup?.id === groupId;
       }).length;
-      if (inGroup >= maximum) {
+      if (maximum > 1 && inGroup >= maximum) {
         setModifierError('Esta opción ya alcanzó el máximo permitido.');
         return current;
       }
@@ -370,16 +379,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                       >
                         {option.name}{option.price_delta_cents ? ` (${option.price_delta_cents > 0 ? '+' : ''}${formatMoney(option.price_delta_cents)})` : ''}
                       </button>
-                      {selected && option.selection_kind === 'modifier' && (
-                        <input
-                          type="text"
-                          className="product-modal-notes-input"
-                          placeholder="Detalle para cocina (si aplica)"
-                          value={selected.text ?? ''}
-                          maxLength={240}
-                          onChange={(event) => setModifierText(option.id, event.target.value)}
-                        />
-                      )}
                     </div>
                   );
                 })}

@@ -1,5 +1,6 @@
 import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile, TrendingDish, CommunityPhoto } from './types';
 import { getProductImage } from './imageMap';
+import { formatModifiersSummary } from './utils/cartPersonalization';
 import { parsePickupOptions } from './utils/pickupSchedule';
 import {
   clearPendingMobileOrder,
@@ -229,7 +230,7 @@ export async function fetchMobileMenu(publicKey?: string | null): Promise<{ prod
               name: group.name,
               is_required: group.is_required === true,
               minimum_selections: Number.isInteger(group.minimum_selections) ? group.minimum_selections : 0,
-              maximum_selections: Number.isInteger(group.maximum_selections) ? group.maximum_selections : 0,
+              maximum_selections: Number.isInteger(group.maximum_selections) && group.maximum_selections > 0 ? group.maximum_selections : (Array.isArray(group.options) ? group.options.length : 0),
               options: group.options.filter((option: unknown) => (
                 typeof (option as { id?: unknown }).id === 'string'
                 && typeof (option as { name?: unknown }).name === 'string'
@@ -357,10 +358,8 @@ export function buildWhatsAppLink(
   items.forEach((item) => {
     text += `• ${item.quantity}x ${item.product.name} (${formatMoney(item.product.price_cents)})\n`;
     if (item.modifiers && item.modifiers.length > 0) {
-      item.modifiers.forEach((mod) => {
-        const delta = mod.price_delta_cents > 0 ? ` (+${formatMoney(mod.price_delta_cents)})` : '';
-        text += `   ↳ _Adicional: ${mod.name}${delta}_\n`;
-      });
+      const summary = formatModifiersSummary(item.modifiers);
+      text += `   ↳ _Adicional: ${summary}_\n`;
     }
     if (item.notes) {
       text += `   ↳ _Nota: ${item.notes}_\n`;

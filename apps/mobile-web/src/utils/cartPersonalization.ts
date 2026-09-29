@@ -54,3 +54,24 @@ export function replaceCartLine(cart: CartItem[], cartId: string, product: Produ
   next[index] = { ...cart[index], product, quantity, notes, modifiers: currentModifiers(product, modifiers), line_total_cents: calculateLineTotal(product, quantity, modifiers) };
   return next;
 }
+
+export function formatModifiersSummary(modifiers?: Array<{ name?: string }>): string {
+  if (!modifiers || modifiers.length === 0) return '';
+  const names = modifiers
+    .map(m => m.name?.trim())
+    .filter((name): name is string => Boolean(name));
+  if (names.length === 0) return '';
+
+  const joinItems = (items: string[]) => {
+    if (items.length === 1) return items[0];
+    const last = items[items.length - 1];
+    const conj = /^[ií](?![a-eou])/i.test(last) ? 'e' : 'y';
+    return `${items.slice(0, -1).join(', ')} ${conj} ${last}`;
+  };
+
+  const hasExplicitPrefix = names.some(n => /^con\s+/i.test(n) || /^sin\s+/i.test(n));
+  if (hasExplicitPrefix) {
+    return joinItems(names);
+  }
+  return `Con ${joinItems(names)}`;
+}

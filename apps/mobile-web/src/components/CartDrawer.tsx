@@ -4,7 +4,7 @@ import { CartItem, CustomerOrderInfo, OrderType, PaymentMethod, BranchInfo, Prod
 import { formatMoney, fetchOrderUpsellRecommendations, getSavedCustomerProfile, saveCustomerProfile, validateBranchCoupon } from '../api';
 import { getProductIconMeta, getProductImage } from '../imageMap';
 import { requestBrowserCoordinates, reverseGeocode, formatGpsAddressNotes } from '../utils/geolocation';
-import { currentModifiers, hasCustomizationOptions, hasSelectedCustomization } from '../utils/cartPersonalization';
+import { currentModifiers, formatModifiersSummary, hasCustomizationOptions, hasSelectedCustomization } from '../utils/cartPersonalization';
 import { formatTimeSlotLabel, validatePickupSelection } from '../utils/pickupSchedule';
 import { usePickupOptions } from '../hooks/usePickupOptions';
 import { pickupGraceMessage } from '../../../../packages/ui/src/utils/pickupGrace';
@@ -722,11 +722,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             📝 {item.notes}
                           </span>
                         )}
-                        {(item.modifiers ?? []).map((modifier) => (
-                          <span key={modifier.option_id} className="cart-item-notes-text">
-                            + {modifier.name}{modifier.text ? `: ${modifier.text}` : ''}
+                        {(item.modifiers ?? []).length > 0 && (
+                          <span className="cart-item-notes-text">
+                            {formatModifiersSummary(item.modifiers)}
                           </span>
-                        ))}
+                        )}
                       </div>
 
                       <div className="cart-item-actions-cluster">
