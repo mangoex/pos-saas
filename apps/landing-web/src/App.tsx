@@ -3,16 +3,16 @@ import React, { useState, useEffect, useRef } from 'react';
 // ============================================================================
 // DATA & ASSET CONSTANTS (mi menú.onl - Sistema Operativo para Restaurantes)
 // ============================================================================
-const HERO_IMAGE = '/landing-assets/assets/mimenu-hero-burger.png';
-const SECTION2_IMAGE = '/landing-assets/assets/mimenu-features-grid.png';
-const SECTION3_IMG1 = '/landing-assets/assets/feature-card-menu.png';
-const SECTION3_IMG2 = '/landing-assets/assets/feature-card-pedidos.png';
-const SECTION3_BG = '/landing-assets/assets/feature-card-crecimiento.png';
+const HERO_IMAGE = '/landing-assets/assets/hero-clean.jpg';
+const SECTION2_IMAGE = '/landing-assets/assets/kitchen-live.jpg';
+const SECTION3_IMG1 = '/landing-assets/assets/app-ordering.jpg';
+const SECTION3_IMG2 = '/landing-assets/assets/kds-tickets.jpg';
+const SECTION3_BG = '/landing-assets/assets/burger-blue.jpg';
 
 const featureBars = [
-  '🍔 Menú Digital Interactivo con Código QR',
-  '⚡ Punto de Venta POS & Caja en la Nube',
-  '📟 Pantalla de Cocina KDS y Pedidos WhatsApp',
+  '🍔 Menú Digital QR Interactivo',
+  '⚡ POS Táctil & Control de Caja',
+  '📟 Cocina KDS & Delivery WhatsApp',
 ];
 
 const services = [
@@ -428,7 +428,7 @@ export const App: React.FC = () => {
         className="h-screen w-full overflow-hidden flex flex-col pt-20 md:pt-24 px-3 md:px-5 pb-1.5 md:pb-2 gap-1.5 md:gap-2 box-border"
       >
         {/* 3 Feature Bars */}
-        <div className="flex flex-col gap-1.5 md:gap-2 shrink-0">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5 md:gap-2 shrink-0">
           {featureBars.map((text, i) => (
             <MaskedCard
               key={text}
@@ -436,12 +436,12 @@ export const App: React.FC = () => {
               bgImage={HERO_IMAGE}
               position={s1Positions[i]}
               imageWidth={s1ImageWidth}
-              focalX={isMobile ? 0.7 : 0.8}
-              className="w-full h-12 md:h-16 shrink-0 rounded-xl md:rounded-2xl border border-white/10"
+              focalX={isMobile ? 0.5 : 0.5}
+              className="w-full h-11 md:h-12 shrink-0 rounded-xl md:rounded-2xl border border-white/10"
               style={s1Reveal.getAnimStyle(i)}
             >
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-                <span className="text-white text-sm md:text-xl font-bold tracking-tight text-center">
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/45 backdrop-blur-md px-3">
+                <span className="text-white text-xs md:text-sm font-bold tracking-tight text-center truncate">
                   {text}
                 </span>
               </div>
@@ -455,13 +455,19 @@ export const App: React.FC = () => {
           bgImage={HERO_IMAGE}
           position={s1Positions[3]}
           imageWidth={s1ImageWidth}
-          focalX={isMobile ? 0.7 : 0.8}
-          className="w-full flex-1 min-h-0 rounded-xl md:rounded-2xl border border-white/15"
+          focalX={isMobile ? 0.5 : 0.5}
+          className="w-full flex-1 min-h-0 rounded-xl md:rounded-2xl border border-white/15 relative"
           style={s1Reveal.getAnimStyle(3)}
         >
+          {/* Subtle dark gradient scrim for contrast */}
+          <div className="absolute inset-0 z-[2] bg-gradient-to-r from-black/85 via-black/45 to-black/15 pointer-events-none" />
+
           {/* Top-left text */}
           <div className="absolute top-4 left-4 md:top-7 md:left-7 text-white text-xs md:text-sm font-semibold leading-relaxed max-w-[220px] md:max-w-[340px] z-10 drop-shadow-md">
-            Plan básico para arrancar: menú digital, pedidos y caja en un solo lugar.
+            <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#00d2ff]/15 border border-[#00d2ff]/30 text-[#00d2ff] text-[10px] font-extrabold uppercase tracking-wider mb-2">
+              ✦ RESTAURANT OS
+            </span>
+            <p>Plan básico para arrancar: menú digital, pedidos y caja en un solo lugar.</p>
           </div>
 
           {/* Bottom-left block */}
