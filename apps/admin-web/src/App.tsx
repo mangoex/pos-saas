@@ -155,6 +155,16 @@ const CashConceptManageRoute = ({ children }: { children: React.ReactNode }) => 
   return <>{children}</>;
 };
 
+const RootRoute = () => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isSuperadmin = Boolean(user.is_superadmin);
+  const isImpersonating = Boolean(localStorage.getItem('impersonation_info'));
+  if (isSuperadmin && !isImpersonating) {
+    return <Navigate to="/superadmin" replace />;
+  }
+  return <Overview />;
+};
+
 const RestaurantLinksRoute = () => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isSuperadmin = Boolean(user.is_superadmin);
@@ -179,7 +189,7 @@ export const App = () => {
             <AdminLayout />
           </ProtectedRoute>
         }>
-          <Route index element={<Overview />} />
+          <Route index element={<RootRoute />} />
           <Route path="orders-mobile" element={<MobileOrdersMonitor branchId={resolveBranchId()} />} />
           <Route path="superadmin" element={<SuperadminRoute><SaaSConsoleView /></SuperadminRoute>} />
           <Route path="restaurant-links" element={<RestaurantLinksRoute />} />

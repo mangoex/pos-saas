@@ -237,105 +237,112 @@ const AdminLayout = () => {
   };
 
   // Main Categories in Sidebar (POS-SaaS Lean Hub)
-  const mainCategories: MainCategoryItem[] = [
-    {
-      path: '/',
-      label: 'Panel Principal',
-      icon: <LayoutDashboard size={20} />,
-      matchingPrefixes: ['/overview'],
-    },
-    {
-      path: '/pos-app',
-      label: 'Punto de Venta POS',
-      icon: <ShoppingCart size={20} style={{ color: '#10b981' }} />,
-      highlight: true,
-      matchingPrefixes: [],
-    },
-    {
-      path: '/catalog',
-      label: 'Catálogo y Precios',
-      icon: <Package size={20} />,
-      matchingPrefixes: [
-        '/catalog',
-        '/products',
-        '/categories',
-        '/community-photos',
-        '/variations',
-        '/ingredient-extras',
-      ],
-    },
-    {
-      path: '/branches-hub',
-      label: 'Sucursales y Canales',
-      icon: <Store size={20} />,
-      badge: 'Uber/DiDi',
-      matchingPrefixes: [
-        '/branches-hub',
-        '/branches',
-        '/drivers',
-        '/integrations',
-        '/invoicing',
-      ],
-    },
-    {
-      path: '/reports-hub',
-      label: 'Cajas y Reportes',
-      icon: <BarChart2 size={20} />,
-      matchingPrefixes: [
-        '/reports-hub',
-        '/reports',
-        '/analytics',
-        '/sales-monitor',
-        '/historical-reports',
-        '/orders',
-        '/cash-concepts',
-        '/waste',
-      ],
-    },
-    {
-      path: '/admin-access-hub',
-      label: 'Equipo y Cajeros',
-      icon: <Users size={20} />,
-      matchingPrefixes: [
-        '/admin-access-hub',
-        '/users',
-        '/roles',
-        '/customers',
-      ],
-    },
-    ...(isMobile
-      ? [
-          {
-            path: '/orders-mobile',
-            label: 'Monitor de Pedidos',
-            icon: <ChefHat size={20} color="#38bdf8" />,
-            badge: 'Móvil',
-            matchingPrefixes: ['/orders-mobile'],
-          },
-        ]
-      : []),
-    ...(currentUser.is_superadmin && !localStorage.getItem('impersonation_info')
-      ? [
-          {
-            path: '/superadmin/domains',
-            label: 'Activación de dominios',
-            icon: <Crown size={20} />,
-            matchingPrefixes: ['/superadmin/domains'],
-          },
-          {
-            path: '/superadmin',
-            label: 'Consola SaaS Master',
-            icon: <Crown size={20} color="#f59e0b" />,
-            badge: 'VIP',
-            matchingPrefixes: ['/superadmin'],
-          },
-        ]
-      : []),
-    ...((currentUser.permissions || []).includes('admin.manage') && (!currentUser.is_superadmin || !!localStorage.getItem('impersonation_info')) ? [{
-      path: '/restaurant-links', label: 'Enlaces y dominio', icon: <Users size={20} />,
-      matchingPrefixes: ['/restaurant-links'],
-    }] : []),
-  ];
+  const isSuperadmin = Boolean(currentUser.is_superadmin && !localStorage.getItem('impersonation_info'));
+
+  const mainCategories: MainCategoryItem[] = isSuperadmin
+    ? [
+        {
+          path: '/superadmin',
+          label: 'Consola SaaS Master',
+          icon: <Crown size={20} color="#f59e0b" />,
+          badge: 'VIP',
+          matchingPrefixes: ['/superadmin'],
+        },
+        {
+          path: '/superadmin/domains',
+          label: 'Activación de dominios',
+          icon: <Crown size={20} />,
+          matchingPrefixes: ['/superadmin/domains'],
+        },
+      ]
+    : [
+        {
+          path: '/',
+          label: 'Panel Principal',
+          icon: <LayoutDashboard size={20} />,
+          matchingPrefixes: ['/overview'],
+        },
+        {
+          path: '/pos-app',
+          label: 'Punto de Venta POS',
+          icon: <ShoppingCart size={20} style={{ color: '#10b981' }} />,
+          highlight: true,
+          matchingPrefixes: [],
+        },
+        {
+          path: '/catalog',
+          label: 'Catálogo y Precios',
+          icon: <Package size={20} />,
+          matchingPrefixes: [
+            '/catalog',
+            '/products',
+            '/categories',
+            '/community-photos',
+            '/variations',
+            '/ingredient-extras',
+          ],
+        },
+        {
+          path: '/branches-hub',
+          label: 'Sucursales y Canales',
+          icon: <Store size={20} />,
+          badge: 'Uber/DiDi',
+          matchingPrefixes: [
+            '/branches-hub',
+            '/branches',
+            '/drivers',
+            '/integrations',
+            '/invoicing',
+          ],
+        },
+        {
+          path: '/reports-hub',
+          label: 'Cajas y Reportes',
+          icon: <BarChart2 size={20} />,
+          matchingPrefixes: [
+            '/reports-hub',
+            '/reports',
+            '/analytics',
+            '/sales-monitor',
+            '/historical-reports',
+            '/orders',
+            '/cash-concepts',
+            '/waste',
+          ],
+        },
+        {
+          path: '/admin-access-hub',
+          label: 'Equipo y Cajeros',
+          icon: <Users size={20} />,
+          matchingPrefixes: [
+            '/admin-access-hub',
+            '/users',
+            '/roles',
+            '/customers',
+          ],
+        },
+        ...(isMobile
+          ? [
+              {
+                path: '/orders-mobile',
+                label: 'Monitor de Pedidos',
+                icon: <ChefHat size={20} color="#38bdf8" />,
+                badge: 'Móvil',
+                matchingPrefixes: ['/orders-mobile'],
+              },
+            ]
+          : []),
+        ...((currentUser.permissions || []).includes('admin.manage')
+          ? [
+              {
+                path: '/restaurant-links',
+                label: 'Enlaces y dominio',
+                icon: <Users size={20} />,
+                matchingPrefixes: ['/restaurant-links'],
+              },
+            ]
+          : []),
+      ];
 
   if (isMobile && !forceDesktop && (location.pathname === '/' || location.pathname === '/orders-mobile')) {
     return (
@@ -442,15 +449,17 @@ const AdminLayout = () => {
         
         {/* Configuración & Logout at the bottom */}
         <div style={{ padding: '12px 12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-           <div 
-             className={`admin-nav-item ${location.pathname === '/branches' ? 'active' : ''}`}
-             onClick={() => navigate('/branches')}
-             style={{ justifyContent: isCollapsed ? 'center' : 'flex-start', padding: isCollapsed ? '12px 0' : '10px 16px', borderRadius: '12px' }}
-             title={isCollapsed ? 'Configuración' : undefined}
-           >
-             <Settings size={20} />
-             {!isCollapsed && <span>Configuración</span>}
-           </div>
+           {!isSuperadmin && (
+             <div
+               className={`admin-nav-item ${location.pathname === '/branches' ? 'active' : ''}`}
+               onClick={() => navigate('/branches')}
+               style={{ justifyContent: isCollapsed ? 'center' : 'flex-start', padding: isCollapsed ? '12px 0' : '10px 16px', borderRadius: '12px' }}
+               title={isCollapsed ? 'Configuración' : undefined}
+             >
+               <Settings size={20} />
+               {!isCollapsed && <span>Configuración</span>}
+             </div>
+           )}
            <div 
              className="admin-nav-item"
              onClick={handleLogout}
@@ -467,7 +476,7 @@ const AdminLayout = () => {
         {/* Topbar */}
         <header className="admin-topbar">
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-            {orgProfile && orgProfile.subscription_status === 'trial' && (
+            {orgProfile && orgProfile.subscription_status === 'trial' && !isSuperadmin && (
               <div
                 style={{
                   display: 'inline-flex',
@@ -493,27 +502,29 @@ const AdminLayout = () => {
                 </span>
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setIsOnboardingWizardOpen(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 12px',
-                borderRadius: 20,
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: '#f8fafc',
-                color: '#334155',
-                border: '1px solid #e2e8f0',
-                cursor: 'pointer',
-              }}
-              title="Abrir Asistente de Configuración Inicial"
-            >
-              <Sparkles size={14} style={{ color: '#10b981' }} />
-              <span>Asistente Inicial</span>
-            </button>
+            {!isSuperadmin && (
+              <button
+                type="button"
+                onClick={() => setIsOnboardingWizardOpen(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 20,
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  background: '#f8fafc',
+                  color: '#334155',
+                  border: '1px solid #e2e8f0',
+                  cursor: 'pointer',
+                }}
+                title="Abrir Asistente de Configuración Inicial"
+              >
+                <Sparkles size={14} style={{ color: '#10b981' }} />
+                <span>Asistente Inicial</span>
+              </button>
+            )}
             {forceDesktop && (
               <button
                 type="button"
@@ -546,7 +557,7 @@ const AdminLayout = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <button style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><Bell size={18} /></button>
-            {hasCatalogManage && <button type="button" aria-label="Abrir asistente de configuración" title="Asistente de configuración" onClick={() => setIsAssistantOpen(true)} style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><UserRound size={18} /></button>}
+            {hasCatalogManage && !isSuperadmin && <button type="button" aria-label="Abrir asistente de configuración" title="Asistente de configuración" onClick={() => setIsAssistantOpen(true)} style={{ background: '#fff', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--admin-text-muted)', boxShadow: 'var(--admin-card-shadow)' }}><UserRound size={18} /></button>}
             <div 
               onClick={openProfileModal}
               style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: 'var(--admin-accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, overflow: 'hidden', cursor: 'pointer', border: '2px solid var(--admin-accent)' }}
