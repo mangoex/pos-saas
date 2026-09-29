@@ -7,9 +7,11 @@
   <title>mi menú.onl | Sistema Operativo Inteligente para Restaurantes</title>
   <meta name="description" content="mi menú.onl. Menú digital interactivo, punto de venta táctil POS, pantallas de cocina KDS y pedidos directos sin comisiones para restaurantes.">
   <link rel="icon" href="/landing-assets/assets/omnipos-logo.svg">
-  <link rel="preload" as="image" href="/landing-assets/assets/hero-clean.jpg" media="(min-width: 861px)">
-  <link rel="preload" as="image" href="/landing-assets/assets/hero-tacos.jpg" media="(min-width: 861px)">
-  <link rel="preload" as="image" href="/landing-assets/assets/hero-hotdog.jpg" media="(min-width: 861px)">
+  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-1.jpg" media="(min-width: 861px)">
+  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-2.jpg" media="(min-width: 861px)">
+  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-3.jpg" media="(min-width: 861px)">
+  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-4.jpg" media="(min-width: 861px)">
+  <link rel="preload" as="image" href="/landing-assets/assets/aura-card-5.jpg" media="(min-width: 861px)">
   <link href="https://db.onlinewebfonts.com/c/1cd1e7d71e048159076fd90b39846902?family=Open+Sauce+One" rel="stylesheet">
   <link href="https://db.onlinewebfonts.com/c/42acf9aa4a6dc2f2886a3f682e337ead?family=Open+Sauce+One+Bold" rel="stylesheet">
   <link rel="stylesheet" href="/landing-assets/styles.css">
@@ -80,95 +82,140 @@
   <!-- DESKTOP: FULL-SCREEN SECTIONS (MASKED CARDS & STAGGERED REVEAL) -->
   <main id="inicio" class="desktop-landing">
     <!-- ==========================================
-         SECTION 1: HERO (Comienza hoy)
+         SECTION 1: HERO (5 AURA CARDS & PARALLAX SCROLL STREAM)
          ========================================== -->
-    <section id="section-1" class="desktop-section section-1" data-bg="/landing-assets/assets/hero-clean.jpg" data-focal="0.5">
-      <!-- 3 Feature Bars (Masked Cards Row) -->
-      <div class="feature-bars">
-        <div class="masked-card feature-bar" data-card-index="0">
-          <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
-          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
-          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
-          <div class="feature-bar__content">
-            <span class="feature-bar__dot"></span>
-            <span>Menú Digital QR Interactivo</span>
+    <section id="section-1" class="hero-parallax-track">
+      <div class="hero-parallax-sticky" id="heroParallaxSticky">
+        <!-- Ambient Aura Glow Layer (shifts dynamically per active card) -->
+        <div class="hero-aura-ambient" id="heroAuraAmbient" aria-hidden="true">
+          <div class="aura-orb aura-orb--0 is-active"></div>
+          <div class="aura-orb aura-orb--1"></div>
+          <div class="aura-orb aura-orb--2"></div>
+          <div class="aura-orb aura-orb--3"></div>
+          <div class="aura-orb aura-orb--4"></div>
+        </div>
+
+        <!-- Pinned Top Banner: Tag & Value Statement -->
+        <div class="hero-pinned-header">
+          <div class="hero-tag-badge">
+            <span class="hero-pulse-dot"></span>
+            <span>✦ RESTAURANT OS · SISTEMA OPERATIVO INTELIGENTE</span>
           </div>
+          <p class="hero-header-sub">Menú digital · Pedidos · Control de caja · Cocina KDS · Todo desde tu celular</p>
         </div>
-        <div class="masked-card feature-bar" data-card-index="1">
-          <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
-          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
-          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
-          <div class="feature-bar__content">
-            <span class="feature-bar__dot"></span>
-            <span>POS Táctil & Control de Caja</span>
+
+        <!-- Center Deck: The 5 Aura Cards -->
+        <div class="hero-card-stage" id="heroCardStage">
+          <!-- Card 0: Tu restaurante desde tu celular -->
+          <article class="aura-slide is-active" data-slide-index="0" aria-label="Tu restaurante. Desde tu celular.">
+            <div class="aura-card-wrapper">
+              <div class="aura-card-halo aura-card-halo--orange"></div>
+              <div class="aura-card-inner">
+                <img src="/landing-assets/assets/aura-card-1.jpg" alt="Tu restaurante. Desde tu celular. Recibe pedidos, actualiza tu menú y controla tus ventas en un solo lugar." class="aura-card-img">
+                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox" title="Comenzar gratis con 14 días de prueba" aria-label="Comenzar gratis"></a>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 1: Pedidos en un solo lugar -->
+          <article class="aura-slide" data-slide-index="1" aria-label="Pedidos en un solo lugar.">
+            <div class="aura-card-wrapper">
+              <div class="aura-card-halo aura-card-halo--magma"></div>
+              <div class="aura-card-inner">
+                <img src="/landing-assets/assets/aura-card-2.jpg" alt="Pedidos en un solo lugar. Recibe, organiza y da seguimiento a todos tus pedidos en tiempo real." class="aura-card-img">
+                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar con pedidos" aria-label="Ver pedidos"></a>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 2: Menú actualiza al momento -->
+          <article class="aura-slide" data-slide-index="2" aria-label="Menú. Actualiza al momento.">
+            <div class="aura-card-wrapper">
+              <div class="aura-card-halo aura-card-halo--gold"></div>
+              <div class="aura-card-inner">
+                <img src="/landing-assets/assets/aura-card-3.jpg" alt="Menú. Actualiza al momento. Cambia precios, disponibilidad, fotos y categorías en segundos." class="aura-card-img">
+                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar con menú" aria-label="Ver menú"></a>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 3: Caja bajo control -->
+          <article class="aura-slide" data-slide-index="3" aria-label="Caja bajo control.">
+            <div class="aura-card-wrapper">
+              <div class="aura-card-halo aura-card-halo--flame"></div>
+              <div class="aura-card-inner">
+                <img src="/landing-assets/assets/aura-card-4.jpg" alt="Caja bajo control. Lleva tus ventas, controla tus pagos y ten toda tu operación en un solo lugar." class="aura-card-img">
+                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar con caja" aria-label="Ver caja"></a>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 4: Haz crecer tu negocio -->
+          <article class="aura-slide" data-slide-index="4" aria-label="Haz crecer tu negocio.">
+            <div class="aura-card-wrapper">
+              <div class="aura-card-halo aura-card-halo--coral"></div>
+              <div class="aura-card-inner">
+                <img src="/landing-assets/assets/aura-card-5.jpg" alt="Haz crecer tu negocio. Comparte tu enlace o QR, llega a más clientes y vende más sin llamadas." class="aura-card-img">
+                <a href="/admin/register?plan=trial" class="aura-card-cta-hitbox aura-card-cta-hitbox--circle" title="Comenzar a crecer" aria-label="Crecer tu negocio"></a>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- Right Side Timeline Scrubber -->
+        <nav class="hero-timeline-scrubber" id="heroTimelineScrubber" aria-label="Línea de tiempo de funciones">
+          <div class="scrubber-track-line" aria-hidden="true">
+            <div class="scrubber-progress-fill" id="scrubberProgressFill"></div>
           </div>
-        </div>
-        <div class="masked-card feature-bar" data-card-index="2">
-          <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
-          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
-          <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
-          <div class="feature-bar__content">
-            <span class="feature-bar__dot"></span>
-            <span>Cocina KDS & Delivery WhatsApp</span>
-          </div>
-        </div>
-      </div>
+          <button type="button" class="scrubber-step is-active" data-step="0" aria-label="Ir a Restaurante">
+            <span class="scrubber-num">00</span>
+            <span class="scrubber-label">Restaurante</span>
+          </button>
+          <button type="button" class="scrubber-step" data-step="1" aria-label="Ir a Pedidos">
+            <span class="scrubber-num">01</span>
+            <span class="scrubber-label">Pedidos</span>
+          </button>
+          <button type="button" class="scrubber-step" data-step="2" aria-label="Ir a Menú">
+            <span class="scrubber-num">02</span>
+            <span class="scrubber-label">Menú</span>
+          </button>
+          <button type="button" class="scrubber-step" data-step="3" aria-label="Ir a Caja">
+            <span class="scrubber-num">03</span>
+            <span class="scrubber-label">Caja</span>
+          </button>
+          <button type="button" class="scrubber-step" data-step="4" aria-label="Ir a Crecimiento">
+            <span class="scrubber-num">04</span>
+            <span class="scrubber-label">Crecimiento</span>
+          </button>
+        </nav>
 
-      <!-- Main Hero Card (Card 3) -->
-      <div class="masked-card hero-card" data-card-index="3">
-        <div class="masked-card__slide is-active" style="background-image: url('/landing-assets/assets/hero-clean.jpg');"></div>
-        <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-tacos.jpg');"></div>
-        <div class="masked-card__slide" style="background-image: url('/landing-assets/assets/hero-hotdog.jpg');"></div>
-
-        <div class="hero-card__scrim" aria-hidden="true"></div>
-
-        <div class="hero-card__top-left">
-          <span class="hero-tag">✦ RESTAURANT OS</span>
-          <p>Plan básico para arrancar: menú digital,<br>pedidos y caja en un solo lugar.</p>
-        </div>
-
-        <div class="hero-card__bottom-left">
-          <span class="hero-kicker">EMPIEZA · PARA RESTAURANTES</span>
-          <h1 class="hero-title">Comienza<br><span class="hero-accent-cyan">hoy</span><span class="hero-dot-pink">.</span></h1>
-          <a href="/admin/register?plan=starter" class="hero-pricing-link">Planes desde $349 MXN/mes</a>
-          <div class="hero-cta-group">
+        <!-- Pinned Bottom Controls & Navigation -->
+        <div class="hero-pinned-footer">
+          <div class="hero-footer-left">
             <a href="/admin/register?plan=trial" class="btn-hero-primary">
               <span>Prueba 14 Días Gratis</span>
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
-            <span class="hero-subtext">Sin tarjeta · Cancela cuando quieras</span>
-          </div>
-        </div>
-
-        <div class="hero-card__bottom-right">
-          <!-- Food Dish Switcher -->
-          <div class="hero-food-switcher" aria-label="Seleccionar platillo">
-            <button type="button" class="hero-indicator-dot is-active" data-slide-target="0" title="Hamburguesas">
-              <span class="dot-icon">🍔</span>
-              <span class="dot-label">Burgers</span>
-            </button>
-            <button type="button" class="hero-indicator-dot" data-slide-target="1" title="Tacos">
-              <span class="dot-icon">🌮</span>
-              <span class="dot-label">Tacos</span>
-            </button>
-            <button type="button" class="hero-indicator-dot" data-slide-target="2" title="Hot Dogs">
-              <span class="dot-icon">🌭</span>
-              <span class="dot-label">Hot Dogs</span>
-            </button>
+            <a href="/admin/register?plan=starter" class="hero-footer-pricing-link">Planes desde $349 MXN/mes</a>
           </div>
 
-          <nav class="hero-quick-links" aria-label="Accesos directos">
-            <a href="/admin/">ADMIN</a>
-            <span>·</span>
-            <a href="/pos/">POS</a>
-            <span>·</span>
-            <a href="/kds/">KDS</a>
-            <span>·</span>
-            <a href="/manual/">MANUAL</a>
-          </nav>
-          <div class="hero-badge-pill">
-            <span class="status-pulse"></span>
-            <span>MENÚ DIGITAL · PEDIDOS · CAJA</span>
+          <div class="hero-scroll-hint" id="heroScrollHint">
+            <span class="scroll-mouse-icon" aria-hidden="true">
+              <span class="scroll-wheel-dot"></span>
+            </span>
+            <span class="scroll-hint-text">Desliza para explorar como video continuo</span>
+          </div>
+
+          <div class="hero-footer-right">
+            <nav class="hero-quick-links" aria-label="Accesos directos">
+              <a href="/admin/login">ADMIN</a>
+              <span>·</span>
+              <a href="/pos/">POS</a>
+              <span>·</span>
+              <a href="/kds/">KDS</a>
+              <span>·</span>
+              <a href="/manual/">MANUAL</a>
+            </nav>
           </div>
         </div>
       </div>

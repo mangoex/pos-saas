@@ -19,8 +19,8 @@
     // 3. Masked Cards Engine (Windowing effect sharing background image across cards)
     initMaskedCards();
 
-    // 4. Hero Food Carousel (Cycles 🍔 Burgers -> 🌮 Tacos -> 🌭 Hot Dogs)
-    initHeroCarousel();
+    // 4. Hero Parallax Continuous Video Scroll Engine (5 Aura Cards)
+    initHeroParallaxScroll();
 
     // 5. Staggered Reveal Animations via IntersectionObserver
     initStaggeredReveal();
@@ -127,37 +127,101 @@
   }
 
   /* --------------------------------------------------------------------------
-     Hero Food Carousel (Cycles 🍔 Burgers -> 🌮 Tacos -> 🌭 Hot Dogs)
+     Hero Parallax Continuous Video Scroll Engine (5 Aura Cards)
      -------------------------------------------------------------------------- */
-  function initHeroCarousel() {
-    if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
-    const section1 = document.querySelector ? document.querySelector("#section-1") : null;
-    if (!section1) return;
+  function initHeroParallaxScroll() {
+    if (typeof document === "undefined" || typeof document.querySelector !== "function") return;
+    const track = document.querySelector("#section-1.hero-parallax-track");
+    const stage = document.querySelector("#heroCardStage");
+    if (!track || !stage) return;
 
-    const cards = section1.querySelectorAll ? Array.from(section1.querySelectorAll(".masked-card")) : [];
-    if (cards.length === 0) return;
+    const slides = Array.from(stage.querySelectorAll ? stage.querySelectorAll(".aura-slide") : []);
+    if (slides.length === 0) return;
 
-    let currentSlide = 0;
-    const totalSlides = 3;
+    const ambientOrbs = Array.from(document.querySelectorAll ? document.querySelectorAll(".hero-aura-ambient .aura-orb") : []);
+    const scrubberSteps = Array.from(document.querySelectorAll ? document.querySelectorAll(".hero-timeline-scrubber .scrubber-step") : []);
+    const progressFill = document.querySelector("#scrubberProgressFill");
+    const scrollHint = document.querySelector("#heroScrollHint");
 
-    function goToSlide(idx) {
-      currentSlide = ((idx % totalSlides) + totalSlides) % totalSlides;
-      cards.forEach((card) => {
-        const slides = card.querySelectorAll ? Array.from(card.querySelectorAll(".masked-card__slide")) : [];
-        slides.forEach((slide, sIdx) => {
-          if (!slide.classList) return;
-          if (sIdx === currentSlide) {
-            slide.classList.add("is-active");
-          } else {
-            slide.classList.remove("is-active");
+    let rafId = null;
+    let targetProgress = 0;
+    let currentProgress = 0;
+    const totalTransitions = Math.max(1, slides.length - 1);
+
+    function getScrollProgress() {
+      if (typeof window === "undefined" || !track.getBoundingClientRect) return 0;
+      const rect = track.getBoundingClientRect();
+      const scrollHeight = track.offsetHeight - window.innerHeight;
+      if (scrollHeight <= 0) return 0;
+      const scrolled = -rect.top;
+      return Math.max(0, Math.min(1, scrolled / scrollHeight));
+    }
+
+    function renderProgress(p) {
+      const virtualIndex = p * totalTransitions; // 0.0 to 4.0
+
+      // Update Scrubber Progress Fill
+      if (progressFill && progressFill.style) {
+        progressFill.style.height = `${(p * 100).toFixed(1)}%`;
+      }
+
+      // Hide scroll hint once user starts scrolling
+      if (scrollHint && scrollHint.style) {
+        scrollHint.style.opacity = p > 0.04 ? "0" : "1";
+        scrollHint.style.pointerEvents = p > 0.04 ? "none" : "auto";
+      }
+
+      // Update Slides with smooth Parallax + Video Scrubber Crossfade
+      slides.forEach((slide, idx) => {
+        if (!slide.style) return;
+        const diff = virtualIndex - idx; // diff < 0: upcoming slide; diff > 0: past slide
+        const absDiff = Math.abs(diff);
+
+        if (absDiff < 1.15) {
+          const clampedAbs = Math.min(1, absDiff);
+          const opacity = Math.max(0, 1 - clampedAbs * 1.25);
+          const translateY = -diff * 60; // Parallax vertical drift
+          const scale = 1 - clampedAbs * 0.06; // Subtle zoom-in / zoom-out
+          const rotate = diff * -1.5; // Organic 3D perspective tilt
+
+          slide.style.opacity = opacity.toFixed(3);
+          slide.style.transform = `translate3d(0, ${translateY.toFixed(1)}px, 0) scale(${scale.toFixed(3)}) rotate(${rotate.toFixed(2)}deg)`;
+          slide.style.pointerEvents = absDiff < 0.4 ? "auto" : "none";
+          slide.style.visibility = "visible";
+          slide.style.zIndex = String(Math.round((1 - clampedAbs) * 10) + 1);
+
+          // Aura halo behind the card
+          const halo = slide.querySelector ? slide.querySelector(".aura-card-halo") : null;
+          if (halo && halo.style) {
+            const haloScale = 0.95 + (1 - clampedAbs) * 0.25;
+            const haloOpacity = Math.max(0, (1 - clampedAbs) * 0.95);
+            halo.style.transform = `scale(${haloScale.toFixed(3)})`;
+            halo.style.opacity = haloOpacity.toFixed(3);
           }
-        });
+        } else {
+          slide.style.opacity = "0";
+          slide.style.pointerEvents = "none";
+          slide.style.visibility = "hidden";
+        }
       });
 
-      const buttons = section1.querySelectorAll ? Array.from(section1.querySelectorAll(".hero-indicator-dot")) : [];
-      buttons.forEach((btn, bIdx) => {
+      // Update Ambient Background Orbs
+      ambientOrbs.forEach((orb, oIdx) => {
+        if (!orb.style) return;
+        const orbDiff = Math.abs(virtualIndex - oIdx);
+        if (orbDiff < 1.0) {
+          const orbOpacity = Math.max(0, 1 - orbDiff);
+          orb.style.opacity = orbOpacity.toFixed(3);
+        } else {
+          orb.style.opacity = "0";
+        }
+      });
+
+      // Update Step Indicators
+      const activeStepIndex = Math.round(virtualIndex);
+      scrubberSteps.forEach((btn, sIdx) => {
         if (!btn.classList) return;
-        if (bIdx === currentSlide) {
+        if (sIdx === activeStepIndex) {
           btn.classList.add("is-active");
         } else {
           btn.classList.remove("is-active");
@@ -165,18 +229,52 @@
       });
     }
 
-    setInterval(() => {
-      goToSlide(currentSlide + 1);
-    }, 4500);
+    function onScroll() {
+      targetProgress = getScrollProgress();
+      if (!rafId && typeof window !== "undefined" && window.requestAnimationFrame) {
+        rafId = window.requestAnimationFrame(updateLoop);
+      }
+    }
 
-    const buttons = section1.querySelectorAll ? Array.from(section1.querySelectorAll(".hero-indicator-dot")) : [];
-    buttons.forEach((btn, idx) => {
+    function updateLoop() {
+      // Lerp for buttery video scrub feel
+      currentProgress += (targetProgress - currentProgress) * 0.2;
+      if (Math.abs(targetProgress - currentProgress) < 0.001) {
+        currentProgress = targetProgress;
+        renderProgress(currentProgress);
+        rafId = null;
+      } else {
+        renderProgress(currentProgress);
+        rafId = window.requestAnimationFrame(updateLoop);
+      }
+    }
+
+    // Click handler for scrubber steps
+    scrubberSteps.forEach((btn) => {
       if (btn.addEventListener) {
         btn.addEventListener("click", () => {
-          goToSlide(idx);
+          const step = Number.parseInt(btn.dataset?.step || "0", 10);
+          if (typeof window === "undefined" || !track.getBoundingClientRect) return;
+          const rect = track.getBoundingClientRect();
+          const trackTop = (window.scrollY || 0) + rect.top;
+          const scrollHeight = track.offsetHeight - window.innerHeight;
+          const targetY = trackTop + (step / totalTransitions) * scrollHeight;
+          if (window.scrollTo) {
+            window.scrollTo({ top: targetY, behavior: "smooth" });
+          }
         });
       }
     });
+
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll, { passive: true });
+    }
+
+    // Initial render
+    currentProgress = getScrollProgress();
+    targetProgress = currentProgress;
+    renderProgress(currentProgress);
   }
 
   /* --------------------------------------------------------------------------

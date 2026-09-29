@@ -3,12 +3,49 @@ import React, { useState, useEffect, useRef } from 'react';
 // ============================================================================
 // DATA & ASSET CONSTANTS (mi menú.onl - Sistema Operativo para Restaurantes)
 // ============================================================================
-const HERO_IMAGES = [
-  { url: '/landing-assets/assets/hero-clean.jpg', label: 'Burgers', icon: '🍔' },
-  { url: '/landing-assets/assets/hero-tacos.jpg', label: 'Tacos', icon: '🌮' },
-  { url: '/landing-assets/assets/hero-hotdog.jpg', label: 'Hot Dogs', icon: '🌭' },
+const AURA_CARDS = [
+  {
+    url: '/landing-assets/assets/aura-card-1.jpg',
+    title: 'Tu restaurante. Desde tu celular.',
+    subtitle: 'Recibe pedidos, actualiza tu menú y controla tus ventas en un solo lugar.',
+    label: 'Restaurante',
+    num: '00',
+    halo: 'rgba(255, 115, 30, 0.85)',
+  },
+  {
+    url: '/landing-assets/assets/aura-card-2.jpg',
+    title: 'Pedidos en un solo lugar.',
+    subtitle: 'Recibe, organiza y da seguimiento a todos tus pedidos en tiempo real.',
+    label: 'Pedidos',
+    num: '01',
+    halo: 'rgba(255, 55, 15, 0.9)',
+  },
+  {
+    url: '/landing-assets/assets/aura-card-3.jpg',
+    title: 'Menú. Actualiza al momento.',
+    subtitle: 'Cambia precios, disponibilidad, fotos y categorías en segundos.',
+    label: 'Menú',
+    num: '02',
+    halo: 'rgba(255, 130, 20, 0.85)',
+  },
+  {
+    url: '/landing-assets/assets/aura-card-4.jpg',
+    title: 'Caja bajo control.',
+    subtitle: 'Lleva tus ventas, controla tus pagos y ten toda tu operación en un solo lugar.',
+    label: 'Caja',
+    num: '03',
+    halo: 'rgba(255, 95, 20, 0.9)',
+  },
+  {
+    url: '/landing-assets/assets/aura-card-5.jpg',
+    title: 'Haz crecer tu negocio.',
+    subtitle: 'Comparte tu enlace o QR, llega a más clientes y vende más sin llamadas.',
+    label: 'Crecimiento',
+    num: '04',
+    halo: 'rgba(255, 70, 30, 0.9)',
+  },
 ];
-const HERO_IMAGE = HERO_IMAGES[0].url;
+const HERO_IMAGE = AURA_CARDS[0].url;
 const SECTION2_IMAGE = '/landing-assets/assets/kitchen-live.jpg';
 const SECTION3_IMG1 = '/landing-assets/assets/app-ordering.jpg';
 const SECTION3_IMG2 = '/landing-assets/assets/kds-tickets.jpg';
