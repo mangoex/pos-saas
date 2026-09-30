@@ -672,6 +672,19 @@ export const App: React.FC = () => {
         <p>{catalogError}</p>
         <button type="button" onClick={() => setCatalogRetry(attempt => attempt + 1)}>Reintentar catálogo</button>
       </div>}
+
+      {/* Active Order Live Tracker - Sticky pinned at top of the menu */}
+      {activeTrackedOrder && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 900, backdropFilter: 'blur(8px)' }}>
+          <ActiveOrderTracker
+            initialOrder={activeTrackedOrder}
+            onClearOrder={() => setActiveTrackedOrder(null)}
+            whatsappPhone={selectedBranch?.phone}
+            restaurantName={organization?.name || selectedBranch?.name}
+          />
+        </div>
+      )}
+
       {currentTab === 'explore' && (
         <HeroHeader
           restaurantName={organization?.name}
@@ -693,16 +706,6 @@ export const App: React.FC = () => {
 
       {currentTab === 'explore' && (
         <main className="mobile-main-content">
-          {/* Active Order Live Tracker */}
-          {activeTrackedOrder && (
-            <ActiveOrderTracker
-              initialOrder={activeTrackedOrder}
-              onClearOrder={() => setActiveTrackedOrder(null)}
-              whatsappPhone={selectedBranch?.phone}
-              restaurantName={organization?.name || selectedBranch?.name}
-            />
-          )}
-
           {/* Circular Category Quick Scroll Bar (as in reference design) */}
           <CategoryCircles
             categories={visibleCategories}

@@ -39,7 +39,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
     }
   }, [initialOrder]);
 
-  // Polling every 6 seconds for live state transition updates
+  // Polling every 3.5 seconds for live state transition updates
   useEffect(() => {
     if (!order?.public_reference) return;
 
@@ -48,7 +48,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
       return; // Stop polling on terminal states
     }
 
-    const interval = window.setInterval(async () => {
+    const poll = async () => {
       const refreshed = await fetchPublicOrderTracking(order.public_reference);
       if (refreshed) {
         setOrder((prev) => {
@@ -77,7 +77,10 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
           return merged;
         });
       }
-    }, 6000);
+    };
+
+    poll();
+    const interval = window.setInterval(poll, 3500);
 
     return () => window.clearInterval(interval);
   }, [order?.public_reference]);
@@ -102,17 +105,10 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
     themeColor = '#ea580c';
     themeBg = '#fff7ed';
     themeBorder = '#ffedd5';
-  } else if (rawStatus === 'ACCEPTED') {
-    activeStep = 1;
-    statusTitle = 'Pedido Aceptado';
-    statusSubtitle = '¡Comanda confirmada! En cola de cocina';
-    themeColor = '#0284c7';
-    themeBg = '#f0f9ff';
-    themeBorder = '#e0f2fe';
-  } else if (['IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION'].includes(rawStatus)) {
+  } else if (rawStatus === 'ACCEPTED' || ['IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'CONFIRMED'].includes(rawStatus)) {
     activeStep = 2;
     statusTitle = 'En Preparación 🍳';
-    statusSubtitle = 'Nuestros chefs están cocinando tu orden';
+    statusSubtitle = '¡Comanda aceptada! Nuestros chefs están cocinando tu orden';
     themeColor = '#2563eb';
     themeBg = '#eff6ff';
     themeBorder = '#dbeafe';

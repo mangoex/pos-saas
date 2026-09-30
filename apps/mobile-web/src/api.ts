@@ -824,6 +824,13 @@ export function getTrackedOrder(branchId?: string): TrackedActiveOrder | null {
     if (!raw) return null;
     const parsed: TrackedActiveOrder = JSON.parse(raw);
     if (!parsed || !parsed.public_reference) return null;
+    if (parsed.created_at) {
+      const orderAgeMs = Date.now() - new Date(parsed.created_at).getTime();
+      if (orderAgeMs > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(ACTIVE_ORDER_TRACKER_KEY);
+        return null;
+      }
+    }
     if (branchId && parsed.branch_id && parsed.branch_id !== branchId) {
       return null;
     }

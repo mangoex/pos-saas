@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { CheckCircle2, X, ShoppingBag, ArrowLeft, Clock, ChefHat, Star, Send, ExternalLink, Sparkles, Share2, Gift, Copy, Check } from 'lucide-react';
-import { CreatedOrderResult, BranchInfo } from '../types';
+import { CreatedOrderResult, BranchInfo, TrackedActiveOrder } from '../types';
 import { formatMoney, submitCustomerFeedback } from '../api';
+import { ActiveOrderTracker } from './ActiveOrderTracker';
 
 interface OrderSuccessModalProps {
   orderResult: CreatedOrderResult;
@@ -24,6 +25,24 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
     if (!branch?.coupons || !Array.isArray(branch.coupons)) return null;
     return branch.coupons.find((c) => c.is_active && c.show_in_checkout) || null;
   }, [branch?.coupons]);
+
+  // Tracked active order state for the live stepper
+  const trackedOrderData: TrackedActiveOrder = useMemo(() => ({
+    public_reference: orderResult.kind === 'public_order_intent' ? orderResult.public_reference : orderResult.folio,
+    folio: orderResult.kind === 'public_order_intent' ? undefined : orderResult.folio,
+    status: orderResult.kind === 'public_order_intent' ? orderResult.status : 'ACCEPTED',
+    total_cents: orderResult.total_cents,
+    branch_id: branch?.id,
+    branch_name: branch?.name,
+    created_at: new Date().toISOString(),
+    items_summary: orderResult.items.map((it: any) => ({
+      name: it.product.name,
+      quantity: it.quantity,
+      line_total_cents: it.line_total_cents || (it.product.price_cents * it.quantity),
+    })),
+    whatsapp_url: orderResult.whatsapp_url,
+    service_type: orderResult.customer_info.order_type === 'delivery' ? 'delivery' : 'takeaway',
+  }), [orderResult, branch]);
 
   // Smart Rating State
   const [rating, setRating] = useState<number | null>(null);
@@ -227,6 +246,15 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
           <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.5, maxWidth: '340px', margin: '0 auto 16px' }}>
             {pendingReview ? 'Tu solicitud ha quedado registrada (Aún no es un pedido operativo) y será revisada de inmediato en el mostrador del restaurante.' : 'Tu pedido ha quedado registrado en el sistema y enviado a la sucursal. ¡Estamos preparando tu orden!'}
           </p>
+
+          {/* Active Order Live Stepper Tracker embedded directly in Modal */}
+          <div style={{ width: '100%', margin: '0 0 16px 0' }}>
+            <ActiveOrderTracker
+              initialOrder={trackedOrderData}
+              whatsappPhone={branch?.phone}
+              restaurantName={branch?.name}
+            />
+          </div>
 
           {/* Order Details Card */}
           <div style={{ width: '100%', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px', boxSizing: 'border-box' }}>

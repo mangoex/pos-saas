@@ -763,15 +763,26 @@ test('Active order tracker storage persists locally and respects branch boundari
 
     clearTrackedOrder('ORD-INTENT-789');
     assert.equal(getTrackedOrder(), null);
+
+    // Verify 24-hour expiration
+    const expiredOrder = {
+      public_reference: 'ORD-EXPIRED-123',
+      status: 'DELIVERED',
+      total_cents: 10000,
+      created_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+    };
+    saveTrackedOrder(expiredOrder);
+    assert.equal(getTrackedOrder(), null);
   } finally {
     delete globalThis.window;
     delete globalThis.localStorage;
   }
 });
 
-test('ActiveOrderTracker component and App.tsx render stepper and live lifecycle stages', () => {
+test('ActiveOrderTracker component, OrderSuccessModal and App.tsx render stepper and live lifecycle stages', () => {
   const trackerSource = readFileSync(join(root, 'apps/mobile-web/src/components/ActiveOrderTracker.tsx'), 'utf8');
   const appSource = readFileSync(join(root, 'apps/mobile-web/src/App.tsx'), 'utf8');
+  const modalSource = readFileSync(join(root, 'apps/mobile-web/src/components/OrderSuccessModal.tsx'), 'utf8');
 
   // Verify stepper labels and states in ActiveOrderTracker
   assert.match(trackerSource, /Aceptado/);
@@ -779,9 +790,15 @@ test('ActiveOrderTracker component and App.tsx render stepper and live lifecycle
   assert.match(trackerSource, /Listo/);
   assert.match(trackerSource, /fetchPublicOrderTracking/);
   assert.match(trackerSource, /Seguimiento de comanda activa/);
+  assert.match(trackerSource, /rawStatus === 'ACCEPTED'/);
+  assert.match(trackerSource, /En Preparación/);
 
   // Verify ActiveOrderTracker integration in App.tsx
   assert.match(appSource, /ActiveOrderTracker/);
   assert.match(appSource, /activeTrackedOrder/);
   assert.match(appSource, /saveTrackedOrder/);
+
+  // Verify ActiveOrderTracker embedded in OrderSuccessModal
+  assert.match(modalSource, /ActiveOrderTracker/);
+  assert.match(modalSource, /trackedOrderData/);
 });

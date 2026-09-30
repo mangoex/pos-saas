@@ -27539,14 +27539,42 @@ def get_public_order_intent(session: Session, public_reference: str) -> dict[str
         .first()
     )
     if not intent:
+        order = (
+            session.execute(
+                sa.select(models.orders).where(
+                    sa.or_(
+                        models.orders.c.id == public_reference,
+                        models.orders.c.folio == public_reference,
+                    )
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if order:
+            return {
+                "public_reference": order["folio"],
+                "status": order["status"],
+                "operational_status": order["status"],
+                "folio": order["folio"],
+                "total_cents": int(order["total_cents"]),
+                "created_at": order["created_at"].isoformat() if order.get("created_at") else None,
+            }
         raise NotFoundError("public_order_not_found", "Public order intent was not found")
 
     res = _public_intent_response(dict(intent))
+    accepted_order_id = intent.get("accepted_order_id")
+    order_clause = (
+        sa.or_(
+            models.orders.c.public_order_intent_id == intent["id"],
+            models.orders.c.id == accepted_order_id,
+        )
+        if accepted_order_id
+        else (models.orders.c.public_order_intent_id == intent["id"])
+    )
     operational_order = (
         session.execute(
-            sa.select(models.orders).where(
-                models.orders.c.public_order_intent_id == intent["id"]
-            )
+            sa.select(models.orders).where(order_clause)
         )
         .mappings()
         .first()
@@ -27554,6 +27582,8 @@ def get_public_order_intent(session: Session, public_reference: str) -> dict[str
     if operational_order:
         res["operational_status"] = operational_order["status"]
         res["folio"] = operational_order["folio"]
+    elif intent.get("status") == "ACCEPTED":
+        res["operational_status"] = "ACCEPTED"
     return res
 
 
