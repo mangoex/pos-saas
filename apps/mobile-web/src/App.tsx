@@ -678,9 +678,10 @@ export const App: React.FC = () => {
         <div style={{ position: 'sticky', top: 0, zIndex: 900, backdropFilter: 'blur(8px)' }}>
           <ActiveOrderTracker
             initialOrder={activeTrackedOrder}
-            onClearOrder={() => setActiveTrackedOrder(null)}
+            onClearOrder={() => setActiveTrackedOrder(getTrackedOrder(selectedBranch?.id))}
             whatsappPhone={selectedBranch?.phone}
             restaurantName={organization?.name || selectedBranch?.name}
+            branchId={selectedBranch?.id}
           />
         </div>
       )}

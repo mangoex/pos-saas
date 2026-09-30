@@ -40,6 +40,7 @@ let MIMENU_CUSTOMER_PROFILE_KEY;
 let LEGACY_CUSTOMER_PROFILE_KEY;
 let saveTrackedOrder;
 let getTrackedOrder;
+let getTrackedOrders;
 let clearTrackedOrder;
 let fetchPublicOrderTracking;
 
@@ -76,6 +77,7 @@ try {
   LEGACY_CUSTOMER_PROFILE_KEY = mobileApi.LEGACY_CUSTOMER_PROFILE_KEY;
   saveTrackedOrder = mobileApi.saveTrackedOrder;
   getTrackedOrder = mobileApi.getTrackedOrder;
+  getTrackedOrders = mobileApi.getTrackedOrders;
   clearTrackedOrder = mobileApi.clearTrackedOrder;
   fetchPublicOrderTracking = mobileApi.fetchPublicOrderTracking;
 } catch (err) {
@@ -754,6 +756,32 @@ test('Active order tracker storage persists locally and respects branch boundari
     assert.equal(retrieved.public_reference, 'ORD-INTENT-789');
     assert.equal(retrieved.operational_status, 'IN_PRODUCTION');
 
+    // Multi-order tracking: adding a second active order preserves both
+    const order2 = {
+      public_reference: 'ORD-INTENT-790',
+      folio: 'F-103',
+      status: 'READY',
+      operational_status: 'READY',
+      total_cents: 8000,
+      branch_id: 'branch-centro',
+      branch_name: 'Sucursal Centro',
+      created_at: new Date().toISOString(),
+    };
+    saveTrackedOrder(order2);
+
+    const allTracked = getTrackedOrders('branch-centro');
+    assert.equal(allTracked.length, 2);
+    assert.equal(allTracked[0].public_reference, 'ORD-INTENT-790');
+    assert.equal(allTracked[1].public_reference, 'ORD-INTENT-789');
+
+    // getTrackedOrder returns the most recent
+    assert.equal(getTrackedOrder('branch-centro').public_reference, 'ORD-INTENT-790');
+
+    // Clearing only order2 preserves order1
+    clearTrackedOrder('ORD-INTENT-790');
+    assert.equal(getTrackedOrders('branch-centro').length, 1);
+    assert.equal(getTrackedOrder('branch-centro').public_reference, 'ORD-INTENT-789');
+
     const scopedSame = getTrackedOrder('branch-centro');
     assert.ok(scopedSame);
     assert.equal(scopedSame.public_reference, 'ORD-INTENT-789');
@@ -792,6 +820,16 @@ test('ActiveOrderTracker component, OrderSuccessModal and App.tsx render stepper
   assert.match(trackerSource, /Seguimiento de comanda activa/);
   assert.match(trackerSource, /rawStatus === 'ACCEPTED'/);
   assert.match(trackerSource, /En Preparación/);
+
+  // Verify bounded stepper connecting track (prevents overflow past Step 3)
+  assert.match(trackerSource, /left: '35px'/);
+  assert.match(trackerSource, /right: '35px'/);
+  assert.match(trackerSource, /overflow: 'hidden'/);
+
+  // Verify multi-order selector dropdown
+  assert.match(trackerSource, /ordersList/);
+  assert.match(trackerSource, /setIsOrderPickerOpen/);
+  assert.match(trackerSource, /Tus comandas activas/);
 
   // Verify ActiveOrderTracker integration in App.tsx
   assert.match(appSource, /ActiveOrderTracker/);

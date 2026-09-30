@@ -808,35 +808,80 @@ export async function fetchPublicOrderTracking(publicReference: string): Promise
   }
 }
 
-export function saveTrackedOrder(order: TrackedActiveOrder): void {
+function parseStoredOrders(raw: string | null): TrackedActiveOrder[] {
+  if (!raw) return [];
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    localStorage.setItem(ACTIVE_ORDER_TRACKER_KEY, JSON.stringify(order));
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((o) => o && typeof o.public_reference === 'string');
+    }
+    if (parsed && typeof parsed.public_reference === 'string') {
+      return [parsed];
+    }
   } catch {
-    // Local storage quota or security restriction
+    return [];
+  }
+  return [];
+}
+
+export function getTrackedOrders(branchId?: string): TrackedActiveOrder[] {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    const raw = localStorage.getItem(ACTIVE_ORDER_TRACKER_KEY);
+    if (!raw) return [];
+    const orders = parseStoredOrders(raw);
+    const now = Date.now();
+    const validOrders: TrackedActiveOrder[] = [];
+    let changed = false;
+
+    for (const order of orders) {
+      if (order.created_at) {
+        const orderAgeMs = now - new Date(order.created_at).getTime();
+        if (orderAgeMs > 24 * 60 * 60 * 1000) {
+          changed = true;
+          continue;
+        }
+      }
+      validOrders.push(order);
+    }
+
+    if (changed) {
+      if (validOrders.length === 0) {
+        localStorage.removeItem(ACTIVE_ORDER_TRACKER_KEY);
+      } else {
+        localStorage.setItem(ACTIVE_ORDER_TRACKER_KEY, JSON.stringify(validOrders));
+      }
+    }
+
+    if (branchId) {
+      return validOrders.filter((o) => !o.branch_id || o.branch_id === branchId);
+    }
+    return validOrders;
+  } catch {
+    return [];
   }
 }
 
 export function getTrackedOrder(branchId?: string): TrackedActiveOrder | null {
+  const list = getTrackedOrders(branchId);
+  return list.length > 0 ? list[0] : null;
+}
+
+export function saveTrackedOrder(order: TrackedActiveOrder): void {
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return null;
-    const raw = localStorage.getItem(ACTIVE_ORDER_TRACKER_KEY);
-    if (!raw) return null;
-    const parsed: TrackedActiveOrder = JSON.parse(raw);
-    if (!parsed || !parsed.public_reference) return null;
-    if (parsed.created_at) {
-      const orderAgeMs = Date.now() - new Date(parsed.created_at).getTime();
-      if (orderAgeMs > 24 * 60 * 60 * 1000) {
-        localStorage.removeItem(ACTIVE_ORDER_TRACKER_KEY);
-        return null;
-      }
+    if (typeof window === 'undefined' || !window.localStorage || !order?.public_reference) return;
+    const currentList = getTrackedOrders();
+    const existingIndex = currentList.findIndex((o) => o.public_reference === order.public_reference);
+
+    if (existingIndex >= 0) {
+      currentList[existingIndex] = { ...currentList[existingIndex], ...order };
+    } else {
+      currentList.unshift(order);
     }
-    if (branchId && parsed.branch_id && parsed.branch_id !== branchId) {
-      return null;
-    }
-    return parsed;
+
+    localStorage.setItem(ACTIVE_ORDER_TRACKER_KEY, JSON.stringify(currentList));
   } catch {
-    return null;
+    // Local storage quota or security restriction
   }
 }
 
@@ -847,9 +892,12 @@ export function clearTrackedOrder(publicReference?: string): void {
       localStorage.removeItem(ACTIVE_ORDER_TRACKER_KEY);
       return;
     }
-    const current = getTrackedOrder();
-    if (current && current.public_reference === publicReference) {
+    const currentList = getTrackedOrders();
+    const remaining = currentList.filter((o) => o.public_reference !== publicReference);
+    if (remaining.length === 0) {
       localStorage.removeItem(ACTIVE_ORDER_TRACKER_KEY);
+    } else {
+      localStorage.setItem(ACTIVE_ORDER_TRACKER_KEY, JSON.stringify(remaining));
     }
   } catch {
     // Storage might be unavailable

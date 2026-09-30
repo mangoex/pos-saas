@@ -50,10 +50,22 @@ interface MobileOrdersMonitorProps {
 
 type OrderFilter = 'NEW' | 'PREP' | 'HISTORY';
 
-const isToday = (dateStr?: string): boolean => {
-  if (!dateStr) return false;
-  const orderDate = new Date(dateStr);
-  if (isNaN(orderDate.getTime())) return false;
+export const parseIsoDate = (dateStr?: string): Date | null => {
+  if (!dateStr) return null;
+  let normalized = String(dateStr).trim();
+  if (normalized.includes(' ') && !normalized.includes('T')) {
+    normalized = normalized.replace(' ', 'T');
+  }
+  if (!normalized.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(normalized)) {
+    normalized += 'Z';
+  }
+  const date = new Date(normalized);
+  return isNaN(date.getTime()) ? null : date;
+};
+
+export const isToday = (dateStr?: string): boolean => {
+  const orderDate = parseIsoDate(dateStr);
+  if (!orderDate) return false;
   const today = new Date();
   return (
     orderDate.getDate() === today.getDate() &&
@@ -62,10 +74,10 @@ const isToday = (dateStr?: string): boolean => {
   );
 };
 
-const getElapsedMinutes = (dateStr: string) => {
-  const ts = Date.parse(dateStr);
-  if (!Number.isFinite(ts)) return 0;
-  return Math.max(0, Math.floor((Date.now() - ts) / 60_000));
+const getElapsedMinutes = (dateStr?: string) => {
+  const parsed = parseIsoDate(dateStr);
+  if (!parsed) return 0;
+  return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 60_000));
 };
 
 export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
@@ -103,19 +115,10 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         items = Array.isArray(fallback) ? fallback : [];
       }
       
-      // Sort chronologically (FIFO: oldest arrivals at the top, newest arrivals at the bottom)
-      const todayOrders = items
-        .filter((item) => isToday(item.created_at))
-        .sort((a, b) => {
-          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return timeA - timeB;
-        });
-      
-      setOrders(todayOrders);
+      setOrders(items);
       setLastUpdated(new Date());
 
-      const activeCount = todayOrders.filter((order) => {
+      const activeCount = items.filter((order) => {
         const status = (order.status || '').toUpperCase();
         return !['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
       }).length;
@@ -237,27 +240,38 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     return ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
   };
 
-  const filteredOrders = orders.filter((order) => {
-    let matchesFilter = false;
-    if (filter === 'NEW') matchesFilter = isOrderNew(order);
-    else if (filter === 'PREP') matchesFilter = isOrderPrep(order);
-    else if (filter === 'HISTORY') matchesFilter = isOrderHistory(order);
+  const filteredOrders = orders
+    .filter((order) => {
+      let matchesFilter = false;
+      if (filter === 'NEW') matchesFilter = isOrderNew(order);
+      else if (filter === 'PREP') matchesFilter = isOrderPrep(order);
+      else if (filter === 'HISTORY') matchesFilter = isOrderHistory(order);
 
-    if (!matchesFilter) return false;
+      if (!matchesFilter) return false;
 
-    if (!searchQuery.trim()) return true;
+      if (!searchQuery.trim()) return true;
 
-    const q = searchQuery.toLowerCase();
-    const folio = (order.folio || '').toLowerCase();
-    const cust = (
-      order.customer_label ||
-      order.customer_snapshot?.name ||
-      order.owner_name ||
-      ''
-    ).toLowerCase();
+      const q = searchQuery.toLowerCase();
+      const folio = (order.folio || '').toLowerCase();
+      const cust = (
+        order.customer_label ||
+        order.customer_snapshot?.name ||
+        order.owner_name ||
+        ''
+      ).toLowerCase();
 
-    return folio.includes(q) || cust.includes(q);
-  });
+      return folio.includes(q) || cust.includes(q);
+    })
+    .sort((a, b) => {
+      const dateA = parseIsoDate(a.created_at)?.getTime() || 0;
+      const dateB = parseIsoDate(b.created_at)?.getTime() || 0;
+      // For History: newest first (LIFO) so recent closed/delivered orders are at the top
+      if (filter === 'HISTORY') {
+        return dateB - dateA;
+      }
+      // For Kitchen queue (NEW / PREP): FIFO (oldest orders first)
+      return dateA - dateB;
+    });
 
   return (
     <div
@@ -505,10 +519,10 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
             </div>
             <p style={{ fontSize: '0.85rem', margin: '6px 0 0', color: '#64748b' }}>
               {filter === 'NEW'
-                ? 'No hay pedidos nuevos por aceptar hoy.'
+                ? 'No hay pedidos nuevos por aceptar.'
                 : filter === 'PREP'
                   ? 'No hay pedidos en preparación.'
-                  : 'No hay historial de pedidos el día de hoy.'}
+                  : 'No hay pedidos en el historial.'}
             </p>
           </div>
         ) : (
@@ -558,6 +572,14 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
 
               const formattedTotal = ((order.total_cents || 0) / 100).toFixed(0);
               const items = (order as any).items || [];
+              const parsedDate = parseIsoDate(order.created_at);
+              const isOrderFromToday = isToday(order.created_at);
+              const timeLabel = !parsedDate
+                ? ''
+                : isOrderFromToday
+                  ? (elapsed < 1 ? 'Ahora' : `Hace ${elapsed} min`)
+                  : parsedDate.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) +
+                    ` ${parsedDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
 
               return (
                 <div
@@ -582,7 +604,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                       #{order.folio}
                     </span>
                     <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                      {elapsed < 1 ? 'Ahora' : `Hace ${elapsed} min`}
+                      {timeLabel}
                     </span>
                   </div>
 

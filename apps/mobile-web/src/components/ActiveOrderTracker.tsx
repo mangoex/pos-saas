@@ -13,69 +13,108 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { TrackedActiveOrder } from '../types';
-import { fetchPublicOrderTracking, formatMoney, saveTrackedOrder, clearTrackedOrder } from '../api';
+import { fetchPublicOrderTracking, formatMoney, saveTrackedOrder, getTrackedOrders, clearTrackedOrder } from '../api';
 
 interface ActiveOrderTrackerProps {
   initialOrder: TrackedActiveOrder | null;
-  onClearOrder?: () => void;
+  initialOrders?: TrackedActiveOrder[];
+  onClearOrder?: (publicReference?: string) => void;
   whatsappPhone?: string;
   restaurantName?: string;
+  branchId?: string;
 }
 
 export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
   initialOrder,
+  initialOrders,
   onClearOrder,
   whatsappPhone,
   restaurantName,
+  branchId,
 }) => {
-  const [order, setOrder] = useState<TrackedActiveOrder | null>(initialOrder);
+  const [ordersList, setOrdersList] = useState<TrackedActiveOrder[]>(() => {
+    if (initialOrders && initialOrders.length > 0) return initialOrders;
+    const fromStorage = getTrackedOrders(branchId);
+    if (fromStorage.length > 0) return fromStorage;
+    return initialOrder ? [initialOrder] : [];
+  });
+  const [selectedReference, setSelectedReference] = useState<string | null>(
+    () => ordersList[0]?.public_reference || initialOrder?.public_reference || null
+  );
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isOrderPickerOpen, setIsOrderPickerOpen] = useState(false);
   const previousStatus = useRef<string | null>(null);
 
-  // Sync with prop
+  // Sync with prop updates
   useEffect(() => {
-    if (initialOrder) {
-      setOrder(initialOrder);
+    if (initialOrders && initialOrders.length > 0) {
+      setOrdersList(initialOrders);
+      if (!selectedReference || !initialOrders.some((o) => o.public_reference === selectedReference)) {
+        setSelectedReference(initialOrders[0].public_reference);
+      }
+    } else if (initialOrder) {
+      setOrdersList((prev) => {
+        const idx = prev.findIndex((o) => o.public_reference === initialOrder.public_reference);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...initialOrder };
+          return next;
+        }
+        return [initialOrder, ...prev];
+      });
+      if (!selectedReference) {
+        setSelectedReference(initialOrder.public_reference);
+      }
     }
-  }, [initialOrder]);
+  }, [initialOrder, initialOrders, selectedReference]);
 
-  // Polling every 3.5 seconds for live state transition updates
+  const order = ordersList.find((o) => o.public_reference === selectedReference) || ordersList[0] || null;
+
+  // Polling every 3.5 seconds for live state transition updates across active orders
   useEffect(() => {
-    if (!order?.public_reference) return;
-
-    const currentStatus = (order.operational_status || order.status || '').toUpperCase();
-    if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(currentStatus)) {
-      return; // Stop polling on terminal states
-    }
+    if (ordersList.length === 0) return;
 
     const poll = async () => {
-      const refreshed = await fetchPublicOrderTracking(order.public_reference);
-      if (refreshed) {
-        setOrder((prev) => {
-          if (!prev) return refreshed;
-          const merged: TrackedActiveOrder = {
-            ...prev,
-            status: refreshed.status,
-            operational_status: refreshed.operational_status,
-            folio: refreshed.folio || prev.folio,
-          };
-          saveTrackedOrder(merged);
+      let anyChanged = false;
+      const updatedList = await Promise.all(
+        ordersList.map(async (curr) => {
+          const st = (curr.operational_status || curr.status || '').toUpperCase();
+          if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(st)) {
+            return curr;
+          }
+          const refreshed = await fetchPublicOrderTracking(curr.public_reference);
+          if (refreshed) {
+            const merged: TrackedActiveOrder = {
+              ...curr,
+              status: refreshed.status,
+              operational_status: refreshed.operational_status,
+              folio: refreshed.folio || curr.folio,
+            };
+            saveTrackedOrder(merged);
 
-          // Haptic vibration feedback when state becomes READY
-          const newStatus = (refreshed.operational_status || refreshed.status || '').toUpperCase();
-          if (newStatus === 'READY' && previousStatus.current !== 'READY') {
-            if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-              try {
-                navigator.vibrate([150, 60, 150]);
-              } catch {
-                // Ignore unsupported
+            // Haptic vibration feedback if selected order becomes READY
+            const newStatus = (refreshed.operational_status || refreshed.status || '').toUpperCase();
+            if (curr.public_reference === order?.public_reference && newStatus === 'READY' && previousStatus.current !== 'READY') {
+              if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                try {
+                  navigator.vibrate([150, 60, 150]);
+                } catch {
+                  // Ignore unsupported
+                }
               }
             }
+            if (curr.public_reference === order?.public_reference) {
+              previousStatus.current = newStatus;
+            }
+            anyChanged = true;
+            return merged;
           }
-          previousStatus.current = newStatus;
+          return curr;
+        })
+      );
 
-          return merged;
-        });
+      if (anyChanged) {
+        setOrdersList(updatedList);
       }
     };
 
@@ -83,7 +122,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
     const interval = window.setInterval(poll, 3500);
 
     return () => window.clearInterval(interval);
-  }, [order?.public_reference]);
+  }, [ordersList.map((o) => o.public_reference).join(','), order?.public_reference]);
 
   if (!order) return null;
 
@@ -147,8 +186,14 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
 
   const handleDismiss = () => {
     clearTrackedOrder(order.public_reference);
-    setOrder(null);
-    if (onClearOrder) onClearOrder();
+    const remaining = ordersList.filter((o) => o.public_reference !== order.public_reference);
+    setOrdersList(remaining);
+    if (remaining.length > 0) {
+      setSelectedReference(remaining[0].public_reference);
+    } else {
+      setSelectedReference(null);
+    }
+    if (onClearOrder) onClearOrder(order.public_reference);
   };
 
   return (
@@ -195,19 +240,117 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
                 <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>
                   {statusTitle}
                 </span>
-                <span
-                  style={{
-                    backgroundColor: '#ffffff',
-                    color: '#475569',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                  }}
-                >
-                  {displayFolio}
-                </span>
+                {ordersList.length > 1 ? (
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsOrderPickerOpen(!isOrderPickerOpen);
+                      }}
+                      style={{
+                        backgroundColor: '#ffffff',
+                        color: '#0f172a',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        border: '1.5px solid #cbd5e1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      }}
+                      title="Seleccionar comanda activa"
+                      aria-label="Ver lista de pedidos activos"
+                    >
+                      <span>{displayFolio}</span>
+                      <span style={{ fontSize: '0.68rem', color: '#ff5722', fontWeight: 800 }}>
+                        ({ordersList.length})
+                      </span>
+                      <ChevronDown size={13} color="#64748b" />
+                    </button>
+
+                    {isOrderPickerOpen && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          marginTop: 6,
+                          backgroundColor: '#ffffff',
+                          borderRadius: 12,
+                          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                          border: '1px solid #cbd5e1',
+                          padding: 6,
+                          zIndex: 100,
+                          minWidth: 200,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                        }}
+                      >
+                        <div style={{ padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                          Tus comandas activas:
+                        </div>
+                        {ordersList.map((ord) => {
+                          const isSel = ord.public_reference === order.public_reference;
+                          const ordFolio = ord.folio ? `#${ord.folio}` : `#${ord.public_reference}`;
+                          const ordSt = (ord.operational_status || ord.status || '').toUpperCase();
+                          const stLabel = ordSt === 'READY' ? 'Listo 🎉' : ['ACCEPTED', 'IN_PRODUCTION'].includes(ordSt) ? 'Preparando 🍳' : 'Recibido';
+                          return (
+                            <button
+                              key={ord.public_reference}
+                              type="button"
+                              onClick={() => {
+                                setSelectedReference(ord.public_reference);
+                                setIsOrderPickerOpen(false);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '6px 8px',
+                                borderRadius: 6,
+                                border: 'none',
+                                backgroundColor: isSel ? '#f1f5f9' : 'transparent',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                width: '100%',
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontSize: '0.78rem', fontWeight: isSel ? 800 : 600, color: isSel ? '#0f172a' : '#334155' }}>
+                                  {ordFolio}
+                                </div>
+                                <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                                  {stLabel}
+                                </div>
+                              </div>
+                              {isSel && <CheckCircle2 size={14} color="#16a34a" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <span
+                    style={{
+                      backgroundColor: '#ffffff',
+                      color: '#475569',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: 6,
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    {displayFolio}
+                  </span>
+                )}
               </div>
               <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748b' }}>
                 {statusSubtitle}
@@ -264,31 +407,29 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
                 position: 'relative',
               }}
             >
-              {/* Background Connecting Line */}
+              {/* Background Connecting Track (strictly from Step 1 center to Step 3 center) */}
               <div
                 style={{
                   position: 'absolute',
                   top: '16px',
-                  left: '20px',
-                  right: '20px',
+                  left: '35px',
+                  right: '35px',
                   height: 3,
                   backgroundColor: '#e2e8f0',
                   zIndex: 1,
+                  overflow: 'hidden',
                 }}
-              />
-              {/* Active Fill Line */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '16px',
-                  left: '20px',
-                  width: activeStep === 1 ? '15%' : activeStep === 2 ? '50%' : '100%',
-                  height: 3,
-                  backgroundColor: activeStep === 3 ? '#16a34a' : '#2563eb',
-                  transition: 'width 0.5s ease',
-                  zIndex: 2,
-                }}
-              />
+              >
+                {/* Active Fill Line bounded strictly within the track */}
+                <div
+                  style={{
+                    height: '100%',
+                    width: activeStep <= 1 ? '0%' : activeStep === 2 ? '50%' : '100%',
+                    backgroundColor: activeStep >= 3 ? '#16a34a' : '#2563eb',
+                    transition: 'width 0.4s ease',
+                  }}
+                />
+              </div>
 
               {/* Step 1: Aceptado */}
               <div

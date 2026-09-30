@@ -253,6 +253,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
               initialOrder={trackedOrderData}
               whatsappPhone={branch?.phone}
               restaurantName={branch?.name}
+              branchId={branch?.id}
             />
           </div>
 
