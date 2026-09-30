@@ -416,3 +416,26 @@ Para mantener la base de código limpia, mantenible y enfocada en el éxito del 
 ## Recuperación SaaS 2026-09-07
 
 Base cee907b. Se conserva organizations.slug de la migración publicada 0069. Las ampliaciones locales se integran secuencialmente después de ella; public_slug puede mantenerse como alias de respuesta para clientes, nunca como segunda identidad editable. El resolver acepta sólo identificadores exactos e inequívocos; no hay catálogo de respaldo ni selección piloto. Guards comprueban actor/organización/sucursal y vigencia. Onboarding se persiste por tenant. Inbox/outbox y confirmación de proveedor conservan auditoría y reintentos. Ver docs/plan-recuperacion-2026-09-07.md para evidencia y preguntas operativas.
+
+## Historial y seguimiento de pedidos
+
+Las consultas de cuentas y conteo no escriben estados ni decisiones. Las 24 horas distinguen
+presentación operativa de historial; no constituyen un TTL. La expiración automática continúa
+reservada. El listado incluye intenciones pendientes, rechazadas y expiradas ya existentes,
+sin duplicar las aceptadas que se proyectan como pedido operativo. Mantiene autorización de
+tenant/sucursal y filtros de fechas, servicio y búsqueda; filtros de caja excluyen intenciones.
+
+La página combina pedidos e intenciones por `(created_at UTC, id, origen)` descendente, devuelve
+como máximo `limit` filas y consulta como máximo `limit + 1` candidatos de cada origen. El cursor
+queda ligado a filtros y distingue orígenes en empates; cursors anteriores se interpretan como
+pedidos. El monitor permite cargar más páginas y refresca solamente el número ya solicitado,
+sin aceptar respuestas de una sucursal anterior ni sustituir errores por otro listado.
+
+El tracker consulta el estado vigente, detiene estados terminales (incluido `EXPIRED`), evita
+solapar requests y descarta respuestas después del cleanup. Los otros pedidos activos conservan
+su seguimiento. No agrega un comando de expiración ni modifica cobros, producción o inventario.
+
+Preguntas operativas: ¿el historial omite o duplica una referencia?, ¿una lectura emitió DML?,
+¿hay consultas después de terminar o desmontar el seguimiento? Responden el cursor y referencia
+de respuesta, la captura SQL de las regresiones y las llamadas observadas en el harness del tracker.
+No se registran payloads ni datos personales adicionales.

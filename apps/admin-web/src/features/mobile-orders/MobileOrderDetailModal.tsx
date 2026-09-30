@@ -375,7 +375,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     '';
 
   const isCompleted = Boolean(
-    ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(detail?.status?.toUpperCase() || '')
+    ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(detail?.status?.toUpperCase() || '')
   );
 
   const isUnaccepted = Boolean(
@@ -466,7 +466,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                 borderRadius: 6,
                 backgroundColor:
                   isCompleted
-                    ? ['REJECTED', 'CANCELLED'].includes(detail?.status?.toUpperCase() || '')
+                    ? ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(detail?.status?.toUpperCase() || '')
                       ? '#fef2f2'
                       : detail?.payment_status === 'CONFIRMED'
                         ? '#dcfce7'
@@ -476,7 +476,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                       : '#e0f2fe',
                 color:
                   isCompleted
-                    ? ['REJECTED', 'CANCELLED'].includes(detail?.status?.toUpperCase() || '')
+                    ? ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(detail?.status?.toUpperCase() || '')
                       ? '#dc2626'
                       : detail?.payment_status === 'CONFIRMED'
                         ? '#166534'
@@ -487,7 +487,9 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
               }}
             >
               {isCompleted
-                ? detail?.status?.toUpperCase() === 'REJECTED'
+                ? detail?.status?.toUpperCase() === 'EXPIRED'
+                  ? 'Expirado'
+                  : detail?.status?.toUpperCase() === 'REJECTED'
                   ? 'Rechazado'
                   : detail?.status?.toUpperCase() === 'CANCELLED'
                     ? 'Cancelado'
@@ -914,7 +916,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
           )}
 
           {/* Payment Method Selector if not yet confirmed */}
-          {detail && detail.payment_status !== 'CONFIRMED' && !isUnaccepted && (
+          {detail && detail.status?.toUpperCase() !== 'EXPIRED' &&
+            detail.payment_status !== 'CONFIRMED' && !isUnaccepted && (
             <div
               style={{
                 backgroundColor: '#f8fafc',
@@ -1039,7 +1042,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
           )}
 
           {isCompleted && (
-            detail?.status?.toUpperCase() === 'REJECTED' ? (
+            ['REJECTED', 'EXPIRED'].includes(detail?.status?.toUpperCase() || '') ? (
               <div
                 style={{
                   width: '100%',
@@ -1057,7 +1060,9 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
                 }}
               >
                 <XCircle size={18} color="#dc2626" />
-                Pedido Rechazado (No cobrado ni preparado)
+                {detail?.status?.toUpperCase() === 'EXPIRED'
+                  ? 'Pedido Expirado'
+                  : 'Pedido Rechazado (No cobrado ni preparado)'}
               </div>
             ) : detail?.status?.toUpperCase() === 'CANCELLED' ? (
               <div

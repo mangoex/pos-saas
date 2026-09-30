@@ -2,6 +2,13 @@
 
 ## TDD-TS-095
 
+### TDD-TC-988 Polling y terminales del seguimiento
+
+- Archivo: `tests/frontend/test_active_order_tracking.mjs`.
+- Ejecuta el componente TypeScript real con hooks y timers controlados. Refuta consultas
+  después de una transición terminal, EXPIRED inicial, solapamiento lento y respuesta después
+  de desmontar. Comprueba que otro pedido continúa y que la UI muestra el estado expirado.
+
 ### TDD-TC-164
 - Archivo: `tests/frontend/test_mobile_web_order_flow.mjs::Mobile Order WhatsApp link format for takeaway`
 - Propósito: Verificar la proyección WhatsApp para recolección sólo cuando recibe teléfono configurado; no calcula ni sustituye el total autoritativo de Python.

@@ -284,6 +284,16 @@ Feature: Capturar y aceptar un pedido público sin inventar autoridad
     Given una intención PENDING_REVIEW
     When no existe TTL, scheduler ni orden de operación aprobada
     Then no hay transición automática a EXPIRED ni efecto operacional
+    And consultar cuentas o conteos no modifica estado, versión ni decisión
+
+  @BDD-SC-987
+  Scenario: Historial público acotado sin expiración ni pérdida por paginación
+    Given intenciones pendientes, rechazadas y expiradas existentes de más de 24 horas
+    When un actor autorizado consulta cuentas de su sucursal y solicita las páginas siguientes
+    Then aparecen en historial conservando su estado persistido
+    And cada página respeta limit, filtros y alcance del actor
+    And empates entre pedidos e intenciones no producen duplicados ni omisiones
+    And una lectura no escribe decisiones ni crea efectos operativos
 
   @BDD-SC-391
   Scenario: Selecciones públicas son valuadas sólo por el pricer canónico

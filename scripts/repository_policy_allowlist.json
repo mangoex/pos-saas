@@ -232,7 +232,7 @@
     },
     {
       "path": "apps/api/tests/test_saas_superadmin.py",
-      "sha256": "1068e2eb9cf14d5a26974e11693f2b78c747dcd44b3a60353aee5b3f841882f1",
+      "sha256": "0a7c5fea3004e18ec2a5adbc42b6b443a514c59baac8f1a9ca1d813cb30b7c4a",
       "provenance": "restaurantos-saas-test-saas-superadmin-synthetic-v1"
     },
     {

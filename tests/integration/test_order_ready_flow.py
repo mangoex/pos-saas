@@ -7,12 +7,11 @@ from datetime import datetime, timezone
 
 import pytest
 import sqlalchemy as sa
+from restaurant_os import models
+from restaurant_os.operations import mark_order_ready
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from restaurant_os import models
-from restaurant_os.operations import mark_order_ready
 
 
 @pytest.fixture
@@ -197,30 +196,40 @@ def test_mark_order_ready_compiles_and_transitions_order(db_session):
     assert detail["status"] == "READY"
 
     # Verify orders table was updated to READY
-    updated_order = db_session.execute(
-        sa.select(models.orders).where(models.orders.c.id == order_id)
-    ).mappings().one()
+    updated_order = (
+        db_session.execute(sa.select(models.orders).where(models.orders.c.id == order_id))
+        .mappings()
+        .one()
+    )
     assert updated_order["status"] == "READY"
 
     # Verify production task was updated to COMPLETED
-    updated_task = db_session.execute(
-        sa.select(models.production_tasks).where(models.production_tasks.c.id == task_id)
-    ).mappings().one()
+    updated_task = (
+        db_session.execute(
+            sa.select(models.production_tasks).where(models.production_tasks.c.id == task_id)
+        )
+        .mappings()
+        .one()
+    )
     assert updated_task["status"] == "COMPLETED"
     assert updated_task["completed_at"] is not None
 
     # Verify order event was recorded
-    event = db_session.execute(
-        sa.select(models.order_events).where(models.order_events.c.order_id == order_id)
-    ).mappings().first()
+    event = (
+        db_session.execute(
+            sa.select(models.order_events).where(models.order_events.c.order_id == order_id)
+        )
+        .mappings()
+        .first()
+    )
     assert event is not None
     assert event["event_type"] == "READY"
 
 
 @pytest.mark.anyio
 async def test_bind_domain_host_allows_public_order_intents(db_session, monkeypatch):
-    from starlette.requests import Request
     from restaurant_os.domain_host import bind_domain_host
+    from starlette.requests import Request
 
     ctx = db_session.info["test_context"]
     org_id = ctx["org_id"]
@@ -270,7 +279,7 @@ async def test_bind_domain_host_allows_public_order_intents(db_session, monkeypa
     # Mock platform_hosts to return empty set so taqueriatest.com is treated as custom domain
     monkeypatch.setattr("restaurant_os.domain_host.platform_hosts", lambda: set())
 
-    # Build a Request with Host taqueriatest.com and path /api/v1/public/order-intents/PI-TEST-123456
+    # Build a custom-domain request for the public intent reference.
     scope = {
         "type": "http",
         "method": "GET",
@@ -285,4 +294,3 @@ async def test_bind_domain_host_allows_public_order_intents(db_session, monkeypa
 
     # Must NOT raise HTTPException 403 domain_route_unavailable
     await bind_domain_host(req, db_session)
-

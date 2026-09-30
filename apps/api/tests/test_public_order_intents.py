@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: E501
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -11,8 +11,15 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from restaurant_os import database, models
 from restaurant_os.config import Settings
-from restaurant_os.operations import BusinessError, _recover_public_order_command
+from restaurant_os.operations import (
+    BusinessError,
+    _recover_public_order_command,
+    count_pending_orders,
+    get_order_detail,
+    list_order_accounts,
+)
 from test_platform_api import (
+    ADMIN_USER_ID,
     BRANCH_ID,
     _admin_headers,
     _client_with_seeded_database,
@@ -987,3 +994,88 @@ def test_public_order_intent_operational_lifecycle_and_ready_endpoint() -> None:
     )
     assert ready_again.status_code == 200
     assert ready_again.json()["status"] == "READY"
+
+
+@pytest.mark.parametrize("status", ["PENDING_REVIEW", "REJECTED", "EXPIRED"])
+def test_old_public_intents_remain_in_history_without_read_side_effects(status, monkeypatch):
+    from restaurant_os import operations
+
+    client = _client_with_seeded_database()
+    _enable_public_order_capture(client)
+    created = _post_intent(client, _payload())
+    assert created.status_code == 201
+    intent_id = _intent_id(client, created.json()["public_reference"])
+    now = datetime(2026, 9, 30, 18, tzinfo=timezone.utc)
+    monkeypatch.setattr(operations, "_now", lambda: now)
+    with _test_session_factory(client)() as session:
+        session.execute(
+            models.public_order_intents.update()
+            .where(models.public_order_intents.c.id == intent_id)
+            .values(status=status, created_at=now - timedelta(hours=25))
+        )
+        session.commit()
+        before = dict(
+            session.execute(
+                sa.select(models.public_order_intents).where(
+                    models.public_order_intents.c.id == intent_id
+                )
+            )
+            .mappings()
+            .one()
+        )
+        writes = []
+
+        def record_write(_conn, _cursor, statement, _parameters, _context, _many):
+            if statement.lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE")):
+                writes.append(statement)
+
+        with session.connection() as connection:
+            sa.event.listen(connection, "before_cursor_execute", record_write)
+            accounts = list_order_accounts(session, {"branch_id": BRANCH_ID}, ADMIN_USER_ID)
+            count_pending_orders(session, BRANCH_ID, ADMIN_USER_ID)
+            after = dict(
+                session.execute(
+                    sa.select(models.public_order_intents).where(
+                        models.public_order_intents.c.id == intent_id
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            assert after == before
+            assert writes == []
+            item = next(item for item in accounts["items"] if item["id"] == intent_id)
+            assert item["status"] == ("PENDING" if status == "PENDING_REVIEW" else status)
+            detail = get_order_detail(session, intent_id, ADMIN_USER_ID)
+            assert detail["status"] == item["status"]
+
+
+def test_public_intent_history_is_bounded_and_paginated_with_stable_ties(monkeypatch):
+    from restaurant_os import operations
+
+    client = _client_with_seeded_database()
+    _enable_public_order_capture(client)
+    now = datetime(2026, 9, 30, 18, tzinfo=timezone.utc)
+    intent_ids = []
+    for index in range(3):
+        created = _post_intent(client, _payload(), key=f"history-pagination-{index:03}")
+        assert created.status_code == 201
+        intent_ids.append(_intent_id(client, created.json()["public_reference"]))
+    monkeypatch.setattr(operations, "_now", lambda: now)
+    with _test_session_factory(client)() as session:
+        session.execute(
+            models.public_order_intents.update().values(created_at=now - timedelta(hours=25))
+        )
+        session.commit()
+    seen = []
+    params = {"branch_id": BRANCH_ID, "limit": 1}
+    for _ in range(4):
+        response = client.get("/api/v1/orders/accounts", params=params, headers=_admin_headers())
+        assert response.status_code == 200
+        page = response.json()
+        assert len(page["items"]) <= 1
+        seen.extend(item["id"] for item in page["items"])
+        if not page["next_cursor"]:
+            break
+        params["cursor"] = page["next_cursor"]
+    assert seen == sorted(intent_ids, reverse=True)

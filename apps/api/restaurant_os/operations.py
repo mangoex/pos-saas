@@ -4518,7 +4518,7 @@ def get_order_detail(
             "cash_shift_id": None,
             "folio": f"WEB-{intent['public_reference'][-6:]}",
             "channel": "PUBLIC_INTENT",
-            "status": "REJECTED" if intent.get("status") == "REJECTED" else "PENDING",
+            "status": "PENDING" if intent["status"] == "PENDING_REVIEW" else intent["status"],
             "service_type": intent["order_type"],
             "order_type": intent["order_type"],
             "total_cents": intent["total_cents"],
@@ -5084,7 +5084,7 @@ def list_order_accounts(
         raise BusinessError(
             "order_accounts_interval_invalid", "Interval must be valid and complete"
         )
-    q = str(raw.get("q") or "").strip()
+    q = str(raw.get("q") or "").strip().casefold()
     if q and not 2 <= len(q) <= 120:
         raise BusinessError(
             "order_accounts_query_invalid", "Search must contain 2 to 120 characters"
@@ -5100,6 +5100,7 @@ def list_order_accounts(
     }
     cursor_created: datetime | None = None
     cursor_id: str | None = None
+    cursor_source = "order"
     if cursor := raw.get("cursor"):
         try:
             data = json.loads(urlsafe_b64decode(str(cursor).encode()).decode())
@@ -5109,6 +5110,9 @@ def list_order_accounts(
             if cursor_created.tzinfo is None:
                 raise ValueError("cursor timestamp is naive")
             cursor_id = data["i"]
+            cursor_source = data.get("s", "order")
+            if cursor_source not in {"order", "intent"}:
+                raise ValueError("cursor source")
         except (
             BinasciiError,
             UnicodeDecodeError,
@@ -5145,8 +5149,15 @@ def list_order_accounts(
         )
     if cursor_id:
         query = query.where(
-            sa.tuple_(models.orders.c.created_at, models.orders.c.id)
-            < sa.tuple_(cursor_created, cursor_id)
+            sa.or_(
+                sa.tuple_(models.orders.c.created_at, models.orders.c.id)
+                < sa.tuple_(sa.literal(cursor_created), sa.literal(cursor_id)),
+                sa.and_(
+                    models.orders.c.created_at == cursor_created,
+                    models.orders.c.id == cursor_id,
+                    sa.literal("order") < cursor_source,
+                ),
+            )
         )
     rows = [
         dict(row)
@@ -5156,53 +5167,82 @@ def list_order_accounts(
             )
         ).mappings()
     ]
-    has_more, rows = len(rows) > limit, rows[:limit]
     items = []
+    intent_rows = []
     if (
         branch_id
-        and not cursor_id
         and not raw.get("cash_shift_id")
         and not raw.get("register_code")
     ):
-        now_dt = _now()
-        session.execute(
-            models.public_order_intents.update()
-            .where(
-                models.public_order_intents.c.organization_id == organization_id,
-                models.public_order_intents.c.branch_id == branch_id,
-                models.public_order_intents.c.status == "PENDING_REVIEW",
-                models.public_order_intents.c.created_at < now_dt - timedelta(hours=24),
-            )
-            .values(
-                status="EXPIRED",
-                decided_at=now_dt,
-                decision_reason="Intent expired operationally",
-            )
-        )
         intent_query = (
             sa.select(models.public_order_intents)
             .where(
                 models.public_order_intents.c.organization_id == organization_id,
                 models.public_order_intents.c.branch_id == branch_id,
-                models.public_order_intents.c.status.in_(["PENDING_REVIEW", "REJECTED"]),
+                models.public_order_intents.c.status.in_(["PENDING_REVIEW", "REJECTED", "EXPIRED"]),
             )
         )
         if start:
             intent_query = intent_query.where(models.public_order_intents.c.created_at >= start)
         if end:
             intent_query = intent_query.where(models.public_order_intents.c.created_at < end)
-        if not start:
-            intent_query = intent_query.where(
-                models.public_order_intents.c.created_at >= now_dt - timedelta(hours=24)
+        if service:
+            intent_query = intent_query.where(models.public_order_intents.c.order_type == service)
+        if q:
+            public_folio = sa.literal("WEB-").concat(
+                sa.func.substr(
+                    models.public_order_intents.c.public_reference,
+                    sa.func.length(models.public_order_intents.c.public_reference) - 5,
+                )
             )
-        intent_query = intent_query.order_by(models.public_order_intents.c.created_at.desc())
-        intent_rows = session.execute(intent_query).mappings().all()
+            intent_query = intent_query.where(sa.or_(
+                sa.func.lower(public_folio).contains(q),
+                sa.func.lower(models.public_order_intents.c.public_reference).contains(q),
+                sa.func.lower(
+                    models.public_order_intents.c.customer_snapshot["name"].as_string()
+                ).contains(q),
+            ))
+        if cursor_id:
+            intent_query = intent_query.where(
+                sa.or_(
+                    sa.tuple_(models.public_order_intents.c.created_at,
+                              models.public_order_intents.c.id)
+                    < sa.tuple_(sa.literal(cursor_created), sa.literal(cursor_id)),
+                    sa.and_(
+                        models.public_order_intents.c.created_at == cursor_created,
+                        models.public_order_intents.c.id == cursor_id,
+                        sa.literal("intent") < cursor_source,
+                    ),
+                )
+            )
+        intent_rows = [dict(row) for row in session.execute(intent_query.order_by(
+            models.public_order_intents.c.created_at.desc(),
+            models.public_order_intents.c.id.desc(),
+        ).limit(limit + 1)).mappings()]
+
+    candidates = [(row, "order") for row in rows] + [(row, "intent") for row in intent_rows]
+
+    def page_key(candidate: tuple[dict[str, Any], str]) -> tuple[datetime, str, str]:
+        row, source = candidate
+        created = row["created_at"]
+        created = created.replace(tzinfo=timezone.utc) if created.tzinfo is None else created
+        return created, str(row["id"]), source
+
+    candidates.sort(key=page_key, reverse=True)
+    has_more = len(candidates) > limit
+    page = candidates[:limit]
+    selected_orders = {row["id"] for row, source in page if source == "order"}
+    selected_intents = {row["id"] for row, source in page if source == "intent"}
+    rows = [row for row in rows if row["id"] in selected_orders]
+    if intent_rows:
         for intent in intent_rows:
+            if intent["id"] not in selected_intents:
+                continue
             cust = dict(intent.get("customer_snapshot") or {})
             addr = dict(intent.get("delivery_address_snapshot") or {})
             cust_name = cust.get("name")
             order_notes = intent.get("order_notes") or cust.get("order_notes") or addr.get("notes") or ""
-            intent_status = "REJECTED" if intent.get("status") == "REJECTED" else "PENDING"
+            intent_status = "PENDING" if intent["status"] == "PENDING_REVIEW" else intent["status"]
             items.append(
                 {
                     "id": intent["id"],
@@ -5262,13 +5302,17 @@ def list_order_accounts(
             }
         )
     next_cursor = None
-    if has_more and rows:
-        last = rows[-1]
+    if has_more and page:
+        last, source = page[-1]
         next_cursor = urlsafe_b64encode(
             json.dumps(
-                {"h": _pco005_hash(filters), "c": last["created_at"].isoformat(), "i": last["id"]}
+                {"h": _pco005_hash(filters), "c": page_key((last, source))[0].isoformat(),
+                 "i": last["id"], "s": source}
             ).encode()
         ).decode()
+    item_by_key = {(item["id"], "intent" if item.get("is_public_intent") else "order"): item
+                   for item in items}
+    items = [item_by_key[(row["id"], source)] for row, source in page]
     return {"items": items, "next_cursor": next_cursor}
 
 
@@ -5293,21 +5337,6 @@ def count_pending_orders(
             "An active branch is required to count pending orders",
         )
     now_dt = _now()
-    session.execute(
-        models.public_order_intents.update()
-        .where(
-            models.public_order_intents.c.organization_id == organization_id,
-            models.public_order_intents.c.branch_id == authorized_branch_id,
-            models.public_order_intents.c.status == "PENDING_REVIEW",
-            models.public_order_intents.c.created_at < now_dt - timedelta(hours=24),
-        )
-        .values(
-            status="EXPIRED",
-            decided_at=now_dt,
-            decision_reason="Intent expired operationally",
-        )
-    )
-
     order_count = session.execute(
         sa.select(sa.func.count())
         .select_from(models.orders)
@@ -5457,7 +5486,7 @@ def list_order_reopen_requests(
             sa.tuple_(
                 models.order_reopen_requests.c.requested_at, models.order_reopen_requests.c.id
             )
-            < sa.tuple_(created, request_id)
+            < sa.tuple_(sa.literal(created), sa.literal(request_id))
         )
     rows = [
         dict(row)

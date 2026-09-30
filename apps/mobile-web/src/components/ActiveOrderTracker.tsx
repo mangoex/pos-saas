@@ -24,6 +24,11 @@ interface ActiveOrderTrackerProps {
   branchId?: string;
 }
 
+const isTerminalStatus = (status: string) =>
+  ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(status.toUpperCase());
+const belongsToBranch = (order: TrackedActiveOrder, branchId?: string) =>
+  !branchId || order.branch_id === branchId;
+
 export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
   initialOrder,
   initialOrders,
@@ -32,11 +37,15 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
   restaurantName,
   branchId,
 }) => {
+  const scopeBranchId = branchId || initialOrder?.branch_id;
   const [ordersList, setOrdersList] = useState<TrackedActiveOrder[]>(() => {
-    if (initialOrders && initialOrders.length > 0) return initialOrders;
-    const fromStorage = getTrackedOrders(branchId);
+    if (initialOrders && initialOrders.length > 0) {
+      return initialOrders.filter(curr => belongsToBranch(curr, scopeBranchId));
+    }
+    const fromStorage = getTrackedOrders(scopeBranchId).filter(curr =>
+      belongsToBranch(curr, scopeBranchId));
     if (fromStorage.length > 0) return fromStorage;
-    return initialOrder ? [initialOrder] : [];
+    return initialOrder && belongsToBranch(initialOrder, scopeBranchId) ? [initialOrder] : [];
   });
   const [selectedReference, setSelectedReference] = useState<string | null>(
     () => ordersList[0]?.public_reference || initialOrder?.public_reference || null
@@ -44,15 +53,27 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOrderPickerOpen, setIsOrderPickerOpen] = useState(false);
   const previousStatus = useRef<string | null>(null);
+  const branchRef = useRef(scopeBranchId);
 
   // Sync with prop updates
   useEffect(() => {
+    if (branchRef.current !== scopeBranchId) {
+      const candidates = initialOrders?.length ? initialOrders
+        : initialOrder ? [initialOrder] : getTrackedOrders(scopeBranchId);
+      const scoped = candidates.filter(curr => belongsToBranch(curr, scopeBranchId));
+      branchRef.current = scopeBranchId;
+      previousStatus.current = null;
+      setOrdersList(scoped);
+      setSelectedReference(scoped[0]?.public_reference || null);
+      return;
+    }
     if (initialOrders && initialOrders.length > 0) {
-      setOrdersList(initialOrders);
-      if (!selectedReference || !initialOrders.some((o) => o.public_reference === selectedReference)) {
-        setSelectedReference(initialOrders[0].public_reference);
-      }
-    } else if (initialOrder) {
+      const scoped = initialOrders.filter(curr => belongsToBranch(curr, scopeBranchId));
+      setOrdersList(scoped);
+      setSelectedReference(current =>
+        current && scoped.some(o => o.public_reference === current)
+          ? current : scoped[0]?.public_reference || null);
+    } else if (initialOrder && belongsToBranch(initialOrder, scopeBranchId)) {
       setOrdersList((prev) => {
         const idx = prev.findIndex((o) => o.public_reference === initialOrder.public_reference);
         if (idx >= 0) {
@@ -62,28 +83,37 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
         }
         return [initialOrder, ...prev];
       });
-      if (!selectedReference) {
-        setSelectedReference(initialOrder.public_reference);
-      }
+      setSelectedReference(current => current || initialOrder.public_reference);
     }
-  }, [initialOrder, initialOrders, selectedReference]);
+  }, [initialOrder, initialOrders, scopeBranchId]);
 
-  const order = ordersList.find((o) => o.public_reference === selectedReference) || ordersList[0] || null;
+  const visibleOrders = ordersList.filter(curr => belongsToBranch(curr, scopeBranchId));
+  const order = visibleOrders.find((o) => o.public_reference === selectedReference) || visibleOrders[0] || null;
+  const ordersRef = useRef(visibleOrders);
+  const selectedRef = useRef(order?.public_reference);
+  ordersRef.current = visibleOrders;
+  selectedRef.current = order?.public_reference;
 
   // Polling every 3.5 seconds for live state transition updates across active orders
   useEffect(() => {
-    if (ordersList.length === 0) return;
+    let disposed = false;
+    let polling = false;
+    let interval: number;
 
     const poll = async () => {
-      let anyChanged = false;
-      const updatedList = await Promise.all(
-        ordersList.map(async (curr) => {
+      if (disposed || polling) return;
+      const activeOrders = ordersRef.current.filter(curr =>
+        !isTerminalStatus(curr.operational_status || curr.status || ''));
+      if (activeOrders.length === 0) {
+        window.clearInterval(interval);
+        return;
+      }
+      polling = true;
+      try {
+        const updates = await Promise.all(activeOrders.map(async (curr) => {
           const st = (curr.operational_status || curr.status || '').toUpperCase();
-          if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(st)) {
-            return curr;
-          }
           const refreshed = await fetchPublicOrderTracking(curr.public_reference);
-          if (refreshed) {
+          if (refreshed && !disposed) {
             const merged: TrackedActiveOrder = {
               ...curr,
               status: refreshed.status,
@@ -94,7 +124,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
 
             // Haptic vibration feedback if selected order becomes READY
             const newStatus = (refreshed.operational_status || refreshed.status || '').toUpperCase();
-            if (curr.public_reference === order?.public_reference && newStatus === 'READY' && previousStatus.current !== 'READY') {
+            if (curr.public_reference === selectedRef.current && newStatus === 'READY' && st !== 'READY' && previousStatus.current !== 'READY') {
               if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
                 try {
                   navigator.vibrate([150, 60, 150]);
@@ -103,31 +133,33 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
                 }
               }
             }
-            if (curr.public_reference === order?.public_reference) {
+            if (curr.public_reference === selectedRef.current) {
               previousStatus.current = newStatus;
             }
-            anyChanged = true;
             return merged;
           }
-          return curr;
-        })
-      );
-
-      if (anyChanged) {
-        setOrdersList(updatedList);
+          return null;
+        }));
+        if (disposed) return;
+        const byReference = new Map(updates.filter((updated): updated is TrackedActiveOrder =>
+          updated !== null).map(updated => [updated.public_reference, updated]));
+        if (byReference.size) {
+          setOrdersList(current => current.map(curr => byReference.get(curr.public_reference) || curr));
+        }
+      } finally {
+        polling = false;
       }
     };
 
-    poll();
-    const interval = window.setInterval(poll, 3500);
-
-    return () => window.clearInterval(interval);
-  }, [ordersList.map((o) => o.public_reference).join(','), order?.public_reference]);
+    interval = window.setInterval(() => void poll(), 3500);
+    void poll();
+    return () => { disposed = true; window.clearInterval(interval); };
+  }, [visibleOrders.map((o) => o.public_reference).join(','), scopeBranchId]);
 
   if (!order) return null;
 
   const rawStatus = (order.operational_status || order.status || '').toUpperCase();
-  const isTerminal = ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(rawStatus);
+  const isTerminal = isTerminalStatus(rawStatus);
 
   // Derive active stage (1: Recibido/Aceptado, 2: Preparando, 3: Listo/Entregado)
   let activeStep = 1;
@@ -174,8 +206,9 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
     themeColor = '#059669';
     themeBg = '#ecfdf5';
     themeBorder = '#a7f3d0';
-  } else if (rawStatus === 'REJECTED' || rawStatus === 'CANCELLED') {
-    statusTitle = rawStatus === 'REJECTED' ? 'Pedido No Aceptado' : 'Pedido Cancelado';
+  } else if (rawStatus === 'REJECTED' || rawStatus === 'CANCELLED' || rawStatus === 'EXPIRED') {
+    statusTitle = rawStatus === 'EXPIRED' ? 'Pedido Expirado'
+      : rawStatus === 'REJECTED' ? 'Pedido No Aceptado' : 'Pedido Cancelado';
     statusSubtitle = 'Comunícate con el restaurante si tienes dudas';
     themeColor = '#dc2626';
     themeBg = '#fef2f2';
@@ -186,7 +219,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
 
   const handleDismiss = () => {
     clearTrackedOrder(order.public_reference);
-    const remaining = ordersList.filter((o) => o.public_reference !== order.public_reference);
+    const remaining = visibleOrders.filter((o) => o.public_reference !== order.public_reference);
     setOrdersList(remaining);
     if (remaining.length > 0) {
       setSelectedReference(remaining[0].public_reference);
@@ -240,7 +273,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
                 <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>
                   {statusTitle}
                 </span>
-                {ordersList.length > 1 ? (
+                {visibleOrders.length > 1 ? (
                   <div style={{ position: 'relative' }}>
                     <button
                       type="button"
@@ -267,7 +300,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
                     >
                       <span>{displayFolio}</span>
                       <span style={{ fontSize: '0.68rem', color: '#ff5722', fontWeight: 800 }}>
-                        ({ordersList.length})
+                        ({visibleOrders.length})
                       </span>
                       <ChevronDown size={13} color="#64748b" />
                     </button>
@@ -295,7 +328,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
                         <div style={{ padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
                           Tus comandas activas:
                         </div>
-                        {ordersList.map((ord) => {
+                        {visibleOrders.map((ord) => {
                           const isSel = ord.public_reference === order.public_reference;
                           const ordFolio = ord.folio ? `#${ord.folio}` : `#${ord.public_reference}`;
                           const ordSt = (ord.operational_status || ord.status || '').toUpperCase();

@@ -271,6 +271,19 @@ When se rechaza y se repite el comando
 Then queda REJECTED una sola vez, sin efectos operativos y sin exponer el motivo públicamente.
 `EXPIRED` permanece reservado sin comando, TTL ni scheduler.
 
+La regresión `test_old_public_intents_remain_in_history_without_read_side_effects` ejecuta
+cuentas y conteo con intenciones de 25 horas, compara el registro completo y captura DML.
+Se exige cero escrituras y estado histórico original para PENDING_REVIEW, REJECTED y EXPIRED.
+
+### TDD-TC-987 Historial público limitado y autorizado
+
+- Archivos: `apps/api/tests/test_public_order_intents.py::test_public_intent_history_is_bounded_and_paginated_with_stable_ties`,
+  `apps/api/tests/test_order_history.py`, `tests/frontend/test_mobile_order_history.mjs`.
+- Comprobar mezcla de orígenes, empates, filtros, separación entre tenants, cursor inválido,
+  límite por página y renovación del alcance; SQLite y PostgreSQL cuando está configurado.
+- Ejecutar el handler real del monitor: cargar más, conservar profundidad al refrescar y
+  descartar respuestas de otra sucursal; sin reescribir la clasificación en el test.
+
 ### TDD-TC-170 Selecciones y límite seudonimizado
 
 - Archivos: `apps/api/tests/test_public_order_intents.py::test_public_intent_uses_canonical_selections_and_direct_client_signal`

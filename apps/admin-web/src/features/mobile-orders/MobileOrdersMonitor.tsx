@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
 import {
   Clock,
@@ -130,24 +130,39 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const scopeRef = useRef({ branchId, pages: 1, busy: false });
+  if (scopeRef.current.branchId !== branchId) {
+    scopeRef.current = { branchId, pages: 1, busy: false };
+  }
   
-  const loadOrders = useCallback(async (isSilent = false) => {
+  const loadOrders = useCallback(async (isSilent = false, additionalPage = false) => {
     if (!branchId) return;
+    const scope = scopeRef.current;
+    if (scope.busy) return;
+    scope.busy = true;
+    const pagesToLoad = additionalPage ? scope.pages + 1 : isSilent ? scope.pages : 1;
     if (!isSilent) setRefreshing(true);
     setError(null);
     try {
       let items: OrderItem[] = [];
-      try {
-        const res = await fetchApi<{ items: OrderItem[] }>(
-          `/orders/accounts?branch_id=${encodeURIComponent(branchId)}&limit=100`
-        );
-        items = Array.isArray(res?.items) ? res.items : [];
-      } catch {
-        const fallback = await fetchApi<OrderItem[]>(
-          `/orders?branch_id=${encodeURIComponent(branchId)}`
-        );
-        items = Array.isArray(fallback) ? fallback : [];
-      }
+      let cursor: string | null = null;
+      let pagesRead = 0;
+      do {
+        const path: string = `/orders/accounts?branch_id=${encodeURIComponent(branchId)}&limit=100`
+          + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+        const res: { items: OrderItem[]; next_cursor?: string | null } = await fetchApi(path);
+        if (scopeRef.current !== scope) return;
+        items.push(...(Array.isArray(res?.items) ? res.items : []));
+        cursor = res.next_cursor || null;
+        pagesRead += 1;
+      } while (cursor && pagesRead < pagesToLoad);
+      if (scopeRef.current !== scope) return;
+      scope.pages = pagesRead;
+      const uniqueItems = new Map(items.map(item =>
+        [`${item.is_public_intent ? 'intent' : 'order'}:${item.id}`, item]));
+      items = [...uniqueItems.values()];
+      setNextCursor(cursor);
       
       setOrders(items);
       setLastUpdated(new Date());
@@ -159,12 +174,15 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       }
       window.dispatchEvent(new CustomEvent('restaurantos:active-orders-count', { detail: activeCount }));
     } catch (err) {
-      if (!isSilent) {
+      if (scopeRef.current === scope && (!isSilent || additionalPage)) {
         setError(err instanceof ApiError ? err.message : 'Error al consultar comandas.');
       }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      scope.busy = false;
+      if (scopeRef.current === scope) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [branchId, onActiveOrdersCountChange]);
 
@@ -789,6 +807,15 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           </div>
         )}
       </main>
+
+      {nextCursor && (
+        <button type="button" disabled={refreshing}
+          onClick={() => void loadOrders(false, true)}
+          style={{ margin: '12px 16px', padding: '12px 16px', borderRadius: 10,
+            border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
+          {refreshing ? 'Cargando...' : 'Cargar más pedidos'}
+        </button>
+      )}
 
       {/* Interactive Detail Modal */}
       <MobileOrderDetailModal

@@ -41,6 +41,8 @@
 - Propósito: verificar que `resume()` se espera, que sólo `running` activa la alarma y que suspensión/rechazo conserva el fallback visual.
 
 ### TDD-TC-258 Regresión del monitor de pedidos
+- Regresión adicional: `tests/frontend/test_mobile_order_history.mjs` ejecuta el handler
+  y clasificadores reales con reloj fijo, páginas sucesivas y respuesta tardía de otra sucursal.
 - Archivo: `tests/frontend/test_mobile_admin_orders_monitor.mjs`
 - Propósito: confirmar que listado, filtros, aceptación, cobro y entrega permanecen independientes del coordinador global de alertas.
 

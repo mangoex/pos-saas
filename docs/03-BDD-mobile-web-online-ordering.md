@@ -54,6 +54,15 @@ Scenario: Modo catálogo y bloqueo de pedidos cuando la caja está cerrada
   And la categoría inicial se presenta como "Cerrado por el momento" en vez de "Todos"
   And el botón de envío de pedido se encuentra deshabilitado mostrando "Abriremos pronto"
 
+@BDD-SC-988
+Scenario: Seguimiento vigente sin consultas terminales ni respuestas obsoletas
+  Given varios pedidos persistidos visibles en el seguimiento del comensal
+  When uno llega a DELIVERED, CLOSED, CANCELLED, REJECTED o EXPIRED
+  Then deja de consultarse y los demás pedidos activos siguen refrescándose
+  And EXPIRED se presenta como expirado y permite ocultar el seguimiento
+  And una petición lenta no se solapa con el siguiente intervalo
+  And una respuesta posterior al desmontaje o cambio de sucursal no modifica UI ni almacenamiento
+
 ## BDD-FEAT-810 Pedido asistido público como borrador del carrito
 
 @PRD-FR-739 @PRD-NFR-531 @mobile-web @voice @privacy
