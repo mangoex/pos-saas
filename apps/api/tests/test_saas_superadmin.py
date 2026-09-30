@@ -1097,3 +1097,95 @@ def test_new_restaurant_pos_endpoints_and_branch_scope_authorization() -> None:
         f"/api/v1/orders/pending-count?branch_id={branch_id}", headers=owner_headers
     )
     assert pending_resp.status_code == 200, pending_resp.text
+
+
+def test_create_tenant_with_8_char_password() -> None:
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+    resp = client.post(
+        "/api/v1/superadmin/tenants",
+        headers=headers,
+        json={
+            "business_name": "Hot Dogs El Profe",
+            "owner_name": "Miguel Gonzalez",
+            "email": "hotdogs@mimenu.onl",
+            "phone": "6672013019",
+            "business_type": "general",
+            "plan": "trial",
+            "menu_mode": "generate_by_type",
+            "password": "Password8",
+        },
+    )
+    assert resp.status_code == 201, f"Failed: {resp.text}"
+    data = resp.json()
+    assert data["tenant"]["name"] == "Hot Dogs El Profe"
+    assert data["owner_user"]["email"] == "hotdogs@mimenu.onl"
+
+
+def test_create_admin_returns_credentials_and_provisions_roles() -> None:
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+    resp = client.post(
+        "/api/v1/superadmin/administrators",
+        headers=headers,
+        json={
+            "email": "nuevo-admin@mimenu.onl",
+            "display_name": "Roberto Gómez",
+            "password": "Password123!",
+            "phone": "5512345678",
+            "tenant_id": None,
+        },
+    )
+    assert resp.status_code == 201, f"Failed: {resp.text}"
+    data = resp.json()
+    assert "credentials" in data, "Credentials block must be returned"
+    assert data["credentials"]["email"] == "nuevo-admin@mimenu.onl"
+    assert data["credentials"]["password"] == "Password123!"
+
+    # Verify user has assigned role and branch in DB
+    with client.app.state._test_session_factory() as session:
+        user_role = session.execute(
+            sa.select(models.user_roles).where(models.user_roles.c.user_id == data["id"])
+        ).first()
+        assert user_role is not None, "Admin user must have an assigned role"
+        assert user_role.branch_id is not None, "Admin user must have an assigned branch"
+
+
+def test_ai_menu_import_prices_without_dollar_symbol() -> None:
+    client = _client_with_db()
+    headers = _login_superadmin(client)
+    create_resp = client.post(
+        "/api/v1/superadmin/tenants",
+        headers=headers,
+        json={
+            "business_name": "Pizzería Nápoles",
+            "owner_name": "Mario Rossi",
+            "email": "mario@napoles.com",
+            "password": "Password123!",
+            "business_type": "pizzeria",
+            "plan": "pro_599",
+            "menu_mode": "blank",
+        },
+    )
+    assert create_resp.status_code == 201
+    tenant_id = create_resp.json()["tenant"]["id"]
+
+    menu_raw = """
+    PIZZAS TRADICIONALES
+    Pizza Pepperoni - 150
+    Pizza Hawaiana - 140 MXN
+    BEBIDAS
+    Refresco 355ml - 25
+    """
+    import_resp = client.post(
+        f"/api/v1/superadmin/tenants/{tenant_id}/ai-menu-import",
+        headers=headers,
+        json={"menu_text": menu_raw},
+    )
+    assert import_resp.status_code == 200, import_resp.text
+    imported = import_resp.json()["imported_products"]
+    assert len(imported) == 3
+    names = [p["name"] for p in imported]
+    assert "Pizza Pepperoni" in names
+    assert "Pizza Hawaiana" in names
+    assert "Refresco 355ml" in names

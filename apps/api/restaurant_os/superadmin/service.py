@@ -48,7 +48,7 @@ class CreateTenantAdminRequest(BaseModel):
     owner_name: str = Field(..., min_length=2, max_length=160)
     email: str = Field(..., min_length=5, max_length=180)
     phone: str | None = None
-    password: str = Field(..., min_length=12)
+    password: str = Field(..., min_length=8, max_length=128)
     business_type: str = Field(default="general")
     plan: str = Field(default="starter_349")  # trial, starter_349, pro_599, enterprise
     menu_mode: str = Field(default="generate_by_type")  # generate_by_type, blank, ai_import
@@ -547,12 +547,17 @@ def parse_and_import_menu_ai(
     categories_cache = {current_category_name: current_category_id}
     imported_products: list[dict[str, Any]] = []
 
-    # Regex patterns for price detection: e.g. "Pizza Margarita - $180 - descripcion" or "Tacos al Pastor $25"
-    price_pattern = re.compile(r"\$\s*(\d+(?:\.\d{1,2})?)")
+    # Regex patterns for price detection: e.g. "Pizza Margarita - $180 - descripcion" or "Pizza Pepperoni - 150 MXN"
+    price_with_dollar = re.compile(r"\$\s*(\d+(?:\.\d{1,2})?)")
+    price_fallback = re.compile(
+        r"[-–—:]\s*(\d+(?:\.\d{1,2})?)\s*(?:mxn|pesos)?(?:\s*[-–—]|\s*$)",
+        re.IGNORECASE,
+    )
 
     for line in lines:
+        match = price_with_dollar.search(line) or price_fallback.search(line)
         # Check if line is a category header (e.g. ALL CAPS or starts with # / Category)
-        if (line.isupper() and len(line) > 3 and not price_pattern.search(line)) or line.startswith("#"):
+        if not match and ((line.isupper() and len(line) > 3) or line.startswith("#")):
             cat_name = line.lstrip("#").strip().title()
             if cat_name not in categories_cache:
                 cat_id = str(uuid.uuid4())
@@ -570,10 +575,10 @@ def parse_and_import_menu_ai(
             current_category_id = categories_cache[cat_name]
             continue
 
-        match = price_pattern.search(line)
         if match:
+            raw_price = match.group(1)
             price_cents = int(
-                (Decimal(match.group(1)) * Decimal(100)).quantize(
+                (Decimal(raw_price) * Decimal(100)).quantize(
                     Decimal("1"), rounding=ROUND_HALF_UP
                 )
             )
@@ -1146,74 +1151,81 @@ def create_restaurant_administrator(
 
     tenant_name = None
     if not tenant_id:
-        target_org_id = _id()
         tenant_name = f"Restaurante de {display_name}"
-        slug = _allocate_storefront_slug(session, tenant_name)
-        session.execute(
-            models.organizations.insert().values(
-                id=target_org_id,
-                name=tenant_name,
-                slug=slug,
-                onboarding_step="business",
-                owner_name=display_name,
-                owner_email=email,
-                owner_phone=phone,
-                status="pending_setup",
-                plan="starter_349",
-                subscription_status="trialing",
-                trial_ends_at=now + timedelta(days=14),
-                monthly_fee_cents=34900,
-                created_at=now,
-                updated_at=now,
-            )
+        signup_res = signup_tenant(
+            session,
+            {
+                "business_name": tenant_name,
+                "owner_name": display_name,
+                "email": email,
+                "password": password,
+                "phone": phone,
+                "business_type": "general",
+                "plan": "starter_349",
+            },
         )
+        target_org_id = signup_res["organization"]["id"]
+        user_id = signup_res["user"]["id"]
+        slug = signup_res["organization"]["slug"]
     else:
         target_org_id = tenant_id
         org = session.execute(
             sa.select(models.organizations).where(models.organizations.c.id == tenant_id)
         ).mappings().first()
-        if org:
-            tenant_name = str(org["name"])
+        if not org:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "tenant_not_found", "message": "Restaurante no encontrado"},
+            )
+        tenant_name = str(org["name"])
+        slug = str(org["slug"]) if org["slug"] else None
 
-    user_vals = {
-        "id": user_id,
-        "email": email,
-        "display_name": display_name,
-        "organization_id": target_org_id,
-        "status": "active",
-        "created_at": now,
-        "updated_at": now,
-    }
-    session.execute(models.users.insert().values(**user_vals))
+        user_vals = {
+            "id": user_id,
+            "email": email,
+            "display_name": display_name,
+            "organization_id": target_org_id,
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+        }
+        session.execute(models.users.insert().values(**user_vals))
 
-    salt = generate_password_salt()
-    pw_hash = hash_password(password, salt)
-    session.execute(
-        models.user_credentials.insert().values(
-            user_id=user_id,
-            password_hash=pw_hash,
-            password_salt=salt,
-            password_algorithm=PASSWORD_ALGORITHM,
-            updated_at=now,
+        salt = generate_password_salt()
+        pw_hash = hash_password(password, salt)
+        session.execute(
+            models.user_credentials.insert().values(
+                user_id=user_id,
+                password_hash=pw_hash,
+                password_salt=salt,
+                password_algorithm=PASSWORD_ALGORITHM,
+                updated_at=now,
+            )
         )
-    )
 
-    if tenant_id:
         role = session.execute(
             sa.select(models.roles).where(
                 models.roles.c.organization_id == tenant_id,
                 models.roles.c.name == "Administrador de Restaurante",
             )
         ).mappings().first()
+
+        branch_id = session.scalar(
+            sa.select(models.branches.c.id)
+            .where(models.branches.c.organization_id == tenant_id)
+            .order_by(models.branches.c.created_at)
+        )
+
         if role:
             session.execute(
                 models.user_roles.insert().values(
                     user_id=user_id,
                     role_id=role["id"],
+                    branch_id=branch_id,
                 )
             )
 
-    session.commit()
+        session.commit()
 
     return {
         "id": user_id,
@@ -1222,12 +1234,16 @@ def create_restaurant_administrator(
         "status": "active",
         "tenant_id": target_org_id,
         "tenant_name": tenant_name,
-        "slug": slug if not tenant_id else (org["slug"] if org else None),
-        "menu_url": (
-            f"/menu/{slug}" if not tenant_id else f"/menu/{org['slug']}" if org and org["slug"] else None
-        ),
+        "slug": slug,
+        "menu_url": f"/menu/{slug}" if slug else None,
         "phone": phone,
         "created_at": now.isoformat(),
+        "credentials": {
+            "restaurant_name": tenant_name,
+            "display_name": display_name,
+            "email": email,
+            "password": password,
+        },
     }
 
 
@@ -1536,6 +1552,35 @@ def setup_my_restaurant(
             .order_by(models.branches.c.created_at, models.branches.c.id)
         ).mappings().first()
         if existing_branch:
+            if org.get("onboarding_step") != "complete" or org.get("status") == "pending_setup":
+                new_slug = _allocate_storefront_slug(session, business_name)
+                session.execute(
+                    models.organizations.update()
+                    .where(models.organizations.c.id == org_id)
+                    .values(
+                        name=business_name,
+                        slug=new_slug,
+                        business_type=business_type,
+                        status="active",
+                        onboarding_step="complete",
+                        updated_at=now,
+                    )
+                )
+                session.commit()
+                return {
+                    "tenant": {
+                        "id": org_id,
+                        "name": business_name,
+                        "business_type": business_type,
+                        "plan": org["plan"],
+                        "subscription_status": org["subscription_status"],
+                        "slug": new_slug,
+                        "menu_url": f"/menu/{new_slug}",
+                    },
+                    "branch": {"id": existing_branch["id"], "name": existing_branch["name"]},
+                    "user_id": user_id,
+                }
+
             slug, _ = _ensure_storefront_identity(
                 session, str(org_id), str(existing_branch["id"]), str(org["name"]), now
             )

@@ -2996,7 +2996,16 @@ def post_superadmin_tenants_endpoint(
 ) -> dict[str, Any]:
     actor_id = _required_actor_from_request(actor_user_id, authorization)
     require_superadmin(session, actor_id)
-    return create_tenant_by_admin(session, payload)
+    try:
+        return create_tenant_by_admin(session, payload)
+    except ValidationError as exc:
+        first_err = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_err.get("loc", []))
+        msg = first_err.get("msg", "Error de validación")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_error", "message": f"{field}: {msg}" if field else msg},
+        ) from exc
 
 
 @router.patch("/superadmin/tenants/{tenant_id}/status")

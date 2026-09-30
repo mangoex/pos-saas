@@ -132,6 +132,12 @@ export const SaaSConsoleView: React.FC = () => {
   const [newPlan, setNewPlan] = useState('pro_599');
   const [suspendReason, setSuspendReason] = useState('Falta de pago mensual');
 
+  // Tenant AI menu import states
+  const [selectedTenantForMenu, setSelectedTenantForMenu] = useState<Tenant | null>(null);
+  const [menuImportText, setMenuImportText] = useState('');
+  const [menuImportSuccess, setMenuImportSuccess] = useState<string | null>(null);
+  const [menuImportError, setMenuImportError] = useState<string | null>(null);
+
   // Administrator states & mutations
   const [adminSearchTerm, setAdminSearchTerm] = useState('');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -194,14 +200,15 @@ export const SaaSConsoleView: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
       queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
       setIsAdminModalOpen(false);
+      setActiveTab('administrators');
       if (data?.credentials) {
         setCreatedCredentials({
-          restaurant_name: data.credentials.restaurant_name || 'Nuevo Restaurante (Pendiente de configuración)',
+          restaurant_name: data.credentials.restaurant_name || 'Nuevo Restaurante',
           owner_name: data.credentials.display_name || adminFormName,
           email: data.credentials.email || adminFormEmail,
           password: data.credentials.password || adminFormPassword,
           branch_name: 'Sucursal Matriz',
-          tenant_id: data.user?.organization_id,
+          tenant_id: data.tenant_id || data.user?.organization_id,
         });
       }
       setAdminFormEmail('');
@@ -356,6 +363,28 @@ export const SaaSConsoleView: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
       queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
       setSelectedTenantForPlan(null);
+    },
+  });
+
+  const aiMenuImportMutation = useMutation({
+    mutationFn: ({ tenantId, text }: { tenantId: string; text: string }) =>
+      fetchApi<{ count: number; imported_products: any[] }>(`/superadmin/tenants/${tenantId}/ai-menu-import`, {
+        method: 'POST',
+        body: JSON.stringify({ menu_text: text }),
+      }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['saas-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['saas-metrics'] });
+      setMenuImportSuccess(`✓ Se importaron ${res.count || 0} platillos exitosamente.`);
+      setTimeout(() => {
+        setSelectedTenantForMenu(null);
+        setMenuImportText('');
+        setMenuImportSuccess(null);
+        setMenuImportError(null);
+      }, 1500);
+    },
+    onError: (err: any) => {
+      setMenuImportError(err.message || 'Error al importar menú');
     },
   });
 
@@ -1052,6 +1081,33 @@ export const SaaSConsoleView: React.FC = () => {
 
                             <button
                               type="button"
+                              title="Importar o actualizar menú con IA"
+                              onClick={() => {
+                                setSelectedTenantForMenu(t);
+                                setMenuImportText('');
+                                setMenuImportError(null);
+                                setMenuImportSuccess(null);
+                              }}
+                              style={{
+                                background: '#7c3aed',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <Sparkles size={13} />
+                              <span>Menú</span>
+                            </button>
+
+                            <button
+                              type="button"
                               title="Editar datos del restaurante y plan"
                               onClick={() => {
                                 setSelectedTenantForEdit(t);
@@ -1608,7 +1664,7 @@ export const SaaSConsoleView: React.FC = () => {
                       onClick={() => {
                         const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
                         let pw = '';
-                        for (let i = 0; i < 10; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+                        for (let i = 0; i < 12; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
                         setFormPassword(pw);
                         setShowFormPassword(true);
                       }}
@@ -2914,6 +2970,180 @@ export const SaaSConsoleView: React.FC = () => {
                       {updateAdminMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
                     </button>
                   </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para importar/actualizar menú con IA a restaurante existente */}
+      {selectedTenantForMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '600px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+            }}
+          >
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%)',
+                color: '#fff',
+                padding: '20px 24px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Sparkles size={20} color="#c4b5fd" />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
+                    Cargar Menú con IA
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#ddd6fe' }}>
+                    {selectedTenantForMenu.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTenantForMenu(null)}
+                style={{ background: 'transparent', border: 'none', color: '#ddd6fe', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              {menuImportSuccess && (
+                <div
+                  style={{
+                    background: '#ecfdf5',
+                    color: '#065f46',
+                    padding: '12px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>{menuImportSuccess}</span>
+                </div>
+              )}
+
+              {menuImportError && (
+                <div
+                  style={{
+                    background: '#fee2e2',
+                    color: '#991b1b',
+                    padding: '12px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  <span>{menuImportError}</span>
+                </div>
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!menuImportText.trim()) return;
+                  setMenuImportError(null);
+                  aiMenuImportMutation.mutate({
+                    tenantId: selectedTenantForMenu.id,
+                    text: menuImportText,
+                  });
+                }}
+              >
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Pega el texto de la carta o menú:
+                  </label>
+                  <textarea
+                    rows={8}
+                    required
+                    value={menuImportText}
+                    onChange={(e) => setMenuImportText(e.target.value)}
+                    placeholder={'PIZZAS\nPizza Margarita - $180\nPizza Pepperoni - 150 MXN\n\nBEBIDAS\nRefresco 355ml - 25\nCerveza Artesanal - $75'}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      fontFamily: 'monospace',
+                      boxSizing: 'border-box',
+                      resize: 'vertical',
+                    }}
+                  />
+                  <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#64748b' }}>
+                    💡 Los encabezados de sección en mayúsculas se convertirán en categorías y los precios detectados se vincularán al platillo.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTenantForMenu(null)}
+                    style={{
+                      padding: '10px 18px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={aiMenuImportMutation.isPending || !menuImportText.trim()}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#7c3aed',
+                      color: '#fff',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: aiMenuImportMutation.isPending ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <Sparkles size={15} />
+                    <span>{aiMenuImportMutation.isPending ? 'Importando con IA...' : 'Importar Menú'}</span>
+                  </button>
                 </div>
               </form>
             </div>

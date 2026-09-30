@@ -40,7 +40,12 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
     try {
       errorData = await response.json();
     } catch {
-      throw new ApiError(response.status, "unknown_error", "An unknown error occurred");
+      const rawText = await response.text().catch(() => "");
+      const cleanSnippet = rawText.replace(/<[^>]*>?/gm, '').trim().slice(0, 150);
+      const fallbackMsg = cleanSnippet
+        ? `Error del servidor (${response.status}): ${cleanSnippet}`
+        : `Error en la solicitud (${response.status})`;
+      throw new ApiError(response.status, `http_${response.status}`, fallbackMsg);
     }
 
     const detail = errorData?.detail;
