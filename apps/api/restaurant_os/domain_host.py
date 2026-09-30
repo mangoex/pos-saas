@@ -172,6 +172,30 @@ async def bind_domain_host(
     if path in {"/api/v1/public/branches", "/api/v1/public/mobile-theme"}:
         resolve_storefront(session, request.query_params.get("identifier", ""))
         return
+    if path.startswith("/api/v1/public/order-intents/"):
+        parts = path.split("/")
+        if len(parts) >= 6:
+            public_ref = parts[5]
+            intent_org = session.scalar(
+                sa.select(models.public_order_intents.c.organization_id).where(
+                    models.public_order_intents.c.public_reference == public_ref
+                )
+            )
+            if intent_org:
+                if intent_org != session.info["host_organization_id"]:
+                    raise error(404, "public_order_not_found")
+                return
+            order_org = session.scalar(
+                sa.select(models.orders.c.organization_id).where(
+                    sa.or_(
+                        models.orders.c.id == public_ref,
+                        models.orders.c.folio == public_ref,
+                    )
+                )
+            )
+            if order_org and order_org != session.info["host_organization_id"]:
+                raise error(404, "public_order_not_found")
+        return
     if path in {"/api/v1/public/feedback", "/api/v1/public/order-upsell-recommendations"}:
         body = await request.body()
         if len(body) > 65536:

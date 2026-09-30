@@ -28337,7 +28337,7 @@ def mark_order_ready(
     session.execute(
         models.orders.update()
         .where(models.orders.c.id == order_id)
-        .values(status="READY", updated_at=now)
+        .values(status="READY")
     )
 
     # Completar tareas de producción asociadas si existieran
