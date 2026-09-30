@@ -334,9 +334,11 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
           </button>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', fontSize: '1.35rem', fontWeight: 900 }}>
-               <span style={{ color: '#ff5722' }}>mi</span><span style={{ color: '#1e293b' }}>menu</span><span style={{ color: '#1e293b' }}>.onl</span>
-            </div>
+            <img
+              src="https://res.cloudinary.com/dfvnyhur4/image/upload/v1790798619/WhatsApp_Image_2026-09-29_at_8.39.02_PM_pskszf.jpg"
+              alt="mi menú.onl"
+              style={{ display: 'block', width: 'clamp(104px, 36vw, 168px)', height: 'auto' }}
+            />
             {onOpenHelpVideos && (
               <button
                 type="button"
