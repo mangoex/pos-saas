@@ -115,19 +115,15 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
         items = Array.isArray(fallback) ? fallback : [];
       }
 
-      const today = new Date();
+      const now = Date.now();
       const activeCount = items.filter((item) => {
         if (!item.created_at) return false;
         const d = new Date(item.created_at);
         if (isNaN(d.getTime())) return false;
-        const isSameDay =
-          d.getDate() === today.getDate() &&
-          d.getMonth() === today.getMonth() &&
-          d.getFullYear() === today.getFullYear();
-        if (!isSameDay) return false;
+        if (now - d.getTime() > 24 * 60 * 60 * 1000) return false;
 
         const status = (item.status || '').toUpperCase();
-        return !['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
+        return !['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(status);
       }).length;
 
       setPendingOrdersCount(activeCount);

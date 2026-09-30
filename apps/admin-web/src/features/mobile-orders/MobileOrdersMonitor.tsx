@@ -74,10 +74,44 @@ export const isToday = (dateStr?: string): boolean => {
   );
 };
 
+export const isOrderStale = (dateStr?: string): boolean => {
+  if (!dateStr) return false;
+  const parsed = parseIsoDate(dateStr);
+  if (!parsed) return false;
+  const ageMs = Date.now() - parsed.getTime();
+  return ageMs > 24 * 60 * 60 * 1000;
+};
+
 const getElapsedMinutes = (dateStr?: string) => {
   const parsed = parseIsoDate(dateStr);
   if (!parsed) return 0;
   return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 60_000));
+};
+
+export const isOrderNew = (order: OrderItem): boolean => {
+  const status = (order.status || '').toUpperCase();
+  if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(status)) return false;
+  if (isOrderStale(order.created_at)) return false;
+  return ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(status) || !!(order.is_public_intent && status !== 'ACCEPTED');
+};
+
+export const isOrderPrep = (order: OrderItem): boolean => {
+  const status = (order.status || '').toUpperCase();
+  if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(status)) return false;
+  if (isOrderStale(order.created_at)) return false;
+  return ['ACCEPTED', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'READY', 'IN_DELIVERY'].includes(status);
+};
+
+export const isOrderReady = (order: OrderItem): boolean => {
+  const status = (order.status || '').toUpperCase();
+  return ['READY', 'IN_DELIVERY'].includes(status);
+};
+
+export const isOrderHistory = (order: OrderItem): boolean => {
+  const status = (order.status || '').toUpperCase();
+  if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(status)) return true;
+  if (isOrderStale(order.created_at)) return true;
+  return false;
 };
 
 export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
@@ -118,10 +152,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       setOrders(items);
       setLastUpdated(new Date());
 
-      const activeCount = items.filter((order) => {
-        const status = (order.status || '').toUpperCase();
-        return !['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
-      }).length;
+      const activeCount = items.filter((order) => isOrderNew(order) || isOrderPrep(order)).length;
 
       if (onActiveOrdersCountChange) {
         onActiveOrdersCountChange(activeCount);
@@ -216,28 +247,6 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     } finally {
       setActionLoadingId(null);
     }
-  };
-
-  const isOrderNew = (order: OrderItem): boolean => {
-    const status = (order.status || '').toUpperCase();
-    if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
-    return ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(status) || !!(order.is_public_intent && status !== 'ACCEPTED');
-  };
-
-  const isOrderPrep = (order: OrderItem) => {
-    const status = (order.status || '').toUpperCase();
-    if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
-    return ['ACCEPTED', 'IN_PRODUCTION', 'IN_PREPARATION', 'SENT_TO_PRODUCTION', 'READY', 'IN_DELIVERY'].includes(status);
-  };
-
-  const isOrderReady = (order: OrderItem) => {
-    const status = (order.status || '').toUpperCase();
-    return ['READY', 'IN_DELIVERY'].includes(status);
-  };
-  
-  const isOrderHistory = (order: OrderItem) => {
-    const status = (order.status || '').toUpperCase();
-    return ['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status);
   };
 
   const filteredOrders = orders
@@ -557,6 +566,10 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                   statusBg = '#fef2f2';
                   statusColor = '#dc2626';
                   statusLabel = status === 'REJECTED' ? 'Rechazado' : 'Cancelado';
+                } else if (status === 'EXPIRED' || isOrderStale(order.created_at)) {
+                  statusBg = '#f1f5f9';
+                  statusColor = '#64748b';
+                  statusLabel = status === 'EXPIRED' ? 'Expirado' : 'No atendido';
                 } else {
                   statusBg = '#f1f5f9';
                   statusColor = '#475569';

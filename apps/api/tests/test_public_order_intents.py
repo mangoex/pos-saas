@@ -952,7 +952,7 @@ def test_public_order_intent_operational_lifecycle_and_ready_endpoint() -> None:
         f"/api/v1/orders/accounts?branch_id={BRANCH_ID}", headers=_admin_headers()
     )
     intent_item = next(
-        item for item in detail_before.json()["items"] if item["folio"] == pub_ref
+        item for item in detail_before.json()["items"] if item.get("public_reference") == pub_ref or item["folio"] == pub_ref or item["id"] == created.json()["id"]
     )
     intent_id = intent_item["id"]
 

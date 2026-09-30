@@ -5164,6 +5164,21 @@ def list_order_accounts(
         and not raw.get("cash_shift_id")
         and not raw.get("register_code")
     ):
+        now_dt = _now()
+        session.execute(
+            models.public_order_intents.update()
+            .where(
+                models.public_order_intents.c.organization_id == organization_id,
+                models.public_order_intents.c.branch_id == branch_id,
+                models.public_order_intents.c.status == "PENDING_REVIEW",
+                models.public_order_intents.c.created_at < now_dt - timedelta(hours=24),
+            )
+            .values(
+                status="EXPIRED",
+                decided_at=now_dt,
+                decision_reason="Intent expired operationally",
+            )
+        )
         intent_query = (
             sa.select(models.public_order_intents)
             .where(
@@ -5171,8 +5186,16 @@ def list_order_accounts(
                 models.public_order_intents.c.branch_id == branch_id,
                 models.public_order_intents.c.status.in_(["PENDING_REVIEW", "REJECTED"]),
             )
-            .order_by(models.public_order_intents.c.created_at.desc())
         )
+        if start:
+            intent_query = intent_query.where(models.public_order_intents.c.created_at >= start)
+        if end:
+            intent_query = intent_query.where(models.public_order_intents.c.created_at < end)
+        if not start:
+            intent_query = intent_query.where(
+                models.public_order_intents.c.created_at >= now_dt - timedelta(hours=24)
+            )
+        intent_query = intent_query.order_by(models.public_order_intents.c.created_at.desc())
         intent_rows = session.execute(intent_query).mappings().all()
         for intent in intent_rows:
             cust = dict(intent.get("customer_snapshot") or {})
@@ -5269,6 +5292,22 @@ def count_pending_orders(
             "pending_order_count_branch_required",
             "An active branch is required to count pending orders",
         )
+    now_dt = _now()
+    session.execute(
+        models.public_order_intents.update()
+        .where(
+            models.public_order_intents.c.organization_id == organization_id,
+            models.public_order_intents.c.branch_id == authorized_branch_id,
+            models.public_order_intents.c.status == "PENDING_REVIEW",
+            models.public_order_intents.c.created_at < now_dt - timedelta(hours=24),
+        )
+        .values(
+            status="EXPIRED",
+            decided_at=now_dt,
+            decision_reason="Intent expired operationally",
+        )
+    )
+
     order_count = session.execute(
         sa.select(sa.func.count())
         .select_from(models.orders)
@@ -5286,6 +5325,7 @@ def count_pending_orders(
             models.public_order_intents.c.organization_id == organization_id,
             models.public_order_intents.c.branch_id == authorized_branch_id,
             models.public_order_intents.c.status == "PENDING_REVIEW",
+            models.public_order_intents.c.created_at >= now_dt - timedelta(hours=24),
         )
     ).scalar_one()
 
