@@ -79,6 +79,7 @@ from restaurant_os.operations import (
     UserCashCutService,
     accept_pending_order,
     reject_pending_order,
+    mark_order_ready,
     accept_public_order_intent,
     acknowledge_print_attempt,
     add_customer_address,
@@ -3858,6 +3859,17 @@ def reject_order_endpoint(
         return reject_pending_order(session, order_id, reason, actor_id)
 
     return _business_response(operation)
+
+
+@router.post("/orders/{order_id}/ready")
+def mark_order_ready_endpoint(
+    order_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _required_actor_from_request(actor_user_id, authorization)
+    return _business_response(lambda: mark_order_ready(session, order_id, actor_id))
 
 
 @router.post("/orders/{order_id}/amendments")

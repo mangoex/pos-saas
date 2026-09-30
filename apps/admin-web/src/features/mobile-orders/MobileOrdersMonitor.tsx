@@ -197,6 +197,24 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
     }
   };
 
+  const handleMarkReady = async (e: React.MouseEvent, orderId: string) => {
+    e.stopPropagation();
+    if (actionLoadingId) return;
+    setActionLoadingId(orderId);
+    setError(null);
+    try {
+      await fetchApi(`/orders/${encodeURIComponent(orderId)}/ready`, {
+        method: 'POST',
+      });
+      await loadOrders(true);
+      window.dispatchEvent(new Event('restaurantos:orders-changed'));
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'Error al marcar comanda como lista.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const isOrderNew = (order: OrderItem): boolean => {
     const status = (order.status || '').toUpperCase();
     if (['DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(status)) return false;
@@ -669,6 +687,64 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                         }}
                       >
                         {actionLoadingId === order.id ? 'Aceptando...' : 'Aceptar'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Actions for In-Preparation Orders */}
+                  {isPrep && !isReady && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        disabled={actionLoadingId === order.id}
+                        onClick={(e) => void handleMarkReady(e, order.id)}
+                        style={{
+                          flex: 1,
+                          padding: '10px 0',
+                          borderRadius: 10,
+                          border: 'none',
+                          color: '#ffffff',
+                          backgroundColor: '#0284c7',
+                          fontWeight: 700,
+                          fontSize: '0.95rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          opacity: actionLoadingId === order.id ? 0.6 : 1,
+                        }}
+                      >
+                        <ChefHat size={18} />
+                        {actionLoadingId === order.id ? 'Marcando listo...' : 'Marcar Listo'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Actions for Ready Orders */}
+                  {isReady && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectOrder(order.id)}
+                        style={{
+                          flex: 1,
+                          padding: '10px 0',
+                          borderRadius: 10,
+                          border: 'none',
+                          color: '#ffffff',
+                          backgroundColor: '#16a34a',
+                          fontWeight: 700,
+                          fontSize: '0.95rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <CheckCircle2 size={18} />
+                        <span>Entregar / Cobrar</span>
                       </button>
                     </div>
                   )}

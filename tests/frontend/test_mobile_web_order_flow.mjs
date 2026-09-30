@@ -38,6 +38,10 @@ let getSavedCustomerProfile;
 let saveCustomerProfile;
 let MIMENU_CUSTOMER_PROFILE_KEY;
 let LEGACY_CUSTOMER_PROFILE_KEY;
+let saveTrackedOrder;
+let getTrackedOrder;
+let clearTrackedOrder;
+let fetchPublicOrderTracking;
 
 try {
   const source = join(root, 'apps/mobile-web/src/api.ts');
@@ -70,6 +74,10 @@ try {
   saveCustomerProfile = mobileApi.saveCustomerProfile;
   MIMENU_CUSTOMER_PROFILE_KEY = mobileApi.MIMENU_CUSTOMER_PROFILE_KEY;
   LEGACY_CUSTOMER_PROFILE_KEY = mobileApi.LEGACY_CUSTOMER_PROFILE_KEY;
+  saveTrackedOrder = mobileApi.saveTrackedOrder;
+  getTrackedOrder = mobileApi.getTrackedOrder;
+  clearTrackedOrder = mobileApi.clearTrackedOrder;
+  fetchPublicOrderTracking = mobileApi.fetchPublicOrderTracking;
 } catch (err) {
   rmSync(temporaryDirectory, { recursive: true, force: true });
   throw err;
@@ -714,4 +722,66 @@ test('OrderSuccessModal displays silent onboarding persistent profile confirmati
   assert.match(source, /order-success-profile-card/);
   assert.match(source, /Datos recordados en mimenu/);
   assert.match(source, /Próximamente: Vincula con Google para ganar puntos y recompensas/);
+});
+
+test('Active order tracker storage persists locally and respects branch boundaries', () => {
+  const store = new Map();
+  globalThis.window = {
+    localStorage: {
+      getItem: (key) => store.get(key) || null,
+      setItem: (key, val) => store.set(key, String(val)),
+      removeItem: (key) => store.delete(key),
+    },
+  };
+  globalThis.localStorage = globalThis.window.localStorage;
+
+  try {
+    const order1 = {
+      public_reference: 'ORD-INTENT-789',
+      folio: 'F-102',
+      status: 'ACCEPTED',
+      operational_status: 'IN_PRODUCTION',
+      total_cents: 14500,
+      branch_id: 'branch-centro',
+      branch_name: 'Sucursal Centro',
+      created_at: new Date().toISOString(),
+    };
+
+    saveTrackedOrder(order1);
+
+    const retrieved = getTrackedOrder();
+    assert.ok(retrieved);
+    assert.equal(retrieved.public_reference, 'ORD-INTENT-789');
+    assert.equal(retrieved.operational_status, 'IN_PRODUCTION');
+
+    const scopedSame = getTrackedOrder('branch-centro');
+    assert.ok(scopedSame);
+    assert.equal(scopedSame.public_reference, 'ORD-INTENT-789');
+
+    const scopedOther = getTrackedOrder('branch-norte');
+    assert.equal(scopedOther, null);
+
+    clearTrackedOrder('ORD-INTENT-789');
+    assert.equal(getTrackedOrder(), null);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.localStorage;
+  }
+});
+
+test('ActiveOrderTracker component and App.tsx render stepper and live lifecycle stages', () => {
+  const trackerSource = readFileSync(join(root, 'apps/mobile-web/src/components/ActiveOrderTracker.tsx'), 'utf8');
+  const appSource = readFileSync(join(root, 'apps/mobile-web/src/App.tsx'), 'utf8');
+
+  // Verify stepper labels and states in ActiveOrderTracker
+  assert.match(trackerSource, /Aceptado/);
+  assert.match(trackerSource, /Preparando/);
+  assert.match(trackerSource, /Listo/);
+  assert.match(trackerSource, /fetchPublicOrderTracking/);
+  assert.match(trackerSource, /Seguimiento de comanda activa/);
+
+  // Verify ActiveOrderTracker integration in App.tsx
+  assert.match(appSource, /ActiveOrderTracker/);
+  assert.match(appSource, /activeTrackedOrder/);
+  assert.match(appSource, /saveTrackedOrder/);
 });

@@ -281,6 +281,24 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
   const handleDeliverAndPay = () => executeFinancialCommand('pay_and_deliver');
   const handleConfirmPaymentOnly = () => executeFinancialCommand('pay');
 
+  const handleMarkOrderReadyInModal = async () => {
+    if (!detail?.id || actionLoading) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const updated = await fetchApi<OrderDetail>(`/orders/${encodeURIComponent(detail.id)}/ready`, {
+        method: 'POST',
+      });
+      setDetail(updated);
+      setNotice('Comanda marcada como LISTA.');
+      if (onOrderUpdated) onOrderUpdated();
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'Error al marcar comanda como lista.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const customerName =
     detail?.customer_snapshot?.name ||
     detail?.owner_name ||
@@ -365,6 +383,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
     ((detail?.is_public_intent && detail?.status?.toUpperCase() !== 'ACCEPTED') ||
     ['PENDING', 'PENDING_REVIEW', 'DRAFT'].includes(detail?.status?.toUpperCase() || ''))
   );
+
+  const isOrderReadyStatus = detail?.status?.toUpperCase() === 'READY';
 
   const isReadyOrInPrep = Boolean(
     !isUnaccepted &&
@@ -963,32 +983,59 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
           )}
 
           {isReadyOrInPrep && (
-            <button
-              onClick={handleDeliverAndPay}
-              disabled={actionLoading || hasPendingRecovery || loading}
-              style={{
-                width: '100%',
-                backgroundColor: detail?.payment_status === 'CONFIRMED' ? '#0f172a' : '#059669',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 10,
-                padding: '12px',
-                fontWeight: 700,
-                fontSize: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                cursor: 'pointer',
-              }}
-            >
-              <CheckCircle size={18} />
-              {actionLoading
-                ? 'Procesando entrega y cobro...'
-                : detail?.payment_status === 'CONFIRMED'
-                  ? 'Listo para Entregar'
-                  : `Entregar y Confirmar Pago ($${orderTotal} MXN)`}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+              {!isOrderReadyStatus && (
+                <button
+                  type="button"
+                  onClick={handleMarkOrderReadyInModal}
+                  disabled={actionLoading || loading}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#0284c7',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.95rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ChefHat size={18} />
+                  {actionLoading ? 'Actualizando comanda...' : 'Marcar Pedido como Listo'}
+                </button>
+              )}
+              <button
+                onClick={handleDeliverAndPay}
+                disabled={actionLoading || hasPendingRecovery || loading}
+                style={{
+                  width: '100%',
+                  backgroundColor: detail?.payment_status === 'CONFIRMED' ? '#0f172a' : '#059669',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '12px',
+                  fontWeight: 700,
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                <CheckCircle size={18} />
+                {actionLoading
+                  ? 'Procesando entrega y cobro...'
+                  : detail?.payment_status === 'CONFIRMED'
+                    ? 'Listo para Entregar'
+                    : `Entregar y Confirmar Pago ($${orderTotal} MXN)`}
+              </button>
+            </div>
           )}
 
           {isCompleted && (

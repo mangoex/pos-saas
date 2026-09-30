@@ -1,4 +1,4 @@
-import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile, TrendingDish, CommunityPhoto } from './types';
+import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile, TrendingDish, CommunityPhoto, TrackedActiveOrder } from './types';
 import { getProductImage } from './imageMap';
 import { formatModifiersSummary } from './utils/cartPersonalization';
 import { parsePickupOptions } from './utils/pickupSchedule';
@@ -781,5 +781,70 @@ export function saveCustomerProfile(
     localStorage.setItem(LEGACY_CUSTOMER_PROFILE_KEY, JSON.stringify(cleanProfile));
   } catch {
     // Storage might be unavailable/full in restricted browser modes
+  }
+}
+
+const ACTIVE_ORDER_TRACKER_KEY = 'mimenu_active_order_tracker';
+
+export async function fetchPublicOrderTracking(publicReference: string): Promise<TrackedActiveOrder | null> {
+  if (!publicReference) return null;
+  try {
+    const res = await fetch(`${API_BASE_URL}/public/order-intents/${encodeURIComponent(publicReference)}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      public_reference: data.public_reference,
+      status: data.status,
+      operational_status: data.operational_status || data.status,
+      folio: data.folio,
+      total_cents: data.total_cents,
+      created_at: data.created_at || new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveTrackedOrder(order: TrackedActiveOrder): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    localStorage.setItem(ACTIVE_ORDER_TRACKER_KEY, JSON.stringify(order));
+  } catch {
+    // Local storage quota or security restriction
+  }
+}
+
+export function getTrackedOrder(branchId?: string): TrackedActiveOrder | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    const raw = localStorage.getItem(ACTIVE_ORDER_TRACKER_KEY);
+    if (!raw) return null;
+    const parsed: TrackedActiveOrder = JSON.parse(raw);
+    if (!parsed || !parsed.public_reference) return null;
+    if (branchId && parsed.branch_id && parsed.branch_id !== branchId) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearTrackedOrder(publicReference?: string): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    if (!publicReference) {
+      localStorage.removeItem(ACTIVE_ORDER_TRACKER_KEY);
+      return;
+    }
+    const current = getTrackedOrder();
+    if (current && current.public_reference === publicReference) {
+      localStorage.removeItem(ACTIVE_ORDER_TRACKER_KEY);
+    }
+  } catch {
+    // Storage might be unavailable
   }
 }

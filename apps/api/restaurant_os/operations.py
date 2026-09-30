@@ -27540,7 +27540,21 @@ def get_public_order_intent(session: Session, public_reference: str) -> dict[str
     )
     if not intent:
         raise NotFoundError("public_order_not_found", "Public order intent was not found")
-    return _public_intent_response(dict(intent))
+
+    res = _public_intent_response(dict(intent))
+    operational_order = (
+        session.execute(
+            sa.select(models.orders).where(
+                models.orders.c.public_order_intent_id == intent["id"]
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if operational_order:
+        res["operational_status"] = operational_order["status"]
+        res["folio"] = operational_order["folio"]
+    return res
 
 
 def _revalidate_public_intent_operationally(session: Session, intent: dict[str, Any]) -> None:
@@ -28258,6 +28272,85 @@ def reject_pending_order(
     except Exception as notify_exc:
         logger.warning(
             "WhatsApp order status notification failed for reject %s: %s",
+            order_id,
+            notify_exc,
+        )
+    return get_order_detail(session, order_id, actor_id)
+
+
+def mark_order_ready(
+    session: Session,
+    order_id: str,
+    actor_user_id: str | None = None,
+) -> dict[str, Any]:
+    actor_id = _actor_user_id(actor_user_id)
+    order = (
+        session.execute(sa.select(models.orders).where(models.orders.c.id == order_id))
+        .mappings()
+        .first()
+    )
+    if not order:
+        raise NotFoundError("order_not_found", "Order was not found")
+    require_permission(session, actor_id, "orders.create", order["branch_id"])
+
+    current_status = str(order["status"]).upper()
+    if current_status == "READY":
+        return get_order_detail(session, order_id, actor_id)
+
+    if current_status not in {"ACCEPTED", "SENT_TO_PRODUCTION", "IN_PRODUCTION"}:
+        raise BusinessError(
+            "order_state_invalid",
+            f"No se puede marcar como lista una comanda en estado {current_status}",
+        )
+
+    now = _now()
+    session.execute(
+        models.orders.update()
+        .where(models.orders.c.id == order_id)
+        .values(status="READY", updated_at=now)
+    )
+
+    # Completar tareas de producción asociadas si existieran
+    session.execute(
+        models.production_tasks.update()
+        .where(
+            models.production_tasks.c.order_id == order_id,
+            models.production_tasks.c.status != "COMPLETED",
+        )
+        .values(status="COMPLETED", completed_at=now)
+    )
+
+    session.execute(
+        models.order_events.insert().values(
+            id=_id(),
+            order_id=order_id,
+            event_type="READY",
+            payload={"source": "mobile_admin_ready"},
+            created_at=now,
+        )
+    )
+    _audit(
+        session,
+        action="order.marked_ready",
+        entity_type="order",
+        entity_id=order_id,
+        payload={
+            "order_id": order_id,
+            "previous_status": current_status,
+            "new_status": "READY",
+        },
+        branch_id=order["branch_id"],
+        organization_id=order["organization_id"],
+        actor_user_id=actor_id,
+    )
+    session.commit()
+    try:
+        from restaurant_os.integrations.whatsapp.notifications import WhatsAppNotificationService
+
+        WhatsAppNotificationService(session).notify_order_status_change(order_id, "READY")
+    except Exception as notify_exc:
+        logger.warning(
+            "WhatsApp order status notification failed for ready %s: %s",
             order_id,
             notify_exc,
         )

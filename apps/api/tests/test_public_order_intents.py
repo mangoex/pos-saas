@@ -930,3 +930,60 @@ def test_public_order_intent_persists_and_projects_notes_and_payment_details() -
     assert acc_after["order_notes"] == "Sin cebolla en nada, voy para allá"
     assert acc_after["table_number"] == "Mesa 5"
     assert acc_after["cash_amount"] == "500"
+
+
+def test_public_order_intent_operational_lifecycle_and_ready_endpoint() -> None:
+    client = _client_with_seeded_database()
+    _enable_public_order_capture(client)
+
+    # 1. Create order intent from mobile storefront
+    created = _post_intent(client, _payload(customer_name="Comensal Tracker"))
+    assert created.status_code == 201
+    pub_ref = created.json()["public_reference"]
+
+    # 2. Public lookup before acceptance
+    pub_res = client.get(f"/api/v1/public/order-intents/{pub_ref}")
+    assert pub_res.status_code == 200
+    assert pub_res.json()["status"] == "PENDING_REVIEW"
+    assert "operational_status" not in pub_res.json()
+
+    # 3. Admin accepts order in mobile admin
+    detail_before = client.get(
+        f"/api/v1/orders/accounts?branch_id={BRANCH_ID}", headers=_admin_headers()
+    )
+    intent_item = next(
+        item for item in detail_before.json()["items"] if item["folio"] == pub_ref
+    )
+    intent_id = intent_item["id"]
+
+    accepted = client.post(f"/api/v1/orders/{intent_id}/accept", headers=_admin_headers())
+    assert accepted.status_code == 200
+    accepted_data = accepted.json()
+    assert accepted_data["status"] == "ACCEPTED"
+    operational_order_id = accepted_data["id"]
+
+    # 4. Public lookup reflects ACCEPTED status
+    pub_res_accepted = client.get(f"/api/v1/public/order-intents/{pub_ref}")
+    assert pub_res_accepted.status_code == 200
+    assert pub_res_accepted.json()["status"] == "ACCEPTED"
+    assert pub_res_accepted.json()["operational_status"] == "ACCEPTED"
+    assert pub_res_accepted.json()["folio"] == accepted_data["folio"]
+
+    # 5. Mobile admin / kitchen marks order ready
+    ready_resp = client.post(
+        f"/api/v1/orders/{operational_order_id}/ready", headers=_admin_headers()
+    )
+    assert ready_resp.status_code == 200
+    assert ready_resp.json()["status"] == "READY"
+
+    # 6. Public lookup reflects READY status
+    pub_res_ready = client.get(f"/api/v1/public/order-intents/{pub_ref}")
+    assert pub_res_ready.status_code == 200
+    assert pub_res_ready.json()["operational_status"] == "READY"
+
+    # 7. Idempotent ready call
+    ready_again = client.post(
+        f"/api/v1/orders/{operational_order_id}/ready", headers=_admin_headers()
+    )
+    assert ready_again.status_code == 200
+    assert ready_again.json()["status"] == "READY"

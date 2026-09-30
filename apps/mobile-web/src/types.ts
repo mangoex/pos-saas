@@ -231,3 +231,17 @@ export interface SavedCustomerProfile {
   address_notes?: string;
   last_updated_at?: string;
 }
+
+export interface TrackedActiveOrder {
+  public_reference: string;
+  folio?: string;
+  status: string;
+  operational_status?: string;
+  total_cents: number;
+  branch_id?: string;
+  branch_name?: string;
+  created_at: string;
+  items_summary?: Array<{ name: string; quantity: number; line_total_cents: number }>;
+  whatsapp_url?: string;
+  service_type?: string;
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier, StorefrontOrganization, TrendingDish } from './types';
-import { fetchMobileMenu, submitMobileOrder, fetchStorefront, fetchStorefrontContext, saveCustomerProfile, fetchTrendingDishes } from './api';
+import { Product, Category, CartItem, CustomerOrderInfo, OrderType, CreatedOrderResult, BranchInfo, SelectedModifier, StorefrontOrganization, TrendingDish, TrackedActiveOrder } from './types';
+import { fetchMobileMenu, submitMobileOrder, fetchStorefront, fetchStorefrontContext, saveCustomerProfile, fetchTrendingDishes, getTrackedOrder, saveTrackedOrder, clearTrackedOrder } from './api';
 import { HeroHeader } from './components/HeroHeader';
 import { CategoryCircles } from './components/CategoryCircles';
 import { SizeSelectorFilter } from './components/SizeSelectorFilter';
@@ -8,6 +8,7 @@ import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
+import { ActiveOrderTracker } from './components/ActiveOrderTracker';
 import { FavoritesView } from './components/FavoritesView';
 import { TrendingFeed } from './components/TrendingFeed';
 import { BottomNav, NavTab } from './components/BottomNav';
@@ -80,7 +81,16 @@ export const App: React.FC = () => {
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const submittingOrderRef = useRef(false);
   const [createdOrderResult, setCreatedOrderResult] = useState<CreatedOrderResult | null>(null);
+  const [activeTrackedOrder, setActiveTrackedOrder] = useState<TrackedActiveOrder | null>(() => getTrackedOrder());
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
+
+  // Sync active order tracker with selected branch
+  useEffect(() => {
+    const existing = getTrackedOrder(selectedBranch?.id);
+    if (existing) {
+      setActiveTrackedOrder(existing);
+    }
+  }, [selectedBranch?.id]);
 
   // Trending Dishes state
   const [trendingDishes, setTrendingDishes] = useState<TrendingDish[]>([]);
@@ -489,6 +499,27 @@ export const App: React.FC = () => {
         address_notes: result.customer_info.address_notes,
       });
       setCreatedOrderResult(result);
+
+      // Save to active order tracker for persistent visibility in main menu
+      const tracked: TrackedActiveOrder = {
+        public_reference: result.kind === 'public_order_intent' ? result.public_reference : result.folio,
+        folio: result.kind === 'public_order_intent' ? undefined : result.folio,
+        status: result.kind === 'public_order_intent' ? result.status : 'ACCEPTED',
+        total_cents: result.total_cents,
+        branch_id: selectedBranch?.id,
+        branch_name: selectedBranch?.name,
+        created_at: new Date().toISOString(),
+        items_summary: cart.map((it) => ({
+          name: it.product.name,
+          quantity: it.quantity,
+          line_total_cents: it.line_total_cents,
+        })),
+        whatsapp_url: result.whatsapp_url,
+        service_type: orderType,
+      };
+      saveTrackedOrder(tracked);
+      setActiveTrackedOrder(tracked);
+
       // A replay may belong to another tab's snapshot. Never discard divergent local work.
       setCart(previous => JSON.stringify(previous) === JSON.stringify(result.items) ? [] : previous);
       setIsCartOpen(false);
@@ -662,6 +693,16 @@ export const App: React.FC = () => {
 
       {currentTab === 'explore' && (
         <main className="mobile-main-content">
+          {/* Active Order Live Tracker */}
+          {activeTrackedOrder && (
+            <ActiveOrderTracker
+              initialOrder={activeTrackedOrder}
+              onClearOrder={() => setActiveTrackedOrder(null)}
+              whatsappPhone={selectedBranch?.phone}
+              restaurantName={organization?.name || selectedBranch?.name}
+            />
+          )}
+
           {/* Circular Category Quick Scroll Bar (as in reference design) */}
           <CategoryCircles
             categories={visibleCategories}
