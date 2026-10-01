@@ -1,8 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Category, BranchInfo } from '../types';
-import { getCategoryIcon } from '../imageMap';
 import { CategoryArtwork } from './CategoryArtwork';
-import { Search, X, MapPin, ChevronDown, ChevronLeft, ChevronRight, Navigation, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Search, X, MapPin, ChevronDown, ChevronLeft, ChevronRight, Navigation, ShoppingBag } from 'lucide-react';
 
 interface HeroHeaderProps {
   restaurantName?: string;
@@ -189,47 +188,38 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
         {categories.map((cat, idx) => {
           const isAll = cat.id === 'all';
           const isActive = activeCategoryId === cat.id || (activeCategoryId === '' && isAll);
-          const isClosed = cat.name.toLowerCase().includes('cerrado');
-          const icon = getCategoryIcon(cat.name);
-          const count = productsCountByCategory[cat.id] || (isAll ? (isClosed ? 'Puedes explorar nuestro menú mientras abrimos' : 'Todo el menú') : '');
 
           return (
             <div
               key={cat.id}
               className={`hero-panoramic-card ${isActive ? 'active' : ''}`}
-              role="tabpanel"
-              aria-label={`Categoría ${cat.name}`}
+              role="button"
+              tabIndex={0}
+              aria-label={`Ver menú de ${cat.name}`}
+              onClick={() => {
+                onSelectCategory(cat.id);
+                onCategoryCardClick?.(cat.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectCategory(cat.id);
+                  onCategoryCardClick?.(cat.id);
+                }
+              }}
             >
-              {/* Background Food Image & Dual Scrims */}
+              {/* Background Food Image & Banner */}
               <div className="hero-card-media">
                 <CategoryArtwork
                   category={cat}
                   className="hero-card-img"
                   loading={idx === 0 ? 'eager' : 'lazy'}
                 />
-                <div className="hero-scrim-top" />
-                <div className="hero-scrim-bottom" />
               </div>
 
-              {/* Middle Hero Content: Tag, Title, Count & Slide Controls */}
-              <div className="hero-card-overlay-content">
-                <div className="hero-card-middle-row">
-                  <div className="hero-card-info-wrap">
-                    <div className="hero-category-tag-pill">
-                      <span className="hero-category-icon">{icon}</span>
-                      <span className="hero-category-name">{cat.name}</span>
-                    </div>
-                    <h1 className="hero-card-title">{cat.name}</h1>
-                    {count && (
-                      <p className="hero-card-subtitle">
-                        {typeof count === 'number' ? `${count} platillos frescos disponibles` : count}
-                      </p>
-                    )}
-                    <button type="button" className="menu-hero-cta" onClick={() => { onSelectCategory(cat.id); onCategoryCardClick?.(cat.id); }}>
-                      Ver menú <ArrowRight size={17} aria-hidden="true" />
-                    </button>
-                  </div>
-
+              {/* Navigation slide controls (shown when there are multiple categories) */}
+              {categories.length > 1 && (
+                <div className="hero-card-overlay-content">
                   <div className="hero-carousel-nav-arrows">
                     <button
                       type="button"
@@ -251,16 +241,11 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
                     </button>
                   </div>
                 </div>
-
-                <div className="hero-card-status-chip">
-                  <span>{idx + 1} / {categories.length}</span>
-                </div>
-              </div>
+              )}
             </div>
           );
         })}
       </div>
-
     </header>
   );
 };

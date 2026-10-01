@@ -74,6 +74,12 @@ for (const component of ['HeroHeader', 'CategoryCircles', 'CategoryStories']) {
   assert.match(source, /CategoryArtwork/);
   assert.doesNotMatch(source, /cat.name === 'Todos'/, 'display name must not decide all-products identity');
 }
+const heroSource = read('apps/mobile-web/src/components/HeroHeader.tsx');
+assert.doesNotMatch(heroSource, /hero-card-title/, 'Hero banner must not clutter graphic banners with overlaid title');
+assert.doesNotMatch(heroSource, /hero-card-subtitle/, 'Hero banner must not overlay product count subtitle over the artwork');
+assert.doesNotMatch(heroSource, /hero-category-tag-pill/, 'Hero banner must not render pill tag badge on the header card');
+assert.doesNotMatch(heroSource, /menu-hero-cta/, 'Hero banner must not render CTA button overlay');
+
 assert.match(read('apps/admin-web/src/features/catalog/CategoriesList.tsx'), /image_url: data.image_url/);
 assert.match(read('apps/admin-web/src/features/catalog/MenuHomeEditor.tsx'), /\/catalog\/menu-home/);
 console.log('Category pictures, renamed master category, tenant switch and image fallback passed');
