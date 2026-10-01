@@ -35,19 +35,19 @@ body { background: #eee7de; }
 .hero-search-input { font-size: 16px; color: var(--text-main); }
 .hero-search-clear-btn { width: 44px; height: 44px; }
 .hero-panoramic-carousel { order: 2; border-radius: 26px; box-shadow: var(--shadow-sm); }
-.hero-panoramic-card { height: 260px; }
+.hero-panoramic-card { height: 260px; cursor: pointer; }
 .hero-card-img { object-position: center; }
 .hero-scrim-top { display: none; }
-.hero-scrim-bottom { inset: 0; height: 100%; background: linear-gradient(90deg, rgb(21 13 8 / 88%), rgb(21 13 8 / 46%) 62%, rgb(21 13 8 / 16%)); }
-.hero-card-overlay-content { justify-content: center; padding: 24px; }
+.hero-scrim-bottom { display: none; }
+.hero-card-overlay-content { position: absolute; inset: 0; pointer-events: none; display: flex; justify-content: flex-end; align-items: flex-end; padding: 14px 16px; }
 .hero-card-middle-row { align-items: center; }
-.hero-card-info-wrap { gap: 8px; min-width: 0; }
-.hero-category-tag-pill { align-self: flex-start; background: rgb(255 255 255 / 15%); border-color: rgb(255 255 255 / 28%); color: white; font-size: 11px; }
+.hero-card-info-wrap { display: none; }
+.hero-category-tag-pill { display: none; }
 .hero-category-icon { display: none; }
-.hero-card-title { font-size: clamp(28px, 6vw, 40px); line-height: 1.06; max-width: 13ch; overflow-wrap: anywhere; }
-.hero-card-subtitle { color: #fff; font-size: 13px; line-height: 1.5; max-width: 26ch; }
-.menu-hero-cta { align-self: flex-start; display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 16px; border: 0; border-radius: 30px; background: var(--accent-primary); color: white; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.hero-carousel-nav-arrows { position: absolute; bottom: 14px; right: 16px; gap: 8px; }
+.hero-card-title { display: none; }
+.hero-card-subtitle { display: none; }
+.menu-hero-cta { display: none; }
+.hero-carousel-nav-arrows { position: absolute; bottom: 14px; right: 16px; gap: 8px; pointer-events: auto; }
 .hero-arrow-btn { width: 44px; height: 44px; }
 .hero-card-status-chip { display: none; }
 .category-circles-section { margin: 0; padding: 20px 0 12px; }
