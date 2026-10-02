@@ -561,9 +561,11 @@ products = sa.Table(
     sa.Column("is_promo", sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column("promo_price_cents", sa.Integer(), nullable=True),
     sa.Column("promo_badge_text", sa.String(32), nullable=True),
+    sa.Column("display_order", sa.Integer(), nullable=False, server_default="0"),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     sa.UniqueConstraint("organization_id", "sku", name="uq_products_org_sku"),
+    sa.Index("ix_products_category_display_order", "category_id", "display_order"),
 )
 
 modifier_groups = sa.Table(

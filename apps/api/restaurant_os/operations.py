@@ -1243,6 +1243,7 @@ def create_product(
     is_promo: bool = False,
     promo_price_cents: int | None = None,
     promo_badge_text: str | None = None,
+    display_order: int = 0,
     simple_modifiers: Any = _UNSET,
     description: Any = _UNSET,
 ) -> dict[str, Any]:
@@ -1317,6 +1318,7 @@ def create_product(
         "is_promo": bool(is_promo),
         "promo_price_cents": promo_price_cents,
         "promo_badge_text": badge_val,
+        "display_order": int(display_order or 0),
         "created_at": now,
         "updated_at": now,
     }
@@ -13042,6 +13044,7 @@ def update_product(
     is_promo: bool | None = None,
     promo_price_cents: Any = _UNSET,
     promo_badge_text: Any = _UNSET,
+    display_order: Any = _UNSET,
     simple_modifiers: Any = _UNSET,
     description: Any = _UNSET,
 ) -> dict[str, Any]:
@@ -13135,6 +13138,8 @@ def update_product(
             update_data["promo_badge_text"] = str(promo_badge_text).strip()
         else:
             update_data["promo_badge_text"] = "PROMOCIÓN" if update_data.get("is_promo") else None
+    if display_order is not _UNSET:
+        update_data["display_order"] = int(display_order or 0)
 
     now = _now()
     # Price-only edits must invalidate editor revisions and share the product
@@ -13194,6 +13199,60 @@ def update_product(
     if update_data or price_cents is not None or simple_modifiers is not _UNSET:
         session.commit()
     return {"id": product_id, **update_data}
+
+
+def reorder_products(
+    session: Session,
+    items: list[dict[str, Any]],
+    actor_user_id: str | None = None,
+) -> dict[str, Any]:
+    actor_id = _actor_user_id(actor_user_id)
+    require_permission(session, actor_id, "catalog.manage")
+    org_id = _modifier_actor_organization(session, actor_id)
+
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, org_id)
+
+    if not items:
+        return {"status": "ok", "updated_count": 0}
+
+    product_ids = [str(item["id"]) for item in items if "id" in item]
+    if not product_ids:
+        raise BusinessError("invalid_items", "No valid product IDs provided")
+
+    existing_rows = (
+        session.execute(
+            sa.select(models.products.c.id).where(
+                models.products.c.id.in_(product_ids),
+                models.products.c.organization_id == org_id,
+                models.products.c.status != "archived",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    existing_ids = set(existing_rows)
+
+    for pid in product_ids:
+        if pid not in existing_ids:
+            raise NotFoundError("product_not_found", f"Product {pid} was not found in catalog")
+
+    now = _now()
+    for item in items:
+        pid = str(item["id"])
+        order = int(item.get("display_order") or 0)
+        session.execute(
+            sa.update(models.products)
+            .where(
+                models.products.c.id == pid,
+                models.products.c.organization_id == org_id,
+            )
+            .values(display_order=order, updated_at=now)
+        )
+
+    session.commit()
+    return {"status": "ok", "updated_count": len(items)}
 
 
 def delete_product(
@@ -26862,6 +26921,7 @@ def get_public_catalog(session: Session, branch_id: str) -> dict[str, Any]:
                 "image_url": p.get("image_url") or "",
                 "station": p.get("station") or "barra",
                 "is_available": p.get("is_available", True),
+                "display_order": int(p.get("display_order") or 0),
                 "modifier_groups": modifier_groups,
             }
         )

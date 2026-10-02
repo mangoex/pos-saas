@@ -41,8 +41,6 @@
 - Propósito: verificar que `resume()` se espera, que sólo `running` activa la alarma y que suspensión/rechazo conserva el fallback visual.
 
 ### TDD-TC-258 Regresión del monitor de pedidos
-- Regresión adicional: `tests/frontend/test_mobile_order_history.mjs` ejecuta el handler
-  y clasificadores reales con reloj fijo, páginas sucesivas y respuesta tardía de otra sucursal.
 - Archivo: `tests/frontend/test_mobile_admin_orders_monitor.mjs`
 - Propósito: confirmar que listado, filtros, aceptación, cobro y entrega permanecen independientes del coordinador global de alertas.
 
@@ -61,3 +59,7 @@
 ### TDD-TC-983 Presentación condicional de métodos de pago, cupones y datos de transferencia en carrito digital
 - Archivo: `tests/frontend/test_cart_payment_methods_and_coupons.mjs`
 - Propósito: Verificar que el carrito oculta el formulario de cupón cuando no hay promociones activas, restringe los métodos de pago (Efectivo, Tarjeta, Transferencia) según la configuración de la sucursal, muestra los datos bancarios al elegir transferencia y aplica estilo amplio a las tarjetas de productos.
+
+### TDD-TC-984 Reordenamiento de platillos y proyección persistente de display_order
+- Archivos: `apps/api/tests/test_product_display_order.py`, `tests/frontend/test_mobile_menu_product_reorder.mjs`
+- Propósito: Validar que `products.display_order` se persiste en base de datos, que el endpoint `PUT /catalog/products/reorder` actualiza atómicamente el orden entre platillos hermanos dentro de su organización, que `_list_catalog_products_base` y `_project_pos_catalog` proyectan los productos ordenados por `(category.display_order, category.name, product.display_order, product.name)`, y que la interfaz móvil del admin ejecuta el swap con flechas arriba/abajo y optimistic updates.

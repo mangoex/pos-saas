@@ -263,6 +263,7 @@ def _list_catalog_products_base(
         models.products.c.is_promo,
         models.products.c.promo_price_cents,
         models.products.c.promo_badge_text,
+        models.products.c.display_order,
         models.product_categories.c.name.label("category_name"),
         active_price.c.price_cents,
         active_price.c.currency,
@@ -323,7 +324,12 @@ def _list_catalog_products_base(
         )
 
     rows = session.execute(
-        query.order_by(models.product_categories.c.name, models.products.c.name)
+        query.order_by(
+            models.product_categories.c.display_order,
+            models.product_categories.c.name,
+            models.products.c.display_order,
+            models.products.c.name,
+        )
     ).mappings()
 
     return [{**dict(row), "is_available": bool(row.get("is_available", True))} for row in rows]

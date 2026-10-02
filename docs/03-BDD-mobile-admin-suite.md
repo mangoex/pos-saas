@@ -112,4 +112,13 @@ Feature: Suite Móvil de Administración y Puesta en Marcha Rápida en admin-web
     And si no se configuraron datos de cuenta bancaria la opción de transferencia no se muestra
     And al seleccionar transferencia bancaria habiendo datos configurados se despliegan el banco, titular, cuenta y CLABE para pago
     And los productos en el carrito se presentan en tarjetas amplias y accesibles
+
+  @BDD-SC-984
+  Scenario: Reordenamiento de platillos con flechas hacia arriba/abajo en catálogo móvil y proyección en menú digital
+    Given un usuario administrador en la pestaña de "Menú" del shell móvil de administración
+    When pulsa la flecha "▲ Subir" o "▼ Bajar" en la tarjeta de un platillo de una categoría
+    Then el sistema actualiza inmediatamente el orden relativo del platillo frente a sus hermanos de categoría
+    And persiste el nuevo "display_order" en la base de datos mediante "PUT /catalog/products/reorder"
+    And las flechas de borde quedan deshabilitadas si el platillo ya es el primero o el último de su categoría
+    And la proyección pública del catálogo en "/public/branches/{key}/catalog" entrega los platillos en el orden establecido
 ```
