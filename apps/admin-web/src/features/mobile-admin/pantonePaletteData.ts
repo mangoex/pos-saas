@@ -10,16 +10,6 @@ export interface PantoneSwatch {
   contrast: '#ffffff' | '#0f172a';
 }
 
-export interface PaletteTokens {
-  primary: string;
-  hover: string;
-  contrast: string;
-  light: string;
-  soft: string;
-  shadowFloat: string;
-  bgApp?: string;
-}
-
 export const PANTONE_CATEGORIES = [
   { id: 'todos', label: 'Todos (64)', icon: '🎨' },
   { id: 'calidos', label: 'Cálidos & Fuego', icon: '🔥', description: 'Taquerías, Hamburguesas, Pizzerías, Snacks' },
@@ -114,7 +104,6 @@ export const PANTONE_SWATCHES: PantoneSwatch[] = [
   { id: 'p-7-7', name: 'Café Espresso', hex: '#3d1e16', column: 7, row: 7, category: 'tierra', categoryLabel: '☕ Café & Tierra', recommendedFor: 'Cafeterías, Dark Kitchens, Asados, Ahumados', contrast: '#ffffff' },
 ];
 
-const SWATCH_ID_SET = new Set(PANTONE_SWATCHES.map((s) => s.id));
 const SWATCH_MAP = new Map(PANTONE_SWATCHES.map((s) => [s.id, s]));
 
 export function findPantoneSwatch(idOrHex?: string | null): PantoneSwatch | undefined {
@@ -123,101 +112,4 @@ export function findPantoneSwatch(idOrHex?: string | null): PantoneSwatch | unde
   const byId = SWATCH_MAP.get(normalized);
   if (byId) return byId;
   return PANTONE_SWATCHES.find((s) => s.hex.toLowerCase() === normalized);
-}
-
-export function resolveMenuTheme(palette?: string | null, appearance?: string | null): { palette: string; appearance: 'light' | 'dark' } {
-  const norm = (palette || '').trim().toLowerCase();
-  const isKnown = SWATCH_ID_SET.has(norm) || /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(norm);
-  return {
-    palette: isKnown ? norm : 'orange',
-    appearance: appearance === 'dark' ? 'dark' : 'light',
-  };
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  let clean = hex.replace('#', '').trim();
-  if (clean.length === 3) {
-    clean = clean.split('').map((c) => c + c).join('');
-  }
-  const num = parseInt(clean, 16);
-  if (isNaN(num) || clean.length !== 6) return [234, 88, 12];
-  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
-  return '#' + [clamp(r), clamp(g), clamp(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
-}
-
-export function getPaletteTokens(paletteIdOrHex?: string | null): PaletteTokens {
-  const norm = (paletteIdOrHex || 'orange').trim().toLowerCase();
-
-  // Legacy presets exact fidelity
-  if (norm === 'orange') {
-    return {
-      primary: '#f97316',
-      hover: '#ea580c',
-      contrast: '#ffffff',
-      light: '#fff7ed',
-      soft: 'rgba(249, 115, 22, 0.12)',
-      shadowFloat: '0 16px 36px rgba(249, 115, 22, 0.24)',
-      bgApp: '#fff8ef',
-    };
-  }
-  if (norm === 'green') {
-    return {
-      primary: '#10b981',
-      hover: '#059669',
-      contrast: '#ffffff',
-      light: '#ecfdf5',
-      soft: 'rgba(16, 185, 129, 0.12)',
-      shadowFloat: '0 16px 36px rgba(16, 185, 129, 0.24)',
-      bgApp: '#f5faf4',
-    };
-  }
-  if (norm === 'blue') {
-    return {
-      primary: '#3b82f6',
-      hover: '#2563eb',
-      contrast: '#ffffff',
-      light: '#eff6ff',
-      soft: 'rgba(59, 130, 246, 0.12)',
-      shadowFloat: '0 16px 36px rgba(59, 130, 246, 0.24)',
-      bgApp: '#f5f8ff',
-    };
-  }
-  if (norm === 'tinto') {
-    return {
-      primary: '#9f1239',
-      hover: '#881337',
-      contrast: '#ffffff',
-      light: '#fff1f2',
-      soft: 'rgba(159, 18, 57, 0.12)',
-      shadowFloat: '0 16px 36px rgba(159, 18, 57, 0.24)',
-      bgApp: '#fff6f7',
-    };
-  }
-
-  // Look up in Pantone catalog or parse hex
-  const swatch = findPantoneSwatch(norm);
-  const baseHex = swatch ? swatch.hex : (norm.startsWith('#') ? norm : '#ea580c');
-  const [r, g, b] = hexToRgb(baseHex);
-
-  const hover = rgbToHex(r * 0.82, g * 0.82, b * 0.82);
-  const light = rgbToHex(r * 0.08 + 255 * 0.92, g * 0.08 + 255 * 0.92, b * 0.08 + 255 * 0.92);
-  const soft = `rgba(${r}, ${g}, ${b}, 0.14)`;
-  const shadowFloat = `0 16px 36px rgba(${r}, ${g}, ${b}, 0.22)`;
-
-  const relLuminance = 0.2126 * (r / 255) + 0.7152 * (g / 255) + 0.0722 * (b / 255);
-  const contrast = relLuminance > 0.55 ? '#0f172a' : '#ffffff';
-
-  return {
-    primary: baseHex,
-    hover,
-    contrast,
-    light,
-    soft,
-    shadowFloat,
-    bgApp: '#fffdfa',
-  };
 }

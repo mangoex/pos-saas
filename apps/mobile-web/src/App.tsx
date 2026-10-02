@@ -16,7 +16,7 @@ import { FloatingCartBar } from './components/FloatingCartBar';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
 import { VoiceOrderModal } from './components/VoiceOrderModal';
 import { detectProductSize } from './imageMap';
-import { resolveMenuTheme } from './utils/menuTheme';
+import { resolveMenuTheme, getPaletteTokens } from './utils/menuTheme';
 import { replaceCartLine, validateCartDraft } from './utils/cartPersonalization';
 import { hasPendingMobileOrder, readPendingMobileOrder, mobileOrderTimestamp, hasMobileOrderCompletedSince } from './pendingMobileOrder';
 
@@ -333,6 +333,18 @@ export const App: React.FC = () => {
     const theme = resolveMenuTheme(selectedBranch?.color_palette, organization.mobile_theme);
     document.documentElement.setAttribute('data-theme', theme.palette);
     document.documentElement.setAttribute('data-appearance', theme.appearance);
+    const tokens = getPaletteTokens(theme.palette);
+    if (tokens) {
+      document.documentElement.style.setProperty('--accent-primary', tokens.primary);
+      document.documentElement.style.setProperty('--accent-primary-hover', tokens.hover);
+      document.documentElement.style.setProperty('--accent-primary-contrast', tokens.contrast);
+      document.documentElement.style.setProperty('--accent-orange-light', tokens.light);
+      document.documentElement.style.setProperty('--accent-orange-soft', tokens.soft);
+      document.documentElement.style.setProperty('--shadow-float', tokens.shadowFloat);
+      if (tokens.bgApp) {
+        document.documentElement.style.setProperty('--bg-app', tokens.bgApp);
+      }
+    }
     document.title = `${organization.name} | Menú Digital`;
     let manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!manifest) {

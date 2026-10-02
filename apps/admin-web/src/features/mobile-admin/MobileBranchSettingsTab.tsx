@@ -25,6 +25,7 @@ import {
   CircleDollarSign,
   Utensils,
 } from 'lucide-react';
+import { PantonePalettePicker } from './PantonePalettePicker';
 
 interface OrgProfile {
   id: string;
@@ -1758,59 +1759,12 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                 )}
               </div>
 
-              {/* Card: Apariencia del Menú Digital */}
-              <div
-                style={{
-                  backgroundColor: '#ffffff',
-                  borderRadius: 16,
-                  padding: 16,
-                  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
-                  marginBottom: 16,
-                }}
-              >
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 800, margin: '0 0 12px', color: '#0f172a' }}>
-                  Apariencia del Menú Digital
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0 0 16px', lineHeight: 1.4 }}>
-                  Elige la paleta de colores para esta sucursal.
-                </p>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {[
-                    { id: 'orange', name: 'Naranja', colors: ['#ea580c', '#f97316', '#fdba74', '#fff7ed'] },
-                    { id: 'green', name: 'Verde', colors: ['#059669', '#10b981', '#6ee7b7', '#ecfdf5'] },
-                    { id: 'blue', name: 'Azul', colors: ['#2563eb', '#3b82f6', '#93c5fd', '#eff6ff'] },
-                    { id: 'tinto', name: 'Tinto', colors: ['#881337', '#9f1239', '#f43f5e', '#fff1f2'] },
-                  ].map((theme) => (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      onClick={() => setColorPalette(theme.id)}
-                      style={{
-                        background: 'none',
-                        border: `2px solid ${colorPalette === theme.id ? '#0f172a' : '#e2e8f0'}`,
-                        borderRadius: 12,
-                        padding: 10,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        transition: 'all 0.2s',
-                        backgroundColor: colorPalette === theme.id ? '#f8fafc' : '#ffffff',
-                      }}
-                    >
-                      <div style={{ flex: 1, display: 'flex', height: 28, borderRadius: 8, overflow: 'hidden' }}>
-                        {theme.colors.map((c, i) => (
-                          <div key={i} style={{ flex: 1, backgroundColor: c }} />
-                        ))}
-                      </div>
-                      <span style={{ fontSize: '0.85rem', fontWeight: colorPalette === theme.id ? 800 : 600, color: '#0f172a', width: 60, textAlign: 'left' }}>
-                        {theme.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Pantone Color Palette Picker for Digital Menu */}
+              <PantonePalettePicker
+                value={colorPalette}
+                onChange={setColorPalette}
+                branchName={branchName || currentBranch?.name || 'Mi Restaurante'}
+              />
 
               {toastMessage && (
                 <div
