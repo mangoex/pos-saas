@@ -243,6 +243,7 @@ from restaurant_os.operations import (
     update_modifier_group,
     update_modifier_option,
     update_order_comment,
+    reorder_products,
     update_product,
     update_purchase_presentation_price,
     update_purchase_presentation,
@@ -1516,6 +1517,7 @@ def post_catalog_product(
         if payload.get("promo_badge_text") is not None
         else None
     )
+    display_order = int(payload.get("display_order", 0)) if payload.get("display_order") is not None else 0
     image_url = payload.get("image_url") if "image_url" in payload else None
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
@@ -1532,6 +1534,7 @@ def post_catalog_product(
             is_promo=is_promo,
             promo_price_cents=promo_price_cents,
             promo_badge_text=promo_badge_text,
+            display_order=display_order,
             simple_modifiers=payload.get("simple_modifiers", _UNSET),
             description=payload.get("description", _UNSET),
         )
@@ -4395,6 +4398,18 @@ def delete_branch_endpoint(
     return _business_response(lambda: delete_branch(session, branch_id, actor_id))
 
 
+@router.put("/catalog/products/reorder")
+def put_reorder_catalog_products(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _actor_from_request(actor_user_id, authorization)
+    items = payload.get("items") or []
+    return _business_response(lambda: reorder_products(session, items, actor_id))
+
+
 @router.put("/catalog/products/{product_id}")
 def put_catalog_product(
     product_id: str,
@@ -4426,6 +4441,11 @@ def put_catalog_product(
         if payload.get("promo_badge_text") is not None
         else (None if "promo_badge_text" in payload else _UNSET)
     )
+    display_order = (
+        int(payload["display_order"])
+        if payload.get("display_order") is not None
+        else (None if "display_order" in payload else _UNSET)
+    )
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(
         lambda: update_product(
@@ -4443,6 +4463,7 @@ def put_catalog_product(
             is_promo=is_promo,
             promo_price_cents=promo_price_cents,
             promo_badge_text=promo_badge_text,
+            display_order=display_order,
             simple_modifiers=payload.get("simple_modifiers", _UNSET),
             description=payload.get("description", _UNSET),
         )

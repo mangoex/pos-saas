@@ -27,6 +27,8 @@ import {
   ToggleRight,
   HelpCircle,
   Trash2,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 
 interface MobileMenuManagerTabProps {
@@ -48,6 +50,7 @@ interface Product {
   is_promo?: boolean;
   promo_price_cents?: number | null;
   promo_badge_text?: string | null;
+  display_order?: number;
 }
 
 interface Category {
@@ -190,8 +193,58 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     return products.filter((p) => Boolean(p.is_promo)).length;
   }, [products]);
 
+  const categoryOrderMap = useMemo(() => {
+    const map = new Map<string, number>();
+    categories.forEach((c) => {
+      map.set(c.name.trim().toLowerCase(), c.display_order ?? 0);
+    });
+    return map;
+  }, [categories]);
+
+  const sortedProducts = useMemo(() => {
+    return [...products].sort((a, b) => {
+      const catA = (a.category_name || '').trim().toLowerCase();
+      const catB = (b.category_name || '').trim().toLowerCase();
+      const catOrderA = categoryOrderMap.get(catA) ?? 9999;
+      const catOrderB = categoryOrderMap.get(catB) ?? 9999;
+      if (catOrderA !== catOrderB) return catOrderA - catOrderB;
+      const catNameCompare = (a.category_name || '').localeCompare(b.category_name || '');
+      if (catNameCompare !== 0) return catNameCompare;
+      const orderA = a.display_order ?? 0;
+      const orderB = b.display_order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    });
+  }, [products, categoryOrderMap]);
+
+  const productCategoryOrderInfo = useMemo(() => {
+    const infoMap = new Map<string, { position: number; total: number; canMoveUp: boolean; canMoveDown: boolean }>();
+    const byCategory = new Map<string, Product[]>();
+
+    products.forEach((p) => {
+      const cat = (p.category_name || '').trim().toLowerCase();
+      if (!byCategory.has(cat)) byCategory.set(cat, []);
+      byCategory.get(cat)!.push(p);
+    });
+
+    byCategory.forEach((catProds) => {
+      catProds.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name));
+      const total = catProds.length;
+      catProds.forEach((p, idx) => {
+        infoMap.set(p.id, {
+          position: idx + 1,
+          total,
+          canMoveUp: idx > 0,
+          canMoveDown: idx < total - 1,
+        });
+      });
+    });
+
+    return infoMap;
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
-    let list = products;
+    let list = sortedProducts;
     if (selectedCategory === 'PROMOS') {
       list = list.filter((p) => Boolean(p.is_promo));
     } else if (selectedCategory !== 'ALL') {
@@ -202,9 +255,67 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       list = list.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
     }
     return list;
-  }, [products, selectedCategory, search]);
+  }, [sortedProducts, selectedCategory, search]);
 
   // Mutations
+  const reorderProductsMutation = useMutation({
+    mutationFn: async (items: Array<{ id: string; display_order: number }>) => {
+      return fetchApi('/catalog/products/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      });
+    },
+    onMutate: async (items) => {
+      await queryClient.cancelQueries({ queryKey: ['products'] });
+      const previousProducts = queryClient.getQueryData<Product[]>(['products']);
+      if (previousProducts) {
+        const orderMap = new Map(items.map((it) => [it.id, it.display_order]));
+        const updated = previousProducts.map((p) => {
+          if (orderMap.has(p.id)) {
+            return { ...p, display_order: orderMap.get(p.id)! };
+          }
+          return p;
+        });
+        queryClient.setQueryData(['products'], updated);
+      }
+      return { previousProducts };
+    },
+    onError: (err, _items, context) => {
+      if (context?.previousProducts) {
+        queryClient.setQueryData(['products'], context.previousProducts);
+      }
+      showToast(err instanceof ApiError ? err.message : 'Error al reordenar platillos');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+
+  const handleMoveProduct = (product: Product, direction: 'up' | 'down') => {
+    const currentProducts = queryClient.getQueryData<Product[]>(['products']) || products;
+    const catName = (product.category_name || '').trim().toLowerCase();
+    const siblings = currentProducts
+      .filter((p) => (p.category_name || '').trim().toLowerCase() === catName)
+      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name));
+
+    const currentIndex = siblings.findIndex((p) => p.id === product.id);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= siblings.length) return;
+
+    const newSiblings = [...siblings];
+    const [moved] = newSiblings.splice(currentIndex, 1);
+    newSiblings.splice(targetIndex, 0, moved);
+
+    const items = newSiblings.map((p, idx) => ({
+      id: p.id,
+      display_order: (idx + 1) * 10,
+    }));
+
+    reorderProductsMutation.mutate(items);
+  };
+
   const toggleAvailabilityMutation = useMutation({
     mutationFn: async (product: Product) => {
       const nextStatus = product.status === 'inactive' ? 'active' : 'inactive';
@@ -220,6 +331,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
           is_promo: product.is_promo,
           promo_price_cents: product.promo_price_cents,
           promo_badge_text: product.promo_badge_text,
+          display_order: product.display_order ?? 0,
         }),
       });
     },
@@ -820,13 +932,29 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {filteredProducts.map((product) => {
-                const isAvailable = product.status !== 'inactive';
-                const emoji = getEmojiFallback(product.name, product.category_name);
-                const priceFormatted = product.price_cents
-                  ? (product.price_cents / 100).toFixed(2)
-                  : '0.00';
+            <>
+              {!productsLoading && filteredProducts.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', margin: '-4px 0 2px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+                    {filteredProducts.length} {filteredProducts.length === 1 ? 'platillo' : 'platillos'}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>▲▼ Flechas ordenan en menú digital</span>
+                  </span>
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {filteredProducts.map((product) => {
+                  const isAvailable = product.status !== 'inactive';
+                  const emoji = getEmojiFallback(product.name, product.category_name);
+                  const priceFormatted = product.price_cents
+                    ? (product.price_cents / 100).toFixed(2)
+                    : '0.00';
+                  const orderInfo = productCategoryOrderInfo.get(product.id);
+                  const isSearching = search.trim().length > 0;
+                  const isPromosTab = selectedCategory === 'PROMOS';
+                  const canMoveUp = !isSearching && !isPromosTab && Boolean(orderInfo?.canMoveUp);
+                  const canMoveDown = !isSearching && !isPromosTab && Boolean(orderInfo?.canMoveDown);
 
                 return (
                   <div
@@ -996,6 +1124,100 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                           <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>MXN</span>
                         </div>
                       </div>
+
+                      {/* Reorder Buttons (Up/Down) */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#f8fafc',
+                          borderRadius: 12,
+                          border: '1px solid #e2e8f0',
+                          padding: '3px',
+                          flexShrink: 0,
+                          alignSelf: 'center',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          aria-label={`Mover ${product.name} arriba en menú digital`}
+                          title={
+                            isSearching
+                              ? 'Desactiva la búsqueda para reordenar platillos'
+                              : isPromosTab
+                              ? 'Selecciona una categoría para reordenar platillos'
+                              : !canMoveUp
+                              ? 'Ya está al inicio de la categoría'
+                              : 'Mover arriba en menú digital'
+                          }
+                          disabled={!canMoveUp || reorderProductsMutation.isPending}
+                          onClick={() => handleMoveProduct(product, 'up')}
+                          style={{
+                            width: 36,
+                            height: 32,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 8,
+                            border: canMoveUp ? '1px solid #cbd5e1' : '1px solid transparent',
+                            backgroundColor: canMoveUp ? '#ffffff' : 'transparent',
+                            boxShadow: canMoveUp ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                            color: canMoveUp ? '#0f172a' : '#cbd5e1',
+                            cursor: canMoveUp ? 'pointer' : 'not-allowed',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <ChevronUp size={18} />
+                        </button>
+                        <div
+                          style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            color: canMoveUp || canMoveDown ? '#475569' : '#94a3b8',
+                            padding: '2px 0',
+                            textAlign: 'center',
+                            minWidth: 26,
+                            lineHeight: 1,
+                          }}
+                          title={`Posición ${orderInfo?.position ?? 1} de ${orderInfo?.total ?? 1} en su categoría`}
+                        >
+                          #{orderInfo?.position ?? 1}
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`Mover ${product.name} abajo en menú digital`}
+                          title={
+                            isSearching
+                              ? 'Desactiva la búsqueda para reordenar platillos'
+                              : isPromosTab
+                              ? 'Selecciona una categoría para reordenar platillos'
+                              : !canMoveDown
+                              ? 'Ya está al final de la categoría'
+                              : 'Mover abajo en menú digital'
+                          }
+                          disabled={!canMoveDown || reorderProductsMutation.isPending}
+                          onClick={() => handleMoveProduct(product, 'down')}
+                          style={{
+                            width: 36,
+                            height: 32,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 8,
+                            border: canMoveDown ? '1px solid #cbd5e1' : '1px solid transparent',
+                            backgroundColor: canMoveDown ? '#ffffff' : 'transparent',
+                            boxShadow: canMoveDown ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                            color: canMoveDown ? '#0f172a' : '#cbd5e1',
+                            cursor: canMoveDown ? 'pointer' : 'not-allowed',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <ChevronDown size={18} />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Bottom Action Bar */}
@@ -1064,6 +1286,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                 );
               })}
             </div>
+          </>
           )}
         </main>
       )}

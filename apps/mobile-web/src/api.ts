@@ -211,6 +211,7 @@ export async function fetchMobileMenu(publicKey?: string | null): Promise<{ prod
         category_name: catName,
         category_id: p.category_id,
         price_cents: p.price_cents,
+        display_order: typeof p.display_order === 'number' ? p.display_order : 0,
         is_promo: Boolean(p.is_promo),
         promo_price_cents: typeof p.promo_price_cents === 'number' ? p.promo_price_cents : null,
         promo_badge_text: typeof p.promo_badge_text === 'string' ? p.promo_badge_text : null,
