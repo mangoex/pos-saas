@@ -71,6 +71,9 @@ try {
   assert.match(modal, /appendVoiceTranscript/, 'dictation sessions must append without duplicates');
   assert.match(modal, /isVoiceDraftComplete/, 'incomplete required options must block cart application');
   assert.match(modal, /draft\?\.option_groups \?\? draft\?\.questions/, 'all canonical groups must remain editable');
+  assert.match(modal, /startingTimeoutRef/, 'safety timeout must prevent stuck isStarting state');
+  assert.match(modal, /continuous\s*=\s*true/, 'speech recognition must use continuous dictation');
+  assert.match(modal, /isInAppBrowser/, 'must detect in-app browser environments');
   assert.doesNotMatch(modal, /onAddCartItems:\s*\(newItems:\s*any\[\]/, 'cart boundary must be typed');
 } finally {
   rmSync(output, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
 import { CartItem, Product } from '../types';
 import {
@@ -74,10 +74,20 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   const [draft, setDraft] = useState<VoiceOrderDraft | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const sessionTokenRef = useRef(0);
+  const startingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const baseTranscriptRef = useRef('');
+
+  const isInAppBrowser = useMemo(() => {
+    if (typeof window === 'undefined' || !navigator?.userAgent) return false;
+    return /WhatsApp|FBAN|FBAV|Instagram|TikTok|Line|MicroMessenger/i.test(navigator.userAgent);
+  }, []);
 
   const stopRecording = (abort = false) => {
     sessionTokenRef.current += 1;
+    if (startingTimeoutRef.current) {
+      clearTimeout(startingTimeoutRef.current);
+      startingTimeoutRef.current = null;
+    }
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
     if (recognition) {
@@ -104,36 +114,70 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
     const supported = Boolean(getSpeechRecognition());
     setSpeechSupported(supported);
     if (!supported) {
-      setErrorMessage('Tu navegador no soporta reconocimiento de voz. Puedes escribir tu pedido.');
+      setErrorMessage('Tu navegador no soporta reconocimiento de voz. Puedes escribir tu pedido directamente.');
     }
-    return () => stopRecording(true);
+    return () => {
+      stopRecording(true);
+    };
   }, [isOpen]);
 
   const startRecording = () => {
-    if (isRecording || isStarting || isLoading) return;
+    if (isRecording) {
+      stopRecording();
+      return;
+    }
+    if (isStarting || isLoading) return;
+
     const SpeechRecognition = getSpeechRecognition();
     if (!SpeechRecognition) {
       setSpeechSupported(false);
-      setErrorMessage('Tu navegador no soporta reconocimiento de voz. Puedes escribir tu pedido.');
+      setErrorMessage('Tu navegador no soporta reconocimiento de voz. Puedes escribir tu pedido directamente.');
       return;
     }
+
     stopRecording(true);
     setIsStarting(true);
     setErrorMessage(null);
     setDraft(null);
+
     const token = sessionTokenRef.current;
+    baseTranscriptRef.current = transcript.trim();
+
+    // Safety timeout: prevents the UI from remaining stuck in isStarting if WebKit freezes
+    startingTimeoutRef.current = setTimeout(() => {
+      if (sessionTokenRef.current === token) {
+        setIsStarting(false);
+        setIsRecording(false);
+        const activeRec = recognitionRef.current;
+        recognitionRef.current = null;
+        if (activeRec) {
+          try {
+            activeRec.abort();
+          } catch {
+            // Safe cleanup
+          }
+        }
+        setErrorMessage('El micrófono tardó en responder. Toca para reintentar o escribe tu pedido abajo.');
+      }
+    }, 4500);
+
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    baseTranscriptRef.current = transcript.trim();
     recognition.lang = 'es-MX';
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+
     recognition.onstart = () => {
+      if (startingTimeoutRef.current) {
+        clearTimeout(startingTimeoutRef.current);
+        startingTimeoutRef.current = null;
+      }
       if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
       setIsStarting(false);
       setIsRecording(true);
     };
+
     recognition.onresult = (event) => {
       if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
       let recognized = '';
@@ -142,29 +186,47 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       }
       setTranscript(appendVoiceTranscript(baseTranscriptRef.current, recognized));
     };
+
     recognition.onerror = (event) => {
+      if (startingTimeoutRef.current) {
+        clearTimeout(startingTimeoutRef.current);
+        startingTimeoutRef.current = null;
+      }
       if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
       const messages: Record<string, string> = {
-        'not-allowed': 'Permiso de micrófono denegado. Puedes escribir tu pedido.',
-        network: 'No se pudo usar el servicio de voz. Tu texto permanece disponible.',
-        'no-speech': 'No se escuchó voz. Toca de nuevo o escribe tu pedido.',
+        'not-allowed': 'Permiso de micrófono denegado. Puedes escribir tu pedido o habilitar el micrófono en los ajustes.',
+        network: 'No se pudo conectar con el servicio de voz del navegador. Puedes escribir tu pedido.',
+        'no-speech': 'No se detectó voz. Toca para dictar nuevamente o escribe tu pedido.',
+        'audio-capture': 'No se detectó micrófono disponible en tu dispositivo.',
+        'service-not-allowed': 'Servicio de voz no permitido en este navegador. Escribe tu pedido abajo.',
       };
       setErrorMessage(messages[event.error] || 'No se pudo continuar el dictado. Puedes escribir tu pedido.');
       setIsStarting(false);
       setIsRecording(false);
     };
+
     recognition.onend = () => {
+      if (startingTimeoutRef.current) {
+        clearTimeout(startingTimeoutRef.current);
+        startingTimeoutRef.current = null;
+      }
       if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
       recognitionRef.current = null;
       setIsStarting(false);
       setIsRecording(false);
     };
+
     try {
       recognition.start();
     } catch {
       if (sessionTokenRef.current === token) {
+        if (startingTimeoutRef.current) {
+          clearTimeout(startingTimeoutRef.current);
+          startingTimeoutRef.current = null;
+        }
         recognitionRef.current = null;
         setIsStarting(false);
+        setIsRecording(false);
         setErrorMessage('No se pudo activar el micrófono. Puedes escribir tu pedido.');
       }
     }
@@ -233,11 +295,48 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
           <button type="button" onClick={onClose} disabled={isLoading} aria-label="Cerrar" style={{ border: 0, borderRadius: '50%', width: 36, height: 36, color: '#475569', background: '#f1f5f9' }}><X size={20} /></button>
         </header>
 
+        {isInAppBrowser && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: '8px 12px',
+              borderRadius: 10,
+              background: '#fef3c7',
+              border: '1px solid #fde68a',
+              color: '#92400e',
+              fontSize: '.78rem',
+              lineHeight: 1.35,
+            }}
+          >
+            Estás navegando dentro de una aplicación (WhatsApp/Instagram). Si el micrófono no responde, puedes escribir tu pedido directamente o abrir el enlace en tu navegador (Safari/Chrome).
+          </div>
+        )}
+
         <div style={{ display: 'grid', placeItems: 'center', padding: '14px 0', marginBottom: 14, border: `1.5px ${isRecording ? 'solid #fca5a5' : 'dashed #cbd5e1'}`, borderRadius: 16, background: isRecording ? '#fef2f2' : '#f8fafc' }}>
-          <button type="button" onClick={() => isRecording ? stopRecording() : startRecording()} disabled={isLoading || isStarting || !speechSupported} aria-label={isRecording ? 'Detener dictado' : 'Iniciar dictado'} style={{ display: 'grid', placeItems: 'center', width: 68, height: 68, border: 0, borderRadius: '50%', color: '#fff', background: isRecording ? '#dc2626' : '#ea580c', cursor: speechSupported ? 'pointer' : 'not-allowed' }}>
+          <button
+            type="button"
+            onClick={startRecording}
+            disabled={isLoading || isStarting || !speechSupported}
+            aria-label={isRecording ? 'Detener dictado' : 'Iniciar dictado'}
+            style={{
+              display: 'grid',
+              placeItems: 'center',
+              width: 68,
+              height: 68,
+              border: 0,
+              borderRadius: '50%',
+              color: '#fff',
+              background: isRecording ? '#dc2626' : isStarting ? '#f97316' : '#ea580c',
+              cursor: speechSupported ? 'pointer' : 'not-allowed',
+              boxShadow: isRecording ? '0 0 0 6px rgba(220, 38, 38, 0.2)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
             {isRecording ? <MicOff size={30} /> : <Mic size={30} />}
           </button>
-          <strong style={{ marginTop: 9, color: isRecording ? '#dc2626' : '#475569', fontSize: '.86rem' }}>{isRecording ? 'Escuchando…' : isStarting ? 'Activando micrófono…' : speechSupported ? 'Toca para dictar' : 'Escribe tu pedido abajo'}</strong>
+          <strong style={{ marginTop: 9, color: isRecording ? '#dc2626' : '#475569', fontSize: '.86rem' }}>
+            {isRecording ? 'Escuchando… (toca para detener)' : isStarting ? 'Activando micrófono…' : speechSupported ? 'Toca para dictar' : 'Escribe tu pedido abajo'}
+          </strong>
         </div>
 
         <label style={{ display: 'block', color: '#334155', fontSize: '.8rem', fontWeight: 700, marginBottom: 6 }}>Tu pedido dictado o escrito</label>
