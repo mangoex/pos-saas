@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
 import { CartItem, Product } from '../types';
 import {
-  appendVoiceTranscript,
   isVoiceDraftComplete,
   toggleVoiceDraftOption,
   voiceDraftToCartItems,
@@ -17,34 +16,22 @@ interface VoiceOrderModalProps {
   onAddCartItems: (newItems: CartItem[]) => void;
 }
 
-interface SpeechRecognitionResultEventLike {
-  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
-}
-
-interface SpeechRecognitionLike {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onstart: (() => void) | null;
-  onresult: ((event: SpeechRecognitionResultEventLike) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
 const API_BASE_URL = '/api/v1';
+const MAX_RECORDING_SECONDS = 30;
 
-const getSpeechRecognition = (): SpeechRecognitionConstructor | null => {
-  const browserWindow = window as typeof window & {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  };
-  return browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition || null;
+const getSupportedMimeType = (): string => {
+  if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') return '';
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/aac',
+    'audio/ogg;codecs=opus',
+  ];
+  for (const candidate of candidates) {
+    if (MediaRecorder.isTypeSupported(candidate)) return candidate;
+  }
+  return '';
 };
 
 const errorFromResponse = (data: unknown): string => {
@@ -69,37 +56,57 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [speechSupported, setSpeechSupported] = useState(true);
   const [draft, setDraft] = useState<VoiceOrderDraft | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionTokenRef = useRef(0);
-  const startingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const baseTranscriptRef = useRef('');
 
   const isInAppBrowser = useMemo(() => {
     if (typeof window === 'undefined' || !navigator?.userAgent) return false;
     return /WhatsApp|FBAN|FBAV|Instagram|TikTok|Line|MicroMessenger/i.test(navigator.userAgent);
   }, []);
 
-  const stopRecording = (abort = false) => {
-    sessionTokenRef.current += 1;
-    if (startingTimeoutRef.current) {
-      clearTimeout(startingTimeoutRef.current);
-      startingTimeoutRef.current = null;
+  const cleanupAudioStream = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
     }
-    const recognition = recognitionRef.current;
-    recognitionRef.current = null;
-    if (recognition) {
+    const stream = mediaStreamRef.current;
+    if (stream) {
       try {
-        if (abort) recognition.abort();
-        else recognition.stop();
+        stream.getTracks().forEach((track) => track.stop());
       } catch {
-        // The browser may have already ended the recognition session.
+        // Safe stream cleanup
+      }
+      mediaStreamRef.current = null;
+    }
+  };
+
+  const stopRecording = (discard = false) => {
+    sessionTokenRef.current += 1;
+    cleanupAudioStream();
+    const recorder = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        if (discard) {
+          recorder.ondataavailable = null;
+          recorder.onstop = null;
+        }
+        recorder.stop();
+      } catch {
+        // Safe recorder stop
       }
     }
     setIsRecording(false);
     setIsStarting(false);
+    setRecordingSeconds(0);
   };
 
   useEffect(() => {
@@ -111,124 +118,147 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       setIsLoading(false);
       return;
     }
-    const supported = Boolean(getSpeechRecognition());
-    setSpeechSupported(supported);
-    if (!supported) {
-      setErrorMessage('Tu navegador no soporta reconocimiento de voz. Puedes escribir tu pedido directamente.');
+    const hasMediaDevices = typeof window !== 'undefined'
+      && Boolean(navigator?.mediaDevices?.getUserMedia)
+      && typeof MediaRecorder !== 'undefined';
+    setSpeechSupported(hasMediaDevices);
+    if (!hasMediaDevices) {
+      setErrorMessage('Tu navegador no admite grabación de audio directa. Puedes escribir tu pedido en el cuadro.');
     }
     return () => {
       stopRecording(true);
     };
   }, [isOpen]);
 
-  const startRecording = () => {
+  const handleSendAudio = async (audioBase64: string, mimeType: string, token: number) => {
+    if (!publicKey) {
+      setErrorMessage('La sucursal no está disponible para pedidos por voz.');
+      return;
+    }
+    setIsLoading(true);
+    setErrorMessage(null);
+    setDraft(null);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/public/branches/${encodeURIComponent(publicKey)}/voice-audio-draft`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audio_base64: audioBase64,
+            mime_type: mimeType,
+          }),
+        },
+      );
+      if (sessionTokenRef.current !== token) return;
+      const data: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(errorFromResponse(data));
+      const result = data as VoiceOrderDraft & { transcript?: string };
+      if (result.transcript) {
+        setTranscript(result.transcript);
+      }
+      setDraft(result);
+    } catch (error) {
+      if (sessionTokenRef.current === token) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'No se pudo interpretar el audio. Puedes escribir tu pedido directamente.',
+        );
+      }
+    } finally {
+      if (sessionTokenRef.current === token) {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const startRecording = async () => {
     if (isRecording) {
-      stopRecording();
+      stopRecording(false);
       return;
     }
     if (isStarting || isLoading) return;
 
-    const SpeechRecognition = getSpeechRecognition();
-    if (!SpeechRecognition) {
+    if (!navigator?.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setSpeechSupported(false);
-      setErrorMessage('Tu navegador no soporta reconocimiento de voz. Puedes escribir tu pedido directamente.');
+      setErrorMessage('Tu dispositivo no soporta grabación de audio. Puedes escribir tu pedido.');
       return;
     }
 
-    stopRecording(true);
     setIsStarting(true);
     setErrorMessage(null);
     setDraft(null);
+    audioChunksRef.current = [];
 
-    const token = sessionTokenRef.current;
-    baseTranscriptRef.current = transcript.trim();
-
-    // Safety timeout: prevents the UI from remaining stuck in isStarting if WebKit freezes
-    startingTimeoutRef.current = setTimeout(() => {
-      if (sessionTokenRef.current === token) {
-        setIsStarting(false);
-        setIsRecording(false);
-        const activeRec = recognitionRef.current;
-        recognitionRef.current = null;
-        if (activeRec) {
-          try {
-            activeRec.abort();
-          } catch {
-            // Safe cleanup
-          }
-        }
-        setErrorMessage('El micrófono tardó en responder. Toca para reintentar o escribe tu pedido abajo.');
-      }
-    }, 4500);
-
-    const recognition = new SpeechRecognition();
-    recognitionRef.current = recognition;
-    recognition.lang = 'es-MX';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      if (startingTimeoutRef.current) {
-        clearTimeout(startingTimeoutRef.current);
-        startingTimeoutRef.current = null;
-      }
-      if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
-      setIsStarting(false);
-      setIsRecording(true);
-    };
-
-    recognition.onresult = (event) => {
-      if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
-      let recognized = '';
-      for (let index = 0; index < event.results.length; index += 1) {
-        recognized += `${event.results[index][0].transcript} `;
-      }
-      setTranscript(appendVoiceTranscript(baseTranscriptRef.current, recognized));
-    };
-
-    recognition.onerror = (event) => {
-      if (startingTimeoutRef.current) {
-        clearTimeout(startingTimeoutRef.current);
-        startingTimeoutRef.current = null;
-      }
-      if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
-      const messages: Record<string, string> = {
-        'not-allowed': 'Permiso de micrófono denegado. Puedes escribir tu pedido o habilitar el micrófono en los ajustes.',
-        network: 'No se pudo conectar con el servicio de voz del navegador. Puedes escribir tu pedido.',
-        'no-speech': 'No se detectó voz. Toca para dictar nuevamente o escribe tu pedido.',
-        'audio-capture': 'No se detectó micrófono disponible en tu dispositivo.',
-        'service-not-allowed': 'Servicio de voz no permitido en este navegador. Escribe tu pedido abajo.',
-      };
-      setErrorMessage(messages[event.error] || 'No se pudo continuar el dictado. Puedes escribir tu pedido.');
-      setIsStarting(false);
-      setIsRecording(false);
-    };
-
-    recognition.onend = () => {
-      if (startingTimeoutRef.current) {
-        clearTimeout(startingTimeoutRef.current);
-        startingTimeoutRef.current = null;
-      }
-      if (sessionTokenRef.current !== token || recognitionRef.current !== recognition) return;
-      recognitionRef.current = null;
-      setIsStarting(false);
-      setIsRecording(false);
-    };
+    const token = sessionTokenRef.current + 1;
+    sessionTokenRef.current = token;
 
     try {
-      recognition.start();
-    } catch {
-      if (sessionTokenRef.current === token) {
-        if (startingTimeoutRef.current) {
-          clearTimeout(startingTimeoutRef.current);
-          startingTimeoutRef.current = null;
-        }
-        recognitionRef.current = null;
-        setIsStarting(false);
-        setIsRecording(false);
-        setErrorMessage('No se pudo activar el micrófono. Puedes escribir tu pedido.');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+
+      if (sessionTokenRef.current !== token) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
+
+      mediaStreamRef.current = stream;
+      const mimeType = getSupportedMimeType();
+      const recorderOptions: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      const recorder = new MediaRecorder(stream, recorderOptions);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        cleanupAudioStream();
+        if (sessionTokenRef.current !== token) return;
+        const recordedBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || mimeType || 'audio/webm',
+        });
+        if (recordedBlob.size < 100) {
+          setErrorMessage('La grabación fue muy breve. Toca el micrófono para intentar de nuevo.');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (sessionTokenRef.current !== token) return;
+          const resultStr = typeof reader.result === 'string' ? reader.result : '';
+          const commaIndex = resultStr.indexOf(',');
+          const base64Data = commaIndex >= 0 ? resultStr.substring(commaIndex + 1) : resultStr;
+          void handleSendAudio(base64Data, recordedBlob.type || 'audio/webm', token);
+        };
+        reader.readAsDataURL(recordedBlob);
+      };
+
+      recorder.start(250);
+      setIsStarting(false);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      // Duration counter and safety auto-stop at MAX_RECORDING_SECONDS
+      let elapsed = 0;
+      timerIntervalRef.current = setInterval(() => {
+        elapsed += 1;
+        setRecordingSeconds(elapsed);
+        if (elapsed >= MAX_RECORDING_SECONDS) {
+          stopRecording(false);
+        }
+      }, 1000);
+    } catch {
+      cleanupAudioStream();
+      setIsStarting(false);
+      setIsRecording(false);
+      setErrorMessage('No se pudo acceder al micrófono. Verifica los permisos de tu navegador o escribe tu pedido abajo.');
     }
   };
 
@@ -242,7 +272,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       setErrorMessage('La sucursal no está disponible para pedidos asistidos.');
       return;
     }
-    stopRecording();
+    stopRecording(true);
     setIsLoading(true);
     setErrorMessage(null);
     setDraft(null);
@@ -290,7 +320,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ display: 'grid', placeItems: 'center', width: 40, height: 40, borderRadius: 12, color: '#fff', background: 'linear-gradient(135deg,#f97316,#ea580c)' }}><Sparkles size={22} /></span>
-            <div><h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.15rem' }}>Pedido por voz</h3><p style={{ margin: 0, color: '#64748b', fontSize: '.8rem' }}>Revisa el borrador antes de agregarlo</p></div>
+            <div><h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.15rem' }}>Pedido por voz</h3><p style={{ margin: 0, color: '#64748b', fontSize: '.8rem' }}>Graba tu audio o escribe tu pedido</p></div>
           </div>
           <button type="button" onClick={onClose} disabled={isLoading} aria-label="Cerrar" style={{ border: 0, borderRadius: '50%', width: 36, height: 36, color: '#475569', background: '#f1f5f9' }}><X size={20} /></button>
         </header>
@@ -308,41 +338,70 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
               lineHeight: 1.35,
             }}
           >
-            Estás navegando dentro de una aplicación (WhatsApp/Instagram). Si el micrófono no responde, puedes escribir tu pedido directamente o abrir el enlace en tu navegador (Safari/Chrome).
+            Estás navegando dentro de una aplicación (WhatsApp/Instagram). Puedes grabar tu nota de voz o escribir tu pedido directamente abajo.
           </div>
         )}
 
-        <div style={{ display: 'grid', placeItems: 'center', padding: '14px 0', marginBottom: 14, border: `1.5px ${isRecording ? 'solid #fca5a5' : 'dashed #cbd5e1'}`, borderRadius: 16, background: isRecording ? '#fef2f2' : '#f8fafc' }}>
+        <div style={{ display: 'grid', placeItems: 'center', padding: '16px 0', marginBottom: 14, border: `1.5px ${isRecording ? 'solid #fca5a5' : 'dashed #cbd5e1'}`, borderRadius: 16, background: isRecording ? '#fef2f2' : '#f8fafc' }}>
           <button
             type="button"
             onClick={startRecording}
             disabled={isLoading || isStarting || !speechSupported}
-            aria-label={isRecording ? 'Detener dictado' : 'Iniciar dictado'}
+            aria-label={isRecording ? 'Detener grabación y enviar' : 'Iniciar grabación'}
             style={{
               display: 'grid',
               placeItems: 'center',
-              width: 68,
-              height: 68,
+              width: 72,
+              height: 72,
               border: 0,
               borderRadius: '50%',
               color: '#fff',
               background: isRecording ? '#dc2626' : isStarting ? '#f97316' : '#ea580c',
               cursor: speechSupported ? 'pointer' : 'not-allowed',
-              boxShadow: isRecording ? '0 0 0 6px rgba(220, 38, 38, 0.2)' : 'none',
+              boxShadow: isRecording ? '0 0 0 8px rgba(220, 38, 38, 0.25)' : 'none',
               transition: 'all 0.2s ease',
             }}
           >
-            {isRecording ? <MicOff size={30} /> : <Mic size={30} />}
+            {isRecording ? <MicOff size={32} /> : <Mic size={32} />}
           </button>
-          <strong style={{ marginTop: 9, color: isRecording ? '#dc2626' : '#475569', fontSize: '.86rem' }}>
-            {isRecording ? 'Escuchando… (toca para detener)' : isStarting ? 'Activando micrófono…' : speechSupported ? 'Toca para dictar' : 'Escribe tu pedido abajo'}
+          <strong style={{ marginTop: 10, color: isRecording ? '#dc2626' : '#475569', fontSize: '.88rem' }}>
+            {isRecording
+              ? `Grabando… ${recordingSeconds}s / ${MAX_RECORDING_SECONDS}s (toca para enviar)`
+              : isStarting
+              ? 'Iniciando micrófono…'
+              : isLoading
+              ? 'Interpretando audio con IA…'
+              : speechSupported
+              ? 'Toca para grabar nota de voz'
+              : 'Escribe tu pedido abajo'}
           </strong>
+          {isRecording && (
+            <span style={{ fontSize: '.75rem', color: '#991b1b', marginTop: 4 }}>
+              Habla claro indicando platillos, cantidades y detalles
+            </span>
+          )}
         </div>
 
         <label style={{ display: 'block', color: '#334155', fontSize: '.8rem', fontWeight: 700, marginBottom: 6 }}>Tu pedido dictado o escrito</label>
         <div style={{ position: 'relative', marginBottom: 12 }}>
-          <textarea value={transcript} maxLength={1000} rows={3} disabled={isLoading} onChange={(event) => { setTranscript(event.target.value); setDraft(null); setErrorMessage(null); }} placeholder="Ejemplo: dos hamburguesas y una limonada" style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', border: '1.5px solid #cbd5e1', borderRadius: 12, padding: 12, font: 'inherit' }} />
-          {transcript && !isLoading && <button type="button" onClick={() => { setTranscript(''); setDraft(null); }} style={{ position: 'absolute', right: 8, bottom: 8, display: 'flex', gap: 4, border: 0, borderRadius: 6, padding: '4px 8px', color: '#64748b', background: '#f1f5f9' }}><RotateCcw size={12} /> Borrar</button>}
+          <textarea
+            value={transcript}
+            maxLength={1000}
+            rows={3}
+            disabled={isLoading || isRecording}
+            onChange={(event) => { setTranscript(event.target.value); setDraft(null); setErrorMessage(null); }}
+            placeholder="Ejemplo: dos hamburguesas y una limonada"
+            style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', border: '1.5px solid #cbd5e1', borderRadius: 12, padding: 12, font: 'inherit' }}
+          />
+          {transcript && !isLoading && !isRecording && (
+            <button
+              type="button"
+              onClick={() => { setTranscript(''); setDraft(null); }}
+              style={{ position: 'absolute', right: 8, bottom: 8, display: 'flex', gap: 4, border: 0, borderRadius: 6, padding: '4px 8px', color: '#64748b', background: '#f1f5f9' }}
+            >
+              <RotateCcw size={12} /> Borrar
+            </button>
+          )}
         </div>
 
         {errorMessage && <div role="alert" style={{ marginBottom: 12, padding: '10px 12px', border: '1px solid #fecaca', borderRadius: 10, color: '#b91c1c', background: '#fef2f2', fontSize: '.82rem' }}>{errorMessage}</div>}
@@ -372,17 +431,90 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
           </div>
         )}
 
-        {draft && <div style={{ marginBottom: 14, padding: 12, border: '1px solid #bbf7d0', borderRadius: 12, background: '#f0fdf4' }}>
-          <strong style={{ color: '#166534' }}>Borrador para revisar</strong>
-          {draft.lines.map((line, index) => <div key={`${line.product_id}-${index}`} style={{ marginTop: 8, color: '#334155' }}><b>{line.quantity} × {line.product_name}</b>{line.selected_options.length > 0 && <div style={{ fontSize: '.78rem', color: '#64748b' }}>{line.selected_options.map((option) => option.option_name).join(', ')}</div>}</div>)}
-          {optionGroups.map((question) => <fieldset key={`${question.line_index}-${question.group_id}`} style={{ marginTop: 12, border: 0, padding: 0 }}><legend style={{ fontSize: '.82rem', fontWeight: 700, color: '#334155' }}>{question.prompt}</legend><div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 7 }}>{question.options.map((option) => {
-            const selected = draft.lines[question.line_index]?.selected_options.some((candidate) => candidate.group_id === question.group_id && candidate.option_id === option.id);
-            return <button key={option.id} type="button" aria-pressed={selected} onClick={() => setDraft((current) => current ? toggleVoiceDraftOption(current, question, option) : current)} style={{ display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${selected ? '#16a34a' : '#cbd5e1'}`, borderRadius: 999, padding: '7px 10px', color: selected ? '#166534' : '#475569', background: selected ? '#dcfce7' : '#fff' }}>{selected && <Check size={14} />}{option.name}</button>;
-          })}</div></fieldset>)}
-        </div>}
+        {draft && (
+          <div style={{ marginBottom: 14, padding: 12, border: '1px solid #bbf7d0', borderRadius: 12, background: '#f0fdf4' }}>
+            <strong style={{ color: '#166534' }}>Borrador para revisar</strong>
+            {draft.lines.map((line, index) => (
+              <div key={`${line.product_id}-${index}`} style={{ marginTop: 8, color: '#334155' }}>
+                <b>{line.quantity} × {line.product_name}</b>
+                {line.selected_options.length > 0 && (
+                  <div style={{ fontSize: '.78rem', color: '#64748b' }}>
+                    {line.selected_options.map((option) => option.option_name).join(', ')}
+                  </div>
+                )}
+              </div>
+            ))}
+            {optionGroups.map((question) => (
+              <fieldset key={`${question.line_index}-${question.group_id}`} style={{ marginTop: 12, border: 0, padding: 0 }}>
+                <legend style={{ fontSize: '.82rem', fontWeight: 700, color: '#334155' }}>{question.prompt}</legend>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 7 }}>
+                  {question.options.map((option) => {
+                    const selected = draft.lines[question.line_index]?.selected_options.some(
+                      (candidate) => candidate.group_id === question.group_id && candidate.option_id === option.id,
+                    );
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setDraft((current) => (current ? toggleVoiceDraftOption(current, question, option) : current))}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          border: `1px solid ${selected ? '#16a34a' : '#cbd5e1'}`,
+                          borderRadius: 999,
+                          padding: '7px 10px',
+                          color: selected ? '#166534' : '#475569',
+                          background: selected ? '#dcfce7' : '#fff',
+                        }}
+                      >
+                        {selected && <Check size={14} />}
+                        {option.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </div>
+        )}
 
-        {!draft ? <button type="button" onClick={() => void handleSubmit()} disabled={isLoading || !transcript.trim()} style={{ width: '100%', padding: 14, border: 0, borderRadius: 14, color: '#fff', fontWeight: 800, background: isLoading || !transcript.trim() ? '#cbd5e1' : 'linear-gradient(135deg,#10b981,#059669)' }}>{isLoading ? 'Interpretando…' : 'Crear borrador'}</button>
-          : <button type="button" onClick={applyDraft} disabled={!complete} style={{ width: '100%', padding: 14, border: 0, borderRadius: 14, color: '#fff', fontWeight: 800, background: complete ? 'linear-gradient(135deg,#10b981,#059669)' : '#cbd5e1' }}>{complete ? 'Agregar borrador al carrito' : 'Completa las opciones requeridas'}</button>}
+        {!draft ? (
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={isLoading || isRecording || !transcript.trim()}
+            style={{
+              width: '100%',
+              padding: 14,
+              border: 0,
+              borderRadius: 14,
+              color: '#fff',
+              fontWeight: 800,
+              background: isLoading || isRecording || !transcript.trim() ? '#cbd5e1' : 'linear-gradient(135deg,#10b981,#059669)',
+            }}
+          >
+            {isLoading ? 'Interpretando…' : 'Crear borrador con texto'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={applyDraft}
+            disabled={!complete}
+            style={{
+              width: '100%',
+              padding: 14,
+              border: 0,
+              borderRadius: 14,
+              color: '#fff',
+              fontWeight: 800,
+              background: complete ? 'linear-gradient(135deg,#10b981,#059669)' : '#cbd5e1',
+            }}
+          >
+            {complete ? 'Agregar borrador al carrito' : 'Completa las opciones requeridas'}
+          </button>
+        )}
       </section>
     </div>
   );

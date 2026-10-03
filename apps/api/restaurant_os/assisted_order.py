@@ -251,6 +251,101 @@ def request_openrouter_draft(
     return parsed
 
 
+def transcribe_openrouter_audio(
+    audio_base64: str,
+    mime_type: str,
+    options: OpenRouterOptions,
+    opener: Callable[..., Any] = urlopen,
+) -> str:
+    clean_mime = mime_type.split(";")[0].strip().lower()
+    format_map = {
+        "audio/webm": "webm",
+        "audio/mp4": "mp4",
+        "audio/m4a": "m4a",
+        "audio/wav": "wav",
+        "audio/x-wav": "wav",
+        "audio/mpeg": "mp3",
+        "audio/mp3": "mp3",
+        "audio/ogg": "ogg",
+        "audio/aac": "aac",
+    }
+    audio_format = format_map.get(clean_mime, "webm")
+
+    body = {
+        "model": options.model,
+        "temperature": 0,
+        "max_tokens": 500,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Eres un transcriptor de audio para pedidos de restaurante en México.\n"
+                    "Tu única tarea es escuchar el audio y transcribir fielmente en español "
+                    "lo que el cliente dijo.\n"
+                    "Debes devolver estrictamente un JSON con la clave 'transcript':\n"
+                    "{\n  \"transcript\": \"texto exacto hablado\"\n}\n"
+                    "Si no se detecta voz comprensible o sólo hay silencio o ruido ininteligible, "
+                    "devuelve {\"transcript\": \"\"}."
+                ),
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Transcribe este audio de pedido de comida.",
+                    },
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": audio_base64,
+                            "format": audio_format,
+                        },
+                    },
+                ],
+            },
+        ],
+    }
+    headers = {
+        "Authorization": f"Bearer {options.api_key}",
+        "Content-Type": "application/json",
+        "X-OpenRouter-Title": options.app_title,
+    }
+    if options.http_referer:
+        headers["HTTP-Referer"] = options.http_referer
+    request = Request(
+        f"{options.base_url.rstrip('/')}/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with opener(request, timeout=options.timeout_seconds) as response:
+            envelope = json.loads(response.read().decode("utf-8"))
+        content = envelope["choices"][0]["message"]["content"]
+        parsed = _parse_json_content(content)
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise AssistedOrderError(
+            "assisted_order_provider_unavailable", "OpenRouter no respondió a tiempo."
+        ) from exc
+    except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise AssistedOrderError(
+            "assisted_order_invalid_response", "OpenRouter devolvió una respuesta inválida."
+        ) from exc
+    if not isinstance(parsed, dict) or "transcript" not in parsed:
+        raise AssistedOrderError(
+            "assisted_order_invalid_response", "OpenRouter devolvió una respuesta inválida."
+        )
+    transcript = str(parsed["transcript"]).strip()
+    if len(transcript) < 2:
+        raise AssistedOrderError(
+            "assisted_order_audio_unintelligible",
+            "No se detectó voz comprensible en el audio.",
+        )
+    return transcript
+
+
 def build_assisted_draft(
     text: str,
     catalog: list[dict[str, Any]],

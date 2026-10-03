@@ -495,3 +495,100 @@ def test_voice_order_partial_match_includes_unmatched_items_in_draft(
     assert data["status"] == "ready"
     assert data["lines"][0]["product_id"] == PRODUCT_1
     assert data["unmatched_items"] == ["2 tacos de carne asada"]
+
+
+def test_public_voice_audio_draft_transcribes_and_returns_draft(
+    app_with_mock_session: tuple[Any, MagicMock],
+) -> None:
+    app, _mock_session = app_with_mock_session
+    client = TestClient(app)
+
+    with patch("restaurant_os.api.get_settings") as settings, patch(
+        "restaurant_os.api._resolve_active_public_order_key",
+        return_value={"branch_id": BRANCH_ID},
+    ), patch("restaurant_os.api.get_public_catalog", return_value=FAKE_CATALOG), patch(
+        "restaurant_os.api.transcribe_openrouter_audio",
+        return_value="quiero tres tacos al pastor",
+    ) as mock_transcribe, patch(
+        "restaurant_os.api.build_assisted_draft",
+        return_value={
+            "customer_name": "",
+            "phone": "",
+            "order_type": None,
+            "lines": [
+                {
+                    "product_id": PRODUCT_1,
+                    "product_name": "Tacos al Pastor",
+                    "quantity": 3,
+                    "selected_options": [],
+                }
+            ],
+            "questions": [],
+            "status": "ready",
+            "model": "synthetic-model",
+        },
+    ) as mock_build_draft:
+        settings.return_value = MagicMock(
+            public_voice_order_enabled=True,
+            openrouter_api_key="test-key",
+            openrouter_model="google/gemini-3.1-flash-lite",
+            openrouter_base_url="https://openrouter.ai/api/v1",
+            openrouter_timeout_seconds=15,
+            openrouter_http_referer=None,
+            openrouter_app_title="RestaurantOS",
+        )
+        app.state.public_order_intents_enabled = True
+        app.state.public_order_rate_limiter = MagicMock(allow=MagicMock(return_value=True))
+
+        dummy_audio = "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwE="
+        response = client.post(
+            f"/api/v1/public/branches/{PUBLIC_KEY}/voice-audio-draft",
+            json={"audio_base64": dummy_audio, "mime_type": "audio/webm"},
+        )
+
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    data = response.json()
+    assert data["transcript"] == "quiero tres tacos al pastor"
+    assert data["status"] == "ready"
+    assert data["lines"][0]["product_id"] == PRODUCT_1
+    assert mock_transcribe.call_count == 1
+    assert mock_build_draft.call_args.args[0] == "quiero tres tacos al pastor"
+
+
+def test_public_voice_audio_draft_unintelligible_returns_422(
+    app_with_mock_session: tuple[Any, MagicMock],
+) -> None:
+    app, _mock_session = app_with_mock_session
+    client = TestClient(app)
+
+    with patch("restaurant_os.api.get_settings") as settings, patch(
+        "restaurant_os.api._resolve_active_public_order_key",
+        return_value={"branch_id": BRANCH_ID},
+    ), patch(
+        "restaurant_os.api.transcribe_openrouter_audio",
+        side_effect=AssistedOrderError(
+            "assisted_order_audio_unintelligible",
+            "No se detectó voz comprensible en el audio.",
+        ),
+    ):
+        settings.return_value = MagicMock(
+            public_voice_order_enabled=True,
+            openrouter_api_key="test-key",
+            openrouter_model="google/gemini-3.1-flash-lite",
+            openrouter_base_url="https://openrouter.ai/api/v1",
+            openrouter_timeout_seconds=15,
+            openrouter_http_referer=None,
+            openrouter_app_title="RestaurantOS",
+        )
+        app.state.public_order_intents_enabled = True
+        app.state.public_order_rate_limiter = MagicMock(allow=MagicMock(return_value=True))
+
+        dummy_audio = "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwE="
+        response = client.post(
+            f"/api/v1/public/branches/{PUBLIC_KEY}/voice-audio-draft",
+            json={"audio_base64": dummy_audio, "mime_type": "audio/webm"},
+        )
+
+    assert response.status_code == 422
+    data = response.json()
+    assert data["detail"]["code"] == "public_voice_order_audio_unintelligible"

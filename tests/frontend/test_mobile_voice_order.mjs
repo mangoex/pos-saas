@@ -68,11 +68,12 @@ try {
   const modal = readFileSync(join(root, 'apps/mobile-web/src/components/VoiceOrderModal.tsx'), 'utf8');
   assert.match(modal, /publicKey/, 'voice endpoint must use public storefront identity');
   assert.match(modal, /sessionTokenRef/, 'stale speech callbacks must be ignored');
-  assert.match(modal, /appendVoiceTranscript/, 'dictation sessions must append without duplicates');
+  assert.match(modal, /voice-audio-draft/, 'modal must post recorded audio to voice-audio-draft endpoint');
+  assert.match(modal, /voice-order-draft/, 'modal must support manual text fallback with voice-order-draft endpoint');
+  assert.match(modal, /MediaRecorder/, 'must use universal MediaRecorder for voice capture');
+  assert.match(modal, /getUserMedia/, 'must request microphone stream via getUserMedia');
   assert.match(modal, /isVoiceDraftComplete/, 'incomplete required options must block cart application');
   assert.match(modal, /draft\?\.option_groups \?\? draft\?\.questions/, 'all canonical groups must remain editable');
-  assert.match(modal, /startingTimeoutRef/, 'safety timeout must prevent stuck isStarting state');
-  assert.match(modal, /continuous\s*=\s*true/, 'speech recognition must use continuous dictation');
   assert.match(modal, /isInAppBrowser/, 'must detect in-app browser environments');
   assert.doesNotMatch(modal, /onAddCartItems:\s*\(newItems:\s*any\[\]/, 'cart boundary must be typed');
 } finally {

@@ -28,6 +28,7 @@ from restaurant_os.assisted_order import (
     AssistedOrderError,
     OpenRouterOptions,
     build_assisted_draft,
+    transcribe_openrouter_audio,
 )
 from restaurant_os.admin_ai import (
     AdminAiError,
@@ -3268,6 +3269,12 @@ class PublicVoiceOrderDraftRequest(BaseModel):
     text: str = Field(min_length=3, max_length=1000)
 
 
+class PublicVoiceAudioDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    audio_base64: str = Field(min_length=32, max_length=4_000_000)
+    mime_type: str = Field(default="audio/webm", max_length=64)
+
+
 class ValidateCouponPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: str | None = Field(default=None, max_length=64)
@@ -3459,6 +3466,130 @@ def create_public_voice_order_draft_endpoint(
         },
     )
     return draft
+
+
+@router.post("/public/branches/{public_key}/voice-audio-draft")
+def create_public_voice_audio_draft_endpoint(
+    public_key: str,
+    payload: PublicVoiceAudioDraftRequest,
+    request: Request,
+    session: SessionDep,
+) -> dict[str, Any]:
+    settings = get_settings()
+    if (
+        not settings.public_voice_order_enabled
+        or not settings.openrouter_api_key
+        or not bool(getattr(request.app.state, "public_order_intents_enabled", False))
+    ):
+        raise _public_voice_order_error("public_voice_order_unavailable", 503)
+    key = _resolve_active_public_order_key(session, public_key)
+    limiter = getattr(request.app.state, "public_order_rate_limiter", None)
+    if not key or limiter is None:
+        raise _public_voice_order_error("public_voice_order_unavailable", 503)
+    try:
+        allowed = bool(limiter.allow(f"{public_key}:voice", _public_client_signal(request)))
+    except Exception as exc:
+        logger.info(
+            "public_voice_audio_draft result=unavailable",
+            extra={"metric": "public_voice_audio_draft", "result": "unavailable"},
+        )
+        raise _public_voice_order_error("public_voice_order_unavailable", 503) from exc
+    if not allowed:
+        logger.info(
+            "public_voice_audio_draft result=limited",
+            extra={"metric": "public_voice_audio_draft", "result": "limited"},
+        )
+        raise _public_voice_order_error("public_voice_order_rate_limited", 429)
+
+    options = OpenRouterOptions(
+        api_key=settings.openrouter_api_key,
+        model=settings.openrouter_model,
+        base_url=settings.openrouter_base_url,
+        timeout_seconds=settings.openrouter_timeout_seconds,
+        http_referer=settings.openrouter_http_referer,
+        app_title=settings.openrouter_app_title,
+    )
+    started_at = time.monotonic()
+    try:
+        transcript = transcribe_openrouter_audio(
+            payload.audio_base64,
+            payload.mime_type,
+            options,
+        )
+    except AssistedOrderError as exc:
+        latency_ms = round((time.monotonic() - started_at) * 1_000)
+        logger.info(
+            "public_voice_audio_draft result=error error_code=%s model=%s latency_ms=%s",
+            exc.code,
+            settings.openrouter_model,
+            latency_ms,
+            extra={
+                "metric": "public_voice_audio_draft",
+                "result": "error",
+                "latency_ms": latency_ms,
+            },
+        )
+        status_code = 422 if exc.code == "assisted_order_audio_unintelligible" else 502
+        error_code = (
+            "public_voice_order_audio_unintelligible"
+            if exc.code == "assisted_order_audio_unintelligible"
+            else exc.code
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": error_code, "message": str(exc)},
+        ) from exc
+
+    catalog = get_public_catalog(session, branch_id=str(key["branch_id"]))
+    items = list(catalog.get("items") or [])
+    modifiers_by_product = {
+        str(item.get("id")): list(item.get("modifier_groups") or []) for item in items
+    }
+    try:
+        draft = build_assisted_draft(
+            transcript,
+            items,
+            lambda product_id: modifiers_by_product.get(product_id, []),
+            options,
+        )
+    except AssistedOrderError as exc:
+        latency_ms = round((time.monotonic() - started_at) * 1_000)
+        logger.info(
+            "public_voice_audio_draft result=draft_error error_code=%s model=%s latency_ms=%s",
+            exc.code,
+            settings.openrouter_model,
+            latency_ms,
+            extra={
+                "metric": "public_voice_audio_draft",
+                "result": "draft_error",
+                "latency_ms": latency_ms,
+            },
+        )
+        status_code = 422 if exc.code in {
+            "assisted_order_catalog_mismatch",
+            "assisted_order_unresolved",
+        } else 502
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+
+    latency_ms = round((time.monotonic() - started_at) * 1_000)
+    logger.info(
+        "public_voice_audio_draft result=success model=%s questions=%s latency_ms=%s",
+        settings.openrouter_model,
+        len(draft.get("questions") or []),
+        latency_ms,
+        extra={
+            "metric": "public_voice_audio_draft",
+            "result": "success",
+            "latency_ms": latency_ms,
+        },
+    )
+    return {
+        "transcript": transcript,
+        **draft,
+    }
 
 
 @router.get("/public/branches/{public_key}/trending-dishes")
