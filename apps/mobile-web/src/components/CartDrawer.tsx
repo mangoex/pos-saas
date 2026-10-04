@@ -640,8 +640,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="cart-empty-icon-circle">
                 <ShoppingBag size={32} />
               </div>
-              <h3>Tu comanda está vacía</h3>
-              <p>Agrega deliciosos jugos, platillos o bowls desde el menú.</p>
+              <h3>Aún no has agregado nada</h3>
+              <p>Elige tus platillos o bebidas favoritas para comenzar tu orden.</p>
               <button type="button" className="btn-cart-back-menu" onClick={onClose}>
                 Explorar el Menú
               </button>

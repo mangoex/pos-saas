@@ -107,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
         <input
           type="search"
           className="mobile-search-input"
-          placeholder="Buscar platillos, jugos, smoothies, bowls..."
+          placeholder="Buscar platillos o bebidas..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
         />
