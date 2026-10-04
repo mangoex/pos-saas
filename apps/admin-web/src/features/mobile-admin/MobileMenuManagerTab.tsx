@@ -27,6 +27,7 @@ import {
   ToggleRight,
   HelpCircle,
   Trash2,
+  Archive,
   ChevronUp,
   ChevronDown,
 } from 'lucide-react';
@@ -104,6 +105,208 @@ function getEmojiFallback(name: string, category: string): string {
   if (text.includes('agua') || text.includes('refresco') || text.includes('bebida') || text.includes('jugo')) return '🥤';
   return '🍽️';
 }
+
+interface SwipeableProductCardProps {
+  product: Product;
+  onDelete: () => void;
+  onArchive: () => void;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}
+
+const SWIPE_THRESHOLD = 75;
+
+const SwipeableProductCard: React.FC<SwipeableProductCardProps> = ({
+  product,
+  onDelete,
+  onArchive,
+  onClick,
+  disabled,
+  children,
+}) => {
+  const [offsetX, setOffsetX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const isIntentDetermined = useRef(false);
+  const isHorizontalSwipe = useRef(false);
+  const hasMovedEnough = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (disabled) return;
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
+    startX.current = clientX;
+    startY.current = clientY;
+    isIntentDetermined.current = false;
+    isHorizontalSwipe.current = false;
+    hasMovedEnough.current = false;
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwiping || disabled) return;
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
+    const deltaX = clientX - startX.current;
+    const deltaY = clientY - startY.current;
+
+    if (!isIntentDetermined.current) {
+      if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+        isIntentDetermined.current = true;
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          isHorizontalSwipe.current = true;
+        } else {
+          isHorizontalSwipe.current = false;
+          setIsSwiping(false);
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    if (!isHorizontalSwipe.current) return;
+
+    if (Math.abs(deltaX) > 10) {
+      hasMovedEnough.current = true;
+    }
+
+    // Resistencia elástica pasando 110px
+    let clampedX = deltaX;
+    const limit = 110;
+    if (Math.abs(deltaX) > limit) {
+      const excess = Math.abs(deltaX) - limit;
+      clampedX = Math.sign(deltaX) * (limit + Math.pow(excess, 0.7));
+    }
+
+    setOffsetX(clampedX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!isSwiping) return;
+    setIsSwiping(false);
+
+    const currentX = offsetX;
+    setOffsetX(0);
+
+    if (isHorizontalSwipe.current && Math.abs(currentX) >= SWIPE_THRESHOLD) {
+      if (currentX > 0) {
+        // Deslizar a la DERECHA -> Eliminar
+        setTimeout(() => {
+          if (window.confirm(`¿Eliminar "${product.name}"? El platillo se desactivará del menú.`)) {
+            onDelete();
+          }
+        }, 50);
+      } else {
+        // Deslizar a la IZQUIERDA -> Archivar
+        setTimeout(() => {
+          if (window.confirm(`¿Archivar "${product.name}"? El platillo saldrá del menú activo y conservará su historial.`)) {
+            onArchive();
+          }
+        }, 50);
+      }
+    }
+
+    isIntentDetermined.current = false;
+    isHorizontalSwipe.current = false;
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (hasMovedEnough.current) {
+      e.stopPropagation();
+      hasMovedEnough.current = false;
+      return;
+    }
+    onClick();
+  };
+
+  const isSwipingRight = offsetX > 0;
+  const isSwipingLeft = offsetX < 0;
+  const progress = Math.min(1, Math.max(0, Math.abs(offsetX) / SWIPE_THRESHOLD));
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        borderRadius: 16,
+        overflow: 'hidden',
+        touchAction: 'pan-y',
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
+      {/* Fondo de acción swipe estilo Google */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: isSwipingRight ? '#dc2626' : isSwipingLeft ? '#2563eb' : 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isSwipingRight ? 'flex-start' : 'flex-end',
+          padding: '0 24px',
+          color: '#ffffff',
+          fontWeight: 800,
+          fontSize: '0.95rem',
+          gap: 8,
+          transition: isSwiping ? 'none' : 'background-color 0.2s ease',
+        }}
+      >
+        {isSwipingRight && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transform: `scale(${0.85 + progress * 0.25})`,
+              opacity: progress,
+              transition: 'transform 0.1s ease',
+            }}
+          >
+            <Trash2 size={24} />
+            <span>Eliminar</span>
+          </div>
+        )}
+        {isSwipingLeft && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transform: `scale(${0.85 + progress * 0.25})`,
+              opacity: progress,
+              transition: 'transform 0.1s ease',
+            }}
+          >
+            <span>Archivar</span>
+            <Archive size={24} />
+          </div>
+        )}
+      </div>
+
+      {/* Tarjeta frontal interactiva */}
+      <div
+        onClick={handleClick}
+        style={{
+          transform: `translateX(${offsetX}px)`,
+          transition: isSwiping ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          position: 'relative',
+          zIndex: 2,
+          backgroundColor: '#ffffff',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
 
 export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
   branchId: _branchId,
@@ -398,10 +601,25 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
       queryClient.invalidateQueries({ queryKey: ['products'] });
       modifierRequestId.current += 1;
       setIsProductModalOpen(false);
+      showToast('Producto eliminado');
+    },
+    onError: (err: any) => {
+      showToast(err?.message || err?.detail?.message || 'Error al eliminar producto');
+    },
+  });
+
+  const archiveProductMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      return fetchApi(`/catalog/products/${productId}/archive`, { method: 'POST' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      modifierRequestId.current += 1;
+      setIsProductModalOpen(false);
       showToast('Producto archivado');
     },
     onError: (err: any) => {
-      setProductModalError(err?.message || err?.detail?.message || 'Error al eliminar producto');
+      showToast(err?.message || err?.detail?.message || 'Error al archivar producto');
     },
   });
 
@@ -938,8 +1156,10 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                   <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
                     {filteredProducts.length} {filteredProducts.length === 1 ? 'platillo' : 'platillos'}
                   </span>
-                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span>▲▼ Flechas ordenan en menú digital</span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>▲▼ Ordenar</span>
+                    <span>•</span>
+                    <span style={{ color: '#475569' }}>Desliza ➔ Eliminar | 🠔 Archivar</span>
                   </span>
                 </div>
               )}
@@ -957,13 +1177,19 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                   const canMoveDown = !isSearching && !isPromosTab && Boolean(orderInfo?.canMoveDown);
 
                 return (
-                  <div
+                  <SwipeableProductCard
                     key={product.id}
+                    product={product}
+                    onDelete={() => deleteProductMutation.mutate(product.id)}
+                    onArchive={() => archiveProductMutation.mutate(product.id)}
                     onClick={() => openProductModal(product)}
-                    style={{
-                      backgroundColor: '#ffffff',
-                      borderRadius: 16,
-                      padding: 16,
+                    disabled={deleteProductMutation.isPending || archiveProductMutation.isPending}
+                  >
+                    <div
+                      style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: 16,
+                        padding: 16,
                       border: product.is_promo ? '1.5px solid #f97316' : '1px solid #e2e8f0',
                       boxShadow: product.is_promo ? '0 4px 14px rgba(249, 115, 22, 0.12)' : '0 2px 8px rgba(15, 23, 42, 0.05)',
                       display: 'flex',
@@ -1283,8 +1509,9 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                       </button>
                     </div>
                   </div>
-                );
-              })}
+                </SwipeableProductCard>
+              );
+            })}
             </div>
           </>
           )}
@@ -2086,39 +2313,6 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
               >
                 {saveProductMutation.isPending ? 'Guardando...' : editingProduct ? 'Guardar Cambios' : 'Crear Platillo'}
               </button>
-
-              {editingProduct && (
-                <button
-                  type="button"
-                  aria-label={`Archivar ${editingProduct.name}`}
-                  disabled={deleteProductMutation.isPending || saveProductMutation.isPending}
-                  onClick={() => {
-                    if (window.confirm(`¿Eliminar "${editingProduct.name}"? El producto se archivará como agotado, conservará sus datos y podrá reactivarse.`)) {
-                      deleteProductMutation.mutate(editingProduct.id);
-                    }
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    width: 'fit-content',
-                    padding: '10px 14px',
-                    marginTop: 10,
-                    marginLeft: 'auto',
-                    backgroundColor: '#fef2f2',
-                    color: '#dc2626',
-                    border: '1px solid #fecaca',
-                    borderRadius: 12,
-                    fontSize: '0.9rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Trash2 size={16} />
-                  {deleteProductMutation.isPending ? 'Archivando...' : 'Eliminar Platillo'}
-                </button>
-              )}
               </fieldset>
             </form>
           </div>

@@ -13103,7 +13103,7 @@ def update_product(
             raise BusinessError("invalid_station", "Station must be valid")
     if status is not None:
         normalized_status = status.strip().lower()
-        if normalized_status not in {"active", "inactive", "needs_review"}:
+        if normalized_status not in {"active", "inactive", "needs_review", "archived"}:
             raise BusinessError("invalid_product_status", "Product status is invalid")
         if normalized_status == "active":
             current_station = update_data.get("station") or station
@@ -13293,6 +13293,46 @@ def delete_product(
     )
     session.commit()
     return {"id": product_id, "status": "inactive"}
+
+
+def archive_product(
+    session: Session,
+    product_id: str,
+    actor_user_id: str | None = None,
+) -> dict[str, Any]:
+    actor_id = _actor_user_id(actor_user_id)
+    require_permission(session, actor_id, "catalog.manage")
+    organization_id = _modifier_actor_organization(session, actor_id)
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, organization_id)
+    product_exists = session.scalar(
+        sa.select(models.products.c.id).where(
+            models.products.c.id == product_id,
+            models.products.c.status != "archived",
+            models.products.c.organization_id == organization_id,
+        )
+    )
+    if not product_exists:
+        raise BusinessError("product_not_found", "Product was not found")
+    session.execute(
+        sa.update(models.products)
+        .where(
+            models.products.c.id == product_id,
+            models.products.c.organization_id == organization_id,
+        )
+        .values(status="archived", updated_at=_now())
+    )
+    _audit(
+        session,
+        action="product.archived",
+        entity_type="product",
+        entity_id=product_id,
+        payload={"status": "archived"},
+        actor_user_id=actor_id,
+    )
+    session.commit()
+    return {"id": product_id, "status": "archived"}
 
 
 def update_role(

@@ -501,6 +501,18 @@ def test_mobile_catalog_toggle_availability_and_product_image(test_db):
     assert reactivate_resp.status_code == 200
     assert reactivate_resp.json()["status"] == "active"
 
+    # Archive product endpoint
+    archive_resp = client.post(
+        f"/api/v1/catalog/products/{prod_id}/archive",
+        headers=headers,
+    )
+    assert archive_resp.status_code == 200
+    assert archive_resp.json()["status"] == "archived"
+
+    # Verify archived product is no longer returned in active catalog
+    active_prods = client.get("/api/v1/catalog/products", headers=headers).json()
+    assert not any(p["id"] == prod_id for p in active_prods)
+
 
 def test_mobile_branch_settings_and_links(test_db):
     """TDD-TC-253: Check updating branch settings and querying SaaS links."""

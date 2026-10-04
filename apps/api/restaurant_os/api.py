@@ -154,6 +154,7 @@ from restaurant_os.operations import (
     decide_order_reopen_request,
     delete_branch,
     delete_product,
+    archive_product,
     delete_user,
     get_branch_context,
     get_cash_shift_summary,
@@ -4610,6 +4611,18 @@ def delete_catalog_product_endpoint(
 ) -> dict[str, Any]:
     actor_id = _actor_from_request(actor_user_id, authorization)
     return _business_response(lambda: delete_product(session, product_id, actor_id))
+
+
+@router.post("/catalog/products/{product_id}/archive")
+def archive_catalog_product_endpoint(
+    product_id: str,
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _actor_from_request(actor_user_id, authorization)
+    return _business_response(lambda: archive_product(session, product_id, actor_id))
+
 
 
 def _database_response(operation: Callable[[], ResponseT]) -> ResponseT:
