@@ -271,6 +271,22 @@ def transcribe_openrouter_audio(
     }
     audio_format = format_map.get(clean_mime, "webm")
 
+    if audio_format in {"wav", "mp3"}:
+        audio_part: dict[str, Any] = {
+            "type": "input_audio",
+            "input_audio": {
+                "data": audio_base64,
+                "format": audio_format,
+            },
+        }
+    else:
+        audio_part = {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{clean_mime};base64,{audio_base64}",
+            },
+        }
+
     body = {
         "model": options.model,
         "temperature": 0,
@@ -296,13 +312,7 @@ def transcribe_openrouter_audio(
                         "type": "text",
                         "text": "Transcribe este audio de pedido de comida.",
                     },
-                    {
-                        "type": "input_audio",
-                        "input_audio": {
-                            "data": audio_base64,
-                            "format": audio_format,
-                        },
-                    },
+                    audio_part,
                 ],
             },
         ],

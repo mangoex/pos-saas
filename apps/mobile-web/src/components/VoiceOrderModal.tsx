@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Check, Loader2, Mic, MicOff, RotateCcw, Sparkles, Volume2, X } from 'lucide-react';
 import { CartItem, Product } from '../types';
 import {
   isVoiceDraftComplete,
@@ -57,6 +57,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   const [isStarting, setIsStarting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [volumeLevel, setVolumeLevel] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [speechSupported, setSpeechSupported] = useState(true);
   const [draft, setDraft] = useState<VoiceOrderDraft | null>(null);
@@ -65,6 +66,8 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
   const sessionTokenRef = useRef(0);
 
   const isInAppBrowser = useMemo(() => {
@@ -77,6 +80,18 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try {
+        void audioContextRef.current.close();
+      } catch {
+        // Safe context close
+      }
+      audioContextRef.current = null;
+    }
     const stream = mediaStreamRef.current;
     if (stream) {
       try {
@@ -86,19 +101,38 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       }
       mediaStreamRef.current = null;
     }
+    setVolumeLevel(0);
   };
 
   const stopRecording = (discard = false) => {
-    sessionTokenRef.current += 1;
-    cleanupAudioStream();
-    const recorder = mediaRecorderRef.current;
-    mediaRecorderRef.current = null;
-    if (recorder && recorder.state !== 'inactive') {
-      try {
-        if (discard) {
+    if (discard) {
+      sessionTokenRef.current += 1;
+      cleanupAudioStream();
+      const recorder = mediaRecorderRef.current;
+      mediaRecorderRef.current = null;
+      if (recorder && recorder.state !== 'inactive') {
+        try {
           recorder.ondataavailable = null;
           recorder.onstop = null;
+          recorder.stop();
+        } catch {
+          // Safe recorder stop
         }
+      }
+      setIsRecording(false);
+      setIsStarting(false);
+      setRecordingSeconds(0);
+      return;
+    }
+
+    // Normal user finish: stop timer, switch UI to interpreting, and let recorder.stop trigger onstop
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
         recorder.stop();
       } catch {
         // Safe recorder stop
@@ -106,7 +140,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
     }
     setIsRecording(false);
     setIsStarting(false);
-    setRecordingSeconds(0);
+    setIsLoading(true);
   };
 
   useEffect(() => {
@@ -133,6 +167,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   const handleSendAudio = async (audioBase64: string, mimeType: string, token: number) => {
     if (!publicKey) {
       setErrorMessage('La sucursal no está disponible para pedidos por voz.');
+      setIsLoading(false);
       return;
     }
     setIsLoading(true);
@@ -195,12 +230,14 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
     sessionTokenRef.current = token;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
 
       if (sessionTokenRef.current !== token) {
         stream.getTracks().forEach((track) => track.stop());
@@ -208,6 +245,36 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
       }
 
       mediaStreamRef.current = stream;
+
+      // Audio volume meter for real-time visual feedback
+      try {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          const audioCtx = new AudioCtx();
+          audioContextRef.current = audioCtx;
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          const source = audioCtx.createMediaStreamSource(stream);
+          source.connect(analyser);
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+          const updateVolume = () => {
+            if (mediaStreamRef.current !== stream) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i += 1) {
+              sum += dataArray[i];
+            }
+            const avg = sum / dataArray.length;
+            setVolumeLevel(Math.min(100, Math.round((avg / 128) * 100)));
+            animFrameRef.current = requestAnimationFrame(updateVolume);
+          };
+          updateVolume();
+        }
+      } catch {
+        // Visualizer is purely enhancement
+      }
+
       const mimeType = getSupportedMimeType();
       const recorderOptions: MediaRecorderOptions = mimeType ? { mimeType } : {};
       const recorder = new MediaRecorder(stream, recorderOptions);
@@ -226,6 +293,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
           type: recorder.mimeType || mimeType || 'audio/webm',
         });
         if (recordedBlob.size < 100) {
+          setIsLoading(false);
           setErrorMessage('La grabación fue muy breve. Toca el micrófono para intentar de nuevo.');
           return;
         }
@@ -351,20 +419,23 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             style={{
               display: 'grid',
               placeItems: 'center',
-              width: 72,
-              height: 72,
+              width: 76,
+              height: 76,
               border: 0,
               borderRadius: '50%',
               color: '#fff',
               background: isRecording ? '#dc2626' : isStarting ? '#f97316' : '#ea580c',
               cursor: speechSupported ? 'pointer' : 'not-allowed',
-              boxShadow: isRecording ? '0 0 0 8px rgba(220, 38, 38, 0.25)' : 'none',
-              transition: 'all 0.2s ease',
+              boxShadow: isRecording
+                ? `0 0 0 ${8 + Math.round(volumeLevel * 0.12)}px rgba(220, 38, 38, ${0.2 + (volumeLevel / 200)})`
+                : 'none',
+              transition: 'box-shadow 0.1s ease, background 0.2s ease',
             }}
           >
-            {isRecording ? <MicOff size={32} /> : <Mic size={32} />}
+            {isLoading ? <Loader2 size={34} className="animate-spin" /> : isRecording ? <MicOff size={34} /> : <Mic size={34} />}
           </button>
-          <strong style={{ marginTop: 10, color: isRecording ? '#dc2626' : '#475569', fontSize: '.88rem' }}>
+
+          <strong style={{ marginTop: 12, color: isRecording ? '#dc2626' : isLoading ? '#ea580c' : '#475569', fontSize: '.88rem' }}>
             {isRecording
               ? `Grabando… ${recordingSeconds}s / ${MAX_RECORDING_SECONDS}s (toca para enviar)`
               : isStarting
@@ -375,10 +446,12 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
               ? 'Toca para grabar nota de voz'
               : 'Escribe tu pedido abajo'}
           </strong>
+
           {isRecording && (
-            <span style={{ fontSize: '.75rem', color: '#991b1b', marginTop: 4 }}>
-              Habla claro indicando platillos, cantidades y detalles
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, color: '#dc2626', fontSize: '.78rem' }}>
+              <Volume2 size={15} />
+              <span>Micrófono captando audio {volumeLevel > 5 ? '🎙️' : '...'}</span>
+            </div>
           )}
         </div>
 
