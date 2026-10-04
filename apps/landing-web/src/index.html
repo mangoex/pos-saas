@@ -8,8 +8,36 @@
   <meta name="description" content="mi menú.onl. Sistema operativo inteligente para restaurantes. Pedidos desde tu celular, menú digital, punto de venta y delivery hub unificado.">
   <link rel="icon" href="/landing-assets/assets/logo-mark.png">
   <link rel="preload" as="image" href="/landing-assets/assets/omnipos-bg.webp" media="(min-width: 861px)">
-  <link rel="stylesheet" href="/landing-assets/scrollcraft.css">
-  <link rel="stylesheet" href="/landing-assets/styles.css">
+  <link rel="stylesheet" href="/landing-assets/scrollcraft.css?v=20261004c">
+  <link rel="stylesheet" href="/landing-assets/styles.css?v=20261004c">
+  <style>
+    .desktop-navbar { display: none !important; }
+    @media (min-width: 861px) {
+      .desktop-navbar { display: flex !important; }
+    }
+    @media (max-width: 860px) {
+      .desktop-navbar,
+      .desktop-main,
+      .desktop-footer,
+      .omnipos-hero-stage,
+      .section-pedidos,
+      .section-pricing,
+      .omnipos-bar,
+      [data-sc-progress],
+      .sc-grain,
+      [data-sc-mode="worldflight"],
+      .plate-map {
+        display: none !important;
+      }
+      body {
+        background-color: #f7f6f2 !important;
+        color: #0f172a !important;
+      }
+      .mobile-landing {
+        display: block !important;
+      }
+    }
+  </style>
 </head>
 <body>
   <!-- VISTA MÓVIL (Se mantiene intacta y optimizada exclusivamente para móviles) -->
