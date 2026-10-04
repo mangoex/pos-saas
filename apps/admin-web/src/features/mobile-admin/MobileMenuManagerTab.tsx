@@ -519,6 +519,64 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     reorderProductsMutation.mutate(items);
   };
 
+  const reorderCategoriesMutation = useMutation({
+    mutationFn: async (items: Array<{ id: string; display_order: number }>) => {
+      return fetchApi('/catalog/categories/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      });
+    },
+    onMutate: async (items) => {
+      await queryClient.cancelQueries({ queryKey: ['categories'] });
+      const previousCategories = queryClient.getQueryData<Category[]>(['categories']);
+      if (previousCategories) {
+        const orderMap = new Map(items.map((it) => [it.id, it.display_order]));
+        const updated = previousCategories.map((c) => {
+          if (orderMap.has(c.id)) {
+            return { ...c, display_order: orderMap.get(c.id)! };
+          }
+          return c;
+        });
+        queryClient.setQueryData(['categories'], updated);
+      }
+      return { previousCategories };
+    },
+    onError: (err, _items, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData(['categories'], context.previousCategories);
+      }
+      showToast(err instanceof ApiError ? err.message : 'Error al reordenar categorías');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+
+  const handleMoveCategory = (category: Category, direction: 'up' | 'down') => {
+    const currentCategories = queryClient.getQueryData<Category[]>(['categories']) || categories;
+    const activeCats = currentCategories
+      .filter((c) => c.status !== 'inactive')
+      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name));
+
+    const currentIndex = activeCats.findIndex((c) => c.id === category.id);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= activeCats.length) return;
+
+    const newActiveCats = [...activeCats];
+    const [moved] = newActiveCats.splice(currentIndex, 1);
+    newActiveCats.splice(targetIndex, 0, moved);
+
+    const items = newActiveCats.map((c, idx) => ({
+      id: c.id,
+      display_order: (idx + 1) * 10,
+    }));
+
+    reorderCategoriesMutation.mutate(items);
+  };
+
   const toggleAvailabilityMutation = useMutation({
     mutationFn: async (product: Product) => {
       const nextStatus = product.status === 'inactive' ? 'active' : 'inactive';
@@ -1710,8 +1768,11 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {sortedCategories.map((cat) => {
+              {sortedCategories.map((cat, catIdx) => {
                 const count = products.filter((p) => p.category_name === cat.name).length;
+                const totalCats = sortedCategories.length;
+                const canCatMoveUp = catIdx > 0 && !reorderCategoriesMutation.isPending;
+                const canCatMoveDown = catIdx < totalCats - 1 && !reorderCategoriesMutation.isPending;
                 return (
                   <div
                     key={cat.id}
@@ -1729,7 +1790,7 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    {/* Top Row: Thumbnail + Info */}
+                    {/* Top Row: Thumbnail + Info + Reorder */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                       <div
                         style={{
@@ -1798,6 +1859,84 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
                             Orden #{cat.display_order ?? 0}
                           </span>
                         </div>
+                      </div>
+
+                      {/* Controles de Reordenamiento */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#f8fafc',
+                          borderRadius: 10,
+                          border: '1px solid #e2e8f0',
+                          padding: '3px',
+                          flexShrink: 0,
+                          alignSelf: 'center',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          aria-label={`Mover categoría ${cat.name} arriba en menú digital`}
+                          title={!canCatMoveUp ? 'Ya está al inicio de las categorías' : 'Mover arriba en menú digital'}
+                          disabled={!canCatMoveUp}
+                          onClick={() => handleMoveCategory(cat, 'up')}
+                          style={{
+                            width: 36,
+                            height: 32,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 8,
+                            border: canCatMoveUp ? '1px solid #cbd5e1' : '1px solid transparent',
+                            backgroundColor: canCatMoveUp ? '#ffffff' : 'transparent',
+                            boxShadow: canCatMoveUp ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                            color: canCatMoveUp ? '#0f172a' : '#cbd5e1',
+                            cursor: canCatMoveUp ? 'pointer' : 'not-allowed',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <ChevronUp size={18} />
+                        </button>
+                        <div
+                          style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            color: canCatMoveUp || canCatMoveDown ? '#475569' : '#94a3b8',
+                            padding: '2px 0',
+                            textAlign: 'center',
+                            minWidth: 26,
+                            lineHeight: 1,
+                          }}
+                          title={`Posición ${catIdx + 1} de ${totalCats} categorías`}
+                        >
+                          #{catIdx + 1}
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`Mover categoría ${cat.name} abajo en menú digital`}
+                          title={!canCatMoveDown ? 'Ya está al final de las categorías' : 'Mover abajo en menú digital'}
+                          disabled={!canCatMoveDown}
+                          onClick={() => handleMoveCategory(cat, 'down')}
+                          style={{
+                            width: 36,
+                            height: 32,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 8,
+                            border: canCatMoveDown ? '1px solid #cbd5e1' : '1px solid transparent',
+                            backgroundColor: canCatMoveDown ? '#ffffff' : 'transparent',
+                            boxShadow: canCatMoveDown ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                            color: canCatMoveDown ? '#0f172a' : '#cbd5e1',
+                            cursor: canCatMoveDown ? 'pointer' : 'not-allowed',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <ChevronDown size={18} />
+                        </button>
                       </div>
                     </div>
 

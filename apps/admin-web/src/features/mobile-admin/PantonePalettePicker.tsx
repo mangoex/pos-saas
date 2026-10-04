@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   PANTONE_SWATCHES,
   PANTONE_CATEGORIES,
   findPantoneSwatch,
+  resolvePantoneSwatch,
   PantoneSwatch,
 } from './pantonePaletteData';
 import { Check, ShoppingBag, Sparkles } from 'lucide-react';
@@ -20,10 +21,55 @@ export const PantonePalettePicker: React.FC<PantonePalettePickerProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
 
-  // Identify currently selected swatch or fallback to 'orange'
+  // Identify currently selected swatch or fallback to 'orange' or custom hex
   const activeSwatch: PantoneSwatch = useMemo(() => {
-    return findPantoneSwatch(value) || findPantoneSwatch('orange') || PANTONE_SWATCHES[12];
+    return resolvePantoneSwatch(value);
   }, [value]);
+
+  const [hexInput, setHexInput] = useState<string>(activeSwatch.hex.toUpperCase());
+
+  useEffect(() => {
+    setHexInput(activeSwatch.hex.toUpperCase());
+  }, [activeSwatch.hex]);
+
+  const handleHexInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value.toUpperCase();
+    setHexInput(rawVal);
+
+    const clean = rawVal.trim();
+    if (/^#?([0-9A-F]{3}|[0-9A-F]{6})$/i.test(clean)) {
+      let normalized = clean.startsWith('#') ? clean : '#' + clean;
+      if (normalized.length === 4) {
+        normalized = '#' + normalized.slice(1).split('').map((c) => c + c).join('');
+      }
+      normalized = normalized.toLowerCase();
+      const matched = findPantoneSwatch(normalized);
+      onChange(matched ? matched.id : normalized);
+    }
+  };
+
+  const handleHexInputBlur = () => {
+    const clean = hexInput.trim();
+    if (/^#?([0-9A-F]{3}|[0-9A-F]{6})$/i.test(clean)) {
+      let normalized = clean.startsWith('#') ? clean : '#' + clean;
+      if (normalized.length === 4) {
+        normalized = '#' + normalized.slice(1).split('').map((c) => c + c).join('');
+      }
+      normalized = normalized.toLowerCase();
+      const matched = findPantoneSwatch(normalized);
+      onChange(matched ? matched.id : normalized);
+      setHexInput(normalized.toUpperCase());
+    } else {
+      setHexInput(activeSwatch.hex.toUpperCase());
+    }
+  };
+
+  const handleNativeColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newHex = e.target.value.toLowerCase();
+    const matched = findPantoneSwatch(newHex);
+    onChange(matched ? matched.id : newHex);
+    setHexInput(newHex.toUpperCase());
+  };
 
   // Filter swatches if category is not 'todos'
   const displayedSwatches = useMemo(() => {
@@ -326,7 +372,7 @@ export const PantonePalettePicker: React.FC<PantonePalettePickerProps> = ({
           <div
             style={{
               display: 'flex',
-              alignItems: 'baseline',
+              alignItems: 'center',
               justifyContent: 'space-between',
               gap: 8,
               marginBottom: 6,
@@ -335,18 +381,81 @@ export const PantonePalettePicker: React.FC<PantonePalettePickerProps> = ({
             <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
               {activeSwatch.name}
             </div>
+
+            {/* Editable Hex Code & Visual Picker */}
             <div
               style={{
-                fontFamily: 'monospace',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                color: '#334155',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
                 backgroundColor: '#f1f5f9',
-                padding: '2px 8px',
-                borderRadius: 6,
+                padding: '3px 8px',
+                borderRadius: 8,
+                border: '1px solid #cbd5e1',
+                boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)',
               }}
             >
-              {activeSwatch.hex.toUpperCase()}
+              <label
+                style={{
+                  position: 'relative',
+                  width: 20,
+                  height: 20,
+                  borderRadius: 6,
+                  backgroundColor: activeSwatch.hex,
+                  border: '1px solid rgba(0, 0, 0, 0.15)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}
+                title="Toca para seleccionar un color visualmente"
+              >
+                <input
+                  type="color"
+                  value={activeSwatch.hex.length === 7 ? activeSwatch.hex : '#ea580c'}
+                  onChange={handleNativeColorChange}
+                  aria-label="Selector visual de color"
+                  style={{
+                    position: 'absolute',
+                    top: -10,
+                    left: -10,
+                    width: 40,
+                    height: 40,
+                    opacity: 0,
+                    cursor: 'pointer',
+                  }}
+                />
+              </label>
+
+              <input
+                type="text"
+                value={hexInput}
+                onChange={handleHexInputChange}
+                onBlur={handleHexInputBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                maxLength={7}
+                placeholder="#HEX"
+                aria-label="Código de color hexadecimal"
+                title="Escribe o edita el código hexadecimal preciso"
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  width: 74,
+                  padding: 0,
+                  textTransform: 'uppercase',
+                }}
+              />
             </div>
           </div>
           <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.35 }}>

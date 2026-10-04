@@ -14226,6 +14226,70 @@ def update_category(
     return {"id": category_id, **update_data}
 
 
+def reorder_categories(
+    session: Session,
+    items: list[dict[str, Any]],
+    actor_user_id: str | None = None,
+) -> dict[str, Any]:
+    actor_id = _actor_user_id(actor_user_id)
+    require_permission(session, actor_id, "catalog.manage")
+    org_id = _modifier_actor_organization(session, actor_id)
+
+    from restaurant_os.category_deletion import lock_catalog_organization
+
+    lock_catalog_organization(session, org_id)
+
+    if not items:
+        return {"status": "ok", "updated_count": 0}
+
+    category_ids = [str(item["id"]) for item in items if "id" in item]
+    if not category_ids:
+        raise BusinessError("invalid_items", "No valid category IDs provided")
+
+    existing_rows = (
+        session.execute(
+            sa.select(models.product_categories.c.id).where(
+                models.product_categories.c.id.in_(category_ids),
+                models.product_categories.c.organization_id == org_id,
+                models.product_categories.c.status != "archived",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    existing_ids = set(existing_rows)
+
+    for cid in category_ids:
+        if cid not in existing_ids:
+            raise NotFoundError("category_not_found", f"Category {cid} was not found in catalog")
+
+    now = _now()
+    for item in items:
+        cid = str(item["id"])
+        order = int(item.get("display_order") or 0)
+        session.execute(
+            sa.update(models.product_categories)
+            .where(
+                models.product_categories.c.id == cid,
+                models.product_categories.c.organization_id == org_id,
+            )
+            .values(display_order=order, updated_at=now)
+        )
+
+    _audit(
+        session,
+        action="category.reordered",
+        entity_type="category",
+        entity_id=org_id,
+        payload={"count": len(items), "items": items},
+        actor_user_id=actor_id,
+        organization_id=org_id,
+    )
+    session.commit()
+    return {"status": "ok", "updated_count": len(items)}
+
+
+
 def _category_option_group_row(
     session: Session, group_id: str, organization_id: str
 ) -> dict[str, Any]:

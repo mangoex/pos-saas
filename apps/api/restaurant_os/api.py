@@ -246,6 +246,7 @@ from restaurant_os.operations import (
     update_modifier_option,
     update_order_comment,
     reorder_products,
+    reorder_categories,
     update_product,
     update_purchase_presentation_price,
     update_purchase_presentation,
@@ -5026,6 +5027,19 @@ def post_category(
     return _business_response(lambda: create_category(
         session, name, display_order, actor_id, image_url=payload.get("image_url")
     ))
+
+
+@router.put("/catalog/categories/reorder")
+@router.put("/categories/reorder")
+def put_reorder_catalog_categories(
+    payload: dict[str, Any],
+    session: SessionDep,
+    actor_user_id: ActorUserDep = None,
+    authorization: AuthorizationDep = None,
+) -> dict[str, Any]:
+    actor_id = _actor_from_request(actor_user_id, authorization)
+    items = payload.get("items") or []
+    return _business_response(lambda: reorder_categories(session, items, actor_id))
 
 
 @router.put("/categories/{category_id}")

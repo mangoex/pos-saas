@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Badge, Modal, Input } from '@restaurantos/ui';
 import { fetchApi } from '@restaurantos/api-client';
-import { Plus, Tags, Edit } from 'lucide-react';
+import { Plus, Tags, Edit, ChevronUp, ChevronDown } from 'lucide-react';
 import { MenuHomeEditor } from './MenuHomeEditor';
 import { CategoryImageField } from './CategoryImageField';
 
@@ -27,6 +27,52 @@ const CategoriesList = () => {
     queryKey: ['categories'],
     queryFn: () => fetchApi('/categories'),
   });
+
+  const reorderMutation = useMutation({
+    mutationFn: (items: Array<{ id: string; display_order: number }>) =>
+      fetchApi('/catalog/categories/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      }),
+    onMutate: async (items) => {
+      await queryClient.cancelQueries({ queryKey: ['categories'] });
+      const previous = queryClient.getQueryData<Category[]>(['categories']);
+      if (previous) {
+        const orderMap = new Map(items.map((it) => [it.id, it.display_order]));
+        queryClient.setQueryData(
+          ['categories'],
+          previous.map((c) => (orderMap.has(c.id) ? { ...c, display_order: orderMap.get(c.id)! } : c))
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _items, context) => {
+      if (context?.previous) queryClient.setQueryData(['categories'], context.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+    },
+  });
+
+  const sortedCategories = React.useMemo(() => {
+    if (!categories) return [];
+    return [...categories].sort(
+      (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name)
+    );
+  }, [categories]);
+
+  const handleMove = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sortedCategories.length) return;
+    const reordered = [...sortedCategories];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+    const items = reordered.map((cat, idx) => ({
+      id: cat.id,
+      display_order: (idx + 1) * 10,
+    }));
+    reorderMutation.mutate(items);
+  };
 
   const saveMutation = useMutation({
     mutationFn: (data: typeof formData) => {
@@ -101,9 +147,47 @@ const CategoriesList = () => {
                 </tr>
               </thead>
               <tbody>
-                {categories.map((category) => (
+                {sortedCategories.map((category, idx) => (
                   <tr key={category.id}>
-                    <td style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{category.display_order}</td>
+                    <td style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <button
+                            type="button"
+                            aria-label={`Mover categoría ${category.name} arriba`}
+                            disabled={idx === 0 || reorderMutation.isPending}
+                            onClick={() => handleMove(idx, 'up')}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              cursor: idx === 0 || reorderMutation.isPending ? 'not-allowed' : 'pointer',
+                              color: idx === 0 || reorderMutation.isPending ? '#cbd5e1' : '#64748b',
+                              padding: 0,
+                              lineHeight: 1,
+                            }}
+                          >
+                            <ChevronUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Mover categoría ${category.name} abajo`}
+                            disabled={idx === sortedCategories.length - 1 || reorderMutation.isPending}
+                            onClick={() => handleMove(idx, 'down')}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              cursor: idx === sortedCategories.length - 1 || reorderMutation.isPending ? 'not-allowed' : 'pointer',
+                              color: idx === sortedCategories.length - 1 || reorderMutation.isPending ? '#cbd5e1' : '#64748b',
+                              padding: 0,
+                              lineHeight: 1,
+                            }}
+                          >
+                            <ChevronDown size={14} />
+                          </button>
+                        </div>
+                        <span>#{category.display_order}</span>
+                      </div>
+                    </td>
                     <td style={{ fontWeight: 500 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ padding: 8, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderRadius: 8 }}>

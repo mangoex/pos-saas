@@ -113,3 +113,41 @@ export function findPantoneSwatch(idOrHex?: string | null): PantoneSwatch | unde
   if (byId) return byId;
   return PANTONE_SWATCHES.find((s) => s.hex.toLowerCase() === normalized);
 }
+
+export function resolvePantoneSwatch(val?: string | null): PantoneSwatch {
+  const match = findPantoneSwatch(val);
+  if (match) return match;
+
+  const raw = (val || '').trim();
+  if (/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(raw)) {
+    let hex = raw.startsWith('#') ? raw : '#' + raw;
+    if (hex.length === 4) {
+      hex = '#' + hex.slice(1).split('').map((c) => c + c).join('');
+    }
+    hex = hex.toLowerCase();
+
+    const existing = PANTONE_SWATCHES.find((s) => s.hex.toLowerCase() === hex);
+    if (existing) return existing;
+
+    const num = parseInt(hex.slice(1), 16);
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    const relLuminance = 0.2126 * (r / 255) + 0.7152 * (g / 255) + 0.0722 * (b / 255);
+    const contrast: '#ffffff' | '#0f172a' = relLuminance > 0.55 ? '#0f172a' : '#ffffff';
+
+    return {
+      id: hex,
+      name: 'Color Personalizado',
+      hex,
+      column: -1,
+      row: -1,
+      category: 'personalizado',
+      categoryLabel: '🎯 Personalizado',
+      recommendedFor: 'Tono exacto personalizado para tu marca',
+      contrast,
+    };
+  }
+
+  return findPantoneSwatch('orange') || PANTONE_SWATCHES[12];
+}
