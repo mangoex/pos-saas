@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from restaurant_os import models, operations
 from restaurant_os.auth import create_session_token
@@ -512,6 +513,35 @@ def test_mobile_catalog_toggle_availability_and_product_image(test_db):
     # Verify archived product is no longer returned in active catalog
     active_prods = client.get("/api/v1/catalog/products", headers=headers).json()
     assert not any(p["id"] == prod_id for p in active_prods)
+
+    # Physical delete endpoint test: create a new product and delete it
+    created_prod_resp = client.post(
+        "/api/v1/catalog/products",
+        headers=headers,
+        json={
+            "name": "PLATILLO TEMPORAL PARA BORRAR",
+            "sku": "99991",
+            "category_name": str(target_product.get("category_name") or "TACOS").upper(),
+            "price_cents": 4500,
+            "station": "kitchen",
+            "status": "active",
+        },
+    )
+    assert created_prod_resp.status_code == 200
+    temp_prod_id = created_prod_resp.json()["id"]
+
+    del_resp = client.delete(
+        f"/api/v1/catalog/products/{temp_prod_id}",
+        headers=headers,
+    )
+    assert del_resp.status_code == 200
+    assert del_resp.json()["status"] == "deleted"
+
+    # Verify physically removed from database
+    row_in_db = test_db.scalar(
+        sa.select(models.products.c.id).where(models.products.c.id == temp_prod_id)
+    )
+    assert row_in_db is None
 
 
 def test_mobile_branch_settings_and_links(test_db):

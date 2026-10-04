@@ -193,16 +193,16 @@ const SwipeableProductCard: React.FC<SwipeableProductCardProps> = ({
 
     if (isHorizontalSwipe.current && Math.abs(currentX) >= SWIPE_THRESHOLD) {
       if (currentX > 0) {
-        // Deslizar a la DERECHA -> Eliminar
+        // Deslizar a la DERECHA -> Eliminar definitivamente del sistema
         setTimeout(() => {
-          if (window.confirm(`¿Eliminar "${product.name}"? El platillo se desactivará del menú.`)) {
+          if (window.confirm(`¿Eliminar definitivamente "${product.name}" del sistema? Esta acción borrará el platillo por completo.`)) {
             onDelete();
           }
         }, 50);
       } else {
         // Deslizar a la IZQUIERDA -> Archivar
         setTimeout(() => {
-          if (window.confirm(`¿Archivar "${product.name}"? El platillo saldrá del menú activo y conservará su historial.`)) {
+          if (window.confirm(`¿Archivar "${product.name}"? El platillo saldrá del menú activo pero conservará su historial de ventas.`)) {
             onArchive();
           }
         }, 50);

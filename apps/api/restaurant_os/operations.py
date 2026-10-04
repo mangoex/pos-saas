@@ -13266,33 +13266,146 @@ def delete_product(
     from restaurant_os.category_deletion import lock_catalog_organization
 
     lock_catalog_organization(session, organization_id)
-    product_exists = session.scalar(
-        sa.select(models.products.c.id).where(
+    product_row = session.execute(
+        sa.select(models.products).where(
             models.products.c.id == product_id,
-            models.products.c.status != "archived",
             models.products.c.organization_id == organization_id,
         )
-    )
-    if not product_exists:
+    ).mappings().first()
+    if not product_row:
         raise BusinessError("product_not_found", "Product was not found")
+
+    # Verificar si tiene órdenes o intenciones históricas vinculadas
+    has_orders = session.scalar(
+        sa.select(sa.func.count(models.order_lines.c.id)).where(
+            models.order_lines.c.product_id == product_id
+        )
+    )
+    has_intent_lines = session.scalar(
+        sa.select(sa.func.count(models.public_order_intent_lines.c.id)).where(
+            models.public_order_intent_lines.c.product_id == product_id
+        )
+    )
+    if (has_orders or 0) > 0 or (has_intent_lines or 0) > 0:
+        raise BusinessError(
+            "product_has_order_history",
+            "No es posible eliminar el platillo permanentemente porque tiene órdenes históricas registradas. Utiliza Archivar para ocultarlo del menú.",
+        )
+
+    # 1. dish_community_photos
     session.execute(
-        sa.update(models.products)
-        .where(
+        sa.delete(models.dish_community_photos).where(
+            models.dish_community_photos.c.product_id == product_id
+        )
+    )
+
+    # 2. channel_availability_sync_jobs & channel_product_mappings
+    session.execute(
+        sa.delete(models.channel_availability_sync_jobs).where(
+            models.channel_availability_sync_jobs.c.product_id == product_id
+        )
+    )
+    session.execute(
+        sa.delete(models.channel_product_mappings).where(
+            models.channel_product_mappings.c.product_id == product_id
+        )
+    )
+
+    # 3. order_comment_products
+    session.execute(
+        sa.delete(models.order_comment_products).where(
+            models.order_comment_products.c.product_id == product_id
+        )
+    )
+
+    # 4. ingredient_variation_products
+    session.execute(
+        sa.delete(models.ingredient_variation_products).where(
+            models.ingredient_variation_products.c.product_id == product_id
+        )
+    )
+
+    # 5. product_option_value_assignments
+    session.execute(
+        sa.delete(models.product_option_value_assignments).where(
+            models.product_option_value_assignments.c.product_id == product_id
+        )
+    )
+
+    # 6. branch_product_availability
+    session.execute(
+        sa.delete(models.branch_product_availability).where(
+            models.branch_product_availability.c.product_id == product_id
+        )
+    )
+
+    # 7. price_versions
+    session.execute(
+        sa.delete(models.price_versions).where(
+            models.price_versions.c.product_id == product_id
+        )
+    )
+
+    # 8. recipes, recipe_components, recipe_version_commands
+    recipe_ids = session.scalars(
+        sa.select(models.recipes.c.id).where(models.recipes.c.product_id == product_id)
+    ).all()
+    if recipe_ids:
+        session.execute(
+            sa.delete(models.recipe_components).where(
+                models.recipe_components.c.recipe_id.in_(recipe_ids)
+            )
+        )
+        session.execute(
+            sa.delete(models.recipes).where(models.recipes.c.id.in_(recipe_ids))
+        )
+    session.execute(
+        sa.delete(models.recipe_version_commands).where(
+            models.recipe_version_commands.c.product_id == product_id
+        )
+    )
+
+    # 9. modifier_groups, modifier_options, branch_modifier_options
+    group_ids = session.scalars(
+        sa.select(models.modifier_groups.c.id).where(models.modifier_groups.c.product_id == product_id)
+    ).all()
+    if group_ids:
+        option_ids = session.scalars(
+            sa.select(models.modifier_options.c.id).where(models.modifier_options.c.group_id.in_(group_ids))
+        ).all()
+        if option_ids:
+            session.execute(
+                sa.delete(models.branch_modifier_options).where(
+                    models.branch_modifier_options.c.option_id.in_(option_ids)
+                )
+            )
+            session.execute(
+                sa.delete(models.modifier_options).where(
+                    models.modifier_options.c.id.in_(option_ids)
+                )
+            )
+        session.execute(
+            sa.delete(models.modifier_groups).where(models.modifier_groups.c.id.in_(group_ids))
+        )
+
+    # 10. Eliminar físicamente de products
+    session.execute(
+        sa.delete(models.products).where(
             models.products.c.id == product_id,
             models.products.c.organization_id == organization_id,
         )
-        .values(status="inactive", updated_at=_now())
     )
+
     _audit(
         session,
         action="product.deleted",
         entity_type="product",
         entity_id=product_id,
-        payload={"status": "inactive"},
+        payload={"id": product_id, "name": product_row["name"], "sku": product_row["sku"]},
         actor_user_id=actor_id,
     )
     session.commit()
-    return {"id": product_id, "status": "inactive"}
+    return {"id": product_id, "status": "deleted"}
 
 
 def archive_product(
