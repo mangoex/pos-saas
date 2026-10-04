@@ -597,14 +597,25 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     mutationFn: async (productId: string) => {
       return fetchApi(`/catalog/products/${productId}`, { method: 'DELETE' });
     },
+    onMutate: async (productId: string) => {
+      await queryClient.cancelQueries({ queryKey: ['products'] });
+      const previousProducts = queryClient.getQueryData<Product[]>(['products']);
+      queryClient.setQueryData<Product[]>(['products'], (old = []) =>
+        old.filter((p) => p.id !== productId)
+      );
+      return { previousProducts };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       modifierRequestId.current += 1;
       setIsProductModalOpen(false);
       showToast('Producto eliminado');
     },
-    onError: (err: any) => {
-      showToast(err?.message || err?.detail?.message || 'Error al eliminar producto');
+    onError: (err: any, _productId, context: any) => {
+      if (context?.previousProducts) {
+        queryClient.setQueryData(['products'], context.previousProducts);
+      }
+      window.alert(err?.message || err?.detail?.message || 'Error al eliminar producto');
     },
   });
 
@@ -612,14 +623,25 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
     mutationFn: async (productId: string) => {
       return fetchApi(`/catalog/products/${productId}/archive`, { method: 'POST' });
     },
+    onMutate: async (productId: string) => {
+      await queryClient.cancelQueries({ queryKey: ['products'] });
+      const previousProducts = queryClient.getQueryData<Product[]>(['products']);
+      queryClient.setQueryData<Product[]>(['products'], (old = []) =>
+        old.filter((p) => p.id !== productId)
+      );
+      return { previousProducts };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       modifierRequestId.current += 1;
       setIsProductModalOpen(false);
       showToast('Producto archivado');
     },
-    onError: (err: any) => {
-      showToast(err?.message || err?.detail?.message || 'Error al archivar producto');
+    onError: (err: any, _productId, context: any) => {
+      if (context?.previousProducts) {
+        queryClient.setQueryData(['products'], context.previousProducts);
+      }
+      window.alert(err?.message || err?.detail?.message || 'Error al archivar producto');
     },
   });
 
@@ -995,20 +1017,25 @@ export const MobileMenuManagerTab: React.FC<MobileMenuManagerTabProps> = ({
         {toastMessage && (
           <div
             style={{
+              position: 'fixed',
+              bottom: 24,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 9999,
               backgroundColor: '#0f172a',
               color: '#ffffff',
-              borderRadius: 10,
-              padding: '8px 14px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              marginBottom: 10,
+              borderRadius: 12,
+              padding: '10px 18px',
+              fontSize: '0.9rem',
+              fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
+              pointerEvents: 'none',
             }}
           >
-            <CheckCircle2 size={16} color="#22c55e" />
+            <CheckCircle2 size={18} color="#22c55e" />
             <span>{toastMessage}</span>
           </div>
         )}

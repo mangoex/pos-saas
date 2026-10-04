@@ -292,7 +292,7 @@ def _list_catalog_products_base(
             )
             .where(
                 models.products.c.organization_id == org_id,
-                models.products.c.status != "archived",
+                models.products.c.status.notin_(["archived", "deleted"]),
                 sa.or_(
                     models.products.c.catalog_scope == "organization",
                     models.products.c.source_branch_id == branch_id,
@@ -319,7 +319,7 @@ def _list_catalog_products_base(
             )
             .where(
                 models.products.c.organization_id == org_id,
-                models.products.c.status != "archived",
+                models.products.c.status.notin_(["archived", "deleted"]),
             )
         )
 

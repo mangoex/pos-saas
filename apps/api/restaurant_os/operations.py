@@ -13356,14 +13356,15 @@ def delete_product(
                 models.recipe_components.c.recipe_id.in_(recipe_ids)
             )
         )
-        session.execute(
-            sa.delete(models.recipes).where(models.recipes.c.id.in_(recipe_ids))
-        )
     session.execute(
         sa.delete(models.recipe_version_commands).where(
             models.recipe_version_commands.c.product_id == product_id
         )
     )
+    if recipe_ids:
+        session.execute(
+            sa.delete(models.recipes).where(models.recipes.c.id.in_(recipe_ids))
+        )
 
     # 9. modifier_groups, modifier_options, branch_modifier_options
     group_ids = session.scalars(
@@ -13388,13 +13389,31 @@ def delete_product(
             sa.delete(models.modifier_groups).where(models.modifier_groups.c.id.in_(group_ids))
         )
 
-    # 10. Eliminar físicamente de products
-    session.execute(
-        sa.delete(models.products).where(
-            models.products.c.id == product_id,
-            models.products.c.organization_id == organization_id,
+    # 10. Eliminación del producto:
+    # Si no tiene historial de órdenes, se borra físicamente.
+    # Si tiene historial de órdenes contables, se libera su SKU y se marca como 'deleted'.
+    if (has_orders or 0) == 0 and (has_intent_lines or 0) == 0:
+        session.execute(
+            sa.delete(models.products).where(
+                models.products.c.id == product_id,
+                models.products.c.organization_id == organization_id,
+            )
         )
-    )
+    else:
+        timestamp = int(_now().timestamp())
+        released_sku = f"del_{timestamp}_{product_row['sku']}"[:64]
+        session.execute(
+            sa.update(models.products)
+            .where(
+                models.products.c.id == product_id,
+                models.products.c.organization_id == organization_id,
+            )
+            .values(
+                status="deleted",
+                sku=released_sku,
+                updated_at=_now(),
+            )
+        )
 
     _audit(
         session,
