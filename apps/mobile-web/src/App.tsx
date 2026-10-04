@@ -714,6 +714,7 @@ export const App: React.FC = () => {
           onOpenBranchSelector={() => setIsBranchModalOpen(true)}
           onRefreshLocation={() => detectLocationAndFetchBranches()}
           isLoadingLocation={isLoadingLocation}
+          isClosed={isBranchClosed}
         />
       )}
 

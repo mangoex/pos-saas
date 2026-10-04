@@ -3,6 +3,8 @@ import { Category, BranchInfo } from '../types';
 import { CategoryArtwork } from './CategoryArtwork';
 import { Search, X, MapPin, ChevronDown, ChevronLeft, ChevronRight, Navigation, ShoppingBag } from 'lucide-react';
 
+import closedEstablishmentHero from '../assets/closed_establishment_hero.jpg';
+
 interface HeroHeaderProps {
   restaurantName?: string;
   cartCount: number;
@@ -18,6 +20,7 @@ interface HeroHeaderProps {
   onOpenBranchSelector: () => void;
   onRefreshLocation?: () => void;
   isLoadingLocation?: boolean;
+  isClosed?: boolean;
 }
 
 export const HeroHeader: React.FC<HeroHeaderProps> = ({
@@ -35,6 +38,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   onOpenBranchSelector,
   onRefreshLocation,
   isLoadingLocation = false,
+  isClosed = false,
 }) => {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -188,6 +192,9 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
         {categories.map((cat, idx) => {
           const isAll = cat.id === 'all';
           const isActive = activeCategoryId === cat.id || (activeCategoryId === '' && isAll);
+          const effectiveCat = (isClosed && isAll)
+            ? { ...cat, name: 'Cerrado por el momento', image_url: closedEstablishmentHero }
+            : cat;
 
           return (
             <div
@@ -195,7 +202,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
               className={`hero-panoramic-card ${isActive ? 'active' : ''}`}
               role="button"
               tabIndex={0}
-              aria-label={`Ver menú de ${cat.name}`}
+              aria-label={`Ver menú de ${effectiveCat.name}`}
               onClick={() => {
                 onSelectCategory(cat.id);
                 onCategoryCardClick?.(cat.id);
@@ -211,7 +218,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
               {/* Background Food Image & Banner */}
               <div className="hero-card-media">
                 <CategoryArtwork
-                  category={cat}
+                  category={effectiveCat}
                   className="hero-card-img"
                   loading={idx === 0 ? 'eager' : 'lazy'}
                 />

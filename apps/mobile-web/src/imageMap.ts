@@ -1,3 +1,5 @@
+import closedEstablishmentHero from './assets/closed_establishment_hero.jpg';
+
 /** Product photographs belong to the resolved restaurant catalog. */
 export function getProductImage(product: { sku?: string; name?: string; category_name?: string; image_url?: string }): string {
   return product.image_url?.trim() || '';
@@ -6,8 +8,11 @@ export function getProductImage(product: { sku?: string; name?: string; category
 /** Generic category artwork has no restaurant-specific photographs or claims. */
 export function getCategoryImageUrl(value: string | null | undefined): string {
   if (!value) return '';
-  // Match raster uploads accepted by the catalog API; never accept embedded SVG/HTML.
   const trimmed = value.trim();
+  if (trimmed.startsWith('/') || trimmed.startsWith('./')) {
+    return trimmed;
+  }
+  // Match raster uploads accepted by the catalog API; never accept embedded SVG/HTML.
   if (trimmed.startsWith('data:')) {
     return trimmed.length <= 2 * 1024 * 1024 && /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(trimmed) ? trimmed : '';
   }
@@ -18,6 +23,10 @@ export function getCategoryImageUrl(value: string | null | undefined): string {
 }
 
 export function getCategoryCover(categoryName: string): string {
+  const cat = (categoryName || '').toLowerCase();
+  if (cat.includes('cerrado')) {
+    return closedEstablishmentHero;
+  }
   const icon = getCategoryIcon(categoryName);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#164e63"/><stop offset="1" stop-color="#0f172a"/></linearGradient></defs><rect width="900" height="500" fill="url(#bg)"/><circle cx="760" cy="70" r="240" fill="#ffffff" opacity=".05"/><text x="450" y="275" text-anchor="middle" font-size="150">${icon}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
