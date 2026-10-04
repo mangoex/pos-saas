@@ -14,12 +14,24 @@
 <body>
   <!-- VISTA MÓVIL (Se mantiene intacta y optimizada exclusivamente para móviles) -->
   <main class="mobile-landing" aria-labelledby="mobile-title">
+    <div class="mobile-landing__aura" aria-hidden="true"></div>
     <header class="mobile-landing__brand">
-      <img src="/landing-assets/assets/logo-mi-menu.png" height="32" alt="mi menú.onl" style="object-fit: contain;">
+      <div class="mobile-landing__badge">
+        <span>mi menú</span><span class="mobile-landing__badge-dot">.</span><span>onl</span>
+      </div>
+      <div class="mobile-landing__kicker">
+        <span>PARA EL DÍA</span>
+        <span>A DÍA</span>
+        <span class="mobile-landing__kicker-line"></span>
+      </div>
     </header>
     <section class="mobile-landing__hero">
-      <p class="mobile-landing__eyebrow">Tu restaurante, bajo control</p>
-      <h1 id="mobile-title">Menos pendientes.<br><em>Más restaurante.</em></h1>
+      <h1 id="mobile-title" class="mobile-landing__title">
+        Menos<br>
+        pendientes.<br>
+        <span class="mobile-landing__title-orange">Más<br>
+        restaurante.</span>
+      </h1>
       <p class="mobile-landing__intro">Organiza tus pedidos, cocina y cobros en un solo lugar.</p>
       <nav class="mobile-landing__actions" aria-label="Comienza con Omnipos">
         <a class="mobile-landing__primary" href="/admin/register?plan=trial">Probar gratis 14 días <span aria-hidden="true">→</span></a>
@@ -28,19 +40,39 @@
       <p class="mobile-landing__note">Crea tu cuenta para comenzar la prueba.</p>
     </section>
     <section class="mobile-landing__details" aria-labelledby="mobile-benefits">
-      <p class="mobile-landing__eyebrow">Para el día a día</p>
-      <h2 id="mobile-benefits">Todo sigue su orden.</h2>
-      <ul>
-        <li><span aria-hidden="true">01</span><div><h3>Pedidos en un lugar</h3><p>Da seguimiento a las comandas de tu restaurante.</p></div></li>
-        <li><span aria-hidden="true">02</span><div><h3>Cocina conectada</h3><p>Comandas en tiempo real para tu equipo de cocina.</p></div></li>
-        <li><span aria-hidden="true">03</span><div><h3>Cobros organizados</h3><p>Punto de venta y caja para tu operación diaria.</p></div></li>
+      <p class="mobile-landing__eyebrow">TODO SIGUE SU ORDEN</p>
+      <ul class="mobile-landing__list">
+        <li>
+          <span class="mobile-landing__num" aria-hidden="true">01</span>
+          <div class="mobile-landing__item-content">
+            <h3 id="mobile-benefits">Pedidos en un lugar</h3>
+            <p>Da seguimiento a las comandas de tu restaurante.</p>
+          </div>
+        </li>
+        <li>
+          <span class="mobile-landing__num" aria-hidden="true">02</span>
+          <div class="mobile-landing__item-content">
+            <h3>Cocina conectada</h3>
+            <p>Comandas en tiempo real para tu equipo de cocina.</p>
+          </div>
+        </li>
+        <li>
+          <span class="mobile-landing__num" aria-hidden="true">03</span>
+          <div class="mobile-landing__item-content">
+            <h3>Cobros organizados</h3>
+            <p>Punto de venta y caja para tu operación diaria.</p>
+          </div>
+        </li>
       </ul>
       <div class="mobile-landing__pricing">
-        <p>Planes desde <strong>$349 MXN/mes</strong></p>
-        <a href="/admin/register?plan=starter">Conocer el plan inicial <span aria-hidden="true">↗</span></a>
+        <p class="mobile-landing__pricing-text">Planes desde <strong>$349 MXN/mes</strong></p>
+        <a class="mobile-landing__pricing-link" href="/admin/register?plan=starter">Conocer el plan inicial <span aria-hidden="true">↗</span></a>
       </div>
     </section>
-    <footer class="mobile-landing__footer"><span>mi menú.onl · Tu operación, conectada.</span><a href="/manual/">Manual de uso</a></footer>
+    <footer class="mobile-landing__footer">
+      <span>mi menú onl · Tu operación, conectada.</span>
+      <a href="/manual/">Manual de uso</a>
+    </footer>
   </main>
   <span data-sc-progress aria-hidden="true"></span>
   <div class="sc-grain" aria-hidden="true"></div>

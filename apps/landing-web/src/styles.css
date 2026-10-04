@@ -830,161 +830,272 @@ body {
 
 /* The compact acquisition page is independent of the desktop scroll journey. */
 @media (max-width: 860px) {
+  body {
+    background-color: #f7f6f2 !important;
+    color: #0f172a !important;
+  }
+
   body > .omnipos-bar,
   body > [data-sc-progress],
   body > .sc-grain,
   body > [data-sc-mode="worldflight"],
-  body > .plate-map {
-    display: none;
+  body > .plate-map,
+  .desktop-navbar,
+  .desktop-main,
+  .omnipos-hero-stage,
+  .section-pedidos,
+  .section-pricing,
+  .desktop-footer {
+    display: none !important;
   }
 
   .mobile-landing {
     display: block;
-    max-width: 36rem;
+    position: relative;
+    max-width: 440px;
     margin: 0 auto;
-    padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
-    font-family: var(--sc-font-text);
+    padding: max(1.75rem, env(safe-area-inset-top)) 1.5rem max(2rem, env(safe-area-inset-bottom)) 1.5rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #0f172a;
+    background-color: #f7f6f2;
+    min-height: 100vh;
+    box-sizing: border-box;
   }
+
+  .mobile-landing__aura {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 6px;
+    background: linear-gradient(180deg, #ea580c 0%, #f97316 35%, #ea580c 70%, transparent 100%);
+    box-shadow: 0 0 35px 12px rgba(234, 88, 12, 0.4);
+    pointer-events: none;
+    z-index: 0;
+  }
+
   .mobile-landing__brand {
     display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 2rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .mobile-landing__badge {
+    display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
-    font-size: 1.15rem;
+    background-color: #fef08a;
+    padding: 5px 13px;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 0.92rem;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+  }
+
+  .mobile-landing__badge-dot {
+    color: #ea580c;
+    font-weight: 900;
+  }
+
+  .mobile-landing__kicker {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.58rem;
     font-weight: 700;
-  }
-  .mobile-landing__hero {
-    padding: 2.5rem 0 2rem;
-  }
-  .mobile-landing__eyebrow {
-    margin: 0 0 0.9rem;
-    color: var(--sc-accent);
-    font-size: 0.72rem;
-    font-weight: 650;
     letter-spacing: 0.12em;
+    color: #64748b;
+    line-height: 1.25;
     text-transform: uppercase;
   }
-  .mobile-landing h1 {
+
+  .mobile-landing__kicker-line {
+    display: block;
+    width: 14px;
+    height: 1.5px;
+    background-color: #94a3b8;
+    margin-top: 4px;
+  }
+
+  .mobile-landing__hero {
+    padding-bottom: 1.75rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .mobile-landing__title {
     margin: 0;
-    font-size: clamp(2rem, 8.5vw, 3.4rem);
-    line-height: 1.08;
-    letter-spacing: -0.045em;
+    font-size: clamp(2.6rem, 11vw, 3.4rem);
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+    font-weight: 900;
+    color: #0f172a;
   }
-  .mobile-landing h1 em {
-    color: var(--sc-accent);
-    font-style: normal;
+
+  .mobile-landing__title-orange {
+    color: #e25327;
+    display: inline;
   }
+
   .mobile-landing__intro {
-    max-width: 29ch;
-    margin: 1rem 0 1.5rem;
-    color: var(--sc-ink-soft);
+    margin: 1.25rem 0 1.65rem;
+    color: #475569;
     font-size: 1rem;
-    line-height: 1.6;
+    line-height: 1.45;
+    max-width: 28ch;
+    font-weight: 400;
   }
+
   .mobile-landing__actions {
-    display: grid;
-    gap: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
   }
+
   .mobile-landing__actions a {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 0.75rem;
-    min-height: 3.25rem;
-    padding: 0.75rem 1rem;
-    border-radius: 0.75rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.65rem;
     text-decoration: none;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 0.95rem;
+    box-sizing: border-box;
+    transition: opacity 0.2s ease;
   }
+
   .mobile-landing__primary {
-    background: var(--sc-accent);
-    color: var(--sc-accent-ink);
+    background-color: #e25327;
+    color: #ffffff !important;
+    border: none;
   }
+
   .mobile-landing__secondary {
-    border: 1px solid #425162;
-    color: var(--sc-ink);
-    background: var(--sc-surface);
+    background-color: #f1f3f5;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1;
   }
+
   .mobile-landing a:focus-visible {
-    outline: 3px solid var(--sc-ink);
-    outline-offset: 4px;
+    outline: 3px solid #e25327;
+    outline-offset: 3px;
   }
+
   .mobile-landing__note {
-    margin: 0.85rem 0 0;
+    margin: 0.75rem 0 0;
     text-align: center;
-    font-size: 0.75rem;
-    color: var(--sc-ink-soft);
+    font-size: 0.7rem;
+    color: #64748b;
   }
+
   .mobile-landing__details {
-    border-top: 1px solid #253341;
-    padding-top: 2rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 1.75rem;
+    position: relative;
+    z-index: 1;
   }
-  .mobile-landing h2 {
-    margin: 0;
-    font-size: 1.65rem;
-    letter-spacing: -0.03em;
-    line-height: 1.2;
+
+  .mobile-landing__eyebrow {
+    margin: 0 0 1rem;
+    color: #64748b;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
-  .mobile-landing ul {
+
+  .mobile-landing__list {
     list-style: none;
-    margin: 1.5rem 0;
+    margin: 0 0 1.25rem;
     padding: 0;
   }
-  .mobile-landing li {
+
+  .mobile-landing__list li {
     display: flex;
+    align-items: flex-start;
     gap: 1rem;
-    padding: 1rem 0;
-    border-bottom: 1px solid #253341;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid #e2e8f0;
   }
-  .mobile-landing li > span {
+
+  .mobile-landing__num {
+    color: #e25327;
+    font-weight: 700;
+    font-size: 0.95rem;
+    min-width: 1.5rem;
     padding-top: 0.1rem;
-    color: var(--sc-accent);
-    font-size: 0.8rem;
   }
-  .mobile-landing h3 {
-    margin: 0 0 0.25rem;
-    font-size: 1rem;
+
+  .mobile-landing__item-content h3 {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
   }
-  .mobile-landing li p {
+
+  .mobile-landing__item-content p {
     margin: 0;
-    color: var(--sc-ink-soft);
-    font-size: 0.9rem;
+    color: #64748b;
+    font-size: 0.82rem;
+    line-height: 1.35;
   }
+
   .mobile-landing__pricing {
-    padding: 0.5rem 0 1.5rem;
+    padding: 0.5rem 0 1rem;
   }
-  .mobile-landing__pricing p {
-    margin: 0;
-    color: var(--sc-ink-soft);
+
+  .mobile-landing__pricing-text {
+    margin: 0 0 0.35rem;
+    color: #475569;
+    font-size: 0.88rem;
   }
-  .mobile-landing__pricing strong {
-    color: var(--sc-ink);
+
+  .mobile-landing__pricing-text strong {
+    color: #0f172a;
+    font-weight: 700;
   }
-  .mobile-landing__pricing a {
+
+  .mobile-landing__pricing-link {
     display: inline-flex;
     align-items: center;
-    min-height: 44px;
-    gap: 0.5rem;
-    color: var(--sc-accent);
-    text-underline-offset: 4px;
+    gap: 0.35rem;
+    color: #e25327;
+    font-weight: 500;
+    font-size: 0.88rem;
+    text-decoration: none;
   }
+
+  .mobile-landing__pricing-link:hover {
+    text-decoration: underline;
+  }
+
   .mobile-landing__footer {
-    border-top: 1px solid #253341;
+    border-top: 1px solid #e2e8f0;
     padding-top: 1rem;
+    margin-top: 0.75rem;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    color: var(--sc-ink-soft);
-    font-size: 0.75rem;
+    color: #64748b;
+    font-size: 0.7rem;
+    position: relative;
+    z-index: 1;
   }
+
   .mobile-landing__footer a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    color: var(--sc-ink-soft);
-    text-underline-offset: 4px;
+    color: #64748b;
+    text-decoration: none;
+  }
+
+  .mobile-landing__footer a:hover {
+    text-decoration: underline;
   }
 }
 

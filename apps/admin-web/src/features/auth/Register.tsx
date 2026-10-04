@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, Button, Input, Select } from '@restaurantos/ui';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
-import { Lock, Mail, User, Store, Phone, Sparkles, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { setCanonicalBranchId } from '../../lib/branchContext';
+import './Register.css';
 
 interface SignupResponse {
   token: string;
@@ -98,230 +98,193 @@ export const Register: React.FC = () => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-      backgroundColor: 'var(--color-bg)',
-      padding: '24px 16px',
-    }}>
-      <Card style={{ maxWidth: 520, width: '100%', padding: '32px 28px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            background: 'rgba(16, 185, 129, 0.12)',
-            color: '#10b981',
-            padding: '4px 12px',
-            borderRadius: 9999,
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: 12,
-          }}>
-            <Sparkles size={14} /> 14 Días de Prueba Gratis
-          </div>
-          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--color-text, #0f172a)', margin: '0 0 6px' }}>
-            Registra tu Restaurante
-          </h1>
-          <p style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.9rem', margin: 0 }}>
-            Sin tarjeta de crédito requerida. Configuración instantánea en 1 minuto.
-          </p>
+    <div className="register-page">
+      <div className="register-mobile-aura" aria-hidden="true" />
+
+      <header className="register-mobile-header">
+        <div className="register-mobile-header__brand">
+          <span>mi menú</span><span className="register-mobile-header__dot">.</span><span>onl</span>
         </div>
+        <div className="register-mobile-header__tag">
+          <span>TODO</span>
+          <span>DESDE</span>
+          <span>TU</span>
+          <span>CELULAR</span>
+          <span className="register-mobile-header__dash" />
+        </div>
+      </header>
 
-        <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {error && (
-            <div style={{
-              padding: 12,
-              backgroundColor: 'var(--color-red-light, #fee2e2)',
-              color: 'var(--color-red, #b91c1c)',
-              borderRadius: 8,
-              fontSize: '0.875rem',
-              fontWeight: 500,
-            }}>
-              {error}
-            </div>
-          )}
+      <div className="register-container">
+        <div className="register-card">
+          <div className="register-header">
+            <span className="register-eyebrow">14 DÍAS DE PRUEBA GRATIS</span>
+            <h1 className="register-title">Registra tu restaurante</h1>
+            <p className="register-subtitle">
+              Sin tarjeta de crédito requerida. Configuración instantánea en 1 minuto.
+            </p>
+          </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-              Nombre del Restaurante o Marca *
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Store size={18} style={{ position: 'absolute', left: 12, top: 11, color: 'var(--color-text-muted)' }} />
-              <Input
+          <form onSubmit={handleSignup} className="register-form">
+            {error && (
+              <div className="register-error">
+                {error}
+              </div>
+            )}
+
+            <div className="register-form-group">
+              <label className="register-label">
+                Nombre del Restaurante o Marca *
+              </label>
+              <input
                 type="text"
+                className="register-input"
                 value={restaurantName}
                 onChange={(e) => setRestaurantName(e.target.value)}
                 placeholder="Ej. Tacos El Pastor, Café Central..."
-                style={{ paddingLeft: 40, width: '100%' }}
                 required
               />
             </div>
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-              Plan inicial
-            </label>
-            <Select value={plan} onChange={(e) => setPlan(e.target.value)} style={{ width: '100%' }}>
-              <option value="trial">Prueba gratuita de 14 días</option>
-              <option value="starter">Starter</option>
-              <option value="professional">Professional</option>
-            </Select>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                Tipo de Negocio
+            <div className="register-form-group">
+              <label className="register-label">
+                Plan inicial
               </label>
-              <Select
-                value={businessType}
-                onChange={(e) => setBusinessType(e.target.value)}
-                style={{ width: '100%' }}
+              <select
+                className="register-select"
+                value={plan}
+                onChange={(e) => setPlan(e.target.value)}
               >
-                <option value="restaurant">Restaurante</option>
-                <option value="cafe">Cafetería</option>
-                <option value="taqueria">Taquería</option>
-                <option value="pizzeria">Pizzería</option>
-                <option value="bar">Bar / Cantina</option>
-                <option value="dark_kitchen">Dark Kitchen</option>
-                <option value="bakery">Panadería / Repostería</option>
-                <option value="other">Otro</option>
-              </Select>
+                <option value="trial">Prueba gratuita de 14 días</option>
+                <option value="starter">Starter</option>
+                <option value="professional">Professional</option>
+              </select>
             </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                Sucursal Inicial
+            <div className="register-grid-2">
+              <div className="register-form-group">
+                <label className="register-label">
+                  Tipo de Negocio
+                </label>
+                <select
+                  className="register-select"
+                  value={businessType}
+                  onChange={(e) => setBusinessType(e.target.value)}
+                >
+                  <option value="restaurant">Restaurante</option>
+                  <option value="cafe">Cafetería</option>
+                  <option value="taqueria">Taquería</option>
+                  <option value="pizzeria">Pizzería</option>
+                  <option value="bar">Bar / Cantina</option>
+                  <option value="dark_kitchen">Dark Kitchen</option>
+                  <option value="bakery">Panadería / Repostería</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+
+              <div className="register-form-group">
+                <label className="register-label">
+                  Sucursal Inicial
+                </label>
+                <input
+                  type="text"
+                  className="register-input"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  placeholder="Matriz"
+                />
+              </div>
+            </div>
+
+            <div className="register-form-group">
+              <label className="register-label">
+                Tu Nombre Completo *
               </label>
-              <Input
+              <input
                 type="text"
-                value={branchName}
-                onChange={(e) => setBranchName(e.target.value)}
-                placeholder="Matriz"
-                style={{ width: '100%' }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-              Tu Nombre Completo *
-            </label>
-            <div style={{ position: 'relative' }}>
-              <User size={18} style={{ position: 'absolute', left: 12, top: 11, color: 'var(--color-text-muted)' }} />
-              <Input
-                type="text"
+                className="register-input"
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
                 placeholder="Carlos Gómez"
-                style={{ paddingLeft: 40, width: '100%' }}
                 required
               />
             </div>
-          </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-              Correo Electrónico (será tu usuario admin) *
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{ position: 'absolute', left: 12, top: 11, color: 'var(--color-text-muted)' }} />
-              <Input
+            <div className="register-form-group">
+              <label className="register-label">
+                Correo Electrónico (será tu usuario admin) *
+              </label>
+              <input
                 type="email"
+                className="register-input"
                 value={ownerEmail}
                 onChange={(e) => setOwnerEmail(e.target.value)}
                 placeholder="carlos@example.com"
-                style={{ paddingLeft: 40, width: '100%' }}
                 required
               />
             </div>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                Contraseña *
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Lock size={18} style={{ position: 'absolute', left: 12, top: 11, color: 'var(--color-text-muted)' }} />
-                <Input
+            <div className="register-grid-2">
+              <div className="register-form-group">
+                <label className="register-label">
+                  Contraseña *
+                </label>
+                <input
                   type="password"
+                  className="register-input"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mín. 8 caracteres"
-                  style={{ paddingLeft: 40, width: '100%' }}
                   required
                 />
               </div>
-            </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                Teléfono / WhatsApp
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Phone size={18} style={{ position: 'absolute', left: 12, top: 11, color: 'var(--color-text-muted)' }} />
-                <Input
+              <div className="register-form-group">
+                <label className="register-label">
+                  Teléfono / WhatsApp
+                </label>
+                <input
                   type="tel"
+                  className="register-input"
                   value={ownerPhone}
                   onChange={(e) => setOwnerPhone(e.target.value)}
                   placeholder="+52 55 1234 5678"
-                  style={{ paddingLeft: 40, width: '100%' }}
                 />
               </div>
             </div>
-          </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            style={{
-              width: '100%',
-              marginTop: 10,
-              padding: '12px 20px',
-              fontSize: '1rem',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-            }}
-            disabled={loading}
-          >
-            {loading ? 'Creando tu cuenta...' : (
-              <>Comenzar Prueba Gratis <ArrowRight size={18} /></>
-            )}
-          </Button>
-
-          <div style={{
-            textAlign: 'center',
-            marginTop: 14,
-            fontSize: '0.875rem',
-            color: 'var(--color-text-muted, #64748b)',
-          }}>
-            ¿Ya tienes una cuenta registrada?{' '}
-            <a
-              href="/login"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/login');
-              }}
-              style={{
-                color: 'var(--color-blue, #2563eb)',
-                textDecoration: 'none',
-                fontWeight: 600,
-              }}
+            <button
+              type="submit"
+              className="register-btn-submit"
+              disabled={loading}
             >
-              Iniciar Sesión
-            </a>
-          </div>
-        </form>
-      </Card>
+              {loading ? 'Creando tu cuenta...' : (
+                <>Comenzar Prueba Gratis <ArrowRight size={18} /></>
+              )}
+            </button>
+
+            <div className="register-login-row">
+              ¿Ya tienes una cuenta registrada?{' '}
+              <a
+                href="/login"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/login');
+                }}
+                className="register-login-link"
+              >
+                Iniciar Sesión
+              </a>
+            </div>
+          </form>
+        </div>
+
+        <footer className="register-mobile-footer">
+          <span>mi menú onl · Tu operación, conectada.</span>
+          <a href="https://mimenu.onl/manual/" target="_blank" rel="noopener noreferrer">
+            Manual de uso
+          </a>
+        </footer>
+      </div>
     </div>
   );
 };

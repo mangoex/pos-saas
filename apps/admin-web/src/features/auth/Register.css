@@ -1,0 +1,290 @@
+/* Register Page Styles - Responsive Mobile & Desktop */
+
+.register-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: var(--color-bg, #f8fafc);
+  padding: 24px 16px;
+  position: relative;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.register-mobile-aura {
+  display: none;
+}
+
+.register-mobile-header {
+  display: none;
+}
+
+.register-mobile-footer {
+  display: none;
+}
+
+.register-container {
+  max-width: 520px;
+  width: 100%;
+}
+
+.register-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  padding: 28px 24px;
+  box-sizing: border-box;
+}
+
+.register-header {
+  margin-bottom: 20px;
+}
+
+.register-eyebrow {
+  display: block;
+  color: #e25327;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.register-title {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.register-subtitle {
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.register-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.register-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.register-input,
+.register-select {
+  width: 100%;
+  height: 42px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background-color: #fcfdfe;
+  color: #0f172a;
+  font-size: 0.88rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+}
+
+.register-input::placeholder {
+  color: #94a3b8;
+}
+
+.register-input:focus,
+.register-select:focus {
+  border-color: #e25327;
+  box-shadow: 0 0 0 3px rgba(226, 83, 39, 0.15);
+  background-color: #ffffff;
+}
+
+.register-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.register-btn-submit {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 8px;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #e25327;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+
+.register-btn-submit:hover:not(:disabled) {
+  background-color: #c9441e;
+}
+
+.register-btn-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.register-error {
+  padding: 12px;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.register-login-row {
+  text-align: center;
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.register-login-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.register-login-link:hover {
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   ESTILOS EXCLUSIVOS PARA MÓVIL (<= 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .register-page {
+    background-color: #f7f6f2 !important;
+    justify-content: flex-start;
+    padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem max(1.75rem, env(safe-area-inset-bottom)) 1.25rem;
+    overflow-x: hidden;
+  }
+
+  .register-mobile-aura {
+    display: block;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 6px;
+    background: linear-gradient(180deg, #ea580c 0%, #f97316 35%, #ea580c 70%, transparent 100%);
+    box-shadow: 0 0 35px 12px rgba(234, 88, 12, 0.4);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .register-mobile-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto 1.25rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .register-mobile-header__brand {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+  }
+
+  .register-mobile-header__dot {
+    color: #e25327;
+  }
+
+  .register-mobile-header__tag {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: #64748b;
+    line-height: 1.25;
+    text-transform: uppercase;
+  }
+
+  .register-mobile-header__dash {
+    display: block;
+    width: 14px;
+    height: 1.5px;
+    background-color: #94a3b8;
+    margin-top: 4px;
+  }
+
+  .register-container {
+    max-width: 440px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .register-card {
+    padding: 22px 18px;
+    border-radius: 18px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  }
+
+  .register-title {
+    font-size: 1.55rem;
+  }
+
+  .register-grid-2 {
+    gap: 10px;
+  }
+
+  .register-mobile-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 440px;
+    margin: 1.5rem auto 0;
+    padding-top: 1rem;
+    gap: 0.5rem;
+    font-size: 0.7rem;
+    color: #64748b;
+    position: relative;
+    z-index: 1;
+  }
+
+  .register-mobile-footer a {
+    color: #64748b;
+    text-decoration: none;
+  }
+
+  .register-mobile-footer a:hover {
+    text-decoration: underline;
+  }
+}
