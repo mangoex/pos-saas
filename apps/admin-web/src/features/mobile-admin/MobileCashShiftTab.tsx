@@ -49,6 +49,8 @@ const DEFAULT_SCHEDULE: DayScheduleForm[] = [
 interface MobileCashShiftTabProps {
   branchId: string;
   branchName?: string;
+  branches?: Array<{ id: string; name: string }>;
+  onSelectBranch?: (branchId: string) => void;
   onOpenHelpVideos?: () => void;
 }
 
@@ -78,6 +80,8 @@ const PRESET_AMOUNTS = [200, 500, 1000, 1500, 2000];
 export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
   branchId,
   branchName,
+  branches = [],
+  onSelectBranch,
   onOpenHelpVideos,
 }) => {
   const registerId = 'CAJA-01';
@@ -122,6 +126,39 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
       setRefreshing(false);
     }
   }, [branchId]);
+
+  // Multi-branch cash shifts state
+  const [multiShifts, setMultiShifts] = useState<Record<string, { shift: CashShift | null; loading: boolean }>>({});
+
+  const loadAllShifts = useCallback(async () => {
+    if (!branches || branches.length === 0) return;
+    const initial: Record<string, { shift: CashShift | null; loading: boolean }> = {};
+    branches.forEach((b) => {
+      initial[b.id] = { shift: multiShifts[b.id]?.shift || null, loading: true };
+    });
+    setMultiShifts(initial);
+
+    const updated: Record<string, { shift: CashShift | null; loading: boolean }> = {};
+    await Promise.all(
+      branches.map(async (b) => {
+        try {
+          const res = await fetchApi<CurrentShiftResponse>(
+            `/cash/shifts/current?branch_id=${encodeURIComponent(b.id)}&register_id=${encodeURIComponent(registerId)}`
+          );
+          updated[b.id] = { shift: res?.cash_shift || null, loading: false };
+        } catch {
+          updated[b.id] = { shift: null, loading: false };
+        }
+      })
+    );
+    setMultiShifts(updated);
+  }, [branches, registerId]);
+
+  useEffect(() => {
+    if (branchId === 'all') {
+      void loadAllShifts();
+    }
+  }, [branchId, loadAllShifts]);
 
   // Daily cash report state
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -410,6 +447,218 @@ export const MobileCashShiftTab: React.FC<MobileCashShiftTabProps> = ({
       return isoStr;
     }
   };
+
+  if (branchId === 'all') {
+    const openCount = branches.filter((b) => multiShifts[b.id]?.shift?.status === 'OPEN').length;
+    const totalBranches = branches.length;
+
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', paddingBottom: 84 }}>
+        {/* Header Multicaja */}
+        <header
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 40,
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            padding: '14px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid #1e293b',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                backgroundColor: '#3b82f6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <CircleDollarSign size={22} color="#ffffff" />
+            </div>
+            <div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, lineHeight: 1.1 }}>
+                Monitor Multicaja
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                {totalBranches} sucursales • {openCount} con turno abierto
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => void loadAllShifts()}
+            aria-label="Refrescar estado de cajas"
+            style={{
+              border: 'none',
+              background: '#1e293b',
+              color: '#ffffff',
+              borderRadius: 8,
+              padding: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={16} />
+          </button>
+        </header>
+
+        {/* Content: Summary banner & Branch cards */}
+        <main style={{ padding: '16px' }}>
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 16,
+              padding: '16px',
+              marginBottom: 16,
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+            }}
+          >
+            <div style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+              Estado de Cajas por Sucursal
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: '0.875rem', color: '#334155', lineHeight: 1.45 }}>
+              Las cajas y turnos son locales e independientes por sucursal. Selecciona una sucursal para abrir turno, ingresar movimientos de efectivo o realizar el corte diario.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {branches.map((b) => {
+              const info = multiShifts[b.id];
+              const bShift = info?.shift;
+              const isOpen = bShift?.status === 'OPEN';
+              const isLoading = info?.loading;
+
+              return (
+                <div
+                  key={b.id}
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: 16,
+                    padding: '16px',
+                    border: isOpen ? '1.5px solid #86efac' : '1px solid #e2e8f0',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '1.1rem' }}>📍</span>
+                      <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>{b.name}</strong>
+                    </div>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        padding: '3px 9px',
+                        borderRadius: 9999,
+                        backgroundColor: isOpen ? '#dcfce7' : '#f1f5f9',
+                        color: isOpen ? '#166534' : '#64748b',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          backgroundColor: isOpen ? '#22c55e' : '#94a3b8',
+                        }}
+                      />
+                      <span>{isLoading ? 'Consultando...' : isOpen ? 'Caja Abierta' : 'Caja Cerrada'}</span>
+                    </span>
+                  </div>
+
+                  {isOpen && bShift && (
+                    <div style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 10, fontSize: '0.8125rem', color: '#475569' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span>Apertura:</span>
+                        <strong>${(bShift.opening_cash_cents / 100).toFixed(2)} MXN</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Abierto desde:</span>
+                        <span>{new Date(bShift.opened_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isOpen && !isLoading && (
+                    <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                      Sin turno de caja activo en esta sucursal.
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 4 }}>
+                    {isOpen ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelectBranch?.(b.id)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: 10,
+                          backgroundColor: '#0f172a',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          fontSize: '0.875rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <CircleDollarSign size={16} />
+                        <span>Gestionar Caja y Movimientos</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSelectBranch?.(b.id)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: 10,
+                          backgroundColor: '#ff5722',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          fontSize: '0.875rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Unlock size={16} />
+                        <span>Abrir turno en esta sucursal</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', paddingBottom: 84 }}>

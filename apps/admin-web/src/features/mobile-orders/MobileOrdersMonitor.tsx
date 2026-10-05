@@ -44,6 +44,7 @@ interface OrderItem {
 interface MobileOrdersMonitorProps {
   branchId: string;
   branchName?: string;
+  branches?: Array<{ id: string; name: string }>;
   onOpenHelpVideos?: () => void;
   onActiveOrdersCountChange?: (count: number) => void;
 }
@@ -117,9 +118,14 @@ export const isOrderHistory = (order: OrderItem): boolean => {
 export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
   branchId,
   branchName,
+  branches = [],
   onOpenHelpVideos,
   onActiveOrdersCountChange,
 }) => {
+  const branchNameMap = React.useMemo(() => {
+    return new Map((branches || []).map((b) => [b.id, b.name]));
+  }, [branches]);
+
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -149,8 +155,15 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       let cursor: string | null = null;
       let pagesRead = 0;
       do {
-        const path: string = `/orders/accounts?branch_id=${encodeURIComponent(branchId)}&limit=100`
-          + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+        const queryParams = new URLSearchParams();
+        if (branchId !== 'all') {
+          queryParams.set('branch_id', branchId);
+        }
+        queryParams.set('limit', '100');
+        if (cursor) {
+          queryParams.set('cursor', cursor);
+        }
+        const path: string = `/orders/accounts?${queryParams.toString()}`;
         const res: { items: OrderItem[]; next_cursor?: string | null } = await fetchApi(path);
         if (scopeRef.current !== scope) return;
         items.push(...(Array.isArray(res?.items) ? res.items : []));
@@ -631,7 +644,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                     marginBottom: 12,
                   }}
                 >
-                  {/* Card Header: Folio, Elapsed Time */}
+                  {/* Card Header: Folio, Elapsed Time, Branch Badge */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>
                       #{order.folio}
@@ -639,6 +652,27 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                     <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
                       {timeLabel}
                     </span>
+                    {branchId === 'all' && (
+                      <span
+                        className="order-branch-badge"
+                        style={{
+                          marginLeft: 'auto',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          backgroundColor: '#f1f5f9',
+                          color: '#475569',
+                          padding: '2px 8px',
+                          borderRadius: 9999,
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        <Store size={12} color="#64748b" />
+                        <span>{(order as any).branch_name || branchNameMap.get((order as any).branch_id) || 'Sucursal'}</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Card Body: Customer & Status Badge */}

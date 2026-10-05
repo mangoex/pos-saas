@@ -351,6 +351,13 @@ const AdminLayout = () => {
         <MobileAdminShell
           branchId={branchId}
           branchName={branches.find((b) => b.id === branchId)?.name}
+          branches={branches}
+          onSelectBranch={(id) => {
+            setBranchId(id);
+            if (id !== 'all') {
+              setCanonicalBranchId(id);
+            }
+          }}
           onSwitchToDesktop={() => {
             try {
               localStorage.setItem('restaurantos_force_desktop', 'true');
