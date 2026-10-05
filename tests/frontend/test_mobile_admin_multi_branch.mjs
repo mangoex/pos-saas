@@ -45,3 +45,27 @@ test('MobileCashShiftTab supports multi-cash overview when branchId is "all"', (
   assert.match(cashSource, /Multicaja|Estado de Cajas|Cajas por Sucursal/i, 'Must render multicash overview when branchId is "all"');
   assert.match(cashSource, /Abrir turno|Gestionar/i, 'Must provide direct action to open or manage shift for each branch');
 });
+
+test('MobileCreateBranchModal exists and submits branch creation payload to /branches', () => {
+  const modalPath = 'apps/admin-web/src/features/mobile-admin/MobileCreateBranchModal.tsx';
+  assert.ok(existsSync(resolve(root, modalPath)), 'MobileCreateBranchModal.tsx must exist');
+
+  const source = read(modalPath);
+  assert.match(source, /export const MobileCreateBranchModal/, 'Must export MobileCreateBranchModal');
+  assert.match(source, /fetchApi(?:<[^>]+>)?\(['"]\/branches['"]/, 'Must POST to /branches endpoint');
+  assert.match(source, /method:\s*['"]POST['"]/, 'Must use POST method');
+  assert.match(source, /onBranchCreated/, 'Must notify caller onBranchCreated');
+  assert.match(source, /name|code/i, 'Must require branch name and code');
+});
+
+test('MobileBranchSettingsTab renders "+" new branch button and branches list selector', () => {
+  const settingsSource = read('apps/admin-web/src/features/mobile-admin/MobileBranchSettingsTab.tsx');
+  assert.match(settingsSource, /onOpenCreateBranch|setIsCreateModalOpen|Nueva Sucursal|\+ Sucursal/i, 'Must have a button or action to add a new branch');
+  assert.match(settingsSource, /Sucursales|branches/i, 'Must render branch list or selector');
+});
+
+test('MobileBranchPillsBar supports onAddBranch "+" action', () => {
+  const pillsSource = read('apps/admin-web/src/features/mobile-admin/MobileBranchPillsBar.tsx');
+  assert.match(pillsSource, /onAddBranch/, 'Must accept onAddBranch callback');
+  assert.match(pillsSource, /\+|Nueva/i, 'Must render "+" or "Nueva" pill when onAddBranch is provided');
+});

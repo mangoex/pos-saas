@@ -41,6 +41,9 @@ interface OrgProfile {
 interface MobileBranchSettingsTabProps {
   branchId: string;
   branchName?: string;
+  branches?: Array<{ id: string; name: string; code?: string; status?: string }>;
+  onSelectBranch?: (branchId: string) => void;
+  onOpenCreateBranch?: () => void;
   onSwitchToDesktop?: () => void;
   onOpenOnboarding?: () => void;
   onboardingPending?: boolean;
@@ -107,10 +110,14 @@ interface LinksResponse {
 
 import { SubscriptionCheckout } from '../../../../../packages/ui/src/components/SubscriptionCheckout';
 import { SUBSCRIPTION_PLANS, findPlanCatalogItem } from '../auth/subscriptionPlans';
+import { MobileCreateBranchModal } from './MobileCreateBranchModal';
 
 export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = ({
   branchId,
   branchName: _branchName,
+  branches: initialBranches,
+  onSelectBranch,
+  onOpenCreateBranch,
   onSwitchToDesktop: _onSwitchToDesktop,
   onOpenOnboarding,
   onboardingPending,
@@ -122,6 +129,9 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [showCheckout, setShowCheckout] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPlanCode, setSelectedPlanCode] = useState('starter_349');
+  const [isLocalCreateModalOpen, setIsLocalCreateModalOpen] = useState(false);
+
+  const handleOpenCreateBranch = onOpenCreateBranch || (() => setIsLocalCreateModalOpen(true));
 
   const handleTokenGenerated = async (tokenId: string, formData: any) => {
     setIsProcessing(true);
@@ -150,10 +160,14 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   };
 
   // Queries
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
+  const { data: queryBranches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
     queryKey: ['branches'],
     queryFn: () => fetchApi('/branches'),
   });
+
+  const branches = (queryBranches && queryBranches.length > 0)
+    ? queryBranches
+    : ((initialBranches as Branch[]) || []);
 
   const currentBranch = branches.find((b) => b.id === branchId) || branches[0];
 
@@ -415,31 +429,57 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
           </div>
         </div>
 
-        {onOpenHelpVideos && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
             type="button"
-            onClick={onOpenHelpVideos}
-            aria-label="Tutoriales y videos de ayuda"
-            title="Guías en video"
+            onClick={handleOpenCreateBranch}
+            aria-label="Agregar nueva sucursal"
+            title="Crear nueva sucursal"
             style={{
-              border: '1px solid rgba(245, 158, 11, 0.4)',
-              background: 'rgba(245, 158, 11, 0.12)',
-              color: '#fbbf24',
+              backgroundColor: '#ff5722',
+              color: '#ffffff',
+              border: 'none',
               borderRadius: 10,
               padding: '7px 11px',
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               cursor: 'pointer',
               fontSize: '0.78rem',
               fontWeight: 800,
-              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+              boxShadow: '0 2px 6px rgba(255, 87, 34, 0.3)',
             }}
           >
-            <HelpCircle size={16} color="#fbbf24" />
-            <span>Ayuda</span>
+            <Plus size={16} color="#ffffff" strokeWidth={2.5} />
+            <span>+ Sucursal</span>
           </button>
-        )}
+
+          {onOpenHelpVideos && (
+            <button
+              type="button"
+              onClick={onOpenHelpVideos}
+              aria-label="Tutoriales y videos de ayuda"
+              title="Guías en video"
+              style={{
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#fbbf24',
+                borderRadius: 10,
+                padding: '7px 11px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+              }}
+            >
+              <HelpCircle size={16} color="#fbbf24" />
+              <span>Ayuda</span>
+            </button>
+          )}
+        </div>
       </header>
 
       <main style={{ padding: '16px 14px', maxWidth: 640, margin: '0 auto' }}>
@@ -742,6 +782,97 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
           <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Cargando sucursal...</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Card: Sucursales del Negocio */}
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: 16,
+                padding: 16,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Store size={20} color="#ff5722" />
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                      Sucursales ({branches.length})
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+                      Gestiona tus ubicaciones y agrega nuevas
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenCreateBranch}
+                  style={{
+                    backgroundColor: '#ff5722',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '7px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(255, 87, 34, 0.25)',
+                  }}
+                >
+                  <Plus size={15} color="#ffffff" strokeWidth={2.5} />
+                  <span>+ Agregar sucursal</span>
+                </button>
+              </div>
+
+              {/* Branch Selector Chips */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {branches.map((b) => {
+                  const isCurrent = b.id === currentBranch?.id;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => onSelectBranch?.(b.id)}
+                      style={{
+                        padding: '7px 12px',
+                        borderRadius: 10,
+                        border: isCurrent ? '2px solid #ff5722' : '1px solid #cbd5e1',
+                        backgroundColor: isCurrent ? '#fff7ed' : '#f8fafc',
+                        color: isCurrent ? '#c2410c' : '#334155',
+                        fontWeight: isCurrent ? 800 : 600,
+                        fontSize: '0.8125rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <MapPin size={13} color={isCurrent ? '#ea580c' : '#94a3b8'} />
+                      <span>{b.name}</span>
+                      {isCurrent && (
+                        <span
+                          style={{
+                            fontSize: '0.65rem',
+                            backgroundColor: '#ffedd5',
+                            color: '#c2410c',
+                            padding: '1px 5px',
+                            borderRadius: 9999,
+                            fontWeight: 800,
+                          }}
+                        >
+                          Editando
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Card: Menú Digital Compartible */}
             <div
               style={{
@@ -1960,6 +2091,18 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
           </div>
         )}
       </main>
+
+      {/* Fallback Local Create Branch Modal */}
+      <MobileCreateBranchModal
+        isOpen={isLocalCreateModalOpen}
+        onClose={() => setIsLocalCreateModalOpen(false)}
+        onBranchCreated={(newBranch) => {
+          queryClient.invalidateQueries({ queryKey: ['branches'] });
+          onSelectBranch?.(newBranch.id);
+          showToast(`¡Sucursal "${newBranch.name}" creada con éxito!`);
+        }}
+        existingBranchesCount={branches.length}
+      />
     </div>
   );
 };

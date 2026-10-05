@@ -10,12 +10,14 @@ import { MobileBranchSettingsTab } from './MobileBranchSettingsTab';
 import { OnboardingWizardModal } from '../onboarding/OnboardingWizardModal';
 import { MobileHelpVideosModal } from './MobileHelpVideosModal';
 import { MobileBranchPillsBar, ShiftState } from './MobileBranchPillsBar';
+import { MobileCreateBranchModal } from './MobileCreateBranchModal';
 
 interface MobileAdminShellProps {
   branchId: string;
   branchName?: string;
-  branches?: Array<{ id: string; name: string; status?: string }>;
+  branches?: Array<{ id: string; name: string; code?: string; status?: string }>;
   onSelectBranch?: (branchId: string) => void;
+  onRefreshBranches?: () => Promise<void> | void;
   onSwitchToDesktop?: () => void;
 }
 
@@ -92,6 +94,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   branchName,
   branches = [],
   onSelectBranch,
+  onRefreshBranches,
   onSwitchToDesktop,
 }) => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -104,11 +107,23 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   const [onboardingStatus, setOnboardingStatus] = useState<string | null>(null);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isCreateBranchModalOpen, setIsCreateBranchModalOpen] = useState(false);
   const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
 
   const effectiveBranchName = selectedBranchId === 'all'
     ? 'Todas las sucursales'
     : (branches.find((b) => b.id === selectedBranchId)?.name || branchName);
+
+  const handleBranchCreated = async (newBranch: { id: string; name: string; code?: string }) => {
+    setIsCreateBranchModalOpen(false);
+    if (onRefreshBranches) {
+      await onRefreshBranches();
+    }
+    setSelectedBranchId(newBranch.id);
+    if (onSelectBranch) {
+      onSelectBranch(newBranch.id);
+    }
+  };
 
   // Poll branch shift states for status dots on pills
   useEffect(() => {
@@ -292,6 +307,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
           selectedBranchId={selectedBranchId}
           onSelectBranch={handleSelectBranch}
           branchShiftStatus={branchShiftStatus}
+          onAddBranch={() => setIsCreateBranchModalOpen(true)}
         />
       )}
 
@@ -334,6 +350,9 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
             <MobileBranchSettingsTab
               branchId={selectedBranchId === 'all' ? (branches[0]?.id || branchId) : selectedBranchId}
               branchName={effectiveBranchName}
+              branches={branches}
+              onSelectBranch={handleSelectBranch}
+              onOpenCreateBranch={() => setIsCreateBranchModalOpen(true)}
               onSwitchToDesktop={onSwitchToDesktop}
               onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
               onboardingPending={onboardingStatus !== 'complete'}
@@ -358,6 +377,14 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
       <MobileHelpVideosModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
+      />
+
+      {/* Create Branch Modal for Mobile */}
+      <MobileCreateBranchModal
+        isOpen={isCreateBranchModalOpen}
+        onClose={() => setIsCreateBranchModalOpen(false)}
+        onBranchCreated={handleBranchCreated}
+        existingBranchesCount={branches.length}
       />
 
       {/* Fixed Bottom Navigation Bar */}
