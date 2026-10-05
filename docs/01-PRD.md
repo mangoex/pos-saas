@@ -199,9 +199,13 @@ La implementación y certificación real de ambos proveedores se difiere de esta
 - `PRD-FR-071`: **Gestión de Personal con PIN de 4 Dígitos**: Alta ágil de cajeros y supervisores con asignación de PIN de 4 dígitos para cambio rápido de usuario en el POS físico.
 - `PRD-FR-072`: **Reporte Automatizado al Dueño**: Configuración de envío nocturno del resumen de caja y ventas por WhatsApp o correo electrónico.
 
-### 4.9 Pago y Suscripción (Paquete Lite)
+### 4.9 Pago y Suscripción (Paquetes Esencial, Conecta y Control)
 
-- `PRD-FR-090`: **Custom Checkout Mercado Pago**: El pago del paquete Lite ($349 MXN) se procesa nativamente en el Backoffice sin redirección. Falla si hay fuga de contexto (redirección externa a Mercado Pago).
+- `PRD-FR-090`: **Opciones de Suscripción y Checkout Mercado Pago**: El backoffice y la aplicación móvil disponen de un catálogo de 3 paquetes de suscripción mensual:
+  1. **Esencial** ($349 MXN/mes, código interno `starter_349`): Menú digital, pedidos, caja, QR/enlace, promociones, disponibilidad y administración desde celular. Permite cobro con tarjeta o checkout integrado cuando esté habilitado.
+  2. **Conecta** ($699 MXN/mes, código interno `conecta_699`): Todo Esencial + integraciones con Uber Eats/DiDi/Rappi cuando estén disponibles + pedidos centralizados + sincronización de catálogo/disponibilidad. Dispone de enlace directo de pago recurrente en Mercado Pago (`https://mpago.la/2b3VRu1`).
+  3. **Control** ($999 MXN/mes, código interno `control_999`): Todo Conecta + inventarios, recetas, subrecetas, costos, mermas, consumo de insumos, márgenes y reportes operativos. Dispone de enlace directo de pago recurrente en Mercado Pago (`https://mpago.la/1yS6YdX`).
+El selector desplegable en la gestión de suscripción permite elegir entre los tres paquetes con visualización inmediata de sus características operativas y acceso directo a la compra correspondiente. Sin configuración de credenciales del proveedor para tokenización directa con tarjeta, la compra de Conecta y Control se realiza mediante sus enlaces de suscripción en Mercado Pago.
 - `PRD-FR-091`: **Suscripción Preapproval**: Mercado Pago gestiona la recurrencia mensual. La plataforma consume webhooks idempotentes para actualizar la vigencia de la sucursal de forma inmutable.
 - `PRD-FR-092`: **WhatsApp Business Onboarding y Asistente de Menú**: Integración oficial como Tech Provider de Meta con Embedded Signup multi-tenant para vincular números y WABA en un clic, y webhook con asistente conversacional que utiliza como base de conocimiento el menú, horarios, disponibilidad y promociones en tiempo real.
 - `PRD-FR-093`: **WhatsApp Conversational Commerce y Carrito Asistido**: Detección de intención de compra por WhatsApp, matching determinista contra catálogo en vivo con soporte de cantidades y sinónimos, reporte transparente de productos agotados (86'd) y no reconocidos, cálculo de totales en enteros de centavos MXN, y generación de enlaces directos de pre-llenado de carrito web (`https://mimenu.com/<slug>/cart?items=...`) preservando la autoridad del checkout del storefront.

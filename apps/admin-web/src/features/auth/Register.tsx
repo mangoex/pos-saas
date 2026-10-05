@@ -40,7 +40,10 @@ export const Register: React.FC = () => {
   const [businessType, setBusinessType] = useState('restaurant');
   const [plan, setPlan] = useState(() => {
     const requested = searchParams.get('plan');
-    return requested === 'starter' || requested === 'professional' || requested === 'trial' ? requested : 'trial';
+    if (requested === 'esencial' || requested === 'starter') return 'starter';
+    if (requested === 'conecta' || requested === 'professional' || requested === 'pro') return 'conecta';
+    if (requested === 'control' || requested === 'enterprise') return 'control';
+    return requested === 'trial' ? requested : 'trial';
   });
   const [branchName, setBranchName] = useState('Matriz');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -164,8 +167,9 @@ export const Register: React.FC = () => {
                 onChange={(e) => setPlan(e.target.value)}
               >
                 <option value="trial">Prueba gratuita de 14 días</option>
-                <option value="starter">Starter</option>
-                <option value="professional">Professional</option>
+                <option value="starter">Esencial — $349/mes</option>
+                <option value="conecta">Conecta — $699/mes</option>
+                <option value="control">Control — $999/mes</option>
               </select>
             </div>
 
