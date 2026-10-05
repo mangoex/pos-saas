@@ -401,3 +401,7 @@ Cada historia nueva deberá incluir:
 - BDD-REC-001: Dado dos restaurantes, al navegar entre URLs y reintentar un pedido, catálogo/carrito/POS/KDS permanecen en su organización; slug inexistente falla sin productos ficticios.
 - BDD-REC-002: Dado un alta por plan o prueba, al terminar/reanudar onboarding desde otro navegador se conserva el avance; al vencer 14 días el servidor rechaza nueva operación incluso con sesión vigente.
 - BDD-REC-003: Dado un actor normal, revocado o de otro tenant, no obtiene privilegios por correo ni modifica recursos ajenos; eventos externos necesitan autenticidad y destino inequívoco.
+
+## Administración móvil multi-sucursal
+
+- BDD-MOB-001: Dado un administrador con múltiples sucursales activas en admin-web móvil, la interfaz presenta una barra superior deslizable en píldoras iniciando en "Todas las sucursales" por defecto. En el monitor de pedidos, la vista unificada agrupa las órdenes de la organización identificando cada una con la insignia de sucursal correspondiente. Al pulsar una sucursal específica, el feed se acota a los pedidos de dicha sucursal. En el módulo de caja, la selección "Todas" expone el monitor consolidado de turnos abiertos/cerrados por sucursal, requiriendo seleccionar una sucursal concreta para ejecutar aperturas, movimientos o cortes de caja.
