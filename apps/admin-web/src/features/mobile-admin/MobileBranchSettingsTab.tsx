@@ -429,57 +429,31 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {onOpenHelpVideos && (
           <button
             type="button"
-            onClick={handleOpenCreateBranch}
-            aria-label="Agregar nueva sucursal"
-            title="Crear nueva sucursal"
+            onClick={onOpenHelpVideos}
+            aria-label="Tutoriales y videos de ayuda"
+            title="Guías en video"
             style={{
-              backgroundColor: '#ff5722',
-              color: '#ffffff',
-              border: 'none',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              background: 'rgba(245, 158, 11, 0.12)',
+              color: '#fbbf24',
               borderRadius: 10,
               padding: '7px 11px',
               display: 'flex',
               alignItems: 'center',
-              gap: 5,
+              gap: 6,
               cursor: 'pointer',
               fontSize: '0.78rem',
               fontWeight: 800,
-              boxShadow: '0 2px 6px rgba(255, 87, 34, 0.3)',
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
             }}
           >
-            <Plus size={16} color="#ffffff" strokeWidth={2.5} />
-            <span>+ Sucursal</span>
+            <HelpCircle size={16} color="#fbbf24" />
+            <span>Ayuda</span>
           </button>
-
-          {onOpenHelpVideos && (
-            <button
-              type="button"
-              onClick={onOpenHelpVideos}
-              aria-label="Tutoriales y videos de ayuda"
-              title="Guías en video"
-              style={{
-                border: '1px solid rgba(245, 158, 11, 0.4)',
-                background: 'rgba(245, 158, 11, 0.12)',
-                color: '#fbbf24',
-                borderRadius: 10,
-                padding: '7px 11px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                cursor: 'pointer',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-              }}
-            >
-              <HelpCircle size={16} color="#fbbf24" />
-              <span>Ayuda</span>
-            </button>
-          )}
-        </div>
+        )}
       </header>
 
       <main style={{ padding: '16px 14px', maxWidth: 640, margin: '0 auto' }}>
@@ -823,7 +797,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   }}
                 >
                   <Plus size={15} color="#ffffff" strokeWidth={2.5} />
-                  <span>+ Agregar sucursal</span>
+                  <span>+ Sucursal</span>
                 </button>
               </div>
 
