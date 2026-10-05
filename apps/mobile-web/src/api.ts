@@ -1,6 +1,5 @@
 import { Product, Category, CustomerOrderInfo, CreatedOrderResult, CartItem, BranchInfo, Storefront, SavedCustomerProfile, TrendingDish, CommunityPhoto, TrackedActiveOrder } from './types';
-import { getProductImage } from './imageMap';
-import closedEstablishmentHero from './assets/closed_establishment_hero.jpg';
+import { getProductImage, CLOSED_ESTABLISHMENT_HERO_MEDIA } from './imageMap';
 import { formatModifiersSummary } from './utils/cartPersonalization';
 import { parsePickupOptions } from './utils/pickupSchedule';
 import {
@@ -183,7 +182,7 @@ export async function fetchMobileMenu(publicKey?: string | null): Promise<{ prod
       name: isClosed
         ? 'Cerrado por el momento'
         : (typeof data.menu_home?.name === 'string' && data.menu_home.name.trim() ? data.menu_home.name : defaultHomeName),
-      image_url: isClosed ? closedEstablishmentHero : (typeof data.menu_home?.image_url === 'string' ? data.menu_home.image_url : null),
+      image_url: isClosed ? CLOSED_ESTABLISHMENT_HERO_MEDIA : (typeof data.menu_home?.image_url === 'string' ? data.menu_home.image_url : null),
     }];
     const seenCatNames = new Set<string>();
     const seenCatIds = new Set<string>(['all']);
