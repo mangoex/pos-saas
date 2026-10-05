@@ -37,6 +37,7 @@ test('MobileOrdersMonitor supports "all" branches with branch badge on order car
   const monitorSource = read('apps/admin-web/src/features/mobile-orders/MobileOrdersMonitor.tsx');
   assert.match(monitorSource, /branchId\s*===\s*['"]all['"]|\bbranchId\s*!==\s*['"]all['"]/, 'Must check for branchId === "all"');
   assert.match(monitorSource, /order\.branch_name|branchNameMap|badge|Sucursal/i, 'Must display branch name/badge on order when in all branches view');
+  assert.doesNotMatch(monitorSource, /ChevronDown/i, 'Must not render ChevronDown arrow on branch indicator in MobileOrdersMonitor');
 });
 
 test('MobileCashShiftTab supports multi-cash overview when branchId is "all"', () => {
@@ -58,10 +59,11 @@ test('MobileCreateBranchModal exists and submits branch creation payload to /bra
   assert.match(source, /name|code/i, 'Must require branch name and code');
 });
 
-test('MobileBranchSettingsTab renders "+" new branch button and branches list selector', () => {
+test('MobileBranchSettingsTab renders "+" new branch button only in branches section, not in header', () => {
   const settingsSource = read('apps/admin-web/src/features/mobile-admin/MobileBranchSettingsTab.tsx');
   assert.match(settingsSource, /onOpenCreateBranch|setIsCreateModalOpen|Nueva Sucursal|\+ Sucursal/i, 'Must have a button or action to add a new branch');
   assert.match(settingsSource, /Sucursales|branches/i, 'Must render branch list or selector');
+  assert.doesNotMatch(settingsSource, /<header[\s\S]*?\+ Sucursal[\s\S]*?<\/header>/, 'Header must not contain + Sucursal button');
 });
 
 test('MobileBranchPillsBar supports onAddBranch "+" action', () => {

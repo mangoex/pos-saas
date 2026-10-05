@@ -16,7 +16,6 @@ import {
   HelpCircle,
   Menu,
   Store,
-  ChevronDown
 } from 'lucide-react';
 import { MobileOrderDetailModal } from './MobileOrderDetailModal';
 import { MobileMenuQrModal } from './MobileMenuQrModal';
@@ -409,11 +408,23 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-           <button style={{ display: 'flex', alignItems: 'center', gap: 6, backgroundColor: '#f1f5f9', border: 'none', padding: '6px 16px', borderRadius: 20, fontSize: '0.9rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-              <Store size={16} />
-              {branchName || 'Sucursal Centro'}
-              <ChevronDown size={16} />
-           </button>
+           <div
+             style={{
+               display: 'inline-flex',
+               alignItems: 'center',
+               gap: 6,
+               backgroundColor: '#f1f5f9',
+               border: '1px solid #e2e8f0',
+               padding: '5px 14px',
+               borderRadius: 20,
+               fontSize: '0.85rem',
+               fontWeight: 700,
+               color: '#334155',
+             }}
+           >
+              <Store size={15} color="#64748b" />
+              <span>{branchName || 'Sucursal Centro'}</span>
+           </div>
         </div>
       </header>
 
