@@ -499,4 +499,4 @@ BDD-REC-001: test_saas_storefront.py y pruebas semánticas móvil, E2E dos tenan
 
 ## Administración móvil multi-sucursal
 
-BDD-MOB-001 / PRD-FR-741: `tests/frontend/test_mobile_admin_multi_branch.mjs` verifica componentes `MobileBranchPillsBar`, selección inicial 'all', pase de sucursales en `AdminLayout`, consulta unificada y badges en `MobileOrdersMonitor`, y Monitor Multicaja consolidado en `MobileCashShiftTab`. Typecheck de `@restaurantos/admin-web` y `git diff --check`.
+BDD-MOB-001/002 / PRD-FR-741: `tests/frontend/test_mobile_admin_multi_branch.mjs` verifica componentes `MobileBranchPillsBar` (+ Nueva), selección inicial 'all', pase de sucursales y refresh en `AdminLayout`, consulta unificada y badges en `MobileOrdersMonitor`, Monitor Multicaja consolidado en `MobileCashShiftTab`, y modal/botón de creación rápida en `MobileBranchSettingsTab` y `MobileCreateBranchModal`. Typecheck de `@restaurantos/admin-web` y `git diff --check`.

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Store, MapPin, CheckCircle2, Circle } from 'lucide-react';
+import { Store, MapPin, CheckCircle2, Circle, Plus } from 'lucide-react';
 
 export interface MobileBranchItem {
   id: string;
@@ -15,6 +15,7 @@ interface MobileBranchPillsBarProps {
   selectedBranchId: string;
   onSelectBranch: (branchId: string) => void;
   branchShiftStatus?: Record<string, ShiftState>;
+  onAddBranch?: () => void;
 }
 
 export const MobileBranchPillsBar: React.FC<MobileBranchPillsBarProps> = ({
@@ -22,6 +23,7 @@ export const MobileBranchPillsBar: React.FC<MobileBranchPillsBarProps> = ({
   selectedBranchId,
   onSelectBranch,
   branchShiftStatus = {},
+  onAddBranch,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -183,6 +185,36 @@ export const MobileBranchPillsBar: React.FC<MobileBranchPillsBarProps> = ({
             </button>
           );
         })}
+
+        {/* Action Pill: + Nueva Sucursal */}
+        {onAddBranch && (
+          <button
+            type="button"
+            onClick={onAddBranch}
+            className="branch-pill-item add-branch-pill"
+            aria-label="Agregar nueva sucursal"
+            title="Agregar nueva sucursal"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '7px 12px',
+              borderRadius: 9999,
+              fontSize: '0.8125rem',
+              fontWeight: 700,
+              color: '#0284c7',
+              backgroundColor: '#f0f9ff',
+              border: '1.5px dashed #38bdf8',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Plus size={14} color="#0284c7" strokeWidth={2.5} />
+            <span>+ Nueva</span>
+          </button>
+        )}
       </div>
     </nav>
   );

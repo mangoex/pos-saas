@@ -358,6 +358,15 @@ const AdminLayout = () => {
               setCanonicalBranchId(id);
             }
           }}
+          onRefreshBranches={async () => {
+            try {
+              const data = await fetchApi<Array<{ id: string; name: string; status: string }>>('/branches');
+              const visibleBranches = allowBranchSelection || !currentUser.assigned_branch_id
+                ? data
+                : data.filter((branch) => branch.id === currentUser.assigned_branch_id);
+              setBranches(visibleBranches);
+            } catch {}
+          }}
           onSwitchToDesktop={() => {
             try {
               localStorage.setItem('restaurantos_force_desktop', 'true');
