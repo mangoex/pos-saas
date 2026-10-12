@@ -28,9 +28,33 @@ test('server projection preserves exact slots; invalid or missing data fails clo
   const data = projection();
   assert.deepEqual(parsePickupOptions(data), data);
   for (const bad of [null, {}, { ...data, configured: 'false' },
-    { ...data, days: [] }, { ...data, days: [{ ...data.days[0], slots: [{}] }, ...data.days.slice(1)] }]) {
+    { ...data, days: [] },
+    { ...data, days: [{ ...data.days[0], day_index: 6 }, ...data.days.slice(1)] },
+    { ...data, days: [data.days[0], { ...data.days[1], date: '2026-10-01' }, ...data.days.slice(2)] },
+    { ...data, days: [{ ...data.days[0], slots: [{}] }, ...data.days.slice(1)] }]) {
     assert.throws(() => parsePickupOptions(bad), /pickup_options_invalid/);
   }
+});
+
+test('Sunday projection accepts chronological Sunday through next Saturday', () => {
+  const sundayProjection = {
+    ...projection(),
+    generated_at: '2026-10-04T18:00:00+00:00',
+    days: [
+      { date: '2026-10-04', day_index: 6, is_today: true, is_past: false, is_closed: true, slots: [] },
+      ...Array.from({ length: 6 }, (_, offset) => ({
+        date: `2026-10-${String(5 + offset).padStart(2, '0')}`,
+        day_index: offset,
+        is_today: false,
+        is_past: false,
+        is_closed: offset !== 0,
+        slots: offset === 0 ? [{ value: '16:00', scheduled_at: '2026-10-05T22:00:00+00:00' }] : [],
+      })),
+    ],
+  };
+
+  assert.deepEqual(parsePickupOptions(sundayProjection), sundayProjection);
+  assert.doesNotThrow(() => validatePickupSelection(sundayProjection, '2026-10-05', '16:00'));
 });
 
 test('revalidation rejects expired dates/times instead of substituting a new slot', () => {

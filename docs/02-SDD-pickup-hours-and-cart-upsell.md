@@ -29,8 +29,10 @@
 `pickup_schedule.py` calcula opciones con `datetime` aware, `ZoneInfo` y un reloj recibido
 como parámetro. `GET /api/v1/public/branches/{public_key}/pickup-options` resuelve la clave
 activa y su par organización/sucursal activa; no acepta IDs de tenant del cliente. Retorna
-`generated_at`, `timezone`, `configured` y los siete días de la semana local actual, cada
-uno con fecha ISO, índice lunes=0 y slots `{value: HH:mm, scheduled_at: UTC ISO}`.
+`generated_at`, `timezone`, `configured` y siete fechas locales consecutivas, cada una con
+fecha ISO, índice de día lunes=0 y slots `{value: HH:mm, scheduled_at: UTC ISO}`. De lunes a
+sábado conserva la semana local actual; el domingo la proyección rota cronológicamente como
+domingo actual + lunes a sábado siguientes, sin incorporar el domingo posterior.
 Respuesta `Cache-Control: no-store`; no realiza reconciliación de caja ni otra escritura.
 
 Se preservan los intervalos de 15 minutos, el margen mínimo de 15 minutos para hoy y la
@@ -38,7 +40,10 @@ ventana inclusiva de apertura/cierre del contrato existente. El margen incluye s
 16:00:01 no permite recoger 16:15:00. Días pasados/cerrados, ventanas inválidas o nocturnas
 no generan slots. Horas locales inexistentes o ambiguas por cambio de offset se excluyen;
 una zona inválida devuelve indisponibilidad explícita, sin usar la zona del navegador.
-La semana sigue siendo lunes a domingo; no se añade otro horizonte de programación.
+El domingo se abre únicamente el horizonte necesario para evitar que la semana quede agotada:
+se habilitan los días configurados de lunes a sábado de la semana siguiente. Fuera de ese caso
+no se amplía el horizonte de programación. `day_index` conserva su significado de día semanal
+aunque el arreglo dominical se entregue en orden `6, 0, 1, 2, 3, 4, 5`.
 
 El carrito consume estas opciones, muestra fechas en la zona de la sucursal y refresca al
 montarse, cada minuto y al recuperar visibilidad/foco. Antes de enviar consulta de nuevo y

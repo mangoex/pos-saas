@@ -57,6 +57,36 @@ def test_future_day_slots_and_current_week_boundary():
     assert next_week["days"][0]["date"] == "2026-10-05"
 
 
+def test_sunday_projection_rolls_through_next_saturday():
+    now = datetime(2026, 10, 4, 18, tzinfo=UTC)  # Sunday noon at the branch.
+    saturday = {**MONDAY, "day_index": 5}
+    sunday = {**MONDAY, "day_index": 6}
+    schedule = [MONDAY, saturday, sunday]
+
+    projection = pickup_options(schedule, "America/Chihuahua", now)
+
+    assert [day["date"] for day in projection["days"]] == [
+        "2026-10-04",
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07",
+        "2026-10-08",
+        "2026-10-09",
+        "2026-10-10",
+    ]
+    assert [day["day_index"] for day in projection["days"]] == [6, 0, 1, 2, 3, 4, 5]
+    assert all(day["is_past"] is False for day in projection["days"])
+    assert projection["days"][1]["slots"][0]["value"] == "16:00"
+    assert projection["days"][6]["slots"][0]["value"] == "16:00"
+    assert validate_pickup(
+        schedule, "America/Chihuahua", now, "2026-10-05", "16:00", "takeout"
+    )
+    with pytest.raises(PickupScheduleError, match="pickup_slot_unavailable"):
+        validate_pickup(
+            schedule, "America/Chihuahua", now, "2026-10-11", "16:00", "takeout"
+        )
+
+
 @pytest.mark.parametrize(
     "entry",
     [
