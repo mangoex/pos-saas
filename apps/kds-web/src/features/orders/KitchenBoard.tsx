@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ApiError, fetchApi } from '@restaurantos/api-client';
+import { ApiError, fetchApi, formatOrderCode, formatOrderModifier } from '@restaurantos/api-client';
 import { Badge, Button } from '@restaurantos/ui';
 import {
   AlertTriangle,
@@ -31,7 +31,7 @@ interface KdsTask {
   channel?: string;
   service_type?: string;
   customer_snapshot?: { name?: string; phone?: string };
-  selected_modifiers?: Array<{ name: string; price_cents?: number; [key: string]: any }> | any;
+  selected_modifiers?: unknown[] | Record<string, unknown>;
   line_notes?: string;
 }
 
@@ -308,7 +308,7 @@ const KitchenBoard = () => {
                           <div key={task.id} className="kds-order-card">
                             <div className="kds-card-header">
                               <div className="kds-card-folio-group">
-                                <span className="kds-folio-badge">{task.folio}</span>
+                                <span className="kds-folio-badge">{formatOrderCode(task.folio)}</span>
                                 {getChannelBadge(task.channel)}
                               </div>
                               {getElapsedBadge(task.created_at)}
@@ -343,11 +343,11 @@ const KitchenBoard = () => {
                             {/* Modifiers / Extras */}
                             {modifiers.length > 0 && (
                               <div className="kds-modifiers-list">
-                                {modifiers.map((mod: any, mIdx: number) => {
-                                  const modName = typeof mod === 'string' ? mod : mod?.name || mod?.option_name || JSON.stringify(mod);
+                                {modifiers.map((mod, mIdx) => {
+                                  const presentation = formatOrderModifier(mod);
                                   return (
                                     <span key={mIdx} className="kds-modifier-tag">
-                                      + {modName}
+                                      {presentation.label}
                                     </span>
                                   );
                                 })}

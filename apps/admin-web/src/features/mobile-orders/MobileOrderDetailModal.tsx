@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fetchApi, ApiError, formatOrderModifier } from '@restaurantos/api-client';
+import { fetchApi, ApiError, formatOrderCode, formatOrderModifier } from '@restaurantos/api-client';
 import { runMobileOrderCommand, pendingMobileOrderCommand, type MobileCommandAction } from './mobileOrderRecovery';
 import {
   X,
@@ -317,7 +317,7 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({
       ? `52${cleanPhone}`
       : cleanPhone;
 
-  const orderFolio = detail?.folio || orderId?.slice(-6).toUpperCase() || '';
+  const orderFolio = formatOrderCode(detail?.folio || orderId);
   const orderTotal = detail ? (detail.total_cents / 100).toFixed(2) : '0.00';
 
   const isDineIn =
