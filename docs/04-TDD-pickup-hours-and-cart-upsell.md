@@ -18,8 +18,8 @@ Verificación de selector `<select id="pickup-time-input" className="pickup-time
 La prueba semántica de carrito usa proyección Python simulada y comprueba refresco al
 abrir/recuperar foco, respuesta fallida, cambio de tenant/sucursal durante carga y revalidación
 al enviar sin POST con slot vencido. QA visual dirigida al selector y estados de error/carga.
-`test_pickup_server_options.mjs` ejecuta validación del transporte, incluida la rotación
-cronológica dominical `6,0,1,2,3,4,5`, membresía y descarte de
+`test_pickup_server_options.mjs` ejecuta validación del transporte, incluida la renovación
+dominical con posiciones retrocompatibles `0,1,2,3,4,5,6`, membresía y descarte de
 respuestas superadas/desmontadas. `test_pickup_cart_submit.mjs` ejecuta el handler real con
 reloj/proyección simulados: horario vencido, fallo de red, cambio de contexto y doble submit.
 `test_mobile_web_order_flow.mjs` ejecuta el cliente compartido y conserva el par original

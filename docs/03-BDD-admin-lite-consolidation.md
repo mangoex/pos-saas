@@ -117,7 +117,7 @@ Then se abre un modal de detalle con la información completa del cliente, telé
 And se despliega cada producto con su cantidad, precio, notas y lista de ingredientes adicionales o modificadores seleccionados
 And cada instrucción seleccionada muestra su texto operativo (por ejemplo, "Sin azúcar", "Con todo" o "Sin picante") en el detalle antes de aceptar y en KDS después de aceptar el pedido
 And ninguna selección válida se representa únicamente mediante el signo "+" o mediante una etiqueta vacía
-And la comanda usa un folio breve y legible sin mostrar identificadores internos largos
+And la comanda usa un folio breve y legible como `PED-000001` sin mostrar identificadores internos o prefijos de sucursal largos
 And las notas libres del producto permanecen visibles por separado de los modificadores y comentarios predefinidos
 And se presentan botones de acción rápida para avanzar el estado de preparación (Iniciar Preparación, Marcar Listo, Entregado) o contactar al comensal por WhatsApp.
 

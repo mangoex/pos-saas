@@ -20,8 +20,9 @@ BDD-SC-LITE-014 y TDD-TS-233.
 4. Un snapshot incompleto muestra una etiqueta de contingencia y nunca un signo `+` aislado.
 5. `line_notes` sigue siendo una nota del producto separada y no se confunde con modificadores.
 6. La solución no reescribe pedidos históricos ni altera la transición pendiente → aceptado.
-7. KDS muestra el folio operativo cuando es legible y resume referencias internas UUID/PI sin
-   cambiar el identificador enviado a la API.
+7. KDS muestra el folio operativo cuando ya es corto y resume referencias internas UUID/PI o
+   folios con prefijo de sucursal largo como `MATRIZ-000001` a `PED-000001`, sin cambiar el
+   identificador enviado a la API.
 
 ## Plan y tareas
 
