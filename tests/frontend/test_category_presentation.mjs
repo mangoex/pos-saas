@@ -22,6 +22,7 @@ function load(path) {
   new Function('require', 'module', 'exports', code)(name => {
     if (name === 'react') return react;
     if (name === 'lucide-react') return {};
+    if (/\.(jpg|jpeg|png|webp|svg|gif)$/i.test(name)) return name;
     const target = resolve(root, dirname(path), name);
     return load(existsSync(target + '.ts') ? target + '.ts' : target + '.tsx');
   }, module, module.exports);
@@ -29,6 +30,11 @@ function load(path) {
   return module.exports;
 }
 const imageMap = load('apps/mobile-web/src/imageMap.ts');
+assert.equal(
+  imageMap.CLOSED_ESTABLISHMENT_HERO_MEDIA,
+  'https://res.cloudinary.com/dfvnyhur4/image/upload/v1791233300/gemini_generated_video_b41e5510-ezgif.com-video-to-webp-converter_muyy7a.webp'
+);
+assert.equal(imageMap.getCategoryCover('Cerrado por el momento'), imageMap.CLOSED_ESTABLISHMENT_HERO_MEDIA);
 assert.equal(imageMap.getCategoryImageUrl('javascript:alert(1)'), '');
 assert.equal(imageMap.getCategoryImageUrl('https://user:password@example.com/a'), '');
 assert.equal(imageMap.getCategoryImageUrl(' https://example.com/a.jpg '), 'https://example.com/a.jpg');

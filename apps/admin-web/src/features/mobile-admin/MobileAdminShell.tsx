@@ -9,10 +9,15 @@ import { MobileMenuManagerTab } from './MobileMenuManagerTab';
 import { MobileBranchSettingsTab } from './MobileBranchSettingsTab';
 import { OnboardingWizardModal } from '../onboarding/OnboardingWizardModal';
 import { MobileHelpVideosModal } from './MobileHelpVideosModal';
+import { MobileBranchPillsBar, ShiftState } from './MobileBranchPillsBar';
+import { MobileCreateBranchModal } from './MobileCreateBranchModal';
 
 interface MobileAdminShellProps {
   branchId: string;
   branchName?: string;
+  branches?: Array<{ id: string; name: string; code?: string; status?: string }>;
+  onSelectBranch?: (branchId: string) => void;
+  onRefreshBranches?: () => Promise<void> | void;
   onSwitchToDesktop?: () => void;
 }
 
@@ -87,6 +92,9 @@ export type MobileTab = 'orders' | 'cash' | 'menu' | 'settings';
 export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   branchId,
   branchName,
+  branches = [],
+  onSelectBranch,
+  onRefreshBranches,
   onSwitchToDesktop,
 }) => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -94,24 +102,74 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
   const [currentTab, setCurrentTab] = useState<MobileTab>(
     ['orders', 'cash', 'menu', 'settings'].includes(tabParam) ? tabParam : 'orders'
   );
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
+  const [branchShiftStatus, setBranchShiftStatus] = useState<Record<string, ShiftState>>({});
   const [onboardingStatus, setOnboardingStatus] = useState<string | null>(null);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isCreateBranchModalOpen, setIsCreateBranchModalOpen] = useState(false);
   const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
 
+  const effectiveBranchName = selectedBranchId === 'all'
+    ? 'Todas las sucursales'
+    : (branches.find((b) => b.id === selectedBranchId)?.name || branchName);
+
+  const handleBranchCreated = async (newBranch: { id: string; name: string; code?: string }) => {
+    setIsCreateBranchModalOpen(false);
+    if (onRefreshBranches) {
+      await onRefreshBranches();
+    }
+    setSelectedBranchId(newBranch.id);
+    if (onSelectBranch) {
+      onSelectBranch(newBranch.id);
+    }
+  };
+
+  // Poll branch shift states for status dots on pills
+  useEffect(() => {
+    if (!branches || branches.length === 0) return;
+    const fetchStatuses = async () => {
+      const statuses: Record<string, ShiftState> = {};
+      await Promise.all(
+        branches.map(async (b) => {
+          try {
+            const res = await fetchApi<{ cash_shift?: { status: string } | null }>(
+              `/cash/shifts/current?branch_id=${encodeURIComponent(b.id)}&register_id=CAJA-01`
+            );
+            statuses[b.id] = res?.cash_shift?.status === 'OPEN' ? 'open' : 'closed';
+          } catch {
+            statuses[b.id] = 'unknown';
+          }
+        })
+      );
+      setBranchShiftStatus(statuses);
+    };
+    void fetchStatuses();
+    const interval = window.setInterval(fetchStatuses, 15_000);
+    return () => window.clearInterval(interval);
+  }, [branches]);
+
+  const handleSelectBranch = (id: string) => {
+    setSelectedBranchId(id);
+    if (onSelectBranch) {
+      onSelectBranch(id);
+    }
+  };
+
   const fetchPendingCount = useCallback(async () => {
-    if (!branchId) return;
     try {
       let items: any[] = [];
       try {
-        const res = await fetchApi<{ items: any[] }>(
-          `/orders/accounts?branch_id=${encodeURIComponent(branchId)}&limit=100`
-        );
+        const query = selectedBranchId !== 'all'
+          ? `?branch_id=${encodeURIComponent(selectedBranchId)}&limit=100`
+          : '?limit=100';
+        const res = await fetchApi<{ items: any[] }>(`/orders/accounts${query}`);
         items = Array.isArray(res?.items) ? res.items : [];
       } catch {
-        const fallback = await fetchApi<any[]>(
-          `/orders?branch_id=${encodeURIComponent(branchId)}`
-        );
+        const fallbackQuery = selectedBranchId !== 'all'
+          ? `?branch_id=${encodeURIComponent(selectedBranchId)}`
+          : '';
+        const fallback = await fetchApi<any[]>(`/orders${fallbackQuery}`);
         items = Array.isArray(fallback) ? fallback : [];
       }
 
@@ -130,7 +188,7 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
     } catch {
       // silent fallback
     }
-  }, [branchId]);
+  }, [selectedBranchId]);
 
   useEffect(() => {
     void fetchPendingCount();
@@ -242,14 +300,26 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
         </section>
       )}
 
+      {/* Horizontal Swipeable Branch Pills Bar */}
+      {branches && branches.length > 0 && (
+        <MobileBranchPillsBar
+          branches={branches}
+          selectedBranchId={selectedBranchId}
+          onSelectBranch={handleSelectBranch}
+          branchShiftStatus={branchShiftStatus}
+          onAddBranch={() => setIsCreateBranchModalOpen(true)}
+        />
+      )}
+
       {/* Active Tab View */}
-      <MobileOrderAlertsCoordinator branchId={branchId} />
+      <MobileOrderAlertsCoordinator branchId={selectedBranchId} />
       <div style={{ minHeight: '100vh', paddingBottom: 88 }}>
         {currentTab === 'orders' && (
           <MobileTabErrorBoundary tabName="Pedidos">
             <MobileOrdersMonitor
-              branchId={branchId}
-              branchName={branchName}
+              branchId={selectedBranchId}
+              branchName={effectiveBranchName}
+              branches={branches}
               onOpenHelpVideos={() => setIsHelpModalOpen(true)}
               onActiveOrdersCountChange={setPendingOrdersCount}
             />
@@ -258,8 +328,10 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
         {currentTab === 'cash' && (
           <MobileTabErrorBoundary tabName="Caja">
             <MobileCashShiftTab
-              branchId={branchId}
-              branchName={branchName}
+              branchId={selectedBranchId}
+              branchName={effectiveBranchName}
+              branches={branches}
+              onSelectBranch={handleSelectBranch}
               onOpenHelpVideos={() => setIsHelpModalOpen(true)}
             />
           </MobileTabErrorBoundary>
@@ -267,8 +339,8 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
         {currentTab === 'menu' && (
           <MobileTabErrorBoundary tabName="Menú">
             <MobileMenuManagerTab
-              branchId={branchId}
-              branchName={branchName}
+              branchId={selectedBranchId === 'all' ? (branches[0]?.id || branchId) : selectedBranchId}
+              branchName={effectiveBranchName}
               onOpenHelpVideos={() => setIsHelpModalOpen(true)}
             />
           </MobileTabErrorBoundary>
@@ -276,8 +348,11 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
         {currentTab === 'settings' && (
           <MobileTabErrorBoundary tabName="Ajustes">
             <MobileBranchSettingsTab
-              branchId={branchId}
-              branchName={branchName}
+              branchId={selectedBranchId === 'all' ? (branches[0]?.id || branchId) : selectedBranchId}
+              branchName={effectiveBranchName}
+              branches={branches}
+              onSelectBranch={handleSelectBranch}
+              onOpenCreateBranch={() => setIsCreateBranchModalOpen(true)}
               onSwitchToDesktop={onSwitchToDesktop}
               onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
               onboardingPending={onboardingStatus !== 'complete'}
@@ -302,6 +377,14 @@ export const MobileAdminShell: React.FC<MobileAdminShellProps> = ({
       <MobileHelpVideosModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
+      />
+
+      {/* Create Branch Modal for Mobile */}
+      <MobileCreateBranchModal
+        isOpen={isCreateBranchModalOpen}
+        onClose={() => setIsCreateBranchModalOpen(false)}
+        onBranchCreated={handleBranchCreated}
+        existingBranchesCount={branches.length}
       />
 
       {/* Fixed Bottom Navigation Bar */}

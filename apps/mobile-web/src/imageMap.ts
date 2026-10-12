@@ -1,4 +1,9 @@
-import closedEstablishmentHero from './assets/closed_establishment_hero.jpg';
+import closedEstablishmentHeroFallback from './assets/closed_establishment_hero.jpg';
+
+export const CLOSED_ESTABLISHMENT_HERO_MEDIA =
+  'https://res.cloudinary.com/dfvnyhur4/image/upload/v1791233300/gemini_generated_video_b41e5510-ezgif.com-video-to-webp-converter_muyy7a.webp';
+
+export { closedEstablishmentHeroFallback };
 
 /** Product photographs belong to the resolved restaurant catalog. */
 export function getProductImage(product: { sku?: string; name?: string; category_name?: string; image_url?: string }): string {
@@ -25,7 +30,7 @@ export function getCategoryImageUrl(value: string | null | undefined): string {
 export function getCategoryCover(categoryName: string): string {
   const cat = (categoryName || '').toLowerCase();
   if (cat.includes('cerrado')) {
-    return closedEstablishmentHero;
+    return CLOSED_ESTABLISHMENT_HERO_MEDIA;
   }
   const icon = getCategoryIcon(categoryName);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#164e63"/><stop offset="1" stop-color="#0f172a"/></linearGradient></defs><rect width="900" height="500" fill="url(#bg)"/><circle cx="760" cy="70" r="240" fill="#ffffff" opacity=".05"/><text x="450" y="275" text-anchor="middle" font-size="150">${icon}</text></svg>`;

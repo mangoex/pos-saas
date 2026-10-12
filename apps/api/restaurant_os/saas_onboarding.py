@@ -48,9 +48,16 @@ class SignUpRequest(BaseModel):
             data = dict(data)
             submitted_plan = data.get("plan", "trial")
             if isinstance(submitted_plan, str):
-                data["plan"] = {"starter": "starter_349", "professional": "pro_599"}.get(
-                    submitted_plan, submitted_plan
-                )
+                data["plan"] = {
+                    "starter": "starter_349",
+                    "esencial": "starter_349",
+                    "lite": "starter_349",
+                    "professional": "pro_599",
+                    "pro": "pro_599",
+                    "conecta": "conecta_699",
+                    "control": "control_999",
+                    "enterprise": "control_999",
+                }.get(submitted_plan, submitted_plan)
             for canonical, alias in (
                 ("business_name", "restaurant_name"),
                 ("email", "owner_email"),
@@ -60,7 +67,7 @@ class SignUpRequest(BaseModel):
                     data[canonical] = data[alias]
         return data
 
-    plan: Literal["trial", "starter_349", "pro_599"] = "trial"
+    plan: Literal["trial", "starter_349", "conecta_699", "control_999", "pro_599"] = "trial"
     defer_catalog_setup: bool = False
 
     @field_validator("business_name", "owner_name")

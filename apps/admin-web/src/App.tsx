@@ -4,6 +4,7 @@ import Overview from './features/dashboard/Overview';
 import Login from './features/auth/Login';
 import Register from './features/auth/Register';
 import SubscriptionStatus from './features/auth/SubscriptionStatus';
+import PrivacyPolicyPage from './features/legal/PrivacyPolicyPage';
 import AdminLayout from './components/AdminLayout';
 import ProductsList from './features/catalog/ProductsList';
 import CategoriesList from './features/catalog/CategoriesList';
@@ -182,6 +183,10 @@ export const App = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/signup" element={<Register />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/privacidad" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<PrivacyPolicyPage />} />
+        <Route path="/terminos" element={<PrivacyPolicyPage />} />
         <Route path="/subscription" element={<ProtectedRoute><SubscriptionStatus /></ProtectedRoute>} />
         
         <Route path="/" element={

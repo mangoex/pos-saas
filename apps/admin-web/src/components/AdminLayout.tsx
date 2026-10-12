@@ -351,6 +351,22 @@ const AdminLayout = () => {
         <MobileAdminShell
           branchId={branchId}
           branchName={branches.find((b) => b.id === branchId)?.name}
+          branches={branches}
+          onSelectBranch={(id) => {
+            setBranchId(id);
+            if (id !== 'all') {
+              setCanonicalBranchId(id);
+            }
+          }}
+          onRefreshBranches={async () => {
+            try {
+              const data = await fetchApi<Array<{ id: string; name: string; status: string }>>('/branches');
+              const visibleBranches = allowBranchSelection || !currentUser.assigned_branch_id
+                ? data
+                : data.filter((branch) => branch.id === currentUser.assigned_branch_id);
+              setBranches(visibleBranches);
+            } catch {}
+          }}
           onSwitchToDesktop={() => {
             try {
               localStorage.setItem('restaurantos_force_desktop', 'true');

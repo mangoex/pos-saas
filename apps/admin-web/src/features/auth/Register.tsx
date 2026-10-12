@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchApi, ApiError } from '@restaurantos/api-client';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { setCanonicalBranchId } from '../../lib/branchContext';
+import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 import './Register.css';
 
 interface SignupResponse {
@@ -39,15 +40,26 @@ export const Register: React.FC = () => {
   const [businessType, setBusinessType] = useState('restaurant');
   const [plan, setPlan] = useState(() => {
     const requested = searchParams.get('plan');
-    return requested === 'starter' || requested === 'professional' || requested === 'trial' ? requested : 'trial';
+    if (requested === 'esencial' || requested === 'starter') return 'starter';
+    if (requested === 'conecta' || requested === 'professional' || requested === 'pro') return 'conecta';
+    if (requested === 'control' || requested === 'enterprise') return 'control';
+    return requested === 'trial' ? requested : 'trial';
   });
   const [branchName, setBranchName] = useState('Matriz');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState<'privacy' | 'terms'>('privacy');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!acceptedTerms) {
+      setError('Debes aceptar los Términos y Condiciones y el Aviso de Privacidad para continuar.');
+      return;
+    }
 
     if (password.length < 8) {
       setError('La contraseña debe tener al menos 8 caracteres');
@@ -155,8 +167,9 @@ export const Register: React.FC = () => {
                 onChange={(e) => setPlan(e.target.value)}
               >
                 <option value="trial">Prueba gratuita de 14 días</option>
-                <option value="starter">Starter</option>
-                <option value="professional">Professional</option>
+                <option value="starter">Esencial — $349/mes</option>
+                <option value="conecta">Conecta — $699/mes</option>
+                <option value="control">Control — $999/mes</option>
               </select>
             </div>
 
@@ -252,6 +265,77 @@ export const Register: React.FC = () => {
               </div>
             </div>
 
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              marginTop: 6,
+              marginBottom: 8,
+              padding: '10px 12px',
+              backgroundColor: '#f8fafc',
+              borderRadius: 8,
+              border: '1px solid #e2e8f0',
+            }}>
+              <input
+                type="checkbox"
+                id="acceptedTerms"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                style={{
+                  marginTop: 2,
+                  width: 18,
+                  height: 18,
+                  cursor: 'pointer',
+                  accentColor: '#2563eb',
+                  flexShrink: 0,
+                }}
+                required
+              />
+              <label htmlFor="acceptedTerms" style={{ fontSize: '0.8125rem', color: '#475569', lineHeight: 1.45 }}>
+                He leído y acepto los{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLegalModalTab('terms');
+                    setIsLegalModalOpen(true);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: '#2563eb',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: 'inherit',
+                  }}
+                >
+                  Términos y Condiciones
+                </button>{' '}
+                y el{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLegalModalTab('privacy');
+                    setIsLegalModalOpen(true);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: '#2563eb',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: 'inherit',
+                  }}
+                >
+                  Aviso de Privacidad Integral
+                </button>
+                . Reconozco que los precios, catálogo y calidad de los alimentos son responsabilidad de mi negocio.
+              </label>
+            </div>
+
             <button
               type="submit"
               className="register-btn-submit"
@@ -285,6 +369,12 @@ export const Register: React.FC = () => {
           </a>
         </footer>
       </div>
+
+      <PrivacyPolicyModal
+        isOpen={isLegalModalOpen}
+        onClose={() => setIsLegalModalOpen(false)}
+        defaultTab={legalModalTab}
+      />
     </div>
   );
 };

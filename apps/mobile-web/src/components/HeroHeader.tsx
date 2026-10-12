@@ -3,7 +3,7 @@ import { Category, BranchInfo } from '../types';
 import { CategoryArtwork } from './CategoryArtwork';
 import { Search, X, MapPin, ChevronDown, ChevronLeft, ChevronRight, Navigation, ShoppingBag } from 'lucide-react';
 
-import closedEstablishmentHero from '../assets/closed_establishment_hero.jpg';
+import { CLOSED_ESTABLISHMENT_HERO_MEDIA } from '../imageMap';
 
 interface HeroHeaderProps {
   restaurantName?: string;
@@ -193,7 +193,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
           const isAll = cat.id === 'all';
           const isActive = activeCategoryId === cat.id || (activeCategoryId === '' && isAll);
           const effectiveCat = (isClosed && isAll)
-            ? { ...cat, name: 'Cerrado por el momento', image_url: closedEstablishmentHero }
+            ? { ...cat, name: 'Cerrado por el momento', image_url: CLOSED_ESTABLISHMENT_HERO_MEDIA }
             : cat;
 
           return (

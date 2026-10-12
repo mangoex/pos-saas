@@ -1533,6 +1533,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   value={orderNotes}
                   onChange={(e) => setOrderNotes(e.target.value)}
                 />
+                <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                  <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>⚠️</span>
+                  <span>
+                    <strong>Alergias o restricciones de salud:</strong> Si tienes alergias severas o celiaquía, indícalo aquí o contacta directamente al restaurante antes de ordenar. La preparación de los alimentos e inocuidad es responsabilidad exclusiva del restaurante.
+                  </span>
+                </div>
               </div>
 
               {formError && (
@@ -1783,6 +1789,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       : `Enviar Pedido • ${formatMoney(grandTotalCents)}`}
                   </span>
                 </button>
+                <p
+                  style={{
+                    margin: '8px 0 0',
+                    textAlign: 'center',
+                    fontSize: '0.72rem',
+                    color: '#64748b',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Menú provisto por mi menú.onl. La calidad, recetas, precios y preparación son responsabilidad exclusiva del restaurante. Consulta el{' '}
+                  <a
+                    href="/admin/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#2563eb', textDecoration: 'underline' }}
+                  >
+                    Aviso de Privacidad
+                  </a>.
+                </p>
               </div>
             </>
           )}

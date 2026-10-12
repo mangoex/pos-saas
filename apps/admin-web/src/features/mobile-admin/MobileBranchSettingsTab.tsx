@@ -41,6 +41,9 @@ interface OrgProfile {
 interface MobileBranchSettingsTabProps {
   branchId: string;
   branchName?: string;
+  branches?: Array<{ id: string; name: string; code?: string; status?: string }>;
+  onSelectBranch?: (branchId: string) => void;
+  onOpenCreateBranch?: () => void;
   onSwitchToDesktop?: () => void;
   onOpenOnboarding?: () => void;
   onboardingPending?: boolean;
@@ -106,10 +109,15 @@ interface LinksResponse {
 }
 
 import { SubscriptionCheckout } from '../../../../../packages/ui/src/components/SubscriptionCheckout';
+import { SUBSCRIPTION_PLANS, findPlanCatalogItem } from '../auth/subscriptionPlans';
+import { MobileCreateBranchModal } from './MobileCreateBranchModal';
 
 export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = ({
   branchId,
   branchName: _branchName,
+  branches: initialBranches,
+  onSelectBranch,
+  onOpenCreateBranch,
   onSwitchToDesktop: _onSwitchToDesktop,
   onOpenOnboarding,
   onboardingPending,
@@ -120,6 +128,10 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   const [error, setError] = useState<string | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedPlanCode, setSelectedPlanCode] = useState('starter_349');
+  const [isLocalCreateModalOpen, setIsLocalCreateModalOpen] = useState(false);
+
+  const handleOpenCreateBranch = onOpenCreateBranch || (() => setIsLocalCreateModalOpen(true));
 
   const handleTokenGenerated = async (tokenId: string, formData: any) => {
     setIsProcessing(true);
@@ -127,7 +139,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
       await fetchApi('/api/subscriptions', {
         method: 'POST',
         body: JSON.stringify({
-          package_name: 'lite',
+          package_name: selectedPlanCode === 'starter_349' ? 'esencial' : selectedPlanCode,
           card_token: tokenId,
           user_email: formData.payer?.email || 'admin@restaurant.com'
         })
@@ -148,10 +160,14 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
   };
 
   // Queries
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
+  const { data: queryBranches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
     queryKey: ['branches'],
     queryFn: () => fetchApi('/branches'),
   });
+
+  const branches = (queryBranches && queryBranches.length > 0)
+    ? queryBranches
+    : ((initialBranches as Branch[]) || []);
 
   const currentBranch = branches.find((b) => b.id === branchId) || branches[0];
 
@@ -542,15 +558,111 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                   boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)',
                 }}
               >
-                Suscribir Paquete Lite ($349 MXN)
+                Consultar opciones de suscripción
               </button>
             ) : (
               <div style={{ backgroundColor: '#ffffff', padding: 16, borderRadius: 16, border: '1px solid #e2e8f0' }}>
-                <SubscriptionCheckout
-                  onTokenGenerated={handleTokenGenerated}
-                  onError={(err) => setError('Error en el checkout: ' + err.message)}
-                />
-                {isProcessing && <p style={{ textAlign: 'center', color: '#64748b' }}>Procesando pago...</p>}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontWeight: 700, marginBottom: 8, fontSize: '0.95rem', color: '#1e293b' }}>
+                    Plan de suscripción
+                    <select
+                      aria-label="Plan de suscripción"
+                      value={selectedPlanCode}
+                      onChange={(e) => setSelectedPlanCode(e.target.value)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: 10,
+                        border: '1.5px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                        color: '#0f172a',
+                        marginTop: 6,
+                      }}
+                    >
+                      {SUBSCRIPTION_PLANS.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {item.name} — {item.priceFormatted}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {(() => {
+                  const selectedPlan = findPlanCatalogItem(selectedPlanCode);
+                  if (!selectedPlan) return null;
+                  return (
+                    <>
+                      <div
+                        data-testid="selected-plan-details"
+                        style={{
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 12,
+                          padding: '16px',
+                          marginBottom: 16,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                          <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>
+                            Plan {selectedPlan.name}
+                          </strong>
+                          <span style={{ fontWeight: 800, fontSize: '1.05rem', color: '#0284c7' }}>
+                            {selectedPlan.priceFormatted}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.875rem', color: '#475569', lineHeight: 1.5 }}>
+                          {selectedPlan.features}
+                        </p>
+                      </div>
+
+                      {selectedPlan.checkoutUrl ? (
+                        <div style={{ marginBottom: 16 }}>
+                          <a
+                            href={selectedPlan.checkoutUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            data-testid="mp-checkout-link"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 8,
+                              width: '100%',
+                              padding: '14px 16px',
+                              backgroundColor: '#009ee3',
+                              color: '#ffffff',
+                              borderRadius: 12,
+                              fontSize: '1rem',
+                              fontWeight: 800,
+                              textDecoration: 'none',
+                              boxShadow: '0 4px 6px -1px rgba(0, 158, 227, 0.25)',
+                              boxSizing: 'border-box',
+                            }}
+                          >
+                            <span>Pagar con Mercado Pago ({selectedPlan.priceFormatted})</span>
+                            <span aria-hidden="true">→</span>
+                          </a>
+                          <p style={{ margin: '8px 0 0', fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>
+                            Pago recurrente seguro procesado directamente en Mercado Pago.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <SubscriptionCheckout
+                            onTokenGenerated={handleTokenGenerated}
+                            onError={(err) => setError('Error en el checkout: ' + err.message)}
+                          />
+                          {isProcessing && <p style={{ textAlign: 'center', color: '#64748b' }}>Procesando pago...</p>}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+
                 <button
                   type="button"
                   onClick={() => setShowCheckout(false)}
@@ -565,7 +677,7 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
                     fontWeight: 700,
                   }}
                 >
-                  Cancelar
+                  Cerrar
                 </button>
               </div>
             )}
@@ -644,6 +756,97 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
           <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Cargando sucursal...</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Card: Sucursales del Negocio */}
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: 16,
+                padding: 16,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Store size={20} color="#ff5722" />
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                      Sucursales ({branches.length})
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+                      Gestiona tus ubicaciones y agrega nuevas
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenCreateBranch}
+                  style={{
+                    backgroundColor: '#ff5722',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '7px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(255, 87, 34, 0.25)',
+                  }}
+                >
+                  <Plus size={15} color="#ffffff" strokeWidth={2.5} />
+                  <span>+ Sucursal</span>
+                </button>
+              </div>
+
+              {/* Branch Selector Chips */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {branches.map((b) => {
+                  const isCurrent = b.id === currentBranch?.id;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => onSelectBranch?.(b.id)}
+                      style={{
+                        padding: '7px 12px',
+                        borderRadius: 10,
+                        border: isCurrent ? '2px solid #ff5722' : '1px solid #cbd5e1',
+                        backgroundColor: isCurrent ? '#fff7ed' : '#f8fafc',
+                        color: isCurrent ? '#c2410c' : '#334155',
+                        fontWeight: isCurrent ? 800 : 600,
+                        fontSize: '0.8125rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <MapPin size={13} color={isCurrent ? '#ea580c' : '#94a3b8'} />
+                      <span>{b.name}</span>
+                      {isCurrent && (
+                        <span
+                          style={{
+                            fontSize: '0.65rem',
+                            backgroundColor: '#ffedd5',
+                            color: '#c2410c',
+                            padding: '1px 5px',
+                            borderRadius: 9999,
+                            fontWeight: 800,
+                          }}
+                        >
+                          Editando
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Card: Menú Digital Compartible */}
             <div
               style={{
@@ -1862,6 +2065,18 @@ export const MobileBranchSettingsTab: React.FC<MobileBranchSettingsTabProps> = (
           </div>
         )}
       </main>
+
+      {/* Fallback Local Create Branch Modal */}
+      <MobileCreateBranchModal
+        isOpen={isLocalCreateModalOpen}
+        onClose={() => setIsLocalCreateModalOpen(false)}
+        onBranchCreated={(newBranch) => {
+          queryClient.invalidateQueries({ queryKey: ['branches'] });
+          onSelectBranch?.(newBranch.id);
+          showToast(`¡Sucursal "${newBranch.name}" creada con éxito!`);
+        }}
+        existingBranchesCount={branches.length}
+      />
     </div>
   );
 };

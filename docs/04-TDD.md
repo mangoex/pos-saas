@@ -496,3 +496,7 @@ evidencia local y requieren autorización productiva separada.
 ## Recuperación SaaS
 
 BDD-REC-001: test_saas_storefront.py y pruebas semánticas móvil, E2E dos tenants. BDD-REC-002: test_saas_onboarding.py, test_saas_onboarding_wizard.py y prueba de migración desde 0069 con trial legacy. BDD-REC-003: test_saas_sensitive_authorization.py, test_saas_superadmin.py, pruebas de alcance y webhooks. Ejecutar focales por paquete y gates completos una vez antes de release. PostgreSQL para migración/concurrencia; revisión R3 independiente.
+
+## Administración móvil multi-sucursal
+
+BDD-MOB-001/002 / PRD-FR-741: `tests/frontend/test_mobile_admin_multi_branch.mjs` verifica componentes `MobileBranchPillsBar` (+ Nueva), selección inicial 'all', pase de sucursales y refresh en `AdminLayout`, consulta unificada y badges en `MobileOrdersMonitor`, Monitor Multicaja consolidado en `MobileCashShiftTab`, y modal/botón de creación rápida en `MobileBranchSettingsTab` y `MobileCreateBranchModal`. Typecheck de `@restaurantos/admin-web` y `git diff --check`.
