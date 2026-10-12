@@ -46,10 +46,12 @@ def pickup_options(schedule: object, timezone_name: str, now: datetime) -> dict[
     local_now = now_utc.astimezone(zone)
     today = local_now.date()
     monday = today - timedelta(days=today.weekday())
+    horizon_start = today if today.weekday() == 6 else monday
     days = []
     earliest = now_utc + timedelta(minutes=15)
-    for index in range(7):
-        day = monday + timedelta(days=index)
+    for offset in range(7):
+        day = horizon_start + timedelta(days=offset)
+        index = day.weekday()
         entry = by_day.get(index)
         closed = not entry or entry.get("is_open") is not True
         slots = []

@@ -7,7 +7,8 @@ Implementación y verificación semántica de restricción de horas de recolecci
 ### TDD-TC-960
 Generación determinista de slots dentro de `[open_time, close_time]` y filtrado de horarios pasados en el día de hoy.
 La autoridad temporal pasa a `test_pickup_schedule.py`: reloj UTC fijo, zona de sucursal,
-segundos del margen, cambio de día/semana, cierre, DST y configuración ausente/inválida.
+segundos del margen, cambio de día/semana, renovación dominical hacia lunes-sábado siguientes,
+cierre, DST y configuración ausente/inválida.
 `test_public_pickup_schedule.py` verifica HTTP y dominio: clave activa/coherente, par cerrado,
 slot vencido sin inserts, persistencia de fecha/zona/UTC, replay después de vencimiento y
 conflicto al cambiar horario. Debe probarse el snapshot en SQLite/PostgreSQL y su conservación
@@ -17,7 +18,8 @@ Verificación de selector `<select id="pickup-time-input" className="pickup-time
 La prueba semántica de carrito usa proyección Python simulada y comprueba refresco al
 abrir/recuperar foco, respuesta fallida, cambio de tenant/sucursal durante carga y revalidación
 al enviar sin POST con slot vencido. QA visual dirigida al selector y estados de error/carga.
-`test_pickup_server_options.mjs` ejecuta validación del transporte, membresía y descarte de
+`test_pickup_server_options.mjs` ejecuta validación del transporte, incluida la rotación
+cronológica dominical `6,0,1,2,3,4,5`, membresía y descarte de
 respuestas superadas/desmontadas. `test_pickup_cart_submit.mjs` ejecuta el handler real con
 reloj/proyección simulados: horario vencido, fallo de red, cambio de contexto y doble submit.
 `test_mobile_web_order_flow.mjs` ejecuta el cliente compartido y conserva el par original

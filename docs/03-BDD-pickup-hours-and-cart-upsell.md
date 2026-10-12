@@ -12,6 +12,11 @@ Para no seleccionar un horario en que la sucursal se encuentre cerrada
 - **Cuando** el comensal selecciona el día Lunes en el selector de recolección del carrito
 - **Entonces** las únicas opciones disponibles en el selector de hora corresponden al intervalo entre 16:00 y 18:00
 - **Y** no se muestra ninguna hora fuera de dicha ventana operativa.
+- **Y dado** que en la zona horaria de la sucursal es domingo y existen horarios configurados para la semana siguiente
+- **Cuando** el comensal abre el selector de recolección del carrito
+- **Entonces** la proyección conserva el domingo actual y habilita los días configurados de lunes a sábado siguientes
+- **Y** las siete fechas se presentan en orden cronológico, aunque sus índices semanales roten de domingo a sábado
+- **Y** el domingo posterior queda fuera del horizonte permitido.
 
 ### Selección de horarios para el día de hoy
 
