@@ -36,12 +36,11 @@ test('server projection preserves exact slots; invalid or missing data fails clo
   }
 });
 
-test('Sunday projection accepts chronological Sunday through next Saturday', () => {
+test('Sunday projection keeps legacy weekday positions while enabling next Monday through Saturday', () => {
   const sundayProjection = {
     ...projection(),
     generated_at: '2026-10-04T18:00:00+00:00',
     days: [
-      { date: '2026-10-04', day_index: 6, is_today: true, is_past: false, is_closed: true, slots: [] },
       ...Array.from({ length: 6 }, (_, offset) => ({
         date: `2026-10-${String(5 + offset).padStart(2, '0')}`,
         day_index: offset,
@@ -50,6 +49,7 @@ test('Sunday projection accepts chronological Sunday through next Saturday', () 
         is_closed: offset !== 0,
         slots: offset === 0 ? [{ value: '16:00', scheduled_at: '2026-10-05T22:00:00+00:00' }] : [],
       })),
+      { date: '2026-10-04', day_index: 6, is_today: true, is_past: false, is_closed: true, slots: [] },
     ],
   };
 

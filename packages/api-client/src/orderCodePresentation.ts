@@ -1,6 +1,7 @@
 const PUBLIC_INTENT_REFERENCE = /^PI-([0-9A-F]{32})$/i;
 const UUID_REFERENCE = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-([0-9A-F]{12})$/i;
 const COMPACT_UUID_REFERENCE = /^([0-9A-F]{32})$/i;
+const LONG_OPERATIONAL_FOLIO = /^.+-(\d{6,})$/;
 
 const shortSuffix = (value: string): string => value.slice(-6).toUpperCase();
 
@@ -17,6 +18,9 @@ export const formatOrderCode = (folio: unknown): string => {
 
   const compactUuid = value.match(COMPACT_UUID_REFERENCE);
   if (compactUuid) return `PED-${shortSuffix(compactUuid[1])}`;
+
+  const operationalFolio = value.match(LONG_OPERATIONAL_FOLIO);
+  if (value.length > 10 && operationalFolio) return `PED-${shortSuffix(operationalFolio[1])}`;
 
   return value;
 };

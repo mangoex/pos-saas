@@ -66,18 +66,18 @@ def test_sunday_projection_rolls_through_next_saturday():
     projection = pickup_options(schedule, "America/Chihuahua", now)
 
     assert [day["date"] for day in projection["days"]] == [
-        "2026-10-04",
         "2026-10-05",
         "2026-10-06",
         "2026-10-07",
         "2026-10-08",
         "2026-10-09",
         "2026-10-10",
+        "2026-10-04",
     ]
-    assert [day["day_index"] for day in projection["days"]] == [6, 0, 1, 2, 3, 4, 5]
+    assert [day["day_index"] for day in projection["days"]] == list(range(7))
     assert all(day["is_past"] is False for day in projection["days"])
-    assert projection["days"][1]["slots"][0]["value"] == "16:00"
-    assert projection["days"][6]["slots"][0]["value"] == "16:00"
+    assert projection["days"][0]["slots"][0]["value"] == "16:00"
+    assert projection["days"][5]["slots"][0]["value"] == "16:00"
     assert validate_pickup(
         schedule, "America/Chihuahua", now, "2026-10-05", "16:00", "takeout"
     )

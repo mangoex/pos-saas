@@ -12,7 +12,6 @@ export function parsePickupOptions(value: unknown): PickupOptions {
     || typeof value.timezone !== 'string' || !value.timezone || typeof value.configured !== 'boolean'
     || !Array.isArray(value.days) || value.days.length !== 7) throw new Error('pickup_options_invalid');
   const dates = new Set<string>();
-  let previousDate = 0;
   for (const day of value.days) {
     const date = record(day) && typeof day.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day.date)
       ? Date.parse(`${day.date}T00:00:00Z`)
@@ -20,11 +19,9 @@ export function parsePickupOptions(value: unknown): PickupOptions {
     const expectedDayIndex = Number.isFinite(date) ? (new Date(date).getUTCDay() + 6) % 7 : -1;
     if (!record(day) || day.day_index !== expectedDayIndex || !Number.isFinite(date)
       || new Date(date).toISOString().slice(0, 10) !== day.date || dates.has(day.date)
-      || (previousDate !== 0 && date !== previousDate + 24 * 60 * 60 * 1000)
       || typeof day.is_today !== 'boolean' || typeof day.is_past !== 'boolean'
       || typeof day.is_closed !== 'boolean' || !Array.isArray(day.slots)) throw new Error('pickup_options_invalid');
     dates.add(day.date);
-    previousDate = date;
     const times = new Set<string>();
     for (const slot of day.slots) {
       if (!record(slot) || typeof slot.value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.value)

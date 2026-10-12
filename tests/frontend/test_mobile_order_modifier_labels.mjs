@@ -70,7 +70,12 @@ const incomplete = formatOrderModifier({ price_delta_cents: 0 });
 assert.ok(incomplete.label.length > 0, 'incomplete snapshots must receive an explicit fallback label');
 assert.notEqual(incomplete.label, '+', 'incomplete snapshots must never become a bare plus sign');
 
-assert.equal(formatOrderCode('PILOTO-000001'), 'PILOTO-000001', 'operational folios must remain intact');
+assert.equal(formatOrderCode('S1-000001'), 'S1-000001', 'already short operational folios must remain intact');
+assert.equal(
+  formatOrderCode('MATRIZ-000001'),
+  'PED-000001',
+  'long branch-prefixed operational folios must be summarized for kitchen views',
+);
 assert.equal(
   formatOrderCode('PI-018F6F732D0A74F08F1C000000000001'),
   'WEB-000001',

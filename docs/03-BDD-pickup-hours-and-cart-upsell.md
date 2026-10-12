@@ -15,7 +15,7 @@ Para no seleccionar un horario en que la sucursal se encuentre cerrada
 - **Y dado** que en la zona horaria de la sucursal es domingo y existen horarios configurados para la semana siguiente
 - **Cuando** el comensal abre el selector de recolección del carrito
 - **Entonces** la proyección conserva el domingo actual y habilita los días configurados de lunes a sábado siguientes
-- **Y** las siete fechas se presentan en orden cronológico, aunque sus índices semanales roten de domingo a sábado
+- **Y** las posiciones del selector permanecen de lunes a domingo para que una versión PWA anterior pueda consumir la respuesta
 - **Y** el domingo posterior queda fuera del horizonte permitido.
 
 ### Selección de horarios para el día de hoy
