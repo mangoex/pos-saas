@@ -154,7 +154,8 @@ Regresión de presentación de instrucciones del pedido:
 - verificar precedencia de `kitchen_text` cuando contiene una instrucción libre distinta del nombre de catálogo y compatibilidad con snapshots históricos `name`/`text`;
 - verificar el precio desde `price_delta_cents` y la compatibilidad histórica con `price_cents`, incluyendo cero sin texto monetario engañoso;
 - ante un objeto legado o incompleto, mostrar una etiqueta explícita y nunca un signo `+` aislado;
-- comprobar que Admin móvil y el detalle de historial POS importan y usan el mismo formateador, mientras `line_notes` continúa mostrándose como nota independiente;
+- comprobar que Admin móvil, el detalle de historial POS y KDS importan y usan el mismo formateador, mientras `line_notes` continúa mostrándose como nota independiente y KDS no serializa el snapshot completo como texto;
+- verificar que KDS conserva folios operativos legibles y resume referencias internas UUID/PI a un código estable de seis caracteres sin modificar el identificador usado por la API;
 - conservar una prueba API de que el pedido pendiente y el pedido aceptado exponen `option_name`, `kitchen_text`, `price_delta_cents` y `line_notes` sin mutar el snapshot persistido.
 
 ## TDD-TS-234 PRD-FR-062: Carrito y Checkout para WhatsApp

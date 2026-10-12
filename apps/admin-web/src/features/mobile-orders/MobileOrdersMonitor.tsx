@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchApi, ApiError } from '@restaurantos/api-client';
+import { fetchApi, ApiError, formatOrderCode } from '@restaurantos/api-client';
 import {
   Clock,
   Utensils,
@@ -279,7 +279,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
       if (!searchQuery.trim()) return true;
 
       const q = searchQuery.toLowerCase();
-      const folio = (order.folio || '').toLowerCase();
+      const folio = formatOrderCode(order.folio).toLowerCase();
       const cust = (
         order.customer_label ||
         order.customer_snapshot?.name ||
@@ -634,7 +634,7 @@ export const MobileOrdersMonitor: React.FC<MobileOrdersMonitorProps> = ({
                   {/* Card Header: Folio, Elapsed Time */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>
-                      #{order.folio}
+                      #{formatOrderCode(order.folio)}
                     </span>
                     <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
                       {timeLabel}

@@ -5,12 +5,13 @@ export interface PresentedOrderModifier {
 }
 
 const FALLBACK_LABEL = 'Instrucción sin etiqueta';
+const NULLISH_TEXT = new Set(['none', 'null', 'undefined']);
 
 const firstText = (...candidates: unknown[]): string | null => {
   for (const candidate of candidates) {
     if (typeof candidate !== 'string') continue;
     const label = candidate.trim().replace(/^(?:\+\s*)+/, '').trim();
-    if (label) return label;
+    if (label && !NULLISH_TEXT.has(label.toLocaleLowerCase('en-US'))) return label;
   }
   return null;
 };
