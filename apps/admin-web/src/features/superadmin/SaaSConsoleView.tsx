@@ -321,7 +321,8 @@ export const SaaSConsoleView: React.FC = () => {
       setSelectedTenantForEdit(null);
     },
     onError: (err: any) => {
-      alert(err.message || 'Error al actualizar restaurante');
+      const msg = err?.detail?.message || err?.message || 'Error al actualizar restaurante';
+      alert(msg);
     },
   });
 
@@ -2112,7 +2113,6 @@ export const SaaSConsoleView: React.FC = () => {
                     owner_email: editEmail,
                     owner_phone: editPhone || null,
                     plan: editPlan,
-                    subscription_status: editStatus,
                   },
                 });
               }}
@@ -2208,15 +2208,57 @@ export const SaaSConsoleView: React.FC = () => {
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                     Estado de Suscripción
                   </label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', fontWeight: 600 }}
+                  <div
+                    style={{
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      background: '#f8fafc',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      boxSizing: 'border-box',
+                      minHeight: '41px',
+                    }}
                   >
-                    <option value="active">Activo</option>
-                    <option value="suspended">Suspendido</option>
-                    <option value="trialing">En Prueba</option>
-                  </select>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color:
+                          selectedTenantForEdit.subscription_status === 'suspended'
+                            ? '#dc2626'
+                            : selectedTenantForEdit.subscription_status === 'trialing'
+                            ? '#d97706'
+                            : '#16a34a',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          background:
+                            selectedTenantForEdit.subscription_status === 'suspended'
+                              ? '#dc2626'
+                              : selectedTenantForEdit.subscription_status === 'trialing'
+                              ? '#d97706'
+                              : '#16a34a',
+                        }}
+                      />
+                      {selectedTenantForEdit.subscription_status === 'suspended'
+                        ? 'Suspendido'
+                        : selectedTenantForEdit.subscription_status === 'trialing'
+                        ? 'En Prueba'
+                        : 'Activo'}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>
+                      (Auditoría en tabla)
+                    </span>
+                  </div>
                 </div>
               </div>
 

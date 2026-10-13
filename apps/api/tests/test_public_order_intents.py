@@ -493,7 +493,7 @@ def test_authenticated_acceptance_creates_canonical_order_once_without_cash_shif
     created = _post_intent(client, _payload())
     assert created.status_code == 201
     reference = created.json()["public_reference"]
-    assert reference.startswith("PI-") and len(reference) == 35
+    assert reference.startswith("PILOTO-") and reference.endswith("-001") and len(reference) <= 20
     with _test_session_factory(client)() as session:
         intent_id = session.execute(
             sa.select(models.metadata.tables["public_order_intents"].c.id).where(

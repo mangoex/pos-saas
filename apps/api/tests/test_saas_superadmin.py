@@ -771,6 +771,24 @@ def test_superadmin_update_tenant_details() -> None:
     )
     assert login_resp.status_code == 200
 
+    # Verify updating tenant with unchanged subscription_status succeeds (backward-compat with admin web)
+    current_status = updated["subscription_status"]
+    update_with_same_status = client.put(
+        f"/api/v1/superadmin/tenants/{tenant_id}",
+        headers=headers,
+        json={"name": "Tacos El Pastor Con Estatus", "subscription_status": current_status},
+    )
+    assert update_with_same_status.status_code == 200
+
+    # Verify attempting to mutate subscription_status directly fails with helpful error
+    fail_mutate_status = client.put(
+        f"/api/v1/superadmin/tenants/{tenant_id}",
+        headers=headers,
+        json={"name": "Mutar", "subscription_status": "suspended" if current_status != "suspended" else "active"},
+    )
+    assert fail_mutate_status.status_code == 422
+    assert fail_mutate_status.json()["detail"]["code"] == "tenant_subscription_status_read_only"
+
 
 def test_tenant_creation_has_5_canonical_roles() -> None:
     """Verify newly created tenants have exactly the 5 canonical roles in Spanish

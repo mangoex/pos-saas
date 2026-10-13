@@ -885,10 +885,13 @@ def update_tenant_details(
     if "plan" in data:
         update_values["plan"] = new_plan
         update_values["monthly_fee_cents"] = new_fee
-    if "subscription_status" in data:
+    if "subscription_status" in data and data["subscription_status"] != org.get("subscription_status"):
         raise HTTPException(
             status_code=422,
-            detail={"code": "tenant_subscription_status_read_only"},
+            detail={
+                "code": "tenant_subscription_status_read_only",
+                "message": "El estado de suscripción se administra con auditoría mediante el botón Suspender / Reactivar.",
+            },
         )
 
     session.execute(

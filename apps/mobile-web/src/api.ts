@@ -306,6 +306,17 @@ export function formatMoney(cents: number): string {
   return `$${(cents / 100).toFixed(2)} MXN`;
 }
 
+/** Formats an order folio or reference to be compact, human-readable, and never overflow mobile UI. */
+export function formatDisplayFolio(folioOrRef: string | null | undefined): string {
+  if (!folioOrRef) return '';
+  const clean = String(folioOrRef).trim().replace(/^#/, '');
+  if (clean.length > 20) {
+    // Legacy long UUID intent reference (e.g. PI-33B872C4AA8247D8A06C908E0E9810E3) -> PI-9810E3
+    return `PI-${clean.slice(-6)}`;
+  }
+  return clean;
+}
+
 export function buildWhatsAppLink(
   folio: string,
   info: CustomerOrderInfo,
@@ -338,8 +349,9 @@ export function buildWhatsAppLink(
   }
 
   const brandTitle = branchName ? branchName.toUpperCase() : 'RESTAURANTE';
+  const displayFolio = formatDisplayFolio(folio);
   let text = `🍽️ *NUEVO PEDIDO - ${brandTitle}*\n`;
-  text += `📋 *Folio:* #${folio}\n`;
+  text += `📋 *Folio:* #${displayFolio}\n`;
   if (branchName) {
     text += `📍 *Sucursal:* ${branchName}\n`;
   }

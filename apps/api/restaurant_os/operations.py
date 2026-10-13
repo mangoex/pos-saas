@@ -4518,7 +4518,11 @@ def get_order_detail(
             "organization_id": intent["organization_id"],
             "branch_id": intent["branch_id"],
             "cash_shift_id": None,
-            "folio": f"WEB-{intent['public_reference'][-6:]}",
+            "folio": (
+                intent["public_reference"]
+                if len(intent["public_reference"]) <= 20
+                else f"WEB-{intent['public_reference'][-6:]}"
+            ),
             "channel": "PUBLIC_INTENT",
             "status": "PENDING" if intent["status"] == "PENDING_REVIEW" else intent["status"],
             "service_type": intent["order_type"],
@@ -5248,7 +5252,11 @@ def list_order_accounts(
             items.append(
                 {
                     "id": intent["id"],
-                    "folio": f"WEB-{intent['public_reference'][-6:]}",
+                    "folio": (
+                        intent["public_reference"]
+                        if len(intent["public_reference"]) <= 20
+                        else f"WEB-{intent['public_reference'][-6:]}"
+                    ),
                     "branch_id": intent["branch_id"],
                     "cash_shift_id": None,
                     "register_code": "WEB",
@@ -27639,6 +27647,59 @@ def get_public_pickup_options(session: Session, public_key: str) -> dict[str, An
         raise BusinessError(error.code, "El horario de recogida no está disponible") from error
 
 
+def _generate_public_order_reference(session: Session, branch_id: str, now: datetime) -> str:
+    """Generates a human-friendly order reference formatted with branch, date, and daily sequential counter.
+    Format: {SUCURSAL}-{YYMMDD}-{CONSECUTIVO_DIA}
+    Ejemplo: TG-261013-001 (Tacos el Güero, 13 de Octubre de 2026, pedido #1 del día).
+    """
+    branch_row = session.execute(
+        sa.select(models.branches.c.code, models.branches.c.name).where(
+            models.branches.c.id == branch_id
+        )
+    ).mappings().first()
+
+    raw_code = (branch_row.get("code") or "") if branch_row else ""
+    if raw_code and raw_code.strip():
+        prefix = "".join(c for c in raw_code.strip().upper() if c.isalnum())[:6]
+    else:
+        name = (branch_row.get("name") or "") if branch_row else ""
+        words = [w for w in name.split() if w]
+        if words:
+            prefix = "".join(w[0] for w in words)[:4].upper()
+        else:
+            prefix = "PED"
+    if not prefix:
+        prefix = "PED"
+
+    date_str = now.strftime("%y%m%d")
+    pattern = f"{prefix}-{date_str}-%"
+
+    existing_refs = session.execute(
+        sa.select(models.public_order_intents.c.public_reference).where(
+            models.public_order_intents.c.branch_id == branch_id,
+            models.public_order_intents.c.public_reference.like(pattern),
+        )
+    ).scalars().all()
+
+    max_seq = 0
+    for ref in existing_refs:
+        parts = ref.rsplit("-", 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            max_seq = max(max_seq, int(parts[1]))
+
+    next_seq = max_seq + 1
+    while True:
+        candidate = f"{prefix}-{date_str}-{next_seq:03d}"
+        collision = session.execute(
+            sa.select(models.public_order_intents.c.id).where(
+                models.public_order_intents.c.public_reference == candidate
+            )
+        ).first()
+        if not collision:
+            return candidate
+        next_seq += 1
+
+
 def create_public_order_intent(
     session: Session,
     public_key: str,
@@ -27820,7 +27881,7 @@ def create_public_order_intent(
 
     grand_total_cents = max(0, total_cents - discount_cents) + delivery_fee
     result = {
-        "public_reference": f"PI-{intent_id.replace('-', '').upper()}",
+        "public_reference": _generate_public_order_reference(session, branch_id, now),
         "status": "PENDING_REVIEW",
         "version": 1,
         "total_cents": grand_total_cents,

@@ -13,7 +13,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { TrackedActiveOrder } from '../types';
-import { fetchPublicOrderTracking, formatMoney, saveTrackedOrder, getTrackedOrders, clearTrackedOrder } from '../api';
+import { fetchPublicOrderTracking, formatMoney, saveTrackedOrder, getTrackedOrders, clearTrackedOrder, formatDisplayFolio } from '../api';
 
 interface ActiveOrderTrackerProps {
   initialOrder: TrackedActiveOrder | null;
@@ -215,7 +215,8 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
     themeBorder = '#fecaca';
   }
 
-  const displayFolio = order.folio ? `#${order.folio}` : `#${order.public_reference}`;
+  const rawFolio = order.folio || order.public_reference;
+  const displayFolio = `#${formatDisplayFolio(rawFolio)}`;
 
   const handleDismiss = () => {
     clearTrackedOrder(order.public_reference);
@@ -330,7 +331,7 @@ export const ActiveOrderTracker: React.FC<ActiveOrderTrackerProps> = ({
                         </div>
                         {visibleOrders.map((ord) => {
                           const isSel = ord.public_reference === order.public_reference;
-                          const ordFolio = ord.folio ? `#${ord.folio}` : `#${ord.public_reference}`;
+                          const ordFolio = `#${formatDisplayFolio(ord.folio || ord.public_reference)}`;
                           const ordSt = (ord.operational_status || ord.status || '').toUpperCase();
                           const stLabel = ordSt === 'READY' ? 'Listo 🎉' : ['ACCEPTED', 'IN_PRODUCTION'].includes(ordSt) ? 'Preparando 🍳' : 'Recibido';
                           return (

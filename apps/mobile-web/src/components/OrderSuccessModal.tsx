@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { CheckCircle2, X, ShoppingBag, ArrowLeft, Clock, ChefHat, Star, Send, ExternalLink, Sparkles, Share2, Gift, Copy, Check } from 'lucide-react';
 import { CreatedOrderResult, BranchInfo, TrackedActiveOrder } from '../types';
-import { formatMoney, submitCustomerFeedback } from '../api';
+import { formatMoney, submitCustomerFeedback, formatDisplayFolio } from '../api';
 import { ActiveOrderTracker } from './ActiveOrderTracker';
 
 interface OrderSuccessModalProps {
@@ -18,7 +18,8 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   onNewOrder,
 }) => {
   const pendingReview = orderResult.kind === 'public_order_intent';
-  const orderFolio = pendingReview ? orderResult.public_reference : orderResult.folio;
+  const rawOrderFolio = pendingReview ? orderResult.public_reference : orderResult.folio;
+  const orderFolio = formatDisplayFolio(rawOrderFolio);
 
   // Active coupon marked for checkout promotion (if any)
   const rewardCoupon = useMemo(() => {
@@ -221,7 +222,27 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', margin: '4px 0 8px' }}>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>{pendingReview ? 'Referencia' : 'Folio de Orden'}</span>
-            <span className="folio-chip">#{orderFolio}</span>
+            <span
+              className="folio-chip"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px 14px',
+                borderRadius: '8px',
+                background: '#f1f5f9',
+                color: '#0f172a',
+                fontSize: '15px',
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                fontFamily: 'monospace',
+                border: '1px solid #e2e8f0',
+                maxWidth: '100%',
+                wordBreak: 'break-all',
+              }}
+            >
+              #{orderFolio}
+            </span>
           </div>
 
           <div
